@@ -219,6 +219,7 @@ su $SUDO_USER -c 'mkdir -p ~/bin'
 rm -f /home/${SUDO_USER}/bin/openmano
 rm -f /home/${SUDO_USER}/bin/service-openmano
 ln -s ${PWD}/openmano/openmano/openmano /home/${SUDO_USER}/bin/openmano
+ln -s ${PWD}/openmano/scripts/openmano-report.sh  /home/${SUDO_USER}/bin/openmano-report
 ln -s ${PWD}/openmano/scripts/service-openmano.sh  /home/${SUDO_USER}/bin/service-openmano
 
 #insert /home/<user>/bin in the PATH
