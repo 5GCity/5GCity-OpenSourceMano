@@ -18,6 +18,8 @@ VNFD_BUILD_DIRS := $(addprefix $(VNFD_BUILD_DIR)/, $(VNFDS))
 VNFD_PKGS := $(addsuffix .tar.gz, $(VNFDS))
 VNFD_BUILD_PKGS := $(addprefix $(VNFD_BUILD_DIR)_pkgs/, $(VNFD_PKGS))
 
+IMS_GITHUB="https://github.com/Metaswitch/clearwater-juju.git"
+
 all: $(VNFD_BUILD_PKGS) ${NSD_BUILD_PKGS}
 	echo $@
 
@@ -29,7 +31,9 @@ $(VNFD_BUILD_DIR)/%: $(VNFD_SRC_DIR)/%
 	cp -rf $< $(VNFD_BUILD_DIR)
 
 	src/gen_vnfd_pkg.sh $< $@
-	src/generate_descriptor_pkg.sh $(BUILD_DIR)/vnfd_pkgs $@
+
+$(BUILD_DIR)/clearwater-juju: $(VNFD_BUILD_DIR)/ims_allin1_2p_vnf
+	-cd $(BUILD_DIR) && (test -e clearwater-juju || git clone $(IMS_GITHUB))
 
 $(NSD_BUILD_DIR)/%: $(NSD_SRC_DIR)/%
 	mkdir -p $(NSD_BUILD_DIR)
@@ -40,5 +44,9 @@ $(NSD_BUILD_DIR)/%: $(NSD_SRC_DIR)/%
 $(BUILD_DIR)/nsd_pkgs/%.tar.gz: $(NSD_BUILD_DIR)/%
 	src/generate_descriptor_pkg.sh $(BUILD_DIR)/nsd_pkgs $<
 
-$(BUILD_DIR)/vnfd_pkgs/%.tar.gz: $(VNFD_BUILD_DIR)/%
+$(VNFD_BUILD_DIR)/ims_allin1_2p_vnf/charms/clearwater-aio-proxy: $(BUILD_DIR)/clearwater-juju
+	# Copy the IMS Charm into the IMS vnf package directory before
+	cp -rf $(BUILD_DIR)/clearwater-juju/charms/trusty/clearwater-aio-proxy $(VNFD_BUILD_DIR)/ims_allin1_2p_vnf/charms
+
+$(BUILD_DIR)/vnfd_pkgs/%.tar.gz: $(VNFD_BUILD_DIR)/% $(VNFD_BUILD_DIR)/ims_allin1_2p_vnf/charms/clearwater-aio-proxy
 	src/generate_descriptor_pkg.sh $(BUILD_DIR)/vnfd_pkgs $<
