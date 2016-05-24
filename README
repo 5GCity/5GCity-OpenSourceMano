@@ -1,0 +1,10 @@
+Generates the MWC16 NSD and VNFD descriptor packages from source.
+
+To generate the packages type "make". The VNF and NSD packages will be located
+build/vnfd_pkgs and build/nsd_pkgs.
+
+To clean, type 'make clean'.
+
+Due to license issues, for the IMS VNFD package, the IMS charm is fetched
+extracted from the respective git repository prior to packaging.  Because of
+this, internet access is required to reach github.
