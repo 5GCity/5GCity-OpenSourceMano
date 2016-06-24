@@ -1,0 +1,66 @@
+# This file is meant to be SOURCED
+#
+#   Copyright 2016 RIFT.IO Inc
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# container_funcs
+# 24 June 2016 -- Jeremy Mordkoff -- Genesis
+
+container_exists() { 
+	if [ $# -ne 1 ]; then
+		FATAL "arg is container name"
+	fi
+	lxc config show $1 2>&1 >/dev/null
+	if [ $? -eq 0 ]; then
+		DEBUG "container $1 exists"
+		return 0
+	else
+		DEBUG "container $1 not found"
+		return 1
+	fi
+}
+
+create_container() { 
+	if [ $# -ne 2 ]; then
+		FATAL "args are image container"
+	fi
+	INFO "creating container $2 using image $1"
+	DEBUG "lxc launch $1 $2"
+	sudo lxc launch "$1" "$2"
+}
+
+container_exec() { 
+	container="$1"
+	shift
+	DEBUG "exec in $1 \"$*\""
+	lxc exec "$container" -- $*
+}
+
+wait_container_up() {
+	[ $# -eq 1 ] || FATAL "arg is container name got $# args - $*"
+	ct=0
+	RE="1 received"
+	while [ $ct -lt 60 ]; do
+		let ct=ct+1
+		output=$(container_exec "$1" ping -c 1 google.com)
+		if [[ $output =~ $RE ]]; then	
+			DEBUG "$1 is up"
+			return
+		fi
+		INFO "waiting for container $1 to start"
+		DEBUG "expected '$RE' in $output"
+		sleep 1
+	done
+	FATAL "container $1 did not start"
+}

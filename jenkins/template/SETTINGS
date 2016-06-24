@@ -1,0 +1,28 @@
+#   Copyright 2016 RIFT.IO Inc
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# sample SETTINGS file
+#
+# 24 June 2016 -- Jeremy Mordkoff -- Genesis 
+#
+# this variable holds the name of the container image needed to build or run this product
+export OSM_BASE_IMAGE=fc20
+#
+# this variable holds the name of the container to be used to build a package
+# if this container already exists, the build process can skip the container build
+export OSM_BUILD_CONTAINER=rift-build
+#
+# this variable holds the name of the container to be used to run a package
+# if this container already exists, the run processes can skip the container build
+export OSM_RUNTIME_CONTAINER=rift-runtime

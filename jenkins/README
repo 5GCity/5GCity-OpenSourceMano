@@ -1,0 +1,7 @@
+This directory holds the scripts and tools needed by jenkins to run jobs
+
+The 'host' subdirectory is meant to be invoked directly by jenkins either in its own container or on the host.
+
+The 'template' subdirectory contains sample files needed to configure a new MDG
+
+The other subdirectories correspond to MDGs and contain the scripts that are run inside the container
