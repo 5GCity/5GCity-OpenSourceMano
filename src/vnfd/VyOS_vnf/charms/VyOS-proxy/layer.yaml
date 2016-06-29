@@ -1,0 +1,9 @@
+"options":
+  "vyos-proxy": {}
+  "basic":
+    "use_venv": !!bool "false"
+    "packages": []
+    "include_system_packages": !!bool "false"
+"includes":
+- "layer:basic"
+"is": "vyos-proxy"
