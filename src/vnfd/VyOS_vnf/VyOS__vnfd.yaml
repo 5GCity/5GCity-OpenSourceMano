@@ -52,7 +52,7 @@ vnfd:vnfd-catalog:
             image: /mnt/powervault/virtualization/osm/VyOS/VyOS-1.1.7-signed-disk1.qcow2
             vm-flavor:
                 memory-mb: '1024'
-                storage-gb: '10'
+                storage-gb: '40'
                 vcpu-count: '1'
             mgmt-vpci: 0000:00:0a.0
             external-interface:
