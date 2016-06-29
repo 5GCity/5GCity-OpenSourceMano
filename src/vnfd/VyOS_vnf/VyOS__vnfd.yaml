@@ -1,0 +1,99 @@
+vnfd:vnfd-catalog:
+    vnfd:
+    -   id: VyOS
+        name: VyOS Router
+        short-name: VyOS Router
+        description: VyOS Router
+        logo: osm_2x.png
+        mgmt-interface:
+            vdu-id: VyOS-VM
+            vnf-configuration:
+                config-attributes:
+                    config-delay: '0'
+                    config-priority: '1'
+                config-primitive:
+                -   name: config
+                    parameter:
+                    -   name: user
+                        data-type: STRING
+                        mandatory: 'true'
+                        default-value: vyos
+                    -   name: password
+                        data-type: string
+                        mandatory: 'true'
+                        name: password
+                        default-value: vyos
+                -   name: ping-test
+                    parameter:
+                    -   name: ip-address
+                        data-type: STRING
+                        mandatory: 'true'
+                    -   name: count
+                        data-type: INTEGER
+                        mandatory: 'false'
+                        default-value: 5
+                juju:
+                    charm: VyOS-proxy
+        connection-point:
+        -   name: eth0
+            type: VPORT
+        -   name: eth1
+            type: VPORT
+        -   name: eth2
+            type: VPORT
+        -   name: eth3
+            type: VPORT
+        -   name: eth4
+            type: VPORT
+        vdu:
+        -   id: VyOS-VM
+            name: VyOS-VM
+            description: VyOS-VM
+            image: /mnt/powervault/virtualization/osm/VyOS/VyOS-1.1.7-signed-disk1.qcow2
+            vm-flavor:
+                memory-mb: '1024'
+                storage-gb: '2'
+                vcpu-count: '1'
+            mgmt-vpci: 0000:00:0a.0
+            external-interface:
+            -   name: eth0
+                virtual-interface:
+                    bandwidth: '0'
+                    type: OM-MGMT
+                    vpci: 0000:00:0a.0
+                vnfd-connection-point-ref: eth0
+            -   name: eth1
+                virtual-interface:
+                    bandwidth: '0'
+                    type: VIRTIO
+                    vpci: 0000:00:0b.0
+                vnfd-connection-point-ref: eth1
+            -   name: eth2
+                virtual-interface:
+                    bandwidth: '0'
+                    type: VIRTIO
+                    vpci: 0000:00:0c.0
+                vnfd-connection-point-ref: eth2
+            -   name: eth3
+                virtual-interface:
+                    bandwidth: '0'
+                    type: VIRTIO
+                    vpci: 0000:00:0d.0
+                vnfd-connection-point-ref: eth3
+            -   name: eth4
+                virtual-interface:
+                    bandwidth: '0'
+                    type: VIRTIO
+                    vpci: 0000:00:0e.0
+                vnfd-connection-point-ref: eth4
+            guest-epa:
+                cpu-pinning-policy: DEDICATED
+                cpu-thread-pinning-policy: PREFER
+                mempage-size: LARGE
+                numa-node-policy:
+                    mem-policy: STRICT
+                    node:
+                    -   id: '0'
+                        paired-threads:
+                            num-paired-threads: '1'
+                    node-cnt: '1'
