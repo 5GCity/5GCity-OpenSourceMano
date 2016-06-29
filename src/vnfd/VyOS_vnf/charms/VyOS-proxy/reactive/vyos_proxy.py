@@ -41,13 +41,13 @@ def vyos_proxy_ready():
     set_flag('vyos-proxy.ready')
 
 
-@when('action.ping')
+@when('actions.ping')
 @when_not('vyos-proxy.configured')
 def pingme():
     action_fail('proxy is not ready')
 
 
-@when('action.ping')
+@when('actions.ping')
 @when('vyos-proxy.configured')
 def pingme_forreal():
     try:
@@ -55,10 +55,10 @@ def pingme_forreal():
     except:
         action_fail('ping command failed')
     finally:
-        remove_flag('action.ping')
+        remove_flag('actions.ping')
 
     # Here you can send results back from ping, if you had time to parse it
-    action_set(result)
+    action_set({'output': result})
 
 
 
@@ -83,8 +83,11 @@ def run(cmd):
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-    client.connect(cfg.get('hostname'), port=22,
-                   username=cfg.get('user'), password=cfg.get('pass'))
+    try:
+        client.connect(cfg.get('hostname'), port=22,
+                       username=cfg.get('user'), password=cfg.get('pass'))
+    except paramiko.ssh_exception.AuthenticationException:
+        raise MgmtNotConfigured('invalid credentials')
 
     stdin, stdout, stderr = client.exec_command(cmd)
     retcode = stdout.channel.recv_exit_status()

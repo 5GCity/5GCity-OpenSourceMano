@@ -1,8 +1,8 @@
 vnfd:vnfd-catalog:
     vnfd:
     -   id: VyOS
-        name: VyOS Router
-        short-name: VyOS Router
+        name: VyOS
+        short-name: VyOS
         description: VyOS Router
         logo: osm_2x.png
         mgmt-interface:
