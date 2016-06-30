@@ -16,7 +16,7 @@ nsd:nsd-catalog:
                 overlay-type: VLAN
             vnfd-connection-point-ref:
             -   member-vnf-index-ref: '1'
-                vnfd-connection-point-ref: eth0
+                vnfd-connection-point-ref: eth1
                 vnfd-id-ref: VyOS
         -   id: management
             name: management
@@ -26,7 +26,7 @@ nsd:nsd-catalog:
                 physical-network: net-mgmtOS
             vnfd-connection-point-ref:
             -   member-vnf-index-ref: '1'
-                vnfd-connection-point-ref: eth1
+                vnfd-connection-point-ref: eth0
                 vnfd-id-ref: VyOS
         config-primitive:
         -   name: Update User
