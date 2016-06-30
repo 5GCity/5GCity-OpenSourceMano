@@ -29,7 +29,7 @@ nsd:nsd-catalog:
                 vnfd-connection-point-ref: eth1
                 vnfd-id-ref: VyOS
         config-primitive:
-        -   name: Update User
+        -   name: Config VyOS
             vnf-primitive-group:
             -   member-vnf-index-ref: '1'
                 vnfd-id-ref: VyOS

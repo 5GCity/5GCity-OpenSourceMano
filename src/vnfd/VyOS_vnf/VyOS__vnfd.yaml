@@ -24,7 +24,7 @@ vnfd:vnfd-catalog:
                         default-value: vyos
                 -   name: ping-test
                     parameter:
-                    -   name: ip-address
+                    -   name: destination
                         data-type: STRING
                         mandatory: 'true'
                     -   name: count
