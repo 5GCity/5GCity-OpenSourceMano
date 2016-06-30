@@ -22,7 +22,7 @@ vnfd:vnfd-catalog:
                         data-type: string
                         mandatory: 'true'
                         default-value: vyos
-                -   name: ping-test
+                -   name: ping
                     parameter:
                     -   name: destination
                         data-type: STRING

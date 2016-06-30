@@ -37,11 +37,11 @@ nsd:nsd-catalog:
                 primitive:
                 -   index: '1'
                     name: config
-        -   name: Ping Test
+        -   name: ping
             vnf-primitive-group:
             -   member-vnf-index-ref: '1'
                 vnfd-id-ref: VyOS
                 vnfd-name: VyOS
                 primitive:
                 -   index: '1'
-                    name: ping-test
+                    name: ping
