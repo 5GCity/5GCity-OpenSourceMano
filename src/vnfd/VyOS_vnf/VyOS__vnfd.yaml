@@ -18,10 +18,9 @@ vnfd:vnfd-catalog:
                         data-type: STRING
                         mandatory: 'true'
                         default-value: vyos
-                    -   name: password
+                    -   name: pass
                         data-type: string
                         mandatory: 'true'
-                        name: password
                         default-value: vyos
                 -   name: ping-test
                     parameter:
