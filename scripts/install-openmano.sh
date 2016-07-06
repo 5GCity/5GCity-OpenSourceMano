@@ -28,12 +28,18 @@
 #        $2: database password 
 
 function usage(){
-    echo  -e "usage: sudo $0 [db-user [db-passwd]]\n  Install source code in ./openmano"
+    echo -e "usage: sudo $0 [OPTIONS]"
+    echo -e "Install source code in ./openmano and the needed packages"
+    echo -e "  OPTIONS"
+    echo -e "     -u USER  database admin user. 'root' by default. Prompts if needed"
+    echo -e "     -p PASS  database admin password to be used or installed.Prompts if needed"
+    echo -e "     -q:  install in an unattended mode"
+    echo -e "     -h:  show this help"
 }
 
 function install_packages(){
     [ -x /usr/bin/apt-get ] && apt-get install -y $*
-    [ -x /usr/bin/yum ]     && yum install -y $*   
+    [ -x /usr/bin/yum ]     && yum install     -y $*   
     
     #check properly installed
     for PACKAGE in $*
@@ -43,17 +49,60 @@ function install_packages(){
         [ -x /usr/bin/yum ]     && yum list installed $PACKAGE &>> /dev/null && PACKAGE_INSTALLED="yes" 
         if [ "$PACKAGE_INSTALLED" = "no" ]
         then
-            echo "failed to install package '$PACKAGE'. Revise network connectivity and try again"
+            echo "failed to install package '$PACKAGE'. Revise network connectivity and try again" >&2
             exit -1
        fi
     done
 }
 
-#check root privileges and non a root user behind
-[ "$1" == "-h" -o "$1" == "--help" ] && usage && exit 0
-[ "$USER" != "root" ] && echo "Needed root privileges" >&2 && usage >&2 && exit -1
-[ -z "$SUDO_USER" -o "$SUDO_USER" = "root" ] && echo "Must be runned with sudo from a non root user"  >&2 && usage >&2 && exit -1
+DBUSER="root"
+DBPASSWD=""
+DBPASSWD_PARAM=""
+QUIET_MODE=""
+while getopts ":u:p:hiq-:" o; do
+    case "${o}" in
+        u)
+            export DBUSER="$OPTARG"
+            ;;
+        p)
+            export DBPASSWD="$OPTARG"
+            export DBPASSWD_PARAM="-p$OPTARG"
+            ;;
+        q)
+            export QUIET_MODE=yes
+            export DEBIAN_FRONTEND=noninteractive
+            ;;
+        h)
+            usage && exit 0
+            ;;
+        -)
+            [ "${OPTARG}" == "help" ] && usage && exit 0
+            echo -e "Invalid option: '--$OPTARG'\nTry $0 --help for more information" >&2 
+            exit 1
+            ;; 
+        \?)
+            echo -e "Invalid option: '-$OPTARG'\nTry $0 --help for more information" >&2
+            exit 1
+            ;;
+        :)
+            echo -e "Option '-$OPTARG' requires an argument\nTry $0 --help for more information" >&2
+            exit 1
+            ;;
+        *)
+            usage >&2
+            exit -1
+            ;;
+    esac
+done
 
+#check root privileges and non a root user behind
+[ "$USER" != "root" ] && echo "Needed root privileges" >&2 && exit -1
+if [[ -z "$SUDO_USER" ]] || [[ "$SUDO_USER" = "root" ]]
+then
+    [[ -z $QUIET_MODE ]] && read -e -p "Install in the root user (y/N)?" KK
+    [[ -z $QUIET_MODE ]] && [[ "$KK" != "y" ]] && [[ "$KK" != "yes" ]] && echo "Cancelled" && exit 1
+    export SUDO_USER=root
+fi
 
 #Discover Linux distribution
 #try redhat type
@@ -65,31 +114,31 @@ then
     _RELEASE="14"
     if ! lsb_release -rs | grep -q "14."
     then 
-        read -e -p "WARNING! Not tested Ubuntu version. Continue assuming a '$_RELEASE' type? (y/N)" KK
-        [ "$KK" != "y" -a  "$KK" != "yes" ] && echo "Cancelled" && exit 0
+        [[ -z $QUIET_MODE ]] && read -e -p "WARNING! Not tested Ubuntu version. Continue assuming a '$_RELEASE' type? (y/N)" KK
+        [[ -z $QUIET_MODE ]] && [[ "$KK" != "y" ]] && [[ "$KK" != "yes" ]] && echo "Cancelled" && exit 1
     fi
 elif [ "$_DISTRO" == "CentOS" ]
 then
     _RELEASE="7" 
     if ! cat /etc/redhat-release | grep -q "7."
     then
-        read -e -p "WARNING! Not tested CentOS version. Continue assuming a '_RELEASE' type? (y/N)" KK
-        [ "$KK" != "y" -a  "$KK" != "yes" ] && echo "Cancelled" && exit 0
+        [[ -z $QUIET_MODE ]] && read -e -p "WARNING! Not tested CentOS version. Continue assuming a '_RELEASE' type? (y/N)" KK
+        [[ -z $QUIET_MODE ]] && [[ "$KK" != "y" ]] && [[ "$KK" != "yes" ]] && echo "Cancelled" && exit 1
     fi
 elif [ "$_DISTRO" == "Red" ]
 then
     _RELEASE="7" 
     if ! cat /etc/redhat-release | grep -q "7."
     then
-        read -e -p "WARNING! Not tested Red Hat OS version. Continue assuming a '_RELEASE' type? (y/N)" KK
-        [ "$KK" != "y" -a  "$KK" != "yes" ] && echo "Cancelled" && exit 0
+        [[ -z $QUIET_MODE ]] && read -e -p "WARNING! Not tested Red Hat OS version. Continue assuming a '_RELEASE' type? (y/N)" KK
+        [[ -z $QUIET_MODE ]] && [[ "$KK" != "y" ]] && [[ "$KK" != "yes" ]] && echo "Cancelled" && exit 1
     fi
 else  #[ "$_DISTRO" != "Ubuntu" -a "$_DISTRO" != "CentOS" -a "$_DISTRO" != "Red" ] 
     _DISTRO_DISCOVER=$_DISTRO
     [ -x /usr/bin/apt-get ] && _DISTRO="Ubuntu" && _RELEASE="14"
     [ -x /usr/bin/yum ]     && _DISTRO="CentOS" && _RELEASE="7"
-    read -e -p "WARNING! Not tested Linux distribution '$_DISTRO_DISCOVER '. Continue assuming a '$_DISTRO $_RELEASE' type? (y/N)" KK
-    [ "$KK" != "y" -a  "$KK" != "yes" ] && echo "Cancelled" && exit 0
+    [[ -z $QUIET_MODE ]] && read -e -p "WARNING! Not tested Linux distribution '$_DISTRO_DISCOVER '. Continue assuming a '$_DISTRO $_RELEASE' type? (y/N)" KK
+    [[ -z $QUIET_MODE ]] && [[ "$KK" != "y" ]] && [[ "$KK" != "yes" ]] && echo "Cancelled" && exit 1
 fi
 
 
@@ -114,6 +163,14 @@ echo '
 [ "$_DISTRO" == "Ubuntu" ] && install_packages "git screen wget mysql-server"
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "git screen wget mariadb mariadb-server"
 
+if [[ "$_DISTRO" == "Ubuntu" ]]
+then
+    #start services. By default CentOS does not start services
+    service mysql start >> /dev/null
+    # try to set admin password, ignore if fails
+    [[ -n $DBPASSWD ]] && mysqladmin -u $DBUSER -s password $DBPASSWD
+fi
+
 if [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ]
 then
     #start services. By default CentOS does not start services
@@ -132,29 +189,28 @@ then
 fi
 
 #check and ask for database user password. Must be done after database installation
-[ -n "$1" ] && DBUSER=$1
-[ -z "$1" ] && DBUSER=root
-[ -n "$2" ] && DBPASSWD="-p$2"
-[ -z "$2" ] && DBPASSWD=""
-echo -e "\nCheking database connection and ask for credentials"
-while !  echo "" | mysql -u$DBUSER $DBPASSWD
-do
+if [[ -n $QUIET_MODE ]]
+then 
+    echo -e "\nCheking database connection and ask for credentials"
+    while ! mysqladmin -s -u$DBUSER $DBPASSWD_PARAM ping
+    do
         [ -n "$logintry" ] &&  echo -e "\nInvalid database credentials!!!. Try again (Ctrl+c to abort)"
         [ -z "$logintry" ] &&  echo -e "\nProvide database credentials"
         read -e -p "database user? ($DBUSER) " DBUSER_
         [ -n "$DBUSER_" ] && DBUSER=$DBUSER_
         read -e -s -p "database password? (Enter for not using password) " DBPASSWD_
-        [ -n "$DBPASSWD_" ] && DBPASSWD="-p$DBPASSWD_"
-        [ -z "$DBPASSWD_" ] && DBPASSWD=""
+        [ -n "$DBPASSWD_" ] && DBPASSWD="$DBPASSWD_" && DBPASSWD_PARAM="-p$DBPASSWD_"
+        [ -z "$DBPASSWD_" ] && DBPASSWD=""           && DBPASSWD_PARAM=""
         logintry="yes"
-done
+    done
+fi
 
 echo '
 #################################################################
 #####        INSTALL PYTHON PACKAGES                        #####
 #################################################################'
-[ "$_DISTRO" == "Ubuntu" ] && install_packages "python-yaml python-libvirt python-bottle python-mysqldb python-jsonschema python-paramiko python-argcomplete python-requests"
-[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "PyYAML libvirt-python MySQL-python python-jsonschema python-paramiko python-argcomplete python-requests"
+[ "$_DISTRO" == "Ubuntu" ] && install_packages "python-yaml python-bottle python-mysqldb python-jsonschema python-paramiko python-argcomplete python-requests"
+[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "PyYAML MySQL-python python-jsonschema python-paramiko python-argcomplete python-requests"
 
 #The only way to install python-bottle on Centos7 is with easy_install or pip
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && easy_install -U bottle
@@ -173,12 +229,13 @@ echo '
 #################################################################
 #####        CREATE DATABASE                                #####
 #################################################################'
-mysqladmin -u$DBUSER $DBPASSWD create mano_db
+mysqladmin -u$DBUSER $DBPASSWD_PARAM -s create mano_db || exit 1
 
-echo "CREATE USER 'mano'@'localhost' identified by 'manopw';"   | mysql -u$DBUSER $DBPASSWD
-echo "GRANT ALL PRIVILEGES ON mano_db.* TO 'mano'@'localhost';" | mysql -u$DBUSER $DBPASSWD
+echo "CREATE USER 'mano'@'localhost' identified by 'manopw';"   | mysql -u$DBUSER $DBPASSWD_PARAM -s || ! echo "Failed while creating user mano at dabase" || exit 1
+echo "GRANT ALL PRIVILEGES ON mano_db.* TO 'mano'@'localhost';" | mysql -u$DBUSER $DBPASSWD_PARAM -s || ! echo "Failed while creating user mano at dabase" || exit 1
+echo " Database 'mano_db' created, user 'mano' password 'manopw'"
 
-su $SUDO_USER -c 'openmano/database_utils/init_mano_db.sh -u mano -p manopw'
+su $SUDO_USER -c 'openmano/database_utils/init_mano_db.sh -u mano -p manopw' || ! echo "Failed while creating user mano at dabase" || exit 1
 
 if [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ]
 then
@@ -186,7 +243,8 @@ then
 #################################################################
 #####        CONFIGURE firewalld                            #####
 #################################################################'
-    read -e -p "Configure firewalld for openmanod port 9090? (Y/n)" KK
+    KK=yes
+    [[ -z $QUIET_MODE ]] && read -e -p "Configure firewalld for openmanod port 9090? (Y/n)" KK
     if [ "$KK" != "n" -a  "$KK" != "no" ]
     then
         #Creates a service file for openmano
@@ -215,30 +273,37 @@ echo '
 #####             CONFIGURE OPENMANO CLIENT                 #####
 #################################################################'
 #creates a link at ~/bin
-su $SUDO_USER -c 'mkdir -p ~/bin'
-rm -f /home/${SUDO_USER}/bin/openmano
-rm -f /home/${SUDO_USER}/bin/service-openmano
-ln -s ${PWD}/openmano/openmano/openmano /home/${SUDO_USER}/bin/openmano
-ln -s ${PWD}/openmano/scripts/openmano-report.sh  /home/${SUDO_USER}/bin/openmano-report
-ln -s ${PWD}/openmano/scripts/service-openmano.sh  /home/${SUDO_USER}/bin/service-openmano
+su $SUDO_USER -c 'mkdir -p ${HOME}/bin'
+su $SUDO_USER -c 'rm -f ${HOME}/bin/openmano'
+su $SUDO_USER -c 'rm -f ${HOME}/bin/service-openmano'
+su $SUDO_USER -c 'ln -s ${PWD}/openmano/openmano ${HOME}/bin/openmano'
+su $SUDO_USER -c 'ln -s '${PWD}'/openmano/scripts/openmano-report.sh   ${HOME}/bin/openmano-report'
+su $SUDO_USER -c 'ln -s '${PWD}'/openmano/scripts/service-openmano.sh  ${HOME}/bin/service-openmano'
 
 #insert /home/<user>/bin in the PATH
 #skiped because normally this is done authomatically when ~/bin exist
-#if ! su $SUDO_USER -c 'echo $PATH' | grep -q "/home/${SUDO_USER}/bin"
+#if ! su $SUDO_USER -c 'echo $PATH' | grep -q "${HOME}/bin"
 #then
 #    echo "    inserting /home/$SUDO_USER/bin in the PATH at .bashrc"
-#    su $SUDO_USER -c 'echo "PATH=\$PATH:/home/\${USER}/bin" >> ~/.bashrc'
+#    su $SUDO_USER -c 'echo "PATH=\$PATH:\${HOME}/bin" >> ~/.bashrc'
 #fi
+if [[ $SUDO_USER == root ]] 
+then
+    if ! echo $PATH | grep -q "${HOME}/bin"
+    then
+        echo "PATH=\$PATH:\${HOME}/bin" >> ${HOME}/.bashrc
+    fi
+fi 
 
 #configure arg-autocomplete for this user
 #in case of minimal instalation this package is not installed by default
 [[ "$_DISTRO" == "CentOS" || "$_DISTRO" == "Red" ]] && yum install -y bash-completion
 #su $SUDO_USER -c 'mkdir -p ~/.bash_completion.d'
 su $SUDO_USER -c 'activate-global-python-argcomplete --user'
-if ! grep -q bash_completion.d/python-argcomplete.sh /home/${SUDO_USER}/.bashrc
+if ! su  $SUDO_USER -c 'grep -q bash_completion.d/python-argcomplete.sh ${HOME}/.bashrc'
 then
     echo "    inserting .bash_completion.d/python-argcomplete.sh execution at .bashrc"
-    su $SUDO_USER -c 'echo ". /home/${USER}/.bash_completion.d/python-argcomplete.sh" >> ~/.bashrc'
+    su $SUDO_USER -c 'echo ". ${HOME}/.bash_completion.d/python-argcomplete.sh" >> ~/.bashrc'
 fi
 
 echo
