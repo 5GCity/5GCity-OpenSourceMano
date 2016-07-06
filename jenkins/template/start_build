@@ -43,7 +43,9 @@ INFO "starting build"
 ### put your commands here to 
 ### build, test and produce coverage reports
 
-INFO "done"
+RC=0
 
+INFO "done, RC=$RC"
+exit $RC
 
 

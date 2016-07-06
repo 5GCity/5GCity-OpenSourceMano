@@ -43,3 +43,6 @@ fi
 
 
 container_exec $OSM_BUILD_CONTAINER ./devops/jenkins/$OSM_MDG/start_build
+RC=$?
+INFO "$OSM_MDG build complete. Return code was $RC"
+exit $RC

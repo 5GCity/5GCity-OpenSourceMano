@@ -36,7 +36,11 @@ else
 	bash ./scripts/vm_image/mkvmimg --container --modes build
 fi
 
-INFO "done"
+INFO "no build script yet"
+RC=1
+
+INFO "done RC = $RC"
+exit $RC
 
 
 
