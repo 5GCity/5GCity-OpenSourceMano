@@ -5,3 +5,6 @@ The 'host' subdirectory is meant to be invoked directly by jenkins either in its
 The 'template' subdirectory contains sample files needed to configure a new MDG
 
 The other subdirectories correspond to MDGs and contain the scripts that are run inside the container
+
+documentation is in the OSM wiki. See https://osm.etsi.org/wiki/index.php/Jenkins_Build_Scripts
+
