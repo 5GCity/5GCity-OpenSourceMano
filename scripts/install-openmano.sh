@@ -235,7 +235,7 @@ echo "CREATE USER 'mano'@'localhost' identified by 'manopw';"   | mysql -u$DBUSE
 echo "GRANT ALL PRIVILEGES ON mano_db.* TO 'mano'@'localhost';" | mysql -u$DBUSER $DBPASSWD_PARAM -s || ! echo "Failed while creating user mano at dabase" || exit 1
 echo " Database 'mano_db' created, user 'mano' password 'manopw'"
 
-su $SUDO_USER -c 'openmano/database_utils/init_mano_db.sh -u mano -p manopw' || ! echo "Failed while creating user mano at dabase" || exit 1
+su $SUDO_USER -c 'openmano/database_utils/init_mano_db.sh -u mano -p manopw -d mano_db' || ! echo "Failed while creating user mano at dabase" || exit 1
 
 if [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ]
 then

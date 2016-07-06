@@ -37,16 +37,6 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
--- Current Database: `mano_db`
---
-
-/*!40000 DROP DATABASE IF EXISTS `mano_db`*/;
-
-CREATE DATABASE /*!32312 IF NOT EXISTS*/ `mano_db` /*!40100 DEFAULT CHARACTER SET latin1 */;
-
-USE `mano_db`;
-
---
 -- Table structure for table `datacenter_nets`
 --
 

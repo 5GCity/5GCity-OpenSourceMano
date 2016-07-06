@@ -41,11 +41,11 @@ function usage(){
     echo -e "     -p PASS  database password. 'No password' by default. Prompts if DB access fails"
     echo -e "     -P PORT  database port. '$DBPORT' by default"
     echo -e "     -h HOST  database host. '$DBHOST' by default"
-#    echo -e "     -d NAME  database name. '$DBNAME' by default.  Prompts if DB access fails"
+    echo -e "     -d NAME  database name. '$DBNAME' by default.  Prompts if DB access fails"
     echo -e "     --help   shows this help"
 }
 
-while getopts ":u:p:P:h:-:" o; do
+while getopts ":u:p:P:d:h:-:" o; do
     case "${o}" in
         u)
             DBUSER="$OPTARG"
@@ -56,9 +56,9 @@ while getopts ":u:p:P:h:-:" o; do
         P)
             DBPORT="$OPTARG"
             ;;
-#        d)
-#            DBNAME="$OPTARG"
-#            ;;
+        d)
+            DBNAME="$OPTARG"
+            ;;
         h)
             DBHOST="$OPTARG"
             ;;
@@ -106,7 +106,7 @@ done
 
 #${DIRNAME}/quick_delete_db.sh $MUSER $MPASS $MDB $HOST $PORT
 echo "    loading ${DIRNAME}/${DBNAME}_structure.sql"
-mysql  $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_ < ${DIRNAME}/${DBNAME}_structure.sql
+mysql  $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_ $DBNAME < ${DIRNAME}/mano_db_structure.sql
 
 echo "    migrage database version"
 ${DIRNAME}/migrate_mano_db.sh $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_ -d$DBNAME
