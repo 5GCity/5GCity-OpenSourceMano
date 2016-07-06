@@ -2370,7 +2370,7 @@ def vim_action_delete(mydb, tenant_id, datacenter, item, name):
     if tenant_id == "any":
         tenant_id=None
 
-    if af.check_valid_uuid(datacenter): 
+    if utils.check_valid_uuid(datacenter): 
         result, vims = get_vim(mydb, nfvo_tenant=tenant_id, datacenter_id=datacenter)
     else:
         result, vims = get_vim(mydb, nfvo_tenant=tenant_id, datacenter_name=datacenter)
