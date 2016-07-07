@@ -66,15 +66,15 @@ $(NSD_BUILD_DIR)/%: $(NSD_SRC_DIR)/%
 	src/gen_nsd_pkg.sh $< $@
 
 $(BUILD_DIR)/nsd_pkgs/%.tar.gz: $(NSD_BUILD_DIR)/%
-	src/generate_descriptor_pkg.sh $(BUILD_DIR)/nsd_pkgs $<
+	src/generate_descriptor_pkg.sh -d $(BUILD_DIR)/nsd_pkgs $<
 
 $(VNFD_BUILD_DIR)/ims_allin1_2p_vnf/charms/clearwater-aio-proxy: $(VNFD_BUILD_DIR)/ims_allin1_2p_vnf $(BUILD_DIR)/clearwater-juju
 	# Copy the IMS Charm into the IMS vnf package directory before packaging
 	cp -rf $(BUILD_DIR)/clearwater-juju/charms/trusty/clearwater-aio-proxy $(VNFD_BUILD_DIR)/ims_allin1_2p_vnf/charms
 
 $(VNFD_BUILD_DIR)/6wind_vnf/charms/vpe-router: $(VNFD_BUILD_DIR)/6wind_vnf $(BUILD_DIR)/juju-charms
-	# Copy the IMS Charm into the IMS vnf package directory before packaging
+	# Copy the PE Charm into the PE vnf package directory before packaging
 	cp -rf $(BUILD_DIR)/juju-charms/vpe-router $(VNFD_BUILD_DIR)/6wind_vnf/charms
 
 $(BUILD_DIR)/vnfd_pkgs/%.tar.gz: $(VNFD_BUILD_DIR)/% $(VNFD_BUILD_DIR)/ims_allin1_2p_vnf/charms/clearwater-aio-proxy $(VNFD_BUILD_DIR)/6wind_vnf/charms/vpe-router
-	src/generate_descriptor_pkg.sh $(BUILD_DIR)/vnfd_pkgs $<
+	src/generate_descriptor_pkg.sh -d $(BUILD_DIR)/vnfd_pkgs $<
