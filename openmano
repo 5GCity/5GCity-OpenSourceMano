@@ -59,8 +59,37 @@ class ThrowingArgumentParser(argparse.ArgumentParser):
 def config(args):
     print "OPENMANO_HOST: %s" %mano_host
     print "OPENMANO_PORT: %s" %mano_port
-    print "OPENMANO_TENANT: %s" %mano_tenant
-    print "OPENMANO_DATACENTER: %s" %str (mano_datacenter)
+    if args.n:
+        logger.debug("resolving tenant and datacenter names")
+        mano_tenant_id = "None"
+        mano_tenant_name = "None"
+        mano_datacenter_id = "None"
+        mano_datacenter_name = "None"
+        try:
+            mano_tenant_id = _get_item_uuid("tenants", mano_tenant)
+            URLrequest = "http://%s:%s/openmano/tenants/%s" %(mano_host, mano_port, mano_tenant_id)
+            mano_response = requests.get(URLrequest)
+            logger.debug("openmano response: %s", mano_response.text )
+            content = mano_response.json()
+            mano_tenant_name = content["tenant"]["name"]
+            URLrequest = "http://%s:%s/openmano/%s/datacenters/%s" %(mano_host, mano_port, mano_tenant_id, mano_datacenter)
+            mano_response = requests.get(URLrequest)
+            logger.debug("openmano response: %s", mano_response.text )
+            content = mano_response.json()
+            if "error" not in content:
+                mano_datacenter_id = content["datacenter"]["uuid"]
+                mano_datacenter_name = content["datacenter"]["name"]
+        except OpenmanoCLIError:
+            pass
+        print "OPENMANO_TENANT: %s" %mano_tenant
+        print "    Id: %s" %mano_tenant_id
+        print "    Name: %s" %mano_tenant_name 
+        print "OPENMANO_DATACENTER: %s" %str (mano_datacenter)
+        print "    Id: %s" %mano_datacenter_id
+        print "    Name: %s" %mano_datacenter_name 
+    else:
+        print "OPENMANO_TENANT: %s" %mano_tenant
+        print "OPENMANO_DATACENTER: %s" %str (mano_datacenter)
 
 def _print_verbose(mano_response, verbose_level=0):
     content = mano_response.json()
@@ -1114,12 +1143,13 @@ if __name__=="__main__":
     
     subparsers = main_parser.add_subparsers(help='commands')
     
-    config_parser = subparsers.add_parser('config', help="prints configuration values")
-    config_parser.set_defaults(func=config)
-
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument('--verbose', '-v', action='count', help="increase verbosity level. Use several times")
     parent_parser.add_argument('--debug', '-d', action='store_true', help="show debug information")
+
+    config_parser = subparsers.add_parser('config', parents=[parent_parser], help="prints configuration values")
+    config_parser.add_argument("-n", action="store_true", help="resolves tenant and datacenter names")
+    config_parser.set_defaults(func=config)
 
     vnf_create_parser = subparsers.add_parser('vnf-create', parents=[parent_parser], help="adds a vnf into the catalogue")
     vnf_create_parser.add_argument("file", action="store", help="location of the JSON file describing the VNF").completer = FilesCompleter
