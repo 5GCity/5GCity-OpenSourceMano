@@ -34,6 +34,7 @@ import yaml
 import json
 import threading
 import time
+import logging
 
 from jsonschema import validate as js_v, exceptions as js_e
 from openmano_schemas import vnfd_schema_v01, vnfd_schema_v02, \
@@ -44,9 +45,12 @@ from openmano_schemas import vnfd_schema_v01, vnfd_schema_v02, \
                             object_schema, netmap_new_schema, netmap_edit_schema
 import nfvo
 import utils
+from db_base import db_base_Exception
+from functools import wraps
 
 global mydb
 global url_base
+global logger
 url_base="/openmano"
 
 HTTP_Bad_Request =          400
@@ -86,12 +90,29 @@ def convert_datetime2str(var):
         for v in var:
             convert_datetime2str(v)
 
+def log_to_logger(fn):
+    '''
+    Wrap a Bottle request so that a log line is emitted after it's handled.
+    (This decorator can be extended to take the desired logger as a param.)
+    '''
+    @wraps(fn)
+    def _log_to_logger(*args, **kwargs):
+        actual_response = fn(*args, **kwargs)
+        # modify this to log exactly what you need:
+        logger.info('FROM %s %s %s %s' % (bottle.request.remote_addr,
+                                        bottle.request.method,
+                                        bottle.request.url,
+                                        bottle.response.status))
+        return actual_response
+    return _log_to_logger
 
 class httpserver(threading.Thread):
     def __init__(self, db, admin=False, host='localhost', port=9090):
         #global url_base
         global mydb
+        global logger
         #initialization
+        logger = logging.getLogger('openmano.http')
         threading.Thread.__init__(self)
         self.host = host
         self.port = port   #Port where the listen service must be started
@@ -108,7 +129,8 @@ class httpserver(threading.Thread):
         self.setDaemon(True)
          
     def run(self):
-        bottle.run(host=self.host, port=self.port, debug=True) #quiet=True
+        bottle.install(log_to_logger)
+        bottle.run(host=self.host, port=self.port, debug=False, quiet=True)
            
 def run_bottle(db, host_='localhost', port_=9090):
     '''used for launching in main thread, so that it can be debugged'''
@@ -148,9 +170,9 @@ def change_keys_http2db(data, http_db, reverse=False):
 
 def format_out(data):
     '''return string of dictionary data according to requested json, yaml, xml. By default json'''
+    logger.debug(yaml.safe_dump(data, explicit_start=True, indent=4, default_flow_style=False, tags=False, encoding='utf-8', allow_unicode=True) )
     if 'application/yaml' in bottle.request.headers.get('Accept'):
         bottle.response.content_type='application/yaml'
-        print yaml.safe_dump(data, explicit_start=True, indent=4, default_flow_style=False, tags=False, encoding='utf-8', allow_unicode=True) 
         return yaml.safe_dump(data, explicit_start=True, indent=4, default_flow_style=False, tags=False, encoding='utf-8', allow_unicode=True) #, canonical=True, default_style='"'
     else: #by default json
         bottle.response.content_type='application/json'
@@ -242,26 +264,25 @@ def filter_query_string(qs, http2db, allowed):
     where={}
     limit=100
     select=[]
-    if type(qs) is not bottle.FormsDict:
-        print '!!!!!!!!!!!!!!invalid query string not a dictionary'
-        #bottle.abort(HTTP_Internal_Server_Error, "call programmer")
-    else:
-        for k in qs:
-            if k=='field':
-                select += qs.getall(k)
-                for v in select:
-                    if v not in allowed:
-                        bottle.abort(HTTP_Bad_Request, "Invalid query string at 'field="+v+"'")
-            elif k=='limit':
-                try:
-                    limit=int(qs[k])
-                except:
-                    bottle.abort(HTTP_Bad_Request, "Invalid query string at 'limit="+qs[k]+"'")
-            else:
-                if k not in allowed:
-                    bottle.abort(HTTP_Bad_Request, "Invalid query string at '"+k+"="+qs[k]+"'")
-                if qs[k]!="null":  where[k]=qs[k]
-                else: where[k]=None 
+    #if type(qs) is not bottle.FormsDict:
+    #    bottle.abort(HTTP_Internal_Server_Error, '!!!!!!!!!!!!!!invalid query string not a dictionary')
+    #    #bottle.abort(HTTP_Internal_Server_Error, "call programmer")
+    for k in qs:
+        if k=='field':
+            select += qs.getall(k)
+            for v in select:
+                if v not in allowed:
+                    bottle.abort(HTTP_Bad_Request, "Invalid query string at 'field="+v+"'")
+        elif k=='limit':
+            try:
+                limit=int(qs[k])
+            except:
+                bottle.abort(HTTP_Bad_Request, "Invalid query string at 'limit="+qs[k]+"'")
+        else:
+            if k not in allowed:
+                bottle.abort(HTTP_Bad_Request, "Invalid query string at '"+k+"="+qs[k]+"'")
+            if qs[k]!="null":  where[k]=qs[k]
+            else: where[k]=None 
     if len(select)==0: select += allowed
     #change from http api to database naming
     for i in range(0,len(select)):
@@ -270,7 +291,7 @@ def filter_query_string(qs, http2db, allowed):
             select[i] = http2db[k]
     if http2db:
         change_keys_http2db(where, http2db)
-    print "filter_query_string", select,where,limit
+    #print "filter_query_string", select,where,limit
     
     return select,where,limit
 
@@ -285,492 +306,495 @@ def enable_cors():
 
 @bottle.route(url_base + '/tenants', method='GET')
 def http_get_tenants():
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     select_,where_,limit_ = filter_query_string(bottle.request.query, None,
             ('uuid','name','description','created_at') )
-    result, content = mydb.get_table(FROM='nfvo_tenants', SELECT=select_,WHERE=where_,LIMIT=limit_)
-    if result < 0:
-        print "http_get_tenants Error", content
-        bottle.abort(-result, content)
-    else:
+    try:
+        tenants = mydb.get_rows(FROM='nfvo_tenants', SELECT=select_,WHERE=where_,LIMIT=limit_)
         #change_keys_http2db(content, http2db_tenant, reverse=True)
-        convert_datetime2str(content)
-        data={'tenants' : content}
+        convert_datetime2str(tenants)
+        data={'tenants' : tenants}
         return format_out(data)
+    except db_base_Exception as e:
+        logger.error("http_get_tenants error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/tenants/<tenant_id>', method='GET')
 def http_get_tenant_id(tenant_id):
     '''get tenant details, can use both uuid or name'''
     #obtain data
-    result, content = mydb.get_table_by_uuid_name('nfvo_tenants', tenant_id, "tenant") 
-    if result < 0:
-        print "http_get_tenant_id error %d %s" % (result, content)
-        bottle.abort(-result, content)
-    #change_keys_http2db(content, http2db_tenant, reverse=True)
-    convert_datetime2str(content)
-    print content
-    data={'tenant' : content}
-    return format_out(data)
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        tenant = mydb.get_table_by_uuid_name('nfvo_tenants', tenant_id, "tenant") 
+        #change_keys_http2db(content, http2db_tenant, reverse=True)
+        convert_datetime2str(tenant)
+        data={'tenant' : tenant}
+        return format_out(data)
+    except db_base_Exception as e:
+        logger.error("http_get_tenant_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/tenants', method='POST')
 def http_post_tenants():
     '''insert a tenant into the catalogue. '''
     #parse input data
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     http_content,_ = format_in( tenant_schema )
     r = utils.remove_extra_items(http_content, tenant_schema)
     if r is not None: print "http_post_tenants: Warning: remove extra items ", r
-    result, data = nfvo.new_tenant(mydb, http_content['tenant'])
-    if result < 0:
-        print "http_post_tenants error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
+    try: 
+        data = nfvo.new_tenant(mydb, http_content['tenant'])
         return http_get_tenant_id(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_tenants error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/tenants/<tenant_id>', method='PUT')
 def http_edit_tenant_id(tenant_id):
     '''edit tenant details, can use both uuid or name'''
     #parse input data
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     http_content,_ = format_in( tenant_edit_schema )
     r = utils.remove_extra_items(http_content, tenant_edit_schema)
     if r is not None: print "http_edit_tenant_id: Warning: remove extra items ", r
     
     #obtain data, check that only one exist
-    result, content = mydb.get_table_by_uuid_name('nfvo_tenants', tenant_id)
-    if result < 0:
-        print "http_edit_tenant_id error %d %s" % (result, content)
-        bottle.abort(-result, content)
-    
-    #edit data 
-    tenant_id = content['uuid']
-    where={'uuid': content['uuid']}
-    result, content = mydb.update_rows('nfvo_tenants', http_content['tenant'], where)
-    if result < 0:
-        print "http_edit_tenant_id error %d %s" % (result, content)
-        bottle.abort(-result, content)
-
-    return http_get_tenant_id(tenant_id)
+    try: 
+        tenant = mydb.get_table_by_uuid_name('nfvo_tenants', tenant_id)
+        #edit data 
+        tenant_id = tenant['uuid']
+        where={'uuid': tenant['uuid']}
+        mydb.update_rows('nfvo_tenants', http_content['tenant'], where)
+        return http_get_tenant_id(tenant_id)
+    except db_base_Exception as e:
+        logger.error("http_edit_tenant_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/tenants/<tenant_id>', method='DELETE')
 def http_delete_tenant_id(tenant_id):
     '''delete a tenant from database, can use both uuid or name'''
-    
-    result, data = nfvo.delete_tenant(mydb, tenant_id)
-    if result < 0:
-        print "http_delete_tenant_id error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
-        #print json.dumps(data, indent=4)
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        data = nfvo.delete_tenant(mydb, tenant_id)
         return format_out({"result":"tenant " + data + " deleted"})
+    except db_base_Exception as e:
+        logger.error("http_delete_tenant_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
     
 
 @bottle.route(url_base + '/<tenant_id>/datacenters', method='GET')
 def http_get_datacenters(tenant_id):
-    #check valid tenant_id
-    if tenant_id != 'any':
-        if not nfvo.check_tenant(mydb, tenant_id): 
-            print 'httpserver.http_get_datacenters () tenant %s not found' % tenant_id
-            bottle.abort(HTTP_Not_Found, 'Tenant %s not found' % tenant_id)
-            return
-    select_,where_,limit_ = filter_query_string(bottle.request.query, None,
-            ('uuid','name','vim_url','type','created_at') )
-    if tenant_id != 'any':
-        where_['nfvo_tenant_id'] = tenant_id
-        if 'created_at' in select_:
-            select_[ select_.index('created_at') ] = 'd.created_at as created_at'
-        if 'created_at' in where_:
-            where_['d.created_at'] = where_.pop('created_at')
-        result, content = mydb.get_table(FROM='datacenters as d join tenants_datacenters as td on d.uuid=td.datacenter_id',
-                                      SELECT=select_,WHERE=where_,LIMIT=limit_)
-    else:
-        result, content = mydb.get_table(FROM='datacenters',
-                                      SELECT=select_,WHERE=where_,LIMIT=limit_)
-    if result < 0:
-        print "http_get_datacenters Error", content
-        bottle.abort(-result, content)
-    else:
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        if tenant_id != 'any':
+            #check valid tenant_id
+            nfvo.check_tenant(mydb, tenant_id)
+        select_,where_,limit_ = filter_query_string(bottle.request.query, None,
+                ('uuid','name','vim_url','type','created_at') )
+        if tenant_id != 'any':
+            where_['nfvo_tenant_id'] = tenant_id
+            if 'created_at' in select_:
+                select_[ select_.index('created_at') ] = 'd.created_at as created_at'
+            if 'created_at' in where_:
+                where_['d.created_at'] = where_.pop('created_at')
+            datacenters = mydb.get_rows(FROM='datacenters as d join tenants_datacenters as td on d.uuid=td.datacenter_id',
+                                          SELECT=select_,WHERE=where_,LIMIT=limit_)
+        else:
+            datacenters = mydb.get_rows(FROM='datacenters',
+                                          SELECT=select_,WHERE=where_,LIMIT=limit_)
         #change_keys_http2db(content, http2db_tenant, reverse=True)
-        convert_datetime2str(content)
-        data={'datacenters' : content}
+        convert_datetime2str(datacenters)
+        data={'datacenters' : datacenters}
         return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_get_datacenters error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>', method='GET')
 def http_get_datacenter_id(tenant_id, datacenter_id):
     '''get datacenter details, can use both uuid or name'''
-    #check valid tenant_id
-    if tenant_id != 'any':
-        if not nfvo.check_tenant(mydb, tenant_id): 
-            print 'httpserver.http_get_datacenter_id () tenant %s not found' % tenant_id
-            bottle.abort(HTTP_Not_Found, 'Tenant %s not found' % tenant_id)
-            return
-    #obtain data
-    what = 'uuid' if utils.check_valid_uuid(datacenter_id) else 'name'
-    where_={}
-    where_[what] = datacenter_id
-    select_=['uuid', 'name','vim_url', 'vim_url_admin', 'type', 'config', 'description', 'd.created_at as created_at']
-    if tenant_id != 'any':
-        select_.append("datacenter_tenant_id")
-        where_['td.nfvo_tenant_id']= tenant_id
-        from_='datacenters as d join tenants_datacenters as td on d.uuid=td.datacenter_id'
-    else:
-        from_='datacenters as d'
-    result, content = mydb.get_table(
-                SELECT=select_,
-                FROM=from_,
-                WHERE=where_)
-
-    if result < 0:
-        print "http_get_datacenter_id error %d %s" % (result, content)
-        bottle.abort(-result, content)
-    elif result==0:
-        bottle.abort( HTTP_Not_Found, "No datacenter found for tenant with %s '%s'" %(what, datacenter_id) )
-    elif result>1: 
-        bottle.abort( HTTP_Bad_Request, "More than one datacenter found for tenant with %s '%s'" %(what, datacenter_id) )
-
-    if tenant_id != 'any':
-        #get vim tenant info
-        result, content2 = mydb.get_table(
-                SELECT=("vim_tenant_name", "vim_tenant_id", "user"),
-                FROM="datacenter_tenants",
-                WHERE={"uuid": content[0]["datacenter_tenant_id"]},
-                ORDER_BY=("created", ) )
-        del content[0]["datacenter_tenant_id"]
-        if result < 0:
-            print "http_get_datacenter_id vim_tenant_info error %d %s" % (result, content2)
-            bottle.abort(-result, content2)
-        content[0]["vim_tenants"] = content2
-
-    print content
-    if content[0]['config'] != None:
-        try:
-            config_dict = yaml.load(content[0]['config'])
-            content[0]['config'] = config_dict
-        except Exception, e:
-            print "Exception '%s' while trying to load config information" % str(e)
-    #change_keys_http2db(content, http2db_datacenter, reverse=True)
-    convert_datetime2str(content[0])
-    data={'datacenter' : content[0]}
-    return format_out(data)
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        if tenant_id != 'any':
+            #check valid tenant_id
+            nfvo.check_tenant(mydb, tenant_id)
+        #obtain data
+        what = 'uuid' if utils.check_valid_uuid(datacenter_id) else 'name'
+        where_={}
+        where_[what] = datacenter_id
+        select_=['uuid', 'name','vim_url', 'vim_url_admin', 'type', 'config', 'description', 'd.created_at as created_at']
+        if tenant_id != 'any':
+            select_.append("datacenter_tenant_id")
+            where_['td.nfvo_tenant_id']= tenant_id
+            from_='datacenters as d join tenants_datacenters as td on d.uuid=td.datacenter_id'
+        else:
+            from_='datacenters as d'
+        datacenters = mydb.get_rows(
+                    SELECT=select_,
+                    FROM=from_,
+                    WHERE=where_)
+    
+        if len(datacenters)==0:
+            bottle.abort( HTTP_Not_Found, "No datacenter found for tenant with {} '{}'".format(what, datacenter_id) )
+        elif len(datacenters)>1: 
+            bottle.abort( HTTP_Bad_Request, "More than one datacenter found for tenant with {} '{}'".format(what, datacenter_id) )
+        datacenter = datacenters[0]
+        if tenant_id != 'any':
+            #get vim tenant info
+            vim_tenants = mydb.get_rows(
+                    SELECT=("vim_tenant_name", "vim_tenant_id", "user"),
+                    FROM="datacenter_tenants",
+                    WHERE={"uuid": datacenters[0]["datacenter_tenant_id"]},
+                    ORDER_BY=("created", ) )
+            del datacenter["datacenter_tenant_id"]
+            datacenter["vim_tenants"] = vim_tenants
+    
+        if datacenter['config'] != None:
+            try:
+                config_dict = yaml.load(datacenter['config'])
+                datacenter['config'] = config_dict
+            except Exception, e:
+                print "Exception '%s' while trying to load config information" % str(e)
+        #change_keys_http2db(content, http2db_datacenter, reverse=True)
+        convert_datetime2str(datacenter)
+        data={'datacenter' : datacenter}
+        return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_get_datacenter_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/datacenters', method='POST')
 def http_post_datacenters():
     '''insert a tenant into the catalogue. '''
     #parse input data
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     http_content,_ = format_in( datacenter_schema )
     r = utils.remove_extra_items(http_content, datacenter_schema)
-    if r is not None: print "http_post_tenants: Warning: remove extra items ", r
-    result, data = nfvo.new_datacenter(mydb, http_content['datacenter'])
-    if result < 0:
-        print "http_post_datacenters error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
+    if r is not None: print "http_post_datacenters: Warning: remove extra items ", r
+    try:
+        data = nfvo.new_datacenter(mydb, http_content['datacenter'])
         return http_get_datacenter_id('any', data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_datacenters error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/datacenters/<datacenter_id_name>', method='PUT')
 def http_edit_datacenter_id(datacenter_id_name):
     '''edit datacenter details, can use both uuid or name'''
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     #parse input data
     http_content,_ = format_in( datacenter_edit_schema )
     r = utils.remove_extra_items(http_content, datacenter_edit_schema)
     if r is not None: print "http_edit_datacenter_id: Warning: remove extra items ", r
     
-    
-    result, datacenter_id = nfvo.edit_datacenter(mydb, datacenter_id_name, http_content['datacenter'])
-    if result < 0:
-        print "http_edit_datacenter_id error %d %s" % (-result, datacenter_id)
-        bottle.abort(-result, datacenter_id)
-    else:
+    try:
+        datacenter_id = nfvo.edit_datacenter(mydb, datacenter_id_name, http_content['datacenter'])
         return http_get_datacenter_id('any', datacenter_id)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_edit_datacenter_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/networks', method='GET')  #deprecated
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/netmaps', method='GET')
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/netmaps/<netmap_id>', method='GET')
 def http_getnetmap_datacenter_id(tenant_id, datacenter_id, netmap_id=None):
     '''get datacenter networks, can use both uuid or name'''
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     #obtain data
-    result, datacenter_dict = mydb.get_table_by_uuid_name('datacenters', datacenter_id, "datacenter") 
-    if result < 0:
-        print "http_getnetwork_datacenter_id error %d %s" % (result, datacenter_dict)
-        bottle.abort(-result, datacenter_dict)
-    where_= {"datacenter_id":datacenter_dict['uuid']}
-    if netmap_id:
-        if utils.check_valid_uuid(netmap_id):
-            where_["uuid"] = netmap_id
+    try:
+        datacenter_dict = mydb.get_table_by_uuid_name('datacenters', datacenter_id, "datacenter") 
+        where_= {"datacenter_id":datacenter_dict['uuid']}
+        if netmap_id:
+            if utils.check_valid_uuid(netmap_id):
+                where_["uuid"] = netmap_id
+            else:
+                where_["name"] = netmap_id
+        netmaps =mydb.get_rows(FROM='datacenter_nets',
+                                        SELECT=('name','vim_net_id as vim_id', 'uuid', 'type','multipoint','shared','description', 'created_at'),
+                                        WHERE=where_ ) 
+        convert_datetime2str(netmaps)
+        utils.convert_str2boolean(netmaps, ('shared', 'multipoint') )
+        if netmap_id and len(netmaps)==1:
+            data={'netmap' : netmaps[0]}
+        elif netmap_id and len(netmaps)==0:
+            bottle.abort(HTTP_Not_Found, "No netmap found with " + " and ".join(map(lambda x: str(x[0])+": "+str(x[1]), where_.iteritems())) )
+            return 
         else:
-            where_["name"] = netmap_id
-    result, content =mydb.get_table(FROM='datacenter_nets',
-                                    SELECT=('name','vim_net_id as vim_id', 'uuid', 'type','multipoint','shared','description', 'created_at'),
-                                    WHERE=where_ ) 
-    if result < 0:
-        print "http_getnetwork_datacenter_id error %d %s" % (result, content)
-        bottle.abort(-result, content)
-
-    convert_datetime2str(content)
-    utils.convert_str2boolean(content, ('shared', 'multipoint') )
-    if netmap_id and len(content)==1:
-        data={'netmap' : content[0]}
-    elif netmap_id and len(content)==0:
-        bottle.abort(HTTP_Not_Found, "No netmap found with " + " and ".join(map(lambda x: str(x[0])+": "+str(x[1]), where_.iteritems())) )
-        return 
-    else:
-        data={'netmaps' : content}
-    return format_out(data)
+            data={'netmaps' : netmaps}
+        return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_getnetwork_datacenter_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/netmaps', method='DELETE')
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/netmaps/<netmap_id>', method='DELETE')
 def http_delnetmap_datacenter_id(tenant_id, datacenter_id, netmap_id=None):
     '''get datacenter networks, can use both uuid or name'''
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     #obtain data
-    result, datacenter_dict = mydb.get_table_by_uuid_name('datacenters', datacenter_id, "datacenter") 
-    if result < 0:
-        print "http_delnetmap_datacenter_id error %d %s" % (result, datacenter_dict)
-        bottle.abort(-result, datacenter_dict)
-    where_= {"datacenter_id":datacenter_dict['uuid']}
-    if netmap_id:
-        if utils.check_valid_uuid(netmap_id):
-            where_["uuid"] = netmap_id
+    try:
+        datacenter_dict = mydb.get_table_by_uuid_name('datacenters', datacenter_id, "datacenter") 
+        where_= {"datacenter_id":datacenter_dict['uuid']}
+        if netmap_id:
+            if utils.check_valid_uuid(netmap_id):
+                where_["uuid"] = netmap_id
+            else:
+                where_["name"] = netmap_id
+        #change_keys_http2db(content, http2db_tenant, reverse=True)
+        deleted = mydb.delete_row(FROM='datacenter_nets', WHERE= where_) 
+        if deleted == 0 and netmap_id :
+            bottle.abort(HTTP_Not_Found, "No netmap found with " + " and ".join(map(lambda x: str(x[0])+": "+str(x[1]), where_.iteritems())) )
+        if netmap_id:
+            return format_out({"result": "netmap %s deleted" % netmap_id})
         else:
-            where_["name"] = netmap_id
-    #change_keys_http2db(content, http2db_tenant, reverse=True)
-    result, content =mydb.delete_row_by_dict(FROM='datacenter_nets', WHERE= where_) 
-    if result < 0:
-        print "http_delnetmap_datacenter_id error %d %s" % (result, content)
-        bottle.abort(-result, content)
-    elif result == 0 and netmap_id :
-        bottle.abort(HTTP_Not_Found, "No netmap found with " + " and ".join(map(lambda x: str(x[0])+": "+str(x[1]), where_.iteritems())) )
-    if netmap_id:
-        return format_out({"result": "netmap %s deleted" % netmap_id})
-    else:
-        return format_out({"result": "%d netmap deleted" % result})
+            return format_out({"result": "%d netmap deleted" % deleted})
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_delnetmap_datacenter_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/netmaps/upload', method='POST')
 def http_uploadnetmap_datacenter_id(tenant_id, datacenter_id):
-    result, content = nfvo.datacenter_new_netmap(mydb, tenant_id, datacenter_id, None)
-    if result < 0:
-        print "http_postnetmap_datacenter_id error %d %s" % (result, content)
-        bottle.abort(-result, content)
-    convert_datetime2str(content)
-    utils.convert_str2boolean(content, ('shared', 'multipoint') )
-    print content
-    data={'netmaps' : content}
-    return format_out(data)
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        netmaps = nfvo.datacenter_new_netmap(mydb, tenant_id, datacenter_id, None)
+        convert_datetime2str(netmaps)
+        utils.convert_str2boolean(netmaps, ('shared', 'multipoint') )
+        data={'netmaps' : netmaps}
+        return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_uploadnetmap_datacenter_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/netmaps', method='POST')
 def http_postnetmap_datacenter_id(tenant_id, datacenter_id):
     '''creates a new netmap'''
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     #parse input data
     http_content,_ = format_in( netmap_new_schema )
     r = utils.remove_extra_items(http_content, netmap_new_schema)
-    if r is not None: print "http_action_datacenter_id: Warning: remove extra items ", r
+    if r is not None: print "http_postnetmap_datacenter_id: Warning: remove extra items ", r
     
-    #obtain data, check that only one exist
-    result, content = nfvo.datacenter_new_netmap(mydb, tenant_id, datacenter_id, http_content)
-    if result < 0:
-        print "http_postnetmap_datacenter_id error %d %s" % (result, content)
-        bottle.abort(-result, content)
-    convert_datetime2str(content)
-    utils.convert_str2boolean(content, ('shared', 'multipoint') )
-    print content
-    data={'netmaps' : content}
-    return format_out(data)
+    try:
+        #obtain data, check that only one exist
+        netmaps = nfvo.datacenter_new_netmap(mydb, tenant_id, datacenter_id, http_content)
+        convert_datetime2str(netmaps)
+        utils.convert_str2boolean(netmaps, ('shared', 'multipoint') )
+        data={'netmaps' : netmaps}
+        return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_postnetmap_datacenter_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/netmaps/<netmap_id>', method='PUT')
 def http_putnettmap_datacenter_id(tenant_id, datacenter_id, netmap_id):
     '''edit a  netmap'''
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     #parse input data
     http_content,_ = format_in( netmap_edit_schema )
     r = utils.remove_extra_items(http_content, netmap_edit_schema)
     if r is not None: print "http_putnettmap_datacenter_id: Warning: remove extra items ", r
     
     #obtain data, check that only one exist
-    result, content = nfvo.datacenter_edit_netmap(mydb, tenant_id, datacenter_id, netmap_id, http_content)
-    if result < 0:
-        print "http_putnettmap_datacenter_id error %d %s" % (result, content)
-        bottle.abort(-result, content)
-    else:
+    try:
+        nfvo.datacenter_edit_netmap(mydb, tenant_id, datacenter_id, netmap_id, http_content)
         return http_getnetmap_datacenter_id(tenant_id, datacenter_id, netmap_id)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_putnettmap_datacenter_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
     
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/action', method='POST')
 def http_action_datacenter_id(tenant_id, datacenter_id):
     '''perform an action over datacenter, can use both uuid or name'''
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     #parse input data
     http_content,_ = format_in( datacenter_action_schema )
     r = utils.remove_extra_items(http_content, datacenter_action_schema)
     if r is not None: print "http_action_datacenter_id: Warning: remove extra items ", r
     
-    #obtain data, check that only one exist
-    result, content = nfvo.datacenter_action(mydb, tenant_id, datacenter_id, http_content)
-    if result < 0:
-        print "http_action_datacenter_id error %d %s" % (result, content)
-        bottle.abort(-result, content)
-    if 'net-update' in http_content:
-        return http_getnetmap_datacenter_id(datacenter_id)
-    else:
-        return format_out(content)
+    try:
+        #obtain data, check that only one exist
+        result = nfvo.datacenter_action(mydb, tenant_id, datacenter_id, http_content)
+        if 'net-update' in http_content:
+            return http_getnetmap_datacenter_id(datacenter_id)
+        else:
+            return format_out(result)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_action_datacenter_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 
 @bottle.route(url_base + '/datacenters/<datacenter_id>', method='DELETE')
 def http_delete_datacenter_id( datacenter_id):
     '''delete a tenant from database, can use both uuid or name'''
     
-    result, data = nfvo.delete_datacenter(mydb, datacenter_id)
-    if result < 0:
-        print "http_delete_datacenter_id error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
-        #print json.dumps(data, indent=4)
-        return format_out({"result":"datacenter " + data + " deleted"})
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        data = nfvo.delete_datacenter(mydb, datacenter_id)
+        return format_out({"result":"datacenter '" + data + "' deleted"})
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_delete_datacenter_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>', method='POST')
 def http_associate_datacenters(tenant_id, datacenter_id):
     '''associate an existing datacenter to a this tenant. '''
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     #parse input data
     http_content,_ = format_in( datacenter_associate_schema )
     r = utils.remove_extra_items(http_content, datacenter_associate_schema)
     if r != None: print "http_associate_datacenters: Warning: remove extra items ", r
-    result, data = nfvo.associate_datacenter_to_tenant(mydb, tenant_id, datacenter_id, 
-                                http_content['datacenter'].get('vim_tenant'),
-                                http_content['datacenter'].get('vim_tenant_name'),
-                                http_content['datacenter'].get('vim_username'),
-                                http_content['datacenter'].get('vim_password')
-                     )
-    if result < 0:
-        print "http_associate_datacenters error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
-        print "http_associate_datacenters data" , data 
-        return http_get_datacenter_id(tenant_id, data)
+    try:
+        id_ = nfvo.associate_datacenter_to_tenant(mydb, tenant_id, datacenter_id, 
+                                    http_content['datacenter'].get('vim_tenant'),
+                                    http_content['datacenter'].get('vim_tenant_name'),
+                                    http_content['datacenter'].get('vim_username'),
+                                    http_content['datacenter'].get('vim_password')
+                         )
+        return http_get_datacenter_id(tenant_id, id_)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_associate_datacenters error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>', method='DELETE')
 def http_deassociate_datacenters(tenant_id, datacenter_id):
     '''deassociate an existing datacenter to a this tenant. '''
-    result, data = nfvo.deassociate_datacenter_to_tenant(mydb, tenant_id, datacenter_id)
-    if result < 0:
-        print "http_deassociate_datacenters error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
-        return format_out({"result":data})
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        data = nfvo.deassociate_datacenter_to_tenant(mydb, tenant_id, datacenter_id)
+        return format_out({"result": data})
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_deassociate_datacenters error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
        
-
-
 @bottle.route(url_base + '/<tenant_id>/vim/<datacenter_id>/<item>', method='GET')
 @bottle.route(url_base + '/<tenant_id>/vim/<datacenter_id>/<item>/<name>', method='GET')
 def http_get_vim_items(tenant_id, datacenter_id, item, name=None):
-    result, data = nfvo.vim_action_get(mydb, tenant_id, datacenter_id, item, name)
-    if result < 0:
-        print "http_get_vim_items error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        data = nfvo.vim_action_get(mydb, tenant_id, datacenter_id, item, name)
         return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_get_vim_items error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/vim/<datacenter_id>/<item>/<name>', method='DELETE')
 def http_del_vim_items(tenant_id, datacenter_id, item, name):
-    result, data = nfvo.vim_action_delete(mydb, tenant_id, datacenter_id, item, name)
-    if result < 0:
-        print "http_get_vim_items error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        data = nfvo.vim_action_delete(mydb, tenant_id, datacenter_id, item, name)
         return format_out({"result":data})
-
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_del_vim_items error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 @bottle.route(url_base + '/<tenant_id>/vim/<datacenter_id>/<item>', method='POST')
 def http_post_vim_items(tenant_id, datacenter_id, item):
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     http_content,_ = format_in( object_schema )
-    result, data = nfvo.vim_action_create(mydb, tenant_id, datacenter_id, item, http_content)
-    if result < 0:
-        print "http_post_vim_items error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
+    try:
+        data = nfvo.vim_action_create(mydb, tenant_id, datacenter_id, item, http_content)
         return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_vim_items error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/vnfs', method='GET')
 def http_get_vnfs(tenant_id):
-    #check valid tenant_id
-    if tenant_id != "any" and not nfvo.check_tenant(mydb, tenant_id): 
-        print 'httpserver.http_get_vnf_id() tenant %s not found' % tenant_id
-        bottle.abort(HTTP_Not_Found, 'Tenant %s not found' % tenant_id)
-        return
-    select_,where_,limit_ = filter_query_string(bottle.request.query, None,
-            ('uuid','name','description','public', "tenant_id", "created_at") )
-    where_or = {}
-    if tenant_id != "any":
-        where_or["tenant_id"] = tenant_id
-        where_or["public"] = True
-    result, content = mydb.get_table(FROM='vnfs', SELECT=select_,WHERE=where_,WHERE_OR=where_or, WHERE_AND_OR="AND",LIMIT=limit_)
-    if result < 0:
-        print "http_get_vnfs Error", content
-        bottle.abort(-result, content)
-    else:
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        if tenant_id != 'any':
+            #check valid tenant_id
+            nfvo.check_tenant(mydb, tenant_id)
+        select_,where_,limit_ = filter_query_string(bottle.request.query, None,
+                ('uuid','name','description','public', "tenant_id", "created_at") )
+        where_or = {}
+        if tenant_id != "any":
+            where_or["tenant_id"] = tenant_id
+            where_or["public"] = True
+        vnfs = mydb.get_rows(FROM='vnfs', SELECT=select_,WHERE=where_,WHERE_OR=where_or, WHERE_AND_OR="AND",LIMIT=limit_)
         #change_keys_http2db(content, http2db_vnf, reverse=True)
-        utils.convert_str2boolean(content, ('public',))
-        convert_datetime2str(content)
-        data={'vnfs' : content}
+        utils.convert_str2boolean(vnfs, ('public',))
+        convert_datetime2str(vnfs)
+        data={'vnfs' : vnfs}
         return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_get_vnfs error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/vnfs/<vnf_id>', method='GET')
 def http_get_vnf_id(tenant_id,vnf_id):
     '''get vnf details, can use both uuid or name'''
-    result, data = nfvo.get_vnf_id(mydb,tenant_id,vnf_id)
-    if result < 0:
-        print "http_post_vnfs error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-
-    utils.convert_str2boolean(data, ('public',))
-    convert_datetime2str(data)
-    return format_out(data)
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        vnf = nfvo.get_vnf_id(mydb,tenant_id,vnf_id)
+        utils.convert_str2boolean(vnf, ('public',))
+        convert_datetime2str(vnf)
+        return format_out(vnf)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_get_vnf_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/vnfs', method='POST')
 def http_post_vnfs(tenant_id):
     '''insert a vnf into the catalogue. Creates the flavor and images in the VIM, and creates the VNF and its internal structure in the OPENMANO DB'''
-    print "Parsing the YAML file of the VNF"
+    #print "Parsing the YAML file of the VNF"
     #parse input data
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     http_content, used_schema = format_in( vnfd_schema_v01, ("version",), {"v0.2": vnfd_schema_v02})
     r = utils.remove_extra_items(http_content, used_schema)
     if r is not None: print "http_post_vnfs: Warning: remove extra items ", r
-    result, data = nfvo.new_vnf(mydb,tenant_id,http_content)
-    if result < 0:
-        print "http_post_vnfs error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
-        return http_get_vnf_id(tenant_id,data)
+    try:
+        vnf_id = nfvo.new_vnf(mydb,tenant_id,http_content)
+        return http_get_vnf_id(tenant_id, vnf_id)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_vnfs error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
             
 @bottle.route(url_base + '/<tenant_id>/vnfs/<vnf_id>', method='DELETE')
 def http_delete_vnf_id(tenant_id,vnf_id):
     '''delete a vnf from database, and images and flavors in VIM when appropriate, can use both uuid or name'''
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     #check valid tenant_id and deletes the vnf, including images, 
-    result, data = nfvo.delete_vnf(mydb,tenant_id,vnf_id)
-    if result < 0:
-        print "http_delete_vnf_id error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
+    try:
+        data = nfvo.delete_vnf(mydb,tenant_id,vnf_id)
         #print json.dumps(data, indent=4)
         return format_out({"result":"VNF " + data + " deleted"})
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_delete_vnf_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 #@bottle.route(url_base + '/<tenant_id>/hosts/topology', method='GET')
 #@bottle.route(url_base + '/<tenant_id>/physicalview/Madrid-Alcantara', method='GET')
 @bottle.route(url_base + '/<tenant_id>/physicalview/<datacenter>', method='GET')
 def http_get_hosts(tenant_id, datacenter):
     '''get the tidvim host hopology from the vim.'''
-    global mydb
-    print "http_get_hosts received by tenant " + tenant_id + ' datacenter ' + datacenter
-    if datacenter == 'treeview':
-        result, data = nfvo.get_hosts(mydb, tenant_id)
-    else:
-        #openmano-gui is using a hardcoded value for the datacenter
-        result, data = nfvo.get_hosts_info(mydb, tenant_id) #, datacenter)
-    
-    if result < 0:
-        print "http_post_vnfs error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
-        convert_datetime2str(data)
-        print json.dumps(data, indent=4)
-        return format_out(data)
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    #print "http_get_hosts received by tenant " + tenant_id + ' datacenter ' + datacenter
+    try:
+        if datacenter == 'treeview':
+            data = nfvo.get_hosts(mydb, tenant_id)
+        else:
+            #openmano-gui is using a hardcoded value for the datacenter
+            result, data = nfvo.get_hosts_info(mydb, tenant_id) #, datacenter)
+        
+        if result < 0:
+            print "http_post_vnfs error %d %s" % (-result, data)
+            bottle.abort(-result, data)
+        else:
+            convert_datetime2str(data)
+            print json.dumps(data, indent=4)
+            return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_vnfs error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 
 @bottle.route(url_base + '/<path:path>', method='OPTIONS')
 def http_options_deploy(path):
     '''For some reason GUI web ask for OPTIONS that must be responded'''
     #TODO: check correct path, and correct headers request
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     bottle.response.set_header('Access-Control-Allow-Methods','POST, GET, PUT, DELETE, OPTIONS')
     bottle.response.set_header('Accept','application/yaml,application/json')
     bottle.response.set_header('Content-Type','application/yaml,application/json')
@@ -781,31 +805,28 @@ def http_options_deploy(path):
 @bottle.route(url_base + '/<tenant_id>/topology/deploy', method='POST')
 def http_post_deploy(tenant_id):
     '''post topology deploy.'''
-    print "http_post_deploy by tenant " + tenant_id 
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
 
     http_content, used_schema = format_in( nsd_schema_v01, ("schema_version",), {2: nsd_schema_v02})
     #r = utils.remove_extra_items(http_content, used_schema)
     #if r is not None: print "http_post_deploy: Warning: remove extra items ", r
-    print "http_post_deploy input: ",  http_content
+    #print "http_post_deploy input: ",  http_content
     
-    result, scenario_uuid = nfvo.new_scenario(mydb, tenant_id, http_content)
-    if result < 0:
-        print "http_post_deploy error creating the scenario %d %s" % (-result, scenario_uuid)
-        bottle.abort(-result, scenario_uuid)
-
-    result, data = nfvo.start_scenario(mydb, tenant_id, scenario_uuid, http_content['name'], http_content['name'])
-    if result < 0:
-        print "http_post_deploy error launching the scenario %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
-        print json.dumps(data, indent=4)
-        return format_out(data)
+    try:
+        scenario_id = nfvo.new_scenario(mydb, tenant_id, http_content)
+        instance = nfvo.start_scenario(mydb, tenant_id, scenario_id, http_content['name'], http_content['name'])
+        #print json.dumps(data, indent=4)
+        return format_out(instance)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_deploy error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/topology/verify', method='POST')
 def http_post_verify(tenant_id):
     #TODO:
 #    '''post topology verify'''
 #    print "http_post_verify by tenant " + tenant_id + ' datacenter ' + datacenter
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     return 
 
 #
@@ -815,176 +836,151 @@ def http_post_verify(tenant_id):
 @bottle.route(url_base + '/<tenant_id>/scenarios', method='POST')
 def http_post_scenarios(tenant_id):
     '''add a scenario into the catalogue. Creates the scenario and its internal structure in the OPENMANO DB'''
-    print "http_post_scenarios by tenant " + tenant_id 
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     http_content, used_schema = format_in( nsd_schema_v01, ("schema_version",), {2: nsd_schema_v02})
     #r = utils.remove_extra_items(http_content, used_schema)
     #if r is not None: print "http_post_scenarios: Warning: remove extra items ", r
-    print "http_post_scenarios input: ",  http_content
-    if http_content.get("schema_version") == None:
-        result, data = nfvo.new_scenario(mydb, tenant_id, http_content)
-    else:
-        result, data = nfvo.new_scenario_v02(mydb, tenant_id, http_content)
-    if result < 0:
-        print "http_post_scenarios error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
+    #print "http_post_scenarios input: ",  http_content
+    try:
+        if http_content.get("schema_version") == None:
+            scenario_id = nfvo.new_scenario(mydb, tenant_id, http_content)
+        else:
+            scenario_id = nfvo.new_scenario_v02(mydb, tenant_id, http_content)
         #print json.dumps(data, indent=4)
         #return format_out(data)
-        return http_get_scenario_id(tenant_id,data)
+        return http_get_scenario_id(tenant_id, scenario_id)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_scenarios error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/scenarios/<scenario_id>/action', method='POST')
 def http_post_scenario_action(tenant_id, scenario_id):
     '''take an action over a scenario'''
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     #check valid tenant_id
-    if not nfvo.check_tenant(mydb, tenant_id): 
-        print 'httpserver.http_post_scenario_action() tenant %s not found' % tenant_id
-        bottle.abort(HTTP_Not_Found, 'Tenant %s not found' % tenant_id)
-        return
-    #parse input data
-    http_content,_ = format_in( scenario_action_schema )
-    r = utils.remove_extra_items(http_content, scenario_action_schema)
-    if r is not None: print "http_post_scenario_action: Warning: remove extra items ", r
-    if "start" in http_content:
-        result, data = nfvo.start_scenario(mydb, tenant_id, scenario_id, http_content['start']['instance_name'], \
-                    http_content['start'].get('description',http_content['start']['instance_name']),
-                    http_content['start'].get('datacenter') )
-        if result < 0:
-            print "http_post_scenario_action start error %d: %s" % (-result, data)
-            bottle.abort(-result, data)
-        else:
+    try:
+        nfvo.check_tenant(mydb, tenant_id) 
+        #parse input data
+        http_content,_ = format_in( scenario_action_schema )
+        r = utils.remove_extra_items(http_content, scenario_action_schema)
+        if r is not None: print "http_post_scenario_action: Warning: remove extra items ", r
+        if "start" in http_content:
+            data = nfvo.start_scenario(mydb, tenant_id, scenario_id, http_content['start']['instance_name'], \
+                        http_content['start'].get('description',http_content['start']['instance_name']),
+                        http_content['start'].get('datacenter') )
             return format_out(data)
-    elif "deploy" in http_content:   #Equivalent to start
-        result, data = nfvo.start_scenario(mydb, tenant_id, scenario_id, http_content['deploy']['instance_name'],
-                    http_content['deploy'].get('description',http_content['deploy']['instance_name']),
-                    http_content['deploy'].get('datacenter') )
-        if result < 0:
-            print "http_post_scenario_action deploy error %d: %s" % (-result, data)
-            bottle.abort(-result, data)
-        else:
+        elif "deploy" in http_content:   #Equivalent to start
+            data = nfvo.start_scenario(mydb, tenant_id, scenario_id, http_content['deploy']['instance_name'],
+                        http_content['deploy'].get('description',http_content['deploy']['instance_name']),
+                        http_content['deploy'].get('datacenter') )
             return format_out(data)
-    elif "reserve" in http_content:   #Reserve resources
-        result, data = nfvo.start_scenario(mydb, tenant_id, scenario_id, http_content['reserve']['instance_name'],
-                    http_content['reserve'].get('description',http_content['reserve']['instance_name']),
-                    http_content['reserve'].get('datacenter'),  startvms=False )
-        if result < 0:
-            print "http_post_scenario_action reserve error %d: %s" % (-result, data)
-            bottle.abort(-result, data)
-        else:
+        elif "reserve" in http_content:   #Reserve resources
+            data = nfvo.start_scenario(mydb, tenant_id, scenario_id, http_content['reserve']['instance_name'],
+                        http_content['reserve'].get('description',http_content['reserve']['instance_name']),
+                        http_content['reserve'].get('datacenter'),  startvms=False )
             return format_out(data)
-    elif "verify" in http_content:   #Equivalent to start and then delete
-        result, data = nfvo.start_scenario(mydb, tenant_id, scenario_id, http_content['verify']['instance_name'],
-                    http_content['verify'].get('description',http_content['verify']['instance_name']),
-                    http_content['verify'].get('datacenter'), startvms=False )
-        if result < 0 or result!=1:
-            print "http_post_scenario_action verify error during start %d: %s" % (-result, data)
-            bottle.abort(-result, data)
-        instance_id = data['uuid']
-        result, message = nfvo.delete_instance(mydb, tenant_id,instance_id)
-        if result < 0:
-            print "http_post_scenario_action verify error during start delete_instance_id %d %s" % (-result, message)
-            bottle.abort(-result, message)
-        else:
-            #print json.dumps(data, indent=4)
+        elif "verify" in http_content:   #Equivalent to start and then delete
+            data = nfvo.start_scenario(mydb, tenant_id, scenario_id, http_content['verify']['instance_name'],
+                        http_content['verify'].get('description',http_content['verify']['instance_name']),
+                        http_content['verify'].get('datacenter'), startvms=False )
+            instance_id = data['uuid']
+            nfvo.delete_instance(mydb, tenant_id,instance_id)
             return format_out({"result":"Verify OK"})
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_scenario_action error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/scenarios', method='GET')
 def http_get_scenarios(tenant_id):
     '''get scenarios list'''
-    #check valid tenant_id
-    if tenant_id != "any" and not nfvo.check_tenant(mydb, tenant_id): 
-        print "httpserver.http_get_scenarios() tenant '%s' not found" % tenant_id
-        bottle.abort(HTTP_Not_Found, "Tenant '%s' not found" % tenant_id)
-        return
-    #obtain data
-    s,w,l=filter_query_string(bottle.request.query, None, ('uuid', 'name', 'description', 'tenant_id', 'created_at', 'public'))
-    where_or={}
-    if tenant_id != "any":
-        where_or["tenant_id"] = tenant_id
-        where_or["public"] = True
-    result, data = mydb.get_table(SELECT=s, WHERE=w, WHERE_OR=where_or, WHERE_AND_OR="AND", LIMIT=l, FROM='scenarios')
-    if result < 0:
-        print "http_get_scenarios error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
-        convert_datetime2str(data)
-        utils.convert_str2boolean(data, ('public',) )
-        scenarios={'scenarios':data}
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        #check valid tenant_id
+        if tenant_id != "any":
+            nfvo.check_tenant(mydb, tenant_id) 
+        #obtain data
+        s,w,l=filter_query_string(bottle.request.query, None, ('uuid', 'name', 'description', 'tenant_id', 'created_at', 'public'))
+        where_or={}
+        if tenant_id != "any":
+            where_or["tenant_id"] = tenant_id
+            where_or["public"] = True
+        scenarios = mydb.get_rows(SELECT=s, WHERE=w, WHERE_OR=where_or, WHERE_AND_OR="AND", LIMIT=l, FROM='scenarios')
+        convert_datetime2str(scenarios)
+        utils.convert_str2boolean(scenarios, ('public',) )
+        data={'scenarios':scenarios}
         #print json.dumps(scenarios, indent=4)
-        return format_out(scenarios)
+        return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_get_scenarios error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/scenarios/<scenario_id>', method='GET')
 def http_get_scenario_id(tenant_id, scenario_id):
     '''get scenario details, can use both uuid or name'''
-    #check valid tenant_id
-    if tenant_id != "any" and not nfvo.check_tenant(mydb, tenant_id): 
-        print "httpserver.http_get_scenario_id() tenant '%s' not found" % tenant_id
-        bottle.abort(HTTP_Not_Found, "Tenant '%s' not found" % tenant_id)
-        return
-    #obtain data
-    result, content = mydb.get_scenario(scenario_id, tenant_id)
-    if result < 0:
-        print "http_get_scenario_id error %d %s" % (-result, content)
-        bottle.abort(-result, content)
-    else:
-        #print json.dumps(content, indent=4)
-        convert_datetime2str(content)
-        data={'scenario' : content}
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        #check valid tenant_id
+        if tenant_id != "any":
+            nfvo.check_tenant(mydb, tenant_id) 
+        #obtain data
+        scenario = mydb.get_scenario(scenario_id, tenant_id)
+        convert_datetime2str(scenario)
+        data={'scenario' : scenario}
         return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_get_scenarios error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/scenarios/<scenario_id>', method='DELETE')
 def http_delete_scenario_id(tenant_id, scenario_id):
     '''delete a scenario from database, can use both uuid or name'''
-    #check valid tenant_id
-    if tenant_id != "any" and not nfvo.check_tenant(mydb, tenant_id): 
-        print "httpserver.http_delete_scenario_id() tenant '%s' not found" % tenant_id
-        bottle.abort(HTTP_Not_Found, "Tenant '%s' not found" % tenant_id)
-        return
-    #obtain data
-    result, data = mydb.delete_scenario(scenario_id, tenant_id)
-    if result < 0:
-        print "http_delete_scenario_id error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
+    try:
+        #check valid tenant_id
+        if tenant_id != "any":
+            nfvo.check_tenant(mydb, tenant_id) 
+        #obtain data
+        data = mydb.delete_scenario(scenario_id, tenant_id)
         #print json.dumps(data, indent=4)
         return format_out({"result":"scenario " + data + " deleted"})
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_delete_scenario_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 
 @bottle.route(url_base + '/<tenant_id>/scenarios/<scenario_id>', method='PUT')
 def http_put_scenario_id(tenant_id, scenario_id):
     '''edit an existing scenario id'''
-    print "http_put_scenarios by tenant " + tenant_id 
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     http_content,_ = format_in( scenario_edit_schema )
     #r = utils.remove_extra_items(http_content, scenario_edit_schema)
     #if r is not None: print "http_put_scenario_id: Warning: remove extra items ", r
-    print "http_put_scenario_id input: ",  http_content
-    
-    result, data = nfvo.edit_scenario(mydb, tenant_id, scenario_id, http_content)
-    if result < 0:
-        print "http_put_scenarios error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
+    #print "http_put_scenario_id input: ",  http_content
+    try:
+        nfvo.edit_scenario(mydb, tenant_id, scenario_id, http_content)
         #print json.dumps(data, indent=4)
         #return format_out(data)
-        return http_get_scenario_id(tenant_id,data)
+        return http_get_scenario_id(tenant_id, scenario_id)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_put_scenario_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/instances', method='POST')
 def http_post_instances(tenant_id):
     '''take an action over a scenario'''
-    #check valid tenant_id
-    if not nfvo.check_tenant(mydb, tenant_id): 
-        print 'httpserver.http_post_scenario_action() tenant %s not found' % tenant_id
-        bottle.abort(HTTP_Not_Found, 'Tenant %s not found' % tenant_id)
-        return
-    #parse input data
-    http_content,used_schema = format_in( instance_scenario_create_schema)
-    r = utils.remove_extra_items(http_content, used_schema)
-    if r is not None: print "http_post_instances: Warning: remove extra items ", r
-    result, data = nfvo.create_instance(mydb, tenant_id, http_content["instance"])
-    if result < 0:
-        print "http_post_instances start error %d: %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        #check valid tenant_id
+        if tenant_id != "any":
+            nfvo.check_tenant(mydb, tenant_id) 
+        #parse input data
+        http_content,used_schema = format_in( instance_scenario_create_schema)
+        r = utils.remove_extra_items(http_content, used_schema)
+        if r is not None: print "http_post_instances: Warning: remove extra items ", r
+        data = nfvo.create_instance(mydb, tenant_id, http_content["instance"])
         return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_instances error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 #
 # INSTANCES
@@ -992,103 +988,88 @@ def http_post_instances(tenant_id):
 @bottle.route(url_base + '/<tenant_id>/instances', method='GET')
 def http_get_instances(tenant_id):
     '''get instance list'''
-    #check valid tenant_id
-    if tenant_id != "any" and not nfvo.check_tenant(mydb, tenant_id): 
-        print 'httpserver.http_get_instances() tenant %s not found' % tenant_id
-        bottle.abort(HTTP_Not_Found, 'Tenant %s not found' % tenant_id)
-        return
-    #obtain data
-    s,w,l=filter_query_string(bottle.request.query, None, ('uuid', 'name', 'scenario_id', 'tenant_id', 'description', 'created_at'))
-    where_or={}
-    if tenant_id != "any":
-        w['tenant_id'] = tenant_id
-    result, data = mydb.get_table(SELECT=s, WHERE=w, LIMIT=l, FROM='instance_scenarios')
-    if result < 0:
-        print "http_get_instances error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
-        convert_datetime2str(data)
-        utils.convert_str2boolean(data, ('public',) )
-        instances={'instances':data}
-        print json.dumps(instances, indent=4)
-        return format_out(instances)
+    try:
+        #check valid tenant_id
+        if tenant_id != "any":
+            nfvo.check_tenant(mydb, tenant_id) 
+        #obtain data
+        s,w,l=filter_query_string(bottle.request.query, None, ('uuid', 'name', 'scenario_id', 'tenant_id', 'description', 'created_at'))
+        if tenant_id != "any":
+            w['tenant_id'] = tenant_id
+        instances = mydb.get_rows(SELECT=s, WHERE=w, LIMIT=l, FROM='instance_scenarios')
+        convert_datetime2str(instances)
+        utils.convert_str2boolean(instances, ('public',) )
+        data={'instances':instances}
+        return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_get_instances error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/instances/<instance_id>', method='GET')
 def http_get_instance_id(tenant_id, instance_id):
     '''get instances details, can use both uuid or name'''
-    #check valid tenant_id
-    if tenant_id != "any" and not nfvo.check_tenant(mydb, tenant_id): 
-        print 'httpserver.http_get_instance_id() tenant %s not found' % tenant_id
-        bottle.abort(HTTP_Not_Found, 'Tenant %s not found' % tenant_id)
-        return
-    if tenant_id == "any":
-        tenant_id = None
-  
-    #obtain data (first time is only to check that the instance exists)
-    result, data = mydb.get_instance_scenario(instance_id, tenant_id, verbose=True)
-    if result < 0:
-        print "http_get_instance_id error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-        return
-    
-    r,c = nfvo.refresh_instance(mydb, tenant_id, data)
-    if r<0:
-        print "WARNING: nfvo.refresh_instance couldn't refresh the status of the instance: %s" %c
-    #obtain data with results upated
-    result, data = mydb.get_instance_scenario(instance_id, tenant_id)
-    if result < 0:
-        print "http_get_instance_id error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-        return
-    convert_datetime2str(data)
-    print json.dumps(data, indent=4)
-    return format_out(data)
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        #check valid tenant_id
+        if tenant_id != "any":
+            nfvo.check_tenant(mydb, tenant_id) 
+        if tenant_id == "any":
+            tenant_id = None
+        #obtain data (first time is only to check that the instance exists)
+        instance_dict = mydb.get_instance_scenario(instance_id, tenant_id, verbose=True)
+        try:
+            nfvo.refresh_instance(mydb, tenant_id, instance_dict)
+        except (nfvo.NfvoException, db_base_Exception) as e:
+            logger.warn("nfvo.refresh_instance couldn't refresh the status of the instance: %s" % str(e))
+        #obtain data with results upated
+        instance = mydb.get_instance_scenario(instance_id, tenant_id)
+        convert_datetime2str(instance)
+        #print json.dumps(instance, indent=4)
+        return format_out(instance)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_get_instance_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/instances/<instance_id>', method='DELETE')
 def http_delete_instance_id(tenant_id, instance_id):
     '''delete instance from VIM and from database, can use both uuid or name'''
-    #check valid tenant_id
-    if tenant_id != "any" and not nfvo.check_tenant(mydb, tenant_id): 
-        print 'httpserver.http_delete_instance_id() tenant %s not found' % tenant_id
-        bottle.abort(HTTP_Not_Found, 'Tenant %s not found' % tenant_id)
-        return
-    if tenant_id == "any":
-        tenant_id = None
-    #obtain data
-    result, message = nfvo.delete_instance(mydb, tenant_id,instance_id)
-    if result < 0:
-        print "http_delete_instance_id error %d %s" % (-result, message)
-        bottle.abort(-result, message)
-    else:
-        #print json.dumps(data, indent=4)
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        #check valid tenant_id
+        if tenant_id != "any":
+            nfvo.check_tenant(mydb, tenant_id) 
+        if tenant_id == "any":
+            tenant_id = None
+        #obtain data
+        message = nfvo.delete_instance(mydb, tenant_id,instance_id)
         return format_out({"result":message})
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_delete_instance_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/instances/<instance_id>/action', method='POST')
 def http_post_instance_scenario_action(tenant_id, instance_id):
     '''take an action over a scenario instance'''
-    #check valid tenant_id
-    if not nfvo.check_tenant(mydb, tenant_id): 
-        print 'httpserver.http_post_instance_scenario_action() tenant %s not found' % tenant_id
-        bottle.abort(HTTP_Not_Found, 'Tenant %s not found' % tenant_id)
-        return
-    #parse input data
-    http_content,_ = format_in( instance_scenario_action_schema )
-    r = utils.remove_extra_items(http_content, instance_scenario_action_schema)
-    if r is not None: print "http_post_instance_scenario_action: Warning: remove extra items ", r
-    print "http_post_instance_scenario_action input: ", http_content
-    #obtain data
-    result, data = mydb.get_instance_scenario(instance_id, tenant_id)
-    if result < 0:
-        print "http_get_instance_id error %d %s" % (-result, data)
-        bottle.abort(-result, data)
-    instance_id = data["uuid"]
-    
-    result, data = nfvo.instance_action(mydb, tenant_id, instance_id, http_content)
-    if result < 0:
-        print "http_post_scenario_action error %d: %s" % (-result, data)
-        bottle.abort(-result, data)
-    else:
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        #check valid tenant_id
+        if tenant_id != "any":
+            nfvo.check_tenant(mydb, tenant_id) 
+
+        #parse input data
+        http_content,_ = format_in( instance_scenario_action_schema )
+        r = utils.remove_extra_items(http_content, instance_scenario_action_schema)
+        if r is not None: print "http_post_instance_scenario_action: Warning: remove extra items ", r
+        #print "http_post_instance_scenario_action input: ", http_content
+        #obtain data
+        instance = mydb.get_instance_scenario(instance_id, tenant_id)
+        instance_id = instance["uuid"]
+        
+        data = nfvo.instance_action(mydb, tenant_id, instance_id, http_content)
         return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_instance_scenario_action error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
 
 
 @bottle.error(400)

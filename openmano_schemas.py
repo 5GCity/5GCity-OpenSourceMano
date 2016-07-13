@@ -97,7 +97,11 @@ config_schema = {
         },
         "log_level": log_level_schema,
         "log_level_db": log_level_schema,
-        "log_level_vimconn": log_level_schema
+        "log_level_vimconn": log_level_schema,
+        "log_level_nfvo": log_level_schema,
+        "log_host": nameshort_schema,
+        "log_port": port_schema,
+        "log_file": path_schema,
     },
     "required": ['db_host', 'db_user', 'db_passwd', 'db_name'],
     "additionalProperties": False

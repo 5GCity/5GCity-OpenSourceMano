@@ -33,8 +33,8 @@ It loads the configuration file and launches the http_server thread that will li
 '''
 __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$26-aug-2014 11:09:29$"
-__version__="0.4.40-r476"
-version_date="Jun 2016"
+__version__="0.4.41-r478"
+version_date="Jul 2016"
 database_version="0.10"      #expected database schema version
 
 import httpserver
@@ -49,9 +49,11 @@ import utils
 from openmano_schemas import config_schema
 import nfvo
 import logging
+import logging.handlers as log_handlers
 
 global global_config
-logger = logging.getLogger('mano')
+global logger
+logger = logging.getLogger('openmano')
 
 class LoadConfigurationException(Exception):
     pass
@@ -62,6 +64,7 @@ def load_configuration(configuration_file):
                      'log_level': 'DEBUG',
                      'log_level_db': 'ERROR',
                      'log_level_vimconn': 'DEBUG',
+                     'log_level_nfvo': 'DEBUG',
                     }
     try:
         #Check config file exists
@@ -131,9 +134,11 @@ def usage():
     
 if __name__=="__main__":
     #streamformat = "%(levelname)s (%(module)s:%(lineno)d) %(message)s"
-    streamformat = "%(asctime)s %(name)s %(levelname)s: %(message)s"
-    logging.basicConfig(format=streamformat, level= logging.DEBUG)
+    logging_local_format = "%(asctime)s %(name)s %(levelname)s: %(message)s"
+    logging_complete_format = "%(asctime)s %(name)s %(levelname)s %(filename)s:%(lineno)d %(funcName)s %(process)d: %(message)s"
+    logging.basicConfig(format=logging_local_format, level= logging.DEBUG)
     logger.setLevel(logging.DEBUG)
+    file_handler = None
     # Read parameters and configuration file 
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hvc:V:p:P:", ["config", "help", "version", "port", "vnf-repository", "adminport"])
@@ -166,7 +171,19 @@ if __name__=="__main__":
         #print global_config
         logging.basicConfig(level = getattr(logging, global_config.get('log_level',"debug")))
         logger.setLevel(getattr(logging, global_config['log_level']))
+        if "log_host" in global_config:
+            socket_handler= log_handlers.SocketHandler(global_config["log_host"], global_config["log_port"])
+            logger.addHandler(socket_handler)
+        logger.addHandler(log_handlers.SysLogHandler())
+        if "log_file" in global_config:
+            try:
+                file_handler= logging.handlers.RotatingFileHandler(global_config["log_file"], maxBytes=100e6, backupCount=9, delay=0)
+                file_handler.setFormatter(logging.Formatter(fmt=logging_complete_format))
+                logger.addHandler(file_handler)
+            except IOError as e:
+                print "Error opening logging file '{}': {}. Check folder exist and permissions".fomat(global_config["log_file"], str(e))
         # Override parameters obtained by command line
+        print logger.handlers
         if port is not None: global_config['http_port'] = port
         if port_admin is not None: global_config['http_admin_port'] = port_admin
         if vnf_repository is not None:
@@ -189,7 +206,7 @@ if __name__=="__main__":
         global_config["console_thread"]={}
         global_config["console_ports"]={}
         # Initialize DB connection
-        mydb = nfvo_db.nfvo_db();
+        mydb = nfvo_db.nfvo_db(log_level=global_config["log_level_db"]);
         if mydb.connect(global_config['db_host'], global_config['db_user'], global_config['db_passwd'], global_config['db_name']) == -1:
             logger.error("Error connecting to database %s at %s@%s", global_config['db_name'], global_config['db_user'], global_config['db_host'])
             exit(-1)
