@@ -48,7 +48,7 @@ function is_valid_uuid(){
 }
 
 #detect if is called with a source to use the 'exit'/'return' command for exiting
-[[ ${BASH_SOURCE[0]} != $0 ]] && _exit="return" || _exit="exit"
+[[ ${BASH_SOURCE[0]} != $0 ]] && _exit="return" || _exit="exit"
 
 
 #check correct arguments
@@ -82,6 +82,12 @@ done
 DIRNAME=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
 DIRmano=$(dirname $DIRNAME)
 DIRscript=${DIRmano}/scripts
+export OPENMANO_HOST=localhost
+export OPENMANO_PORT=9090
+[[ $insert_bashrc == y ]] && echo -e "\nexport OPENMANO_HOST=localhost"  >> ~/.bashrc
+[[ $insert_bashrc == y ]] && echo -e "\nexport OPENMANO_PORT=9090"  >> ~/.bashrc
+
+
 #by default action should be reset and create
 [[ -z $action_list ]]  && action_list="reset create delete"
 [[ -z $init_openvim ]] || initopenvim $force || echo "WARNING openvim cannot be initialized. The rest of test can fail!"
