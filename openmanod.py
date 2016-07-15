@@ -33,27 +33,25 @@ It loads the configuration file and launches the http_server thread that will li
 '''
 __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$26-aug-2014 11:09:29$"
-__version__="0.4.41-r478"
+__version__="0.4.42-r479"
 version_date="Jul 2016"
 database_version="0.10"      #expected database schema version
 
 import httpserver
 import time
-import os
 import sys
 import getopt
 import yaml
 import nfvo_db
 from jsonschema import validate as js_v, exceptions as js_e
-import utils
 from openmano_schemas import config_schema
 import nfvo
 import logging
 import logging.handlers as log_handlers
+import socket
 
 global global_config
 global logger
-logger = logging.getLogger('openmano')
 
 class LoadConfigurationException(Exception):
     pass
@@ -65,42 +63,37 @@ def load_configuration(configuration_file):
                      'log_level_db': 'ERROR',
                      'log_level_vimconn': 'DEBUG',
                      'log_level_nfvo': 'DEBUG',
+                     'log_socket_port': 9022,
                     }
     try:
         #Check config file exists
-        if not os.path.isfile(configuration_file):
-            raise LoadConfigurationException("Error: Configuration file '"+configuration_file+"' does not exist.")
-            
-        #Read file
-        (return_status, code) = utils.read_file(configuration_file)
-        if not return_status:
-            raise LoadConfigurationException("Error loading configuration file '"+configuration_file+"': "+code)
+        with open(configuration_file, 'r') as f:
+            config_str = f.read()
         #Parse configuration file
-        try:
-            config = yaml.load(code)
-        except yaml.YAMLError, exc:
-            error_pos = ""
-            if hasattr(exc, 'problem_mark'):
-                mark = exc.problem_mark
-                error_pos = " at position: (%s:%s)" % (mark.line+1, mark.column+1)
-            raise LoadConfigurationException("Error loading configuration file '"+configuration_file+"'"+error_pos+": content format error: Failed to parse yaml format")
-
+        config = yaml.load(config_str)
         #Validate configuration file with the config_schema
-        try:
-            js_v(config, config_schema)
-        except js_e.ValidationError, exc:
-            error_pos = ""
-            if len(exc.path)>0: error_pos=" at '" + ":".join(map(str, exc.path))+"'"
-            raise LoadConfigurationException("Error loading configuration file '"+configuration_file+"'"+error_pos+": "+exc.message) 
+        js_v(config, config_schema)
         
-        #Check default values tokens
+        #Add default values tokens
         for k,v in default_tokens.items():
-            if k not in config: config[k]=v
+            if k not in config:
+                config[k]=v
+        return config
     
-    except Exception,e:
-        raise LoadConfigurationException("Error loading configuration file '"+configuration_file+"': "+str(e))
+    except yaml.YAMLError as e:
+        error_pos = ""
+        if hasattr(e, 'problem_mark'):
+            mark = e.problem_mark
+            error_pos = " at line:{} column:{}".format(mark.line+1, mark.column+1)
+        raise LoadConfigurationException("Bad YAML format at configuration file '{file}'{pos}".format(file=configuration_file, pos=error_pos) )
+    except js_e.ValidationError as e:
+        error_pos = ""
+        if e.path:
+            error_pos=" at '" + ":".join(map(str, e.path))+"'"
+        raise LoadConfigurationException("Invalid field at configuration file '{file}'{pos} {message}".format(file=configuration_file, pos=error_pos, message=str(e)) ) 
+    except Exception as e:
+        raise LoadConfigurationException("Cannot load configuration file '{file}' {message}".format(file=configuration_file, message=str(e) ) )
                 
-    return config
 
 def console_port_iterator():
     '''this iterator deals with the http_console_ports 
@@ -129,29 +122,42 @@ def usage():
     print( "      -h|--help: shows this help")
     print( "      -p|--port [port_number]: changes port number and overrides the port number in the configuration file (default: 9090)")
     print( "      -P|--adminport [port_number]: changes admin port number and overrides the port number in the configuration file (default: 9095)")
-    print( "      -V|--vnf-repository: changes the path of the vnf-repository and overrides the path in the configuration file")
+    #print( "      -V|--vnf-repository: changes the path of the vnf-repository and overrides the path in the configuration file")
+    print( "      --log-socket-host: send logs to this host")
+    print( "      --log-socket-port: send logs using this port (default: 9022)")
     return
     
 if __name__=="__main__":
+    #Configure logging step 1
+    hostname = socket.gethostname()
     #streamformat = "%(levelname)s (%(module)s:%(lineno)d) %(message)s"
-    logging_local_format = "%(asctime)s %(name)s %(levelname)s: %(message)s"
-    logging_complete_format = "%(asctime)s %(name)s %(levelname)s %(filename)s:%(lineno)d %(funcName)s %(process)d: %(message)s"
-    logging.basicConfig(format=logging_local_format, level= logging.DEBUG)
+    # "%(asctime)s %(name)s %(levelname)s %(filename)s:%(lineno)d %(funcName)s %(process)d: %(message)s"
+    log_formatter_complete = logging.Formatter(
+        '%(asctime)s.%(msecs)03d00Z[{host}@openmanod] %(filename)s:%(lineno)s severity:%(levelname)s logger:%(name)s log:%(message)s'.format(host=hostname),
+        datefmt='%Y-%m-%dT%H:%M:%S',
+    )
+    log_format_simple =  "%(asctime)s %(levelname)s  %(name)s %(filename)s:%(lineno)s %(message)s"
+    log_formatter_simple = logging.Formatter(log_format_simple, datefmt='%Y-%m-%dT%H:%M:%S')
+    logging.basicConfig(format=log_format_simple, level= logging.DEBUG)
+    logger = logging.getLogger('openmano')
     logger.setLevel(logging.DEBUG)
+    socket_handler = None
     file_handler = None
     # Read parameters and configuration file 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hvc:V:p:P:", ["config", "help", "version", "port", "vnf-repository", "adminport"])
-    
+        #load parameters and configuration
+        opts, args = getopt.getopt(sys.argv[1:], "hvc:V:p:P:", ["config", "help", "version", "port", "vnf-repository", "adminport", "log-socket-host"])
         port=None
         port_admin = None
         config_file = 'openmanod.cfg'
         vnf_repository = None
+        log_socket_host = None
+        log_socket_port = None
         
         for o, a in opts:
             if o in ("-v", "--version"):
-                print "openmanod version", __version__, version_date
-                print "(c) Copyright Telefonica"
+                print ("openmanod version " + __version__ + ' ' + version_date)
+                print ("(c) Copyright Telefonica")
                 sys.exit()
             elif o in ("-h", "--help"):
                 usage()
@@ -164,58 +170,71 @@ if __name__=="__main__":
                 port = a
             elif o in ("-P", "--adminport"):
                 port_admin = a
+            elif o == "--log-socket-port":
+                log_socket_port = a
+            elif o == "--log-socket-port":
+                log_socket_host = a
             else:
                 assert False, "Unhandled option"
-    
         global_config = load_configuration(config_file)
         #print global_config
+        # Override parameters obtained by command line
+        if port:
+            global_config['http_port'] = port
+        if port_admin:
+            global_config['http_admin_port'] = port_admin
+        if log_socket_host:
+            global_config['log_socket_host'] = log_socket_host
+        if log_socket_port:
+            global_config['log_socket_port'] = log_socket_port
+#         if vnf_repository is not None:
+#             global_config['vnf_repository'] = vnf_repository
+#         else:
+#             if not 'vnf_repository' in global_config:  
+#                 logger.error( os.getcwd() )
+#                 global_config['vnf_repository'] = os.getcwd()+'/vnfrepo'
+#         #print global_config
+#         if not os.path.exists(global_config['vnf_repository']):
+#             logger.error( "Creating folder vnf_repository folder: '%s'.", global_config['vnf_repository'])
+#             try:
+#                 os.makedirs(global_config['vnf_repository'])
+#             except Exception as e:
+#                 logger.error( "Error '%s'. Ensure the path 'vnf_repository' is properly set at %s",e.args[1], config_file)
+#                 exit(-1)
+        
+        global_config["console_port_iterator"] = console_port_iterator
+        global_config["console_thread"]={}
+        global_config["console_ports"]={}
+        
+        #Configure logging STEP 2
         logging.basicConfig(level = getattr(logging, global_config.get('log_level',"debug")))
         logger.setLevel(getattr(logging, global_config['log_level']))
         if "log_host" in global_config:
-            socket_handler= log_handlers.SocketHandler(global_config["log_host"], global_config["log_port"])
+            socket_handler= log_handlers.SocketHandler(global_config["log_socket_host"], global_config["log_socket_port"])
+            socket_handler.setFormatter(log_formatter_complete)
+            if global_config.get("log_socket_level") and global_config["log_socket_level"] != global_config["log_level"]: 
+                socket_handler.setLevel(global_config["log_socket_level"])
             logger.addHandler(socket_handler)
         logger.addHandler(log_handlers.SysLogHandler())
         if "log_file" in global_config:
             try:
                 file_handler= logging.handlers.RotatingFileHandler(global_config["log_file"], maxBytes=100e6, backupCount=9, delay=0)
-                file_handler.setFormatter(logging.Formatter(fmt=logging_complete_format))
+                file_handler.setFormatter(log_formatter_simple)
                 logger.addHandler(file_handler)
             except IOError as e:
-                print "Error opening logging file '{}': {}. Check folder exist and permissions".fomat(global_config["log_file"], str(e))
-        # Override parameters obtained by command line
-        print logger.handlers
-        if port is not None: global_config['http_port'] = port
-        if port_admin is not None: global_config['http_admin_port'] = port_admin
-        if vnf_repository is not None:
-            global_config['vnf_repository'] = vnf_repository
-        else:
-            if not 'vnf_repository' in global_config:  
-                logger.error( os.getcwd() )
-                global_config['vnf_repository'] = os.getcwd()+'/vnfrepo'
-        #print global_config
+                raise LoadConfigurationException("Cannot open logging file '{}': {}. Check folder exist and permissions".format(global_config["log_file"], str(e)) ) 
         
-        if not os.path.exists(global_config['vnf_repository']):
-            logger.error( "Creating folder vnf_repository folder: '%s'.", global_config['vnf_repository'])
-            try:
-                os.makedirs(global_config['vnf_repository'])
-            except Exception as e:
-                logger.error( "Error '%s'. Ensure the path 'vnf_repository' is properly set at %s",e.args[1], config_file)
-                exit(-1)
-        
-        global_config["console_port_iterator"] = console_port_iterator
-        global_config["console_thread"]={}
-        global_config["console_ports"]={}
         # Initialize DB connection
         mydb = nfvo_db.nfvo_db(log_level=global_config["log_level_db"]);
         if mydb.connect(global_config['db_host'], global_config['db_user'], global_config['db_passwd'], global_config['db_name']) == -1:
-            logger.error("Error connecting to database %s at %s@%s", global_config['db_name'], global_config['db_user'], global_config['db_host'])
+            logger.critical("Cannot connect to database %s at %s@%s", global_config['db_name'], global_config['db_user'], global_config['db_host'])
             exit(-1)
         r = mydb.get_db_version()
         if r[0]<0:
-            logger.error("Error DATABASE is not a MANO one or it is a '0.0' version. Try to upgrade to version '%s' with './database_utils/migrate_mano_db.sh'", database_version)
+            logger.critical("DATABASE is not a MANO one or it is a '0.0' version. Try to upgrade to version '%s' with './database_utils/migrate_mano_db.sh'", database_version)
             exit(-1)
         elif r[1]!=database_version:
-            logger.error("Error DATABASE wrong version '%s'. Try to upgrade/downgrade to version '%s' with './database_utils/migrate_mano_db.sh'", r[1], database_version)
+            logger.critical("DATABASE wrong version '%s'. Try to upgrade/downgrade to version '%s' with './database_utils/migrate_mano_db.sh'", r[1], database_version)
             exit(-1)
         
         nfvo.global_config=global_config
@@ -243,15 +262,15 @@ if __name__=="__main__":
         for thread in global_config["console_thread"]:
             thread.terminate = True
 
-    except KeyboardInterrupt:
-        logger.info('KyboardInterrupt')
+    except KeyboardInterrupt as e:
+        logger.info(str(e))
     except SystemExit:
         pass
     except getopt.GetoptError as e:
-        logger.error("Error: %s", str(e)) # will print something like "option -a not recognized"
+        logger.critical(str(e)) # will print something like "option -a not recognized"
         #usage()
         exit(-1)
     except LoadConfigurationException as e:
-        logger.error("Error: %s", str(e))
+        logger.critical(str(e))
         exit(-1)
 

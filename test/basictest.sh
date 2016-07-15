@@ -28,6 +28,7 @@
 function usage(){
     echo -e "usage: ${BASH_SOURCE[0]} [OPTIONS] <action>\n  test openmano using openvim as a VIM"
     echo -e "           the OPENVIM_HOST, OPENVIM_PORT shell variables indicate openvim location"
+    echo -e "           by default localhost:9080"
     echo -e "  <action> is a list of the following items (by default 'reset create delete')"
     echo -e "    reset     reset the openmano database content"
     echo -e "    create    creates items"
@@ -37,8 +38,8 @@ function usage(){
     echo -e "    -h --help        shows this help"
     echo -e "    --insert-bashrc  insert the created tenant,datacenter variables at"
     echo -e "                     ~/.bashrc to be available by openmano CLI"
-    echo -e "    --init-openvim   if openvim runs locally, an init is called to clean openvim database"
-    echo -e "                     and add fake hosts"
+    echo -e "    --init-openvim   if openvim runs locally, an init is called to clean openvim"
+    echo -e "                      database and add fake hosts"
 }
 
 function is_valid_uuid(){
@@ -49,11 +50,6 @@ function is_valid_uuid(){
 #detect if is called with a source to use the 'exit'/'return' command for exiting
 [[ ${BASH_SOURCE[0]} != $0 ]] && _exit="return" || _exit="exit"
 
-#check openvim client variables are set
-fail=""
-[[ -z $OPENVIM_HOST ]] && echo "OPENVIM_HOST variable not defined" >&2 && fail=1
-[[ -z $OPENVIM_PORT ]] && echo "OPENVIM_PORT variable not defined" >&2 && fail=1
-[[ -n $fail ]] && $_exit 1
 
 #check correct arguments
 force=""
@@ -90,6 +86,13 @@ DIRscript=${DIRmano}/scripts
 [[ -z $action_list ]]  && action_list="reset create delete"
 [[ -z $init_openvim ]] || initopenvim $force || echo "WARNING openvim cannot be initialized. The rest of test can fail!"
 
+#check openvim client variables are set
+#fail=""
+#[[ -z $OPENVIM_HOST ]] && echo "OPENVIM_HOST variable not defined" >&2 && fail=1
+#[[ -z $OPENVIM_PORT ]] && echo "OPENVIM_PORT variable not defined" >&2 && fail=1
+#[[ -n $fail ]] && $_exit 1
+
+
 for action in $action_list
 do
 #if [[ $action == "install-openvim" ]]
@@ -104,6 +107,7 @@ if [[ $action == "reset" ]]
 then
 
     #ask for confirmation if argument is not -f --force
+    force_=y
     [[ -z $force ]] && read -e -p "WARNING: reset openmano database, content will be lost!!! Continue(y/N) " force_
     [[ $force_ != y ]] && [[ $force_ != yes ]] && echo "aborted!" && $_exit
 
