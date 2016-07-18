@@ -164,6 +164,7 @@ DATABASE_TARGET_VER_NUM=0
 [ $OPENMANO_VER_NUM -ge 4032 ] && DATABASE_TARGET_VER_NUM=8   #0.4.32=>  8
 [ $OPENMANO_VER_NUM -ge 4033 ] && DATABASE_TARGET_VER_NUM=9   #0.4.33=>  9
 [ $OPENMANO_VER_NUM -ge 4036 ] && DATABASE_TARGET_VER_NUM=10  #0.4.36=>  10
+[ $OPENMANO_VER_NUM -ge 4043 ] && DATABASE_TARGET_VER_NUM=11  #0.4.43=>  11
 #TODO ... put next versions here
 
 
@@ -540,6 +541,21 @@ function downgrade_from_10(){
         echo "ALTER TABLE ${table} CHANGE COLUMN datacenter_tenant_id vim_tenant_id VARCHAR(36) $NULL AFTER datacenter_id, ADD CONSTRAINT FK_${table}_vim_tenants FOREIGN KEY (vim_tenant_id) REFERENCES vim_tenants (uuid); " | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     done    
     echo "DELETE FROM schema_version WHERE version_int='10';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+
+function upgrade_to_11(){
+    echo "    upgrade database from version 0.10 to version 0.11"
+    echo "      remove unique name at 'scenarios', 'instance_scenarios'"
+    echo "ALTER TABLE scenarios DROP INDEX name;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_scenarios DROP INDEX name;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (11, '0.11', '0.4.43', 'remove unique name at scenarios,instance_scenarios', '2016-07-18');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+function downgrade_from_11(){
+    echo "    downgrade database from version 0.11 to version 0.10"
+    echo "      add unique name at 'scenarios', 'instance_scenarios'"
+    echo "ALTER TABLE scenarios ADD UNIQUE INDEX name (name);"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_scenarios ADD UNIQUE INDEX name (name);"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "DELETE FROM schema_version WHERE version_int='11';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
 
 function upgrade_to_X(){

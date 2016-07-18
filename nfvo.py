@@ -768,19 +768,24 @@ def new_scenario(mydb, tenant_id, topo):
 
 #1.2: Check that VNF are present at database table vnfs. Insert uuid, description and external interfaces
     for name,vnf in vnfs.items():
-        WHERE_={}
+        where={}
+        where_or={"tenant_id": tenant_id, 'public': "true"}
         error_text = ""
         error_pos = "'topology':'nodes':'" + name + "'"
         if 'vnf_id' in vnf:
             error_text += " 'vnf_id' " +  vnf['vnf_id']
-            WHERE_['uuid'] = vnf['vnf_id']
+            where['uuid'] = vnf['vnf_id']
         if 'VNF model' in vnf:
             error_text += " 'VNF model' " +  vnf['VNF model']
-            WHERE_['name'] = vnf['VNF model']
-        if len(WHERE_) == 0:
+            where['name'] = vnf['VNF model']
+        if len(where) == 0:
             raise NfvoException("Descriptor need a 'vnf_id' or 'VNF model' field at " + error_pos, HTTP_Bad_Request)
         
-        vnf_db = mydb.get_rows(SELECT=('uuid','name','description'), FROM='vnfs', WHERE=WHERE_)
+        vnf_db = mydb.get_rows(SELECT=('uuid','name','description'),
+                               FROM='vnfs',
+                               WHERE=where, 
+                               WHERE_OR=where_or,
+                               WHERE_AND_OR="AND")
         if len(vnf_db)==0:
             raise NfvoException("unknown" + error_text + " at " + error_pos, HTTP_Not_Found)
         elif len(vnf_db)>1:
@@ -1024,18 +1029,23 @@ def new_scenario_v02(mydb, tenant_id, scenario_dict):
 
 #1: Check that VNF are present at database table vnfs and update content into scenario dict
     for name,vnf in scenario["vnfs"].iteritems():
-        WHERE_={}
+        where={}
+        where_or={"tenant_id": tenant_id, 'public': "true"}
         error_text = ""
         error_pos = "'topology':'nodes':'" + name + "'"
         if 'vnf_id' in vnf:
             error_text += " 'vnf_id' " +  vnf['vnf_id']
-            WHERE_['uuid'] = vnf['vnf_id']
+            where['uuid'] = vnf['vnf_id']
         if 'vnf_name' in vnf:
             error_text += " 'vnf_name' " +  vnf['vnf_name']
-            WHERE_['name'] = vnf['vnf_name']
-        if len(WHERE_) == 0:
+            where['name'] = vnf['vnf_name']
+        if len(where) == 0:
             raise NfvoException("Needed a 'vnf_id' or 'VNF model' at " + error_pos, HTTP_Bad_Request)
-        vnf_db = mydb.get_rows(SELECT=('uuid','name','description'), FROM='vnfs', WHERE=WHERE_)
+        vnf_db = mydb.get_rows(SELECT=('uuid','name','description'),
+                               FROM='vnfs',
+                               WHERE=where,
+                               WHERE_OR=where_or,
+                               WHERE_AND_OR="AND")
         if len(vnf_db)==0:
             raise NfvoException("Unknown" + error_text + " at " + error_pos, HTTP_Not_Found)
         elif len(vnf_db)>1:
