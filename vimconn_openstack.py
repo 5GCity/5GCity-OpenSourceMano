@@ -563,7 +563,7 @@ class vimconnector(vimconn.vimconnector):
         '''
         self.logger.debug("Creating VM image '%s' flavor '%s' nics='%s'",image_id, flavor_id,str(net_list))
         try:
-            metadata=[]
+            metadata={}
             net_list_vim=[]
             self._reload_connection()
             metadata_vpci={} #For a specific neutron plugin 
@@ -602,6 +602,11 @@ class vimconnector(vimconn.vimconnector):
                     net_list_vim.append({"port-id": new_port["port"]["id"]})
             if metadata_vpci:
                 metadata = {"pci_assignement": json.dumps(metadata_vpci)}
+                if len(metadata["pci_assignement"] >255):
+                    #limit the metadata size
+                    #metadata["pci_assignement"] = metadata["pci_assignement"][0:255]
+                    self.logger.warn("Metadata deleted since it exceeds the expected length (255) ")
+                    metadata = {}
             
             self.logger.debug("name '%s' image_id '%s'flavor_id '%s' net_list_vim '%s' description '%s' metadata %s",
                               name, image_id, flavor_id, str(net_list_vim), description, str(metadata))
