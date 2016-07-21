@@ -37,13 +37,22 @@ create_container() {
 	fi
 	INFO "creating container $2 using image $1"
 	DEBUG "lxc launch $1 $2"
-	sudo lxc launch "$1" "$2"
+	lxc launch "$1" "$2"
+}
+
+create_privileged_container() {
+	if [ $# -ne 2 ]; then
+		FATAL "args are image container"
+	fi
+	INFO "creating container $2 using image $1"
+	DEBUG "lxc launch $1 $2"
+	lxc launch "$1" "$2" -c security.privileged=true
 }
 
 container_exec() { 
 	container="$1"
 	shift
-	DEBUG "exec in $1 \"$*\""
+	DEBUG "exec in $container \"$*\""
 	lxc exec "$container" -- $*
 }
 

@@ -11,14 +11,18 @@
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
-# 
-# Settings specific to the riftware MDG
-# 
-# 24 June 2016 -- Jeremy Mordkoff -- Genesis
 #
-# see ../template/SETTINGS for descriptions
-export OSM_BASE_IMAGE=fedora20
-export OSM_BUILD_CONTAINER=rift-build
-export OSM_BUILD_CONTAINER_PRIVILEGED=yes
-export OSM_RUNTIME_CONTAINER=rift-runtime
-export OSM_RUNTIME_CONTAINER_PRIVILEGED=yes
+# sample SETTINGS file
+#
+# 24 June 2016 -- Jeremy Mordkoff -- Genesis 
+#
+# this variable holds the name of the container image needed to build or run this product
+export OSM_BASE_IMAGE=ubuntu:14.04
+#
+# this variable holds the name of the container to be used to build a package
+# if this container already exists, the build process can skip the container build
+export OSM_BUILD_CONTAINER=RO
+#
+# this variable holds the name of the container to be used to run a package
+# if this container already exists, the run processes can skip the container build
+export OSM_RUNTIME_CONTAINER=RO

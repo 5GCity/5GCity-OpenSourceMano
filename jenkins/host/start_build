@@ -28,21 +28,25 @@ export OSM_MDG=$1
 OSM_load_config
 
 if ! container_exists $OSM_BUILD_CONTAINER; then
-	create_container $OSM_BASE_IMAGE $OSM_BUILD_CONTAINER
+	if [[ "$OSM_BUILD_CONTAINER_PRIVILEGED" == yes ]]; then
+		create_privileged_container $OSM_BASE_IMAGE $OSM_BUILD_CONTAINER
+	else
+		create_container $OSM_BASE_IMAGE $OSM_BUILD_CONTAINER
+	fi
 	wait_container_up $OSM_BUILD_CONTAINER
 	RE="fedora|fc[0-9]"
 	if [[ $OSM_BASE_IMAGE =~ $RE ]]; then
 		container_exec $OSM_BUILD_CONTAINER yum -y install git
 	else
-		container_exec $OSM_BUILD_CONTAINER apt install git
+		container_exec $OSM_BUILD_CONTAINER apt -y install git realpath
 	fi
 	container_exec $OSM_BUILD_CONTAINER git clone ${OSM_GIT_URL}/devops
 else
 	container_exec $OSM_BUILD_CONTAINER git -C devops pull
 fi
 
-
 container_exec $OSM_BUILD_CONTAINER ./devops/jenkins/$OSM_MDG/start_build
 RC=$?
 INFO "$OSM_MDG build complete. Return code was $RC"
 exit $RC
+
