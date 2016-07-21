@@ -73,3 +73,14 @@ wait_container_up() {
 	done
 	FATAL "container $1 did not start"
 }
+container_push_tree() { 
+    # create a tarball locally, pipe it into the container and unpack it there
+	[ $# -eq 3 ] || FATAL "args are container dir_from dir_to (dir_to MUST exist)"
+    tar -C "$2" -c . -f - | container_exec $1 tar -C "$3" -x -f -
+}
+
+container_push_devops() { 
+	[ $# -eq 1 ] || FATAL "arg is container name got $# args - $*"
+    container_exec "$1" mkdir -p /root/devops
+    container_push_tree "$1" "$(dirname $OSM_JENKINS)" "/root/devops"
+}

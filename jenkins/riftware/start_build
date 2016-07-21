@@ -33,7 +33,7 @@ else
 	git clone $OSM_GIT_URL/riftware
 	cd riftware
 	INFO "install pre-requisites"
-	bash ./scripts/vm_image/mkvmimg --container --modes build
+	bash ./scripts/vm_image/mkcontainer --modes build
 fi
 
 INFO "no build script yet"
