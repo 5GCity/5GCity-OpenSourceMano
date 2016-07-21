@@ -56,27 +56,33 @@ force=""
 action_list=""
 insert_bashrc=""
 init_openvim=""
-for param in $*
+
+while [[ $# -gt 0 ]]
 do
-    if [[ $param == reset ]] || [[ $param == create ]] || [[ $param == delete ]]
+    argument="$1"
+    shift
+    if [[ $argument == reset ]] || [[ $argument == create ]] || [[ $argument == delete ]]
     then
-        action_list="$action_list $param"
-    elif [[ $param == -h ]] || [[ $param == --help ]]
+        action_list="$action_list $argument"
+        continue
+    #short options
+    elif [[ ${argument:0:1} == "-" ]] && [[ ${argument:1:1} != "-" ]] && [[ ${#argument} -ge 2 ]]
     then
-        usage
-        $_exit 0
-    elif [[ $param == -f ]] || [[ $param == --force ]]
-    then
-        force="-f"
-    elif [[ $param == --insert-bashrc ]]
-    then
-        insert_bashrc=y
-    elif [[ $param == --init-openvim ]]
-    then
-        init_openvim=y
-    else
-        echo "invalid argument '$param'?  Type -h for help" >&2 && $_exit 1
+        index=0
+        while index=$((index+1)) && [[ $index -lt ${#argument} ]]
+        do
+            [[ ${argument:$index:1} == h ]]  && usage   && $_exit 0
+            [[ ${argument:$index:1} == f ]]  && force="-f" && continue
+            echo "invalid option '${argument:$index:1}'?  Type -h for help" >&2 && $_exit 1
+        done
+        continue
     fi
+    #long options
+    [[ $argument == --help ]]   && usage   && $_exit 0
+    [[ $argument == --force ]]  && force="-f" && continue
+    [[ $argument == --insert-bashrc ]] && insert_bashrc="--insert-bashrc" && continue
+    [[ $argument == --init-openvim ]] && init_openvim="y" && continue
+    echo "invalid argument '$argument'?  Type -h for help" >&2 && $_exit 1
 done
 
 DIRNAME=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
@@ -84,13 +90,13 @@ DIRmano=$(dirname $DIRNAME)
 DIRscript=${DIRmano}/scripts
 export OPENMANO_HOST=localhost
 export OPENMANO_PORT=9090
-[[ $insert_bashrc == y ]] && echo -e "\nexport OPENMANO_HOST=localhost"  >> ~/.bashrc
-[[ $insert_bashrc == y ]] && echo -e "\nexport OPENMANO_PORT=9090"  >> ~/.bashrc
+[[ -n "$insert_bashrc" ]] && echo -e "\nexport OPENMANO_HOST=localhost"  >> ~/.bashrc
+[[ -n "$insert_bashrc" ]] && echo -e "\nexport OPENMANO_PORT=9090"  >> ~/.bashrc
 
 
 #by default action should be reset and create
 [[ -z $action_list ]]  && action_list="reset create delete"
-[[ -z $init_openvim ]] || initopenvim $force || echo "WARNING openvim cannot be initialized. The rest of test can fail!"
+[[ -z $init_openvim ]] || initopenvim $force $insert_bashrc || echo "WARNING openvim cannot be initialized. The rest of test can fail!"
 
 #check openvim client variables are set
 #fail=""
@@ -155,7 +161,7 @@ then
     #check a valid uuid is obtained
     ! is_valid_uuid $nfvotenant && echo "FAIL" && echo "    $result" && $_exit 1
     export OPENMANO_TENANT=$nfvotenant
-    [[ $insert_bashrc == y ]] && echo -e "\nexport OPENMANO_TENANT=$nfvotenant"  >> ~/.bashrc
+    [[ -n "$insert_bashrc" ]] && echo -e "\nexport OPENMANO_TENANT=$nfvotenant"  >> ~/.bashrc
     echo $nfvotenant
 
     printf "%-50s" "Creating datacenter 'TEST-dc' in openmano:"
@@ -169,7 +175,7 @@ then
     ! is_valid_uuid $datacenter && echo "FAIL" && echo "    $result" && $_exit 1
     echo $datacenter
     export OPENMANO_DATACENTER=$datacenter
-    [[ $insert_bashrc == y ]] && echo -e "\nexport OPENMANO_DATACENTER=$datacenter"  >> ~/.bashrc
+    [[ -n "$insert_bashrc" ]] && echo -e "\nexport OPENMANO_DATACENTER=$datacenter"  >> ~/.bashrc
 
     printf "%-50s" "Attaching openmano tenant to the datacenter:"
     result=`${DIRmano}/openmano datacenter-attach TEST-dc`

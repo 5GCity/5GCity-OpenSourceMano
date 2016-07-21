@@ -33,7 +33,7 @@ It loads the configuration file and launches the http_server thread that will li
 '''
 __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$26-aug-2014 11:09:29$"
-__version__="0.4.43-r481"
+__version__="0.4.44-r482"
 version_date="Jul 2016"
 database_version="0.11"      #expected database schema version
 
@@ -125,6 +125,7 @@ def usage():
     #print( "      -V|--vnf-repository: changes the path of the vnf-repository and overrides the path in the configuration file")
     print( "      --log-socket-host: send logs to this host")
     print( "      --log-socket-port: send logs using this port (default: 9022)")
+    print( "      --log-file: send logs to this file")
     return
     
 if __name__=="__main__":
@@ -146,11 +147,12 @@ if __name__=="__main__":
     # Read parameters and configuration file 
     try:
         #load parameters and configuration
-        opts, args = getopt.getopt(sys.argv[1:], "hvc:V:p:P:", ["config", "help", "version", "port", "vnf-repository", "adminport", "log-socket-host"])
+        opts, args = getopt.getopt(sys.argv[1:], "hvc:V:p:P:", ["config", "help", "version", "port", "vnf-repository", "adminport", "log-socket-host=", "log-socket-port=", "log-file="])
         port=None
         port_admin = None
         config_file = 'openmanod.cfg'
         vnf_repository = None
+        log_file = None
         log_socket_host = None
         log_socket_port = None
         
@@ -174,6 +176,8 @@ if __name__=="__main__":
                 log_socket_port = a
             elif o == "--log-socket-port":
                 log_socket_host = a
+            elif o == "--log-file":
+                log_file = a
             else:
                 assert False, "Unhandled option"
         global_config = load_configuration(config_file)
@@ -187,6 +191,8 @@ if __name__=="__main__":
             global_config['log_socket_host'] = log_socket_host
         if log_socket_port:
             global_config['log_socket_port'] = log_socket_port
+        if log_file:
+            global_config['log_file'] = log_file
 #         if vnf_repository is not None:
 #             global_config['vnf_repository'] = vnf_repository
 #         else:
@@ -207,22 +213,25 @@ if __name__=="__main__":
         global_config["console_ports"]={}
         
         #Configure logging STEP 2
-        logging.basicConfig(level = getattr(logging, global_config.get('log_level',"debug")))
-        logger.setLevel(getattr(logging, global_config['log_level']))
         if "log_host" in global_config:
             socket_handler= log_handlers.SocketHandler(global_config["log_socket_host"], global_config["log_socket_port"])
             socket_handler.setFormatter(log_formatter_complete)
             if global_config.get("log_socket_level") and global_config["log_socket_level"] != global_config["log_level"]: 
                 socket_handler.setLevel(global_config["log_socket_level"])
             logger.addHandler(socket_handler)
-        logger.addHandler(log_handlers.SysLogHandler())
+        #logger.addHandler(log_handlers.SysLogHandler())
         if "log_file" in global_config:
             try:
                 file_handler= logging.handlers.RotatingFileHandler(global_config["log_file"], maxBytes=100e6, backupCount=9, delay=0)
                 file_handler.setFormatter(log_formatter_simple)
                 logger.addHandler(file_handler)
+                logger.debug("moving logs to '%s'", global_config["log_file"])
+                #remove initial strema handler
+                logging.root.removeHandler(logging.root.handlers[0])
             except IOError as e:
                 raise LoadConfigurationException("Cannot open logging file '{}': {}. Check folder exist and permissions".format(global_config["log_file"], str(e)) ) 
+        #logging.basicConfig(level = getattr(logging, global_config.get('log_level',"debug")))
+        logger.setLevel(getattr(logging, global_config['log_level']))
         
         # Initialize DB connection
         mydb = nfvo_db.nfvo_db(log_level=global_config["log_level_db"]);
@@ -247,6 +256,7 @@ if __name__=="__main__":
             httpthreadadmin.start()
         time.sleep(1)      
         logger.info('Waiting for http clients')
+        print('Waiting for http clients')
         print('openmanod ready')
         print('====================')
         time.sleep(20)
