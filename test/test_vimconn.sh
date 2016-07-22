@@ -94,7 +94,7 @@ done
 
 DIRNAME=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
 DIRmano=$(dirname $DIRNAME)
-DIRscript=$(dirname $DIRmano)/scripts
+DIRscript=${DIRmano}/scripts
 #by default action should be reset and create
 [[ -z $action_list ]] && action_list="reset create"
 
