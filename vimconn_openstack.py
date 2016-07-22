@@ -602,7 +602,7 @@ class vimconnector(vimconn.vimconnector):
                     net_list_vim.append({"port-id": new_port["port"]["id"]})
             if metadata_vpci:
                 metadata = {"pci_assignement": json.dumps(metadata_vpci)}
-                if len(metadata["pci_assignement"] >255):
+                if len(metadata["pci_assignement"]) >255:
                     #limit the metadata size
                     #metadata["pci_assignement"] = metadata["pci_assignement"][0:255]
                     self.logger.warn("Metadata deleted since it exceeds the expected length (255) ")
