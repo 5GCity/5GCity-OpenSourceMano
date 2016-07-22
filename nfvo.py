@@ -1796,9 +1796,9 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                 vm_error+=1
 
     if vm_ok==0: #all goes wrong
-        return 1, vm_result
+        return vm_result
     else:
-        return 1, vm_result
+        return vm_result
     
 def create_or_use_console_proxy_thread(console_server, console_port):
     #look for a non-used port
