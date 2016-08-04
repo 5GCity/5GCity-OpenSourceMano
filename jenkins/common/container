@@ -21,7 +21,7 @@ container_exists() {
 	if [ $# -ne 1 ]; then
 		FATAL "arg is container name"
 	fi
-	lxc config show $1 2>&1 >/dev/null
+	lxc config show $1 >/dev/null 2>&1
 	if [ $? -eq 0 ]; then
 		DEBUG "container $1 exists"
 		return 0
@@ -55,6 +55,12 @@ container_exec() {
 	DEBUG "exec in $container \"$*\""
 	lxc exec "$container" -- $*
 }
+container_exec_stderr() { 
+	container="$1"
+	shift
+	DEBUG "exec in $container \"$*\""
+	lxc exec "$container" -- $* 2>&1
+}
 
 wait_container_up() {
 	[ $# -eq 1 ] || FATAL "arg is container name got $# args - $*"
@@ -62,7 +68,7 @@ wait_container_up() {
 	RE="1 received"
 	while [ $ct -lt 60 ]; do
 		let ct=ct+1
-		output=$(container_exec "$1" ping -c 1 google.com)
+		output=$(container_exec_stderr "$1" ping -c 1 google.com)
 		if [[ $output =~ $RE ]]; then	
 			DEBUG "$1 is up"
 			return

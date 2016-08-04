@@ -29,15 +29,27 @@ if [ -d riftware ]; then
 	cd riftware
 	git pull 
 else
+	INFO "install pre-requisites"
+    yum install -y yum-utils curl 
+    curl -o /etc/yum.repos.d/release.repo http://buildtracker.riftio.com/repo_file/fc20/OSM/
+    yum install -y --nogpgcheck rw.tools-container-tools rw.tools-scripts
+    /usr/rift/container_tools/mkcontainer  --modes build --internet --latest --repofile /usr/rift/container_tools/riftware.repo
+
+
 	INFO "cloning MDG riftware from $OSM_GIT_URL/riftware"
+    # these were missing once, so just to be safe, install them again here
+    yum -y install cmake wget lcov
 	git clone $OSM_GIT_URL/riftware
 	cd riftware
-	INFO "install pre-requisites"
-	bash ./scripts/vm_image/mkcontainer --modes build
 fi
 
-INFO "no build script yet"
-RC=1
+./rift-shell -r -- make rw.ext 
+RC=$?
+
+if [ $RC == 0 ]; then
+    ./rift-shell -r -- make -j16 
+    RC=$?
+fi
 
 INFO "done RC = $RC"
 exit $RC
