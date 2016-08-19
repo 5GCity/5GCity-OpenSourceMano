@@ -1771,23 +1771,39 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
             try:
                 data = myvim.action_vminstance(vm['vim_vm_id'], action_dict)
                 if "console" in action_dict:
-                    if data["server"]=="127.0.0.1" or data["server"]=="localhost":
+                    if not global_config["http_console_proxy"]:
+                        vm_result[ vm['uuid'] ] = {"vim_result": 200,
+                                                   "description": "{protocol}//{ip}:{port}/{suffix}".format(
+                                                                                protocol=data["protocol"],
+                                                                                ip = data["server"],
+                                                                                port = data["port"],
+                                                                                suffix = data["suffix"]),
+                                                   "name":vm['name']
+                                                }
+                        vm_ok +=1
+                    elif data["server"]=="127.0.0.1" or data["server"]=="localhost":
                         vm_result[ vm['uuid'] ] = {"vim_result": -HTTP_Unauthorized,
                                                    "description": "this console is only reachable by local interface",
                                                    "name":vm['name']
                                                 }
                         vm_error+=1
-                        continue
+                    else:
                     #print "console data", data
-                    try: 
-                        console_thread = create_or_use_console_proxy_thread(data["server"], data["port"])
-                        vm_result[ vm['uuid'] ] = {"vim_result": 200,
-                                                   "description": "%s//%s:%d/%s" %(data["protocol"], console_thread.host, console_thread.port, data["suffix"]),
-                                                   "name":vm['name']
-                                                }
-                        vm_ok +=1
-                    except NfvoException as e:
-                        vm_result[ vm['uuid'] ] = {"vim_result": e.http_code, "name":vm['name'], "description": str(e)}
+                        try: 
+                            console_thread = create_or_use_console_proxy_thread(data["server"], data["port"])
+                            vm_result[ vm['uuid'] ] = {"vim_result": 200,
+                                                       "description": "{protocol}//{ip}:{port}/{suffix}".format(
+                                                                                    protocol=data["protocol"],
+                                                                                    ip = global_config["http_console_host"],
+                                                                                    port = console_thread.port,
+                                                                                    suffix = data["suffix"]),
+                                                       "name":vm['name']
+                                                    }
+                            vm_ok +=1
+                        except NfvoException as e:
+                            vm_result[ vm['uuid'] ] = {"vim_result": e.http_code, "name":vm['name'], "description": str(e)}
+                            vm_error+=1
+
                 else:
                     vm_result[ vm['uuid'] ] = {"vim_result": 200, "description": "ok", "name":vm['name']}
                     vm_ok +=1
@@ -1808,7 +1824,7 @@ def create_or_use_console_proxy_thread(console_server, console_port):
         return global_config["console_thread"][console_thread_key]
     
     for port in  global_config["console_port_iterator"]():
-        print "create_or_use_console_proxy_thread() port:", port
+        #print "create_or_use_console_proxy_thread() port:", port
         if port in global_config["console_ports"]:
             continue
         try:

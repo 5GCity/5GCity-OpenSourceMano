@@ -88,6 +88,8 @@ config_schema = {
         "vim_tenant_name": nameshort_schema,
         "mano_tenant_name": nameshort_schema,
         "mano_tenant_id": id_schema, 
+        "http_console_proxy": {"type":"boolean"},
+        "http_console_host": nameshort_schema,
         "http_console_ports": {
             "type": "array", 
             "items": {"OneOf" : [

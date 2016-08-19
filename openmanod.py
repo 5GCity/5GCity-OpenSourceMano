@@ -33,8 +33,8 @@ It loads the configuration file and launches the http_server thread that will li
 '''
 __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$26-aug-2014 11:09:29$"
-__version__="0.4.44-r482"
-version_date="Jul 2016"
+__version__="0.4.45-r484"
+version_date="Aug 2016"
 database_version="0.11"      #expected database schema version
 
 import httpserver
@@ -59,6 +59,8 @@ class LoadConfigurationException(Exception):
 def load_configuration(configuration_file):
     default_tokens ={'http_port':9090,
                      'http_host':'localhost',
+                     'http_console_proxy': True,
+                     'http_console_host': None,
                      'log_level': 'DEBUG',
                      'log_level_db': 'ERROR',
                      'log_level_vimconn': 'DEBUG',
@@ -211,6 +213,10 @@ if __name__=="__main__":
         global_config["console_port_iterator"] = console_port_iterator
         global_config["console_thread"]={}
         global_config["console_ports"]={}
+        if not global_config["http_console_host"]:
+            global_config["http_console_host"] = global_config["http_host"]
+            if global_config["http_host"]=="0.0.0.0":
+                global_config["http_console_host"] = socket.gethostname()
         
         #Configure logging STEP 2
         if "log_host" in global_config:
