@@ -1,4 +1,3 @@
-#   Copyright 2016 RIFT.IO Inc
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -12,9 +11,6 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 #
-# sample SETTINGS file
-#
-# 24 June 2016 -- Jeremy Mordkoff -- Genesis 
 #
 # this variable holds the name of the container image needed to build or run this product
 export OSM_BASE_IMAGE=ubuntu:14.04

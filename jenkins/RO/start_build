@@ -1,5 +1,4 @@
 #!/bin/bash
-#   Copyright 2016 RIFT.IO Inc
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -13,9 +12,6 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 # 
-# TEMPLATE script to start a build. This is run inside a container
-#
-# 6 July 2016 -- Jeremy.Mordkoff@riftio.com -- adapted from the riftware version
 # 
 
 HERE=$(realpath $(dirname $0))
@@ -43,10 +39,8 @@ INFO "starting build"
 ### put your commands here to
 ### build, test and produce coverage reports
 
-##CODE HERE
-touch compiled
-
-RC=0
+#RC=0
+RC=`python -m py_compile *.py`
 
 INFO "done, RC=$RC"
 exit $RC
