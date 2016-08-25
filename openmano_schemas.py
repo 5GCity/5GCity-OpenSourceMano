@@ -47,10 +47,12 @@ vlan_schema={"type":"integer","minimum":1,"maximum":4095}
 vlan1000_schema={"type":"integer","minimum":1000,"maximum":4095}
 mac_schema={"type":"string", "pattern":"^[0-9a-fA-F][02468aceACE](:[0-9a-fA-F]{2}){5}$"}  #must be unicast LSB bit of MSB byte ==0 
 #mac_schema={"type":"string", "pattern":"^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$"}
-ip_schema={"type":"string","pattern":"^([0-9]{1,3}.){3}[0-9]{1,3}$"}
+ip_schema={"type":"string","pattern":"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"}
+ip_prefix_schema={"type":"string","pattern":"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/(30|[12]?[0-9])$"}
 port_schema={"type":"integer","minimum":1,"maximum":65534}
 object_schema={"type":"object"}
 schema_version_2={"type":"integer","minimum":2,"maximum":2}
+#schema_version_string={"type":"string","enum": ["0.1", "2", "0.2", "3", "0.3"]}
 log_level_schema={"type":"string", "enum":["DEBUG", "INFO", "WARNING","ERROR","CRITICAL"]}
 
 metadata_schema={
@@ -128,6 +130,7 @@ tenant_schema = {
     "required": ["tenant"],
     "additionalProperties": False
 }
+
 tenant_edit_schema = {
     "title":"tenant edit information schema",
     "$schema": "http://json-schema.org/draft-04/schema#",
@@ -147,13 +150,13 @@ tenant_edit_schema = {
 }
 
 datacenter_schema_properties={
-                "name": name_schema,
-                "description": description_schema,
-                "type": nameshort_schema, #currently "openvim" or "openstack", can be enlarge with plugins
-                "vim_url": description_schema,
-                "vim_url_admin": description_schema,
-                "config": { "type":"object" }
-            }
+    "name": name_schema,
+    "description": description_schema,
+    "type": nameshort_schema, #currently "openvim" or "openstack", can be enlarged with plugins
+    "vim_url": description_schema,
+    "vim_url_admin": description_schema,
+    "config": { "type":"object" }
+}
 
 datacenter_schema = {
     "title":"datacenter information schema",
@@ -279,11 +282,83 @@ datacenter_associate_schema={
     "additionalProperties": False
 }
 
+dhcp_schema = {
+    "title":"DHCP schema",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type":"object",
+    "properties":{
+        "enabled": {"type": "boolean"},
+        "start-address": ip_schema,
+        "count": integer1_schema
+    }
+}
+
+ip_profile_schema = {
+    "title":"IP profile schema",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type":"object",
+    "properties":{
+        "ip-version": {"type":"string", "enum":["IPv4","IPv6"]},
+        "subnet-address": ip_prefix_schema,
+        "gateway-address": ip_schema,
+        "security-group": {"type":"string"},
+        "dns-address": ip_schema,
+        "dhcp": dhcp_schema
+    },
+}
+
+key_pair_schema = {
+    "title": "Key-pair schema for cloud-init configuration schema",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type":"object",
+    "properties":{
+        "name": name_schema,
+        "key": {"type":"string"}
+    },
+    "required": ["key"],
+    "additionalProperties": False
+}
+
+cloud_config_user_schema = {
+    "title": "User schema for cloud-init configuration schema",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type":"object",
+    "properties":{
+        "name": nameshort_schema,
+        "user-info": {"type":"string"},
+        #"key-pairs": {"type" : "array", "items": key_pair_schema}
+        "key-pairs": {"type" : "array", "items": {"type":"string"}}
+    },
+    "required": ["name"],
+    "additionalProperties": False
+}
+
+cloud_config_schema = {
+    "title": "Cloud-init configuration schema",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type":"object",
+    "properties":{
+        #"key-pairs": {"type" : "array", "items": key_pair_schema},
+        "key-pairs": {"type" : "array", "items": {"type":"string"}},
+        "users": {"type" : "array", "items": cloud_config_user_schema}
+    },
+    "additionalProperties": False
+}
+
 internal_connection_element_schema = {
     "type":"object",
     "properties":{
         "VNFC": name_schema,
         "local_iface_name": name_schema
+    }
+}
+
+internal_connection_element_schema_v02 = {
+    "type":"object",
+    "properties":{
+        "VNFC": name_schema,
+        "local_iface_name": name_schema,
+        "ip-address": ip_schema
     }
 }
 
@@ -299,6 +374,20 @@ internal_connection_schema = {
     "additionalProperties": False
 }
 
+internal_connection_schema_v02 = {
+    "type":"object",
+    "properties":{
+        "name": name_schema,
+        "description":description_schema,
+        "type": {"type": "string", "enum":["e-line", "e-lan"]},
+        "implementation": {"type": "string", "enum":["virtual", "underlay"]},
+        "ip-profile": ip_profile_schema,
+        "elements": {"type" : "array", "items": internal_connection_element_schema_v02, "minItems":2}
+    },
+    "required": ["name", "type", "elements"],
+    "additionalProperties": False
+}
+
 external_connection_schema = {
     "type":"object",
     "properties":{
@@ -309,6 +398,18 @@ external_connection_schema = {
         "description":description_schema
     },
     "required": ["name", "type", "VNFC", "local_iface_name"],
+    "additionalProperties": False
+}
+
+external_connection_schema_v02 = {
+    "type":"object",
+    "properties":{
+        "name": name_schema,
+        "VNFC": name_schema,
+        "local_iface_name": name_schema ,
+        "description":description_schema
+    },
+    "required": ["name", "VNFC", "local_iface_name"],
     "additionalProperties": False
 }
 
@@ -384,6 +485,7 @@ vnfc_schema = {
         "description": description_schema,
         "VNFC image": {"oneOf": [path_schema, http_schema]},
         "image metadata": metadata_schema, 
+        #"cloud-config": cloud_config_schema, #common for all vnfs in the scenario
         "processor": {
             "type":"object",
             "properties":{
@@ -405,10 +507,11 @@ vnfc_schema = {
         "disk": integer1_schema,
         "numas": {
             "type": "array",
-            "items":numa_schema
+            "items": numa_schema
         },
         "bridge-ifaces": bridge_interfaces_schema,
         "devices": devices_schema
+        
     },
     "required": ["name", "VNFC image"],
     "additionalProperties": False
@@ -440,17 +543,26 @@ vnfd_schema_v01 = {
     "additionalProperties": False
 }
 
-#Future VNFD schema to be defined
+#VNFD schema for OSM R1 
 vnfd_schema_v02 = {
     "title":"vnfd information schema v0.2",
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type":"object",
     "properties":{
-        "schema_version": schema_version_2,
+        "schema_version": {"type": "string", "enum": ["0.2"]},
         "vnf":{
             "type":"object",
             "properties":{
                 "name": name_schema,
+                "description": description_schema,
+                "class": nameshort_schema,
+                "public": {"type" : "boolean"},
+                "physical": {"type" : "boolean"},
+                "tenant_id": id_schema, #only valid for admin
+                "external-connections": {"type" : "array", "items": external_connection_schema_v02, "minItems":1},
+                "internal-connections": {"type" : "array", "items": internal_connection_schema_v02, "minItems":1},
+                # "cloud-config": cloud_config_schema, #common for all vnfcs
+                "VNFC":{"type" : "array", "items": vnfc_schema, "minItems":1}
             },
             "required": ["name"],
             "additionalProperties": True
@@ -538,17 +650,16 @@ nsd_schema_v01 = {
     "additionalProperties": False
 }
 
-#Future NSD schema to be defined
 nsd_schema_v02 = {
     "title":"network scenario descriptor information schema v0.2",
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type":"object",
     "properties":{
-        "schema_version": schema_version_2,
+        "schema_version": {"type": "string", "enum": ["0.2"]},
         "scenario":{
             "type":"object",
             "properties":{
-                "name":name_schema,
+                "name": name_schema,
                 "description": description_schema,
                 "tenant_id": id_schema, #only valid for admin
                 "public": {"type": "boolean"},
@@ -576,6 +687,100 @@ nsd_schema_v02 = {
                                 "type": {"type": "string", "enum":["dataplane", "bridge"]},
                                 "external" : {"type": "boolean"},
                                 "graph": graph_schema
+                            },
+                            "required": ["interfaces"]
+                        },
+                    }
+                },
+            
+            },
+            "required": ["vnfs", "name"],
+            "additionalProperties": False
+        }
+    },
+    "required": ["scenario","schema_version"],
+    "additionalProperties": False
+}
+
+#NSD schema for OSM R1
+nsd_schema_v03 = {
+    "title":"network scenario descriptor information schema v0.3",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type":"object",
+    "properties":{
+        "schema_version": {"type": "string", "enum": ["0.3"]},
+        "scenario":{
+            "type":"object",
+            "properties":{
+                "name": name_schema,
+                "description": description_schema,
+                "tenant_id": id_schema, #only valid for admin
+                "public": {"type": "boolean"},
+                "cloud-config": cloud_config_schema, #common for all vnfs in the scenario
+                #"site": name_schema,
+                "vnfs": {
+                    "type":"object",
+                    "patternProperties":{
+                        ".": {
+                            "type": "object",
+                            "properties":{
+                                "vnf_id": id_schema,
+                                "graph": graph_schema,
+                                "vnf_name": name_schema,
+                                "cloud-config": cloud_config_schema, #particular for a vnf
+                                #"site": name_schema,
+                                "internal-connections": {
+                                    "type": "object",
+                                    "patternProperties": {
+                                        ".": {
+                                            "type": "object",
+                                            "properties": {
+                                                "ip-profile": ip_profile_schema,
+                                                "elements": {
+                                                    "type" : "array",
+                                                    "items":{
+                                                        "type":"object",
+                                                        "properties":{
+                                                            "VNFC": name_schema,
+                                                            "local_iface_name": name_schema,
+                                                            "ip-address": ip_schema
+                                                        },
+                                                        "required": ["VNFC", "local_iface_name"],
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                        }
+                    },
+                    "minProperties": 1
+                },
+                "networks": {
+                    "type":"object",
+                    "patternProperties":{
+                        ".": {
+                            "type": "object",
+                            "properties":{
+                                "interfaces":{
+                                    "type":"array",
+                                    "minLength":1,
+                                    "items":{
+                                        "type":"object",
+                                        "properties":{
+                                            "ip-address": ip_schema
+                                        },
+                                        "patternProperties":{
+                                            ".": {"type": "string"}
+                                        }
+                                    }
+                                },
+                                "type": {"type": "string", "enum":["e-line", "e-lan"]},
+                                "implementation": {"type": "string", "enum":["virtual", "underlay"]},
+                                "external" : {"type": "boolean"},
+                                "graph": graph_schema,
+                                "ip-profile": ip_profile_schema
                             },
                             "required": ["interfaces"]
                         },
@@ -683,7 +888,7 @@ scenario_action_schema = {
     "additionalProperties": False
 }
 
-instance_scenario_create_schema = {
+instance_scenario_create_schema_v01 = {
     "title":"instance scenario create information schema v0.1",
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type":"object",
@@ -694,20 +899,56 @@ instance_scenario_create_schema = {
             "properties":{
                 "name":name_schema,
                 "description":description_schema,
-                "datacenter": name_schema,
-                "scenario" : name_schema, #can be an UUID or name
+                "site": name_schema,
                 "action":{"enum": ["deploy","reserve","verify" ]},
-                "connect_mgmt_interfaces": {"oneOff": [{"type":"boolean"}, {"type":"object"}]},# can be true or a dict with datacenter: net_name
+                "connect_mgmt_interfaces": {"oneOf": [{"type":"boolean"}, {"type":"object"}]},# can be true or a dict with datacenter: net_name
+                "cloud-config": cloud_config_schema, #common to all vnfs in the instance scenario
                 "vnfs":{             #mapping from scenario to datacenter
                     "type": "object",
                     "patternProperties":{
                         ".": {
                             "type": "object",
                             "properties":{
-                                "name":   name_schema,#override vnf name
-                                "datacenter": name_schema,
-                                "metadata": {"type": "object"},
-                                "user_data": {"type": "string"}
+                                "name": name_schema, #override vnf name
+                                "site": name_schema,
+                                #"metadata": {"type": "object"},
+                                #"user_data": {"type": "string"}
+                                "cloud-config": cloud_config_schema, #particular for a vnf
+                                "external-connections": {
+                                    "type": "object",
+                                    "patternProperties": {
+                                        ".": {
+                                            "type": "object",
+                                            "properties": {
+                                                "vim-network-name": name_schema,
+                                                "ip-address": ip_schema
+                                            } 
+                                        }
+                                    }
+                                },
+                                "internal-connections": {
+                                    "type": "object",
+                                    "patternProperties": {
+                                        ".": {
+                                            "type": "object",
+                                            "properties": {
+                                                "ip-profile": ip_profile_schema,
+                                                "elements": {
+                                                    "type" : "array",
+                                                    "items":{
+                                                        "type":"object",
+                                                        "properties":{
+                                                            "VNFC": name_schema,
+                                                            "local_iface_name": name_schema,
+                                                            "ip-address": ip_schema
+                                                        },
+                                                        "required": ["VNFC", "local_iface_name"],
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     },
@@ -718,22 +959,36 @@ instance_scenario_create_schema = {
                         ".": {
                             "type": "object",
                             "properties":{
+                                "interfaces":{
+                                    "type":"array",
+                                    "minLength":1,
+                                    "items":{
+                                        "type":"object",
+                                        "properties":{
+                                            "ip-address": ip_schema
+                                        },
+                                        "patternProperties":{
+                                            ".": {"type": "string"}
+                                        }
+                                    }
+                                },
                                 "netmap-create": {"oneOf":[name_schema,{"type": "null"}]}, #datacenter network to use. Null if must be created as an internal net
                                 "netmap-use": name_schema,
-                                "name":   name_schema,#override network name
-                                "datacenter": name_schema,
+                                "name": name_schema, #override network name
+                                "ip-profile": ip_profile_schema,
+                                #"site": name_schema,
+                                "vim-network-name": name_schema
                             }
                         }
                     },
                 },
             },
             "additionalProperties": False,
-            "required": ["scenario", "name"]
+            "required": ["name"]
         },
     },
     "required": ["instance"],
     "additionalProperties": False
-    
 }
 
 instance_scenario_action_schema = {
