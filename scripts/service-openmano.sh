@@ -99,7 +99,7 @@ do
     then
         #calculates log file name
         logfile=""
-        mkdir -p $DIR_OM/logs && logfile=$DIR_OM/logs/open${om_component} || echo "can not create logs directory  $DIR_OM/logs"
+        mkdir -p $DIR_OM/logs && logfile=$DIR_OM/logs/open${om_component}.log || echo "can not create logs directory  $DIR_OM/logs"
         #check already running
         [ -n "$component_id" ] && echo "    $om_name is already running. Skipping" && continue
         #create screen if not created
@@ -119,11 +119,12 @@ do
         #move old log file index one number up and log again in index 0
         if [[ -n $logfile ]]
         then
-            for index in 8 7 6 5 4 3 2 1 0
+            for index in 8 7 6 5 4 3 2 1
             do
                 [[ -f ${logfile}.${index} ]] && mv ${logfile}.${index} ${logfile}.$((index+1))
             done
-            screen -S ${om_component} -p 0 -X logfile ${logfile}.0
+            [[ -f ${logfile} ]] && mv ${logfile} ${logfile}.1
+            screen -S ${om_component} -p 0 -X logfile ${logfile}
             screen -S ${om_component} -p 0 -X log on
         fi
         #launch command to screen
@@ -137,14 +138,14 @@ do
            #echo timeout $timeout
            #if !  ps -f -U $USER -u $USER | grep -v grep | grep -q ${om_cmd}
            log_lines=0
-           [[ -n $logfile ]] && log_lines=`head ${logfile}.0 | wc -l`
+           [[ -n $logfile ]] && log_lines=`head ${logfile} | wc -l`
            component_id=`ps -o pid,cmd -U $USER -u $USER | grep -v grep | grep ${om_cmd} | awk '{print $1}'`
            if [[ -z $component_id ]]
            then #process not started or finished
                [[ $log_lines -ge 2 ]] &&  echo -n "ERROR, it has exited." && break
                #started because writted serveral lines at log so report error
            fi
-           [[ -n $logfile ]] && grep -q "open${om_component}d ready" ${logfile}.0 && break
+           [[ -n $logfile ]] && grep -q "open${om_component}d ready" ${logfile} && break
            sleep 1
            timeout=$((timeout -1))
         done
@@ -154,7 +155,7 @@ do
         else
            echo -n "running on 'screen -x ${om_component}'."
         fi
-        [[ -n $logfile ]] && echo "  Logging at '${logfile}.0'" || echo
+        [[ -n $logfile ]] && echo "  Logging at '${logfile}'" || echo
     fi
 done
 

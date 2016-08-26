@@ -28,21 +28,32 @@ function usage(){
     echo -e "usage: sudo $0 [OPTIONS]"
     echo -e "Configures openmano to run as a service"
     echo -e "  OPTIONS"
-    echo -e "     -u USER  user to run openmano, 'root' by default"
-    echo -e "     -f PATH  path where openmano source is located. If missing it download from git"
-    echo -e "     -q:  install in an unattended mode"
+    echo -e "     -u USER_OWNER  user owner of the service, 'root' by default"
+    echo -e "     -f PATH  path where openmano source is located. If missing it is downloaded from git"
+    #echo -e "     -q:  install in an unattended mode"
     echo -e "     -h:  show this help"
+    echo -e "     --uninstall: remove created service and files"
 }
 
+function uninstall(){
+    service openmano stop
+    for file in /opt/openmano /etc/default/openmanod.cfg /var/log/openmano /etc/systemd/system/openmano.service
+    do
+        rm -rf $file || ! echo "Can not delete '$file'. Needed root privileges?" >&2 || exit 1
+    done
+    echo "Done"
+}
 
-USER="root"
+BAD_PATH_ERROR="Path '$FILE' does not contain a valid openmano distribution"
+GIT_URL=https://osm.etsi.org/gerrit/osm/RO.git
+USER_OWNER="root"
 QUIET_MODE=""
 FILE=""
 DELETE=""
 while getopts ":u:f:hq-:" o; do
     case "${o}" in
         u)
-            export USER="$OPTARG"
+            export USER_OWNER="$OPTARG"
             ;;
         f)
             export FILE="$OPTARG"
@@ -55,6 +66,7 @@ while getopts ":u:f:hq-:" o; do
             ;;
         -)
             [ "${OPTARG}" == "help" ] && usage && exit 0
+            [ "${OPTARG}" == "uninstall" ] && uninstall && exit 0
             echo -e "Invalid option: '--$OPTARG'\nTry $0 --help for more information" >&2 
             exit 1
             ;; 
@@ -73,18 +85,22 @@ while getopts ":u:f:hq-:" o; do
     esac
 done
 
-#check root privileges and non a root user behind
+#check root privileges
 [ "$USER" != "root" ] && echo "Needed root privileges" >&2 && exit 1
 
 #Discover Linux distribution
 #try redhat type
-[ -f /etc/redhat-release ] && _DISTRO=$(cat /etc/redhat-release 2>/dev/null | cut  -d" " -f1) 
-#if not assuming ubuntu type
-[ -f /etc/redhat-release ] || _DISTRO=$(lsb_release -is  2>/dev/null)            
-if [ "$_DISTRO" == "Ubuntu" ]
+if [[ -f /etc/redhat-release ]]
+then 
+    _DISTRO=$(cat /etc/redhat-release 2>/dev/null | cut  -d" " -f1)
+else 
+    #if not assuming ubuntu type
+    _DISTRO=$(lsb_release -is  2>/dev/null)
+fi            
+if [[ "$_DISTRO" == "Ubuntu" ]]
 then
-    _RELEASE=`lsb_release -rs`
-    if ! lsb_release -rs | grep -q -e "16.04"
+    _RELEASE=$(lsb_release -rs)
+    if [[ ${_RELEASE%%.*} != 16 ]] 
     then 
         echo "Only tested in Ubuntu Server 16.04" >&2 && exit 1
     fi
@@ -95,24 +111,33 @@ fi
 
 if [[ -z $FILE ]]
 then
-    git clone https://osm.etsi.org/gerrit/osm/RO.git openmano
-    FILE=./openmano
+    git clone $GIT_URL __temp__ || ! echo "Cannot get openmano source code from $GIT_URL" >&2 || exit 1
+    #git checkout <tag version>
+    FILE=./__temp__
     DELETE=y
 fi
-cp -r $FILE /opt/openmano
-cp ${FILE}/openmano /usr/sbin/
-mv /opt/openmano/openmanod.cfg /etc/default/openmanod.cfg
-mkdir -p /var/log/openmano/
+
+#make idenpotent
+rm -rf /opt/openmano
+rm -f /etc/default/openmanod.cfg
+rm -f /var/log/openmano
+cp -r $FILE /opt/openmano         || ! echo $BAD_PATH_ERROR >&2 || exit 1
+mkdir /opt/openmano/logs
+#cp ${FILE}/openmano /usr/sbin/    || ! echo $BAD_PATH_ERROR >&2 || exit 1
+ln -s /opt/openmano/openmanod.cfg /etc/default/openmanod.cfg  || echo "warning cannot create link '/etc/default/openmanod.cfg'"
+ln -s /opt/openmano/logs /var/log/openmano  || echo "warning cannot create link '/var/log/openmano'"
+
+chown $USER_OWNER /opt/openmano/openmanod.cfg
+chown -R $USER_OWNER /opt/openmano
+
 mkdir -p etc/systemd/system/
-
-
-cat  >> /etc/systemd/system/openmano.service  << EOF 
+cat  > /etc/systemd/system/openmano.service  << EOF 
 [Unit]
 Description=openmano server
 
 [Service]
-User=${USER}
-ExecStart=/opt/openmano/openmanod.py -c /etc/default/openmanod.cfg --log-file=/var/log/openmano/openmano.log
+User=${USER_OWNER}
+ExecStart=/opt/openmano/openmanod.py -c /opt/openmano/openmanod.cfg --log-file=/opt/openmano/logs/openmano.log
 Restart=always
 
 [Install]

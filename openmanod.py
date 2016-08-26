@@ -231,13 +231,15 @@ if __name__=="__main__":
                 file_handler= logging.handlers.RotatingFileHandler(global_config["log_file"], maxBytes=100e6, backupCount=9, delay=0)
                 file_handler.setFormatter(log_formatter_simple)
                 logger.addHandler(file_handler)
-                logger.debug("moving logs to '%s'", global_config["log_file"])
-                #remove initial strema handler
+                #logger.debug("moving logs to '%s'", global_config["log_file"])
+                #remove initial stream handler
                 logging.root.removeHandler(logging.root.handlers[0])
+                print ("logging on '{}'".format(global_config["log_file"]))
             except IOError as e:
                 raise LoadConfigurationException("Cannot open logging file '{}': {}. Check folder exist and permissions".format(global_config["log_file"], str(e)) ) 
         #logging.basicConfig(level = getattr(logging, global_config.get('log_level',"debug")))
         logger.setLevel(getattr(logging, global_config['log_level']))
+        logger.critical("Starting openmano server command: '%s'", sys.argv[0])
         
         # Initialize DB connection
         mydb = nfvo_db.nfvo_db(log_level=global_config["log_level_db"]);

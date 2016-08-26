@@ -29,12 +29,14 @@
 
 function usage(){
     echo -e "usage: sudo $0 [OPTIONS]"
-    echo -e "Install source code in ./openmano and the needed packages"
+    echo -e "Install last stable source code in ./openmano and the needed packages"
+    echo -e "On a Ubuntu 16.04 it configures openmano as a service"
     echo -e "  OPTIONS"
-    echo -e "     -u USER  database admin user. 'root' by default. Prompts if needed"
-    echo -e "     -p PASS  database admin password to be used or installed.Prompts if needed"
-    echo -e "     -q:  install in an unattended mode"
-    echo -e "     -h:  show this help"
+    echo -e "     -u USER:    database admin user. 'root' by default. Prompts if needed"
+    echo -e "     -p PASS:    database admin password to be used or installed. Prompts if needed"
+    echo -e "     -q --quiet: install in an unattended mode"
+    echo -e "     -h --help:  show this help"
+    echo -e "     --develop:  install last version for developers, and do not configure as a service"
 }
 
 function install_packages(){
@@ -55,10 +57,12 @@ function install_packages(){
     done
 }
 
+GIT_URL=https://osm.etsi.org/gerrit/osm/RO.git
 DBUSER="root"
 DBPASSWD=""
 DBPASSWD_PARAM=""
 QUIET_MODE=""
+DEVELOP=""
 while getopts ":u:p:hiq-:" o; do
     case "${o}" in
         u)
@@ -77,6 +81,8 @@ while getopts ":u:p:hiq-:" o; do
             ;;
         -)
             [ "${OPTARG}" == "help" ] && usage && exit 0
+            [ "${OPTARG}" == "develop" ] && DEVELOP="y" && continue
+            [ "${OPTARG}" == "quiet" ] && export QUIET_MODE=yes && export DEBIAN_FRONTEND=noninteractive && continue
             echo -e "Invalid option: '--$OPTARG'\nTry $0 --help for more information" >&2 
             exit 1
             ;; 
@@ -111,11 +117,12 @@ fi
 [ -f /etc/redhat-release ] || _DISTRO=$(lsb_release -is  2>/dev/null)            
 if [ "$_DISTRO" == "Ubuntu" ]
 then
-    _RELEASE="14"
-    if ! lsb_release -rs | grep -q "14."
+    _RELEASE=$(lsb_release -rs)
+    if [[ ${_RELEASE%%.*} != 14 ]] && [[ ${_RELEASE%%.*} != 16 ]] 
     then 
-        [[ -z $QUIET_MODE ]] && read -e -p "WARNING! Not tested Ubuntu version. Continue assuming a '$_RELEASE' type? (y/N)" KK
+        [[ -z $QUIET_MODE ]] && read -e -p "WARNING! Not tested Ubuntu version. Continue assuming a trusty (14.XX)'? (y/N)" KK
         [[ -z $QUIET_MODE ]] && [[ "$KK" != "y" ]] && [[ "$KK" != "yes" ]] && echo "Cancelled" && exit 1
+        _RELEASE = 14
     fi
 elif [ "$_DISTRO" == "CentOS" ]
 then
@@ -223,7 +230,8 @@ echo '
 #################################################################
 #####        DOWNLOAD SOURCE                                #####
 #################################################################'
-su $SUDO_USER -c 'git clone https://osm.etsi.org/gerrit/osm/openmano.git openmano'
+su $SUDO_USER -c 'git clone '"${GIT_URL}"' openmano'
+#[[ -z $DEVELOP ]] && su $SUDO_USER -c 'git checkout <tag version>'
 
 echo '
 #################################################################
@@ -306,9 +314,32 @@ then
     su $SUDO_USER -c 'echo ". ${HOME}/.bash_completion.d/python-argcomplete.sh" >> ~/.bashrc'
 fi
 
-echo
-echo "Done!  you may need to logout and login again for loading the configuration"
-echo " Run './openmano/scripts/service-openmano.sh start' for starting openmano in a screen"
+
+
+
+if [[ "$_DISTRO" == "Ubuntu" ]] &&  [[ ${_RELEASE%%.*} == 16 ]] && [[ -z $DEVELOP ]]
+then
+echo '
+#################################################################
+#####             CONFIGURE OPENMANO SERVICE                #####
+#################################################################'
+
+    ./openmano/scripts/install-service-openmano.sh -f openmano #-u $SUDO_USER
+#    alias service-openmano="service openmano"
+#    echo 'alias service-openmano="service openmano"' >> ${HOME}/.bashrc
+
+    echo
+    echo "Done!  you may need to logout and login again for loading client configuration"
+    echo " Manage server with 'service openmano start|stop|status|...' "
+
+
+else
+
+    echo
+    echo "Done!  you may need to logout and login again for loading client configuration"
+    echo " Run './openmano/scripts/service-openmano.sh start' for starting openmano in a screen"
+
+fi
 
 
 

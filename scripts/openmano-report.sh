@@ -36,8 +36,8 @@ echo "-------------------------------"
 echo "-------------------------------"
 echo "OPENMANO"
 echo "-------------------------------"
-echo "cat $DIRNAME/../logs/openmano.?"
-cat $DIRNAME/../logs/openmano.?
+echo "cat $DIRNAME/../logs/openmano.log*"
+cat $DIRNAME/../logs/openmano.log*
 echo
 echo "-------------------------------"
 echo "OPENVIM"
