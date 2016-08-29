@@ -28,8 +28,8 @@ openmano client used to interact with openmano-server (openmanod)
 '''
 __author__="Alfonso Tierno, Gerardo Garcia"
 __date__ ="$09-oct-2014 09:09:48$"
-__version__="0.4.3-r467"
-version_date="Mar 2016"
+__version__="0.4.4-r488"
+version_date="Aug 2016"
 
 from argcomplete.completers import FilesCompleter
 import os
@@ -993,7 +993,7 @@ def vim_action(args):
 
 def datacenter_net_action(args):
     if args.action == "net-update":
-        print "This command is deprecated, use 'openmano datacenter-netmap-delete --all' and 'openmano datacenter-netmap-upload' instead!!!"
+        print "This command is deprecated, use 'openmano datacenter-netmap-delete --all' and 'openmano datacenter-netmap-import' instead!!!"
         print
         args.action = "netmap-delete"
         args.netmap = None
@@ -1001,7 +1001,7 @@ def datacenter_net_action(args):
         r = datacenter_netmap_action(args)
         if r == 0:
             args.force = True
-            args.action = "netmap-upload"
+            args.action = "netmap-import"
             r = datacenter_netmap_action(args)
         return r
 
@@ -1056,7 +1056,7 @@ def datacenter_netmap_action(args):
             else:
                 return 0
         mano_response = requests.delete(URLrequest, headers=headers_req)
-    elif args.action=="netmap-upload":
+    elif args.action=="netmap-import":
         if not args.force:
             r = raw_input("Create all the available networks from datacenter '%s' as default netmaps (y/N)? " % (datacenter))
             if  len(r)>0  and r[0].lower()=="y":
@@ -1309,7 +1309,7 @@ if __name__=="__main__":
         datacenter_action_parser.set_defaults(func=datacenter_net_action, action=item)
 
 
-    action_dict={'netmap-upload': 'create network senario netmap base on the datacenter networks',
+    action_dict={'netmap-import': 'create network senario netmap base on the datacenter networks',
                  'netmap-create': 'create a new network senario netmap',
                  'netmap-edit':   'edit name of a network senario netmap',
                  'netmap-delete': 'deletes a network scenario netmap (--all for clearing all)',
@@ -1337,7 +1337,7 @@ if __name__=="__main__":
             datacenter_action_parser.add_argument("--name", action='store', help="name to assign to the datacenter netmap, by default same as vim-name")
             datacenter_action_parser.add_argument('--vim-id', action='store', help="specify vim network uuid")
             datacenter_action_parser.add_argument('--vim-name', action='store', help="specify vim network name")
-        if item=='netmap-upload':
+        if item=='netmap-import':
             datacenter_action_parser.add_argument("-f","--force", action="store_true", help="do not prompt for confirmation")
         datacenter_action_parser.set_defaults(func=datacenter_netmap_action, action=item)
     

@@ -185,7 +185,7 @@ then
     printf "%-50s" "Updating external nets in openmano: "
     result=`${DIRmano}/openmano datacenter-netmap-delete -f --all`
     [[ $? != 0 ]] && echo  "FAIL" && echo "    $result"  && $_exit 1
-    result=`${DIRmano}/openmano datacenter-netmap-upload -f`
+    result=`${DIRmano}/openmano datacenter-netmap-import -f`
     [[ $? != 0 ]] && echo  "FAIL" && echo "    $result"  && $_exit 1
     echo OK
 
