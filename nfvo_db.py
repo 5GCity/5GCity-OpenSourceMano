@@ -614,7 +614,7 @@ class nfvo_db(db_base.db_base):
                         for vm in vnf['vms']:
                             vm_manage_iface_list=[]
                             #instance_interfaces
-                            cmd = "SELECT vim_interface_id, instance_net_id, internal_name,external_name, mac_address, ip_address, vim_info, i.type as type "\
+                            cmd = "SELECT vim_interface_id, instance_net_id, internal_name,external_name, mac_address, ii.ip_address as ip_address, vim_info, i.type as type "\
                                     " FROM instance_interfaces as ii join interfaces as i on ii.interface_id=i.uuid "\
                                     " WHERE instance_vm_id='{}' ORDER BY created_at".format(vm['uuid'])
                             self.logger.debug(cmd)

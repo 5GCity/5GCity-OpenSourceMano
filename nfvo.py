@@ -1318,6 +1318,7 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
 
 def create_instance(mydb, tenant_id, instance_dict):
     #print "Checking that nfvo_tenant_id exists and getting the VIM URI and the VIM tenant_id"
+    logger.debug("Creating instance...")
     scenario = instance_dict["scenario"]
     datacenter_id = None
     datacenter_name=None

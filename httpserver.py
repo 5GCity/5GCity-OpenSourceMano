@@ -39,7 +39,7 @@ import logging
 from jsonschema import validate as js_v, exceptions as js_e
 from openmano_schemas import vnfd_schema_v01, vnfd_schema_v02, \
                             nsd_schema_v01, nsd_schema_v02, scenario_edit_schema, \
-                            scenario_action_schema, instance_scenario_action_schema, instance_scenario_create_schema, \
+                            scenario_action_schema, instance_scenario_action_schema, instance_scenario_create_schema_v01, \
                             tenant_schema, tenant_edit_schema,\
                             datacenter_schema, datacenter_edit_schema, datacenter_action_schema, datacenter_associate_schema,\
                             object_schema, netmap_new_schema, netmap_edit_schema
@@ -973,7 +973,7 @@ def http_post_instances(tenant_id):
         if tenant_id != "any":
             nfvo.check_tenant(mydb, tenant_id) 
         #parse input data
-        http_content,used_schema = format_in( instance_scenario_create_schema)
+        http_content,used_schema = format_in( instance_scenario_create_schema_v01)
         r = utils.remove_extra_items(http_content, used_schema)
         if r is not None: print "http_post_instances: Warning: remove extra items ", r
         data = nfvo.create_instance(mydb, tenant_id, http_content["instance"])

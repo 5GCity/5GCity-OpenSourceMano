@@ -126,7 +126,7 @@ then
     echo "Stopping openmano"
     $DIRscript/service-openmano.sh mano stop
     echo "Initializing openmano database"
-    $DIRmano/database_utils/init_mano_db.sh -u mano -p manopw
+    $DIRmano/database_utils/init_mano_db.sh -u mano -p manopw --createdb
     echo "Starting openmano"
     $DIRscript/service-openmano.sh mano start
     echo

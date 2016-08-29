@@ -165,6 +165,7 @@ DATABASE_TARGET_VER_NUM=0
 [ $OPENMANO_VER_NUM -ge 4033 ] && DATABASE_TARGET_VER_NUM=9   #0.4.33=>  9
 [ $OPENMANO_VER_NUM -ge 4036 ] && DATABASE_TARGET_VER_NUM=10  #0.4.36=>  10
 [ $OPENMANO_VER_NUM -ge 4043 ] && DATABASE_TARGET_VER_NUM=11  #0.4.43=>  11
+[ $OPENMANO_VER_NUM -ge 4046 ] && DATABASE_TARGET_VER_NUM=12  #0.4.46=>  12
 #TODO ... put next versions here
 
 
@@ -556,6 +557,42 @@ function downgrade_from_11(){
     echo "ALTER TABLE scenarios ADD UNIQUE INDEX name (name);"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "ALTER TABLE instance_scenarios ADD UNIQUE INDEX name (name);"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "DELETE FROM schema_version WHERE version_int='11';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+
+function upgrade_to_12(){
+    echo "    upgrade database from version 0.11 to version 0.12"
+    echo "      create ip_profiles table, with foreign keys to all nets tables, and add ip_address column to 'interfaces' and 'sce_interfaces'"
+    echo "CREATE TABLE ip_profiles (
+	id INT(11) NOT NULL AUTO_INCREMENT,
+	net_id VARCHAR(36) NULL DEFAULT NULL,
+	sce_net_id VARCHAR(36) NULL DEFAULT NULL,
+	instance_net_id VARCHAR(36) NULL DEFAULT NULL,
+	ip_version ENUM('IPv4','IPv6') NOT NULL DEFAULT 'IPv4',
+	subnet_address VARCHAR(64) NULL DEFAULT NULL,
+	gateway_address VARCHAR(64) NULL DEFAULT NULL,
+	security_group VARCHAR(255) NULL DEFAULT NULL,
+	dns_address VARCHAR(64) NULL DEFAULT NULL,
+	dhcp_enabled ENUM('true','false') NOT NULL DEFAULT 'true',
+	dhcp_start_address VARCHAR(64) NULL DEFAULT NULL,
+	dhcp_count INT(11) NULL DEFAULT NULL,
+	PRIMARY KEY (id),
+	CONSTRAINT FK_ipprofiles_nets FOREIGN KEY (net_id) REFERENCES nets (uuid) ON DELETE CASCADE,
+	CONSTRAINT FK_ipprofiles_scenets FOREIGN KEY (sce_net_id) REFERENCES sce_nets (uuid) ON DELETE CASCADE,
+	CONSTRAINT FK_ipprofiles_instancenets FOREIGN KEY (instance_net_id) REFERENCES instance_nets (uuid) ON DELETE CASCADE  )
+        COMMENT='Table containing the IP parameters of a network, either a net, a sce_net or and instance_net.'
+        COLLATE='utf8_general_ci'
+        ENGINE=InnoDB;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE interfaces ADD COLUMN ip_address VARCHAR(64) NULL DEFAULT NULL AFTER mac;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE sce_interfaces ADD COLUMN ip_address VARCHAR(64) NULL DEFAULT NULL AFTER interface_id;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (12, '0.12', '0.4.46', 'create ip_profiles table, with foreign keys to all nets tables, and add ip_address column to interfaces and sce_interfaces', '2016-07-18');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+function downgrade_from_12(){
+    echo "    downgrade database from version 0.12 to version 0.11"
+    echo "      delete ip_profiles table, and remove ip_address column in 'interfaces' and 'sce_interfaces'"
+    echo "DROP TABLE ip_profiles;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE interfaces DROP COLUMN ip_address;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE sce_interfaces DROP COLUMN ip_address;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "DELETE FROM schema_version WHERE version_int='12';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
 
 function upgrade_to_X(){

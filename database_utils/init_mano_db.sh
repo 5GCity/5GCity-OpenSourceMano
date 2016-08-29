@@ -26,6 +26,7 @@ DBPASS=""
 DBHOST="localhost"
 DBPORT="3306"
 DBNAME="mano_db"
+CREATEDB=""
 
 # Detect paths
 MYSQL=$(which mysql)
@@ -43,6 +44,7 @@ function usage(){
     echo -e "     -h HOST  database host. '$DBHOST' by default"
     echo -e "     -d NAME  database name. '$DBNAME' by default.  Prompts if DB access fails"
     echo -e "     --help   shows this help"
+    echo -e "     --createdb   forces the deletion and creation of the database"
 }
 
 while getopts ":u:p:P:d:h:-:" o; do
@@ -63,9 +65,14 @@ while getopts ":u:p:P:d:h:-:" o; do
             DBHOST="$OPTARG"
             ;;
         -)
-            [ "${OPTARG}" == "help" ] && usage && exit 0
-            echo "Invalid option: --$OPTARG" >&2 && usage  >&2
-            exit 1
+            if [ "${OPTARG}" == "help" ]; then
+                usage && exit 0
+            elif [ "${OPTARG}" == "createdb" ]; then
+                CREATEDB="yes"
+            else
+                echo "Invalid option: --$OPTARG" >&2 && usage  >&2
+                exit 1
+            fi
             ;;
         \?)
             echo "Invalid option: -$OPTARG" >&2 && usage  >&2
@@ -104,7 +111,13 @@ do
         echo
 done
 
-#${DIRNAME}/quick_delete_db.sh $MUSER $MPASS $MDB $HOST $PORT
+if [ -n "${CREATEDB}" ]; then
+    echo "    deleting previous database ${DBNAME}"
+    echo "DROP DATABASE IF EXISTS ${DBNAME}" | mysql $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_
+    echo "    creating database ${DBNAME}"
+    mysqladmin $DBUSER_ $DBPASS_ -s create ${DBNAME} || exit 1
+fi
+
 echo "    loading ${DIRNAME}/${DBNAME}_structure.sql"
 mysql  $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_ $DBNAME < ${DIRNAME}/mano_db_structure.sql
 
