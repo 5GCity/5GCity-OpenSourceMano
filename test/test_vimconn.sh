@@ -110,7 +110,7 @@ then
     echo "Stopping openmano"
     $DIRscript/service-openmano.sh mano stop
     echo "Initializing openmano database"
-    $DIRmano/database_utils/init_mano_db.sh -u mano -p manopw
+    $DIRmano/database_utils/init_mano_db.sh -u mano -p manopw --createdb
     echo "Starting openmano"
     $DIRscript/service-openmano.sh mano start
 
@@ -248,11 +248,22 @@ then
       ! is_valid_uuid $scenario && echo FAIL && echo "    $result" &&  $_exit 1
       echo $scenario
     done
+    
+    #USER_KEY=""
+    key_param1=""
+    key_param2=""
+    #for file_key in ${HOME}/.ssh/*.pub
+    #do
+    #    [[ -n ${USER_KEY} ]] && USER_KEY="${USER_KEY},"
+    #    USER_KEY="${USER_KEY}$(cat $file_key)"
+    #done
+    #[[  -n ${USER_KEY} ]] && key_param1="--keypair=${USER}:${USER_KEY}" && key_param2="--keypair=${USER_KEY}"
+    key_param1=--keypair-auto
 
     for sce in simple complex2
     do 
       printf "%-50s" "Deploying scenario '$sce':"
-      result=`openmano instance-scenario-create --scenario $sce --name ${sce}-instance`
+      result=`openmano instance-scenario-create --scenario $sce --name ${sce}-instance "$key_param1" "$key_param2"`
       instance=`echo $result |gawk '{print $1}'`
       ! is_valid_uuid $instance && echo FAIL && echo "    $result" && $_exit 1
       echo $instance

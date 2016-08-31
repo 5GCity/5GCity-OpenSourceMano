@@ -269,7 +269,7 @@ class vimconnector():
         '''
         raise vimconnNotImplemented( "Should have implemented this" )
         
-    def new_vminstance(self,name,description,start,image_id,flavor_id,net_list):
+    def new_vminstance(self,name,description,start,image_id,flavor_id,net_list,cloud_config=None):
         '''Adds a VM instance to VIM
         Params:
             start: indicates if VM must start or boot in pause mode. Ignored
@@ -283,6 +283,10 @@ class vimconnector():
                 use: 'data', 'bridge',  'mgmt'
                 type: 'virtual', 'PF', 'VF', 'VFnotShared'
                 vim_id: filled/added by this function
+                cloud_config: can be a text script to be passed directly to cloud-init,
+                    or an object to inject users and ssh keys with format:
+                        key-pairs: [] list of keys to install to the default user
+                        users: [{ name, key-pairs: []}] list of users to add with their key-pair 
                 #TODO ip, security groups
         Returns >=0, the instance identifier
                 <0, error_text

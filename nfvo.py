@@ -1316,6 +1316,27 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
         #logger.error("start_scenario %s", error_text)
         raise NfvoException(error_text, e.http_code)
 
+
+def unify_cloud_config(cloud_config):
+    index_to_delete = []
+    users = cloud_config.get("users", [])
+    for index0 in range(0,len(users)):
+        if index0 in index_to_delete:
+            continue
+        for index1 in range(index0+1,len(users)):
+            if index1 in index_to_delete:
+                continue
+            if users[index0]["name"] == users[index1]["name"]:
+                index_to_delete.append(index1)
+                for key in users[index1].get("key-pairs",()):
+                    if "key-pairs" not in users[index0]: 
+                        users[index0]["key-pairs"] = [key]
+                    elif key not in users[index0]["key-pairs"]:
+                        users[index0]["key-pairs"].append(key)
+    index_to_delete.sort(reverse=True)
+    for index in index_to_delete:
+        del users[index]
+
 def create_instance(mydb, tenant_id, instance_dict):
     #print "Checking that nfvo_tenant_id exists and getting the VIM URI and the VIM tenant_id"
     logger.debug("Creating instance...")
@@ -1370,6 +1391,15 @@ def create_instance(mydb, tenant_id, instance_dict):
                     break
             if not found:
                 raise NfvoException("Invalid vnf name '{}' at instance:vnfs".format(descriptor_vnf), HTTP_Bad_Request)
+    #0.1 parse cloud-config parameters
+        cloud_config = scenarioDict.get("cloud-config", {})
+        if instance_dict.get("cloud-config"):
+            cloud_config.update( instance_dict["cloud-config"])
+        if not cloud_config:
+            cloud_config = None
+        else:
+            scenarioDict["cloud-config"] = cloud_config
+            unify_cloud_config(cloud_config)
         
     #1. Creating new nets (sce_nets) in the VIM"
         for sce_net in scenarioDict['nets']:
@@ -1540,7 +1570,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                 #print "interfaces", yaml.safe_dump(vm['interfaces'], indent=4, default_flow_style=False)
                 #print ">>>>>>>>>>>>>>>>>>>>>>>>>>>"
                 vm_id = myvim.new_vminstance(myVMDict['name'],myVMDict['description'],myVMDict.get('start', None),
-                        myVMDict['imageRef'],myVMDict['flavorRef'],myVMDict['networks'])
+                        myVMDict['imageRef'],myVMDict['flavorRef'],myVMDict['networks'], cloud_config = cloud_config)
                 vm['vim_id'] = vm_id
                 rollbackList.append({'what':'vm','where':'vim','vim_id':datacenter_id,'uuid':vm_id})
                 #put interface uuid back to scenario[vnfs][vms[[interfaces]

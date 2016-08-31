@@ -544,7 +544,7 @@ class vimconnector(vimconn.vimconnector):
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError) as e: 
             self._format_exception(e)
         
-    def new_vminstance(self,name,description,start,image_id,flavor_id,net_list):
+    def new_vminstance(self,name,description,start,image_id,flavor_id,net_list,cloud_config=None):
         '''Adds a VM instance to VIM
         Params:
             start: indicates if VM must start or boot in pause mode. Ignored
@@ -614,10 +614,32 @@ class vimconnector(vimconn.vimconnector):
             security_groups   = self.config.get('security_groups')
             if type(security_groups) is str:
                 security_groups = ( security_groups, )
+            if isinstance(cloud_config, dict):
+                userdata="#cloud-config\nusers:\n"
+                #default user
+                if "key-pairs" in cloud_config:
+                    userdata += "  - default:\n    ssh-authorized-keys:\n"
+                    for key in cloud_config["key-pairs"]:
+                        userdata += "      - '{key}'\n".format(key=key)
+                for user in cloud_config.get("users",[]):
+                    userdata += "  - name: {name}\n    sudo: ALL=(ALL) NOPASSWD:ALL\n".format(name=user["name"])
+                    if "user-info" in user:
+                        userdata += "    gecos: {}'\n".format(user["user-info"])
+                    if user.get("key-pairs"):
+                        userdata += "    ssh-authorized-keys:\n"
+                        for key in user["key-pairs"]:
+                            userdata += "      - '{key}'\n".format(key=key)
+                self.logger.debug("userdata: %s", userdata)
+            elif isinstance(cloud_config, str):
+                userdata = cloud_config
+            else:
+                userdata=None    
+            
             server = self.nova.servers.create(name, image_id, flavor_id, nics=net_list_vim, meta=metadata,
                                               security_groups   = security_groups,
                                               availability_zone = self.config.get('availability_zone'),
                                               key_name          = self.config.get('keypair'),
+                                              userdata=userdata
                                         ) #, description=description)
             
             

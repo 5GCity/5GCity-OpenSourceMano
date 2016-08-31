@@ -30,7 +30,7 @@ __date__ ="$28-aug-2014 10:05:01$"
 import db_base
 import MySQLdb as mdb
 import json
-#import yaml
+import yaml
 import time
 
 
@@ -362,6 +362,9 @@ class nfvo_db(db_base.db_base):
                     elif self.cur.rowcount>1:
                         raise db_base.db_base_Exception("More than one scenario found with this criteria " + where_text, db_base.HTTP_Bad_Request)
                     scenario_dict = rows[0]
+                    if scenario_dict["cloud_config"]:
+                        scenario_dict["cloud-config"] = yaml.load(scenario_dict["cloud_config"])
+                    del scenario_dict["cloud_config"]
                     #sce_vnfs
                     cmd = "SELECT uuid,name,vnf_id,description FROM sce_vnfs WHERE scenario_id='{}' ORDER BY created_at".format(scenario_dict['uuid'])
                     self.logger.debug(cmd)
@@ -494,6 +497,9 @@ class nfvo_db(db_base.db_base):
                         'scenario_id' : scenarioDict['uuid'],
                         'datacenter_id': datacenter_id
                     }
+                    if scenarioDict.get("cloud-config"):
+                        INSERT_["cloud_config"] = yaml.safe_dump(scenarioDict["cloud-config"], default_flow_style=True, width=256)
+
                     instance_uuid = self._new_row_internal('instance_scenarios', INSERT_, add_uuid=True, root_uuid=None, created_time=created_time)
                     
                     net_scene2instance={}
@@ -582,6 +588,7 @@ class nfvo_db(db_base.db_base):
                     cmd = "SELECT inst.uuid as uuid,inst.name as name,inst.scenario_id as scenario_id, datacenter_id" +\
                                 " ,datacenter_tenant_id, s.name as scenario_name,inst.tenant_id as tenant_id" + \
                                 " ,inst.description as description,inst.created_at as created_at" +\
+                                " ,inst.cloud_config as 'cloud_config'" +\
                             " FROM instance_scenarios as inst join scenarios as s on inst.scenario_id=s.uuid"+\
                             " WHERE " + where_text
                     self.logger.debug(cmd)
@@ -593,6 +600,9 @@ class nfvo_db(db_base.db_base):
                     elif self.cur.rowcount>1:
                         raise db_base.db_base_Exception("More than one instance found where " + where_text, db_base.HTTP_Bad_Request)
                     instance_dict = rows[0]
+                    if instance_dict["cloud_config"]:
+                        instance_dict["cloud-config"] = yaml.load(instance_dict["cloud_config"])
+                    del instance_dict["cloud_config"]
                     
                     #instance_vnfs
                     cmd = "SELECT iv.uuid as uuid,sv.vnf_id as vnf_id,sv.name as vnf_name, sce_vnf_id, datacenter_id, datacenter_tenant_id"\

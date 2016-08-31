@@ -975,7 +975,8 @@ def http_post_instances(tenant_id):
         #parse input data
         http_content,used_schema = format_in( instance_scenario_create_schema_v01)
         r = utils.remove_extra_items(http_content, used_schema)
-        if r is not None: print "http_post_instances: Warning: remove extra items ", r
+        if r is not None:
+            logger.warning("http_post_instances: Warning: remove extra items %s", str(r))
         data = nfvo.create_instance(mydb, tenant_id, http_content["instance"])
         return format_out(data)
     except (nfvo.NfvoException, db_base_Exception) as e:

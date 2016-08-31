@@ -28,6 +28,7 @@ scenario:
       vnf_name:  linux        # VNF name as introduced in OPENMANO DB
   networks: 
     default:                   # provide a name for this net or connection
+      external:  true
       interfaces: 
       - linux1:  eth0       # Node and its interface
 

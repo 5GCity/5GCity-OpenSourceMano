@@ -28,7 +28,7 @@ openmano client used to interact with openmano-server (openmanod)
 '''
 __author__="Alfonso Tierno, Gerardo Garcia"
 __date__ ="$09-oct-2014 09:09:48$"
-__version__="0.4.4-r488"
+__version__="0.4.5-r489"
 version_date="Aug 2016"
 
 from argcomplete.completers import FilesCompleter
@@ -614,6 +614,49 @@ def instance_create(args):
                 if net_scenario not in myInstance["instance"]["networks"]:
                     myInstance["instance"]["networks"][net_scenario] = {} 
                 myInstance["instance"]["networks"][net_scenario]["netmap-create"] = net_datacenter
+    if args.keypair:
+        if "cloud-config" not in myInstance["instance"]:
+            myInstance["instance"]["cloud-config"] = {}
+        cloud_config = myInstance["instance"]["cloud-config"]
+        for key in args.keypair:
+            index = key.find(":")
+            if index<0:
+                if "key-pairs" not in cloud_config:
+                    cloud_config["key-pairs"] = []
+                cloud_config["key-pairs"].append(key)
+            else:
+                user = key[:index]
+                key_ = key[index+1:]
+                key_list = key_.split(",")
+                if "users" not in cloud_config:
+                    cloud_config["users"] = []
+                cloud_config["users"].append({"name": user, "key-pairs": key_list  })
+    if args.keypair_auto:
+        try:
+            keys=[]
+            home = os.getenv("HOME")
+            user = os.getenv("USER")
+            files = os.listdir(home+'/.ssh')
+            for file in files:
+                if file[-4:] == ".pub":
+                    with open(home+'/.ssh/'+file, 'r') as f:
+                        keys.append(f.read())
+            if not keys:
+                print "Cannot obtain any public ssh key from '{}'. Try not using --keymap-auto".format(home+'/.ssh')
+                return 1
+        except Exception as e:
+            print "Cannot obtain any public ssh key. Error '{}'. Try not using --keymap-auto".format(str(e))
+            return 1
+        
+        if "cloud-config" not in myInstance["instance"]:
+            myInstance["instance"]["cloud-config"] = {}
+        cloud_config = myInstance["instance"]["cloud-config"]
+        if "key-pairs" not in cloud_config:
+            cloud_config["key-pairs"] = []
+        if user:
+            if "users" not in cloud_config:
+                cloud_config["users"] = []
+            cloud_config["users"].append({"name": user, "key-pairs": keys })                    
                         
     payload_req = yaml.safe_dump(myInstance, explicit_start=True, indent=4, default_flow_style=False, tags=False, encoding='utf-8', allow_unicode=True)
     logger.debug("openmano request: %s", payload_req)
@@ -1209,6 +1252,8 @@ if __name__=="__main__":
     instance_scenario_create_parser.add_argument("--datacenter", action="store", help="specifies the datacenter. Needed if several datacenters are available")
     instance_scenario_create_parser.add_argument("--netmap-use", action="append", type=str, dest="netmap_use", help="indicates a datacenter network to map a scenario network 'scenario-network=datacenter-network'. Can be used several times")
     instance_scenario_create_parser.add_argument("--netmap-create", action="append", type=str, dest="netmap_create", help="the scenario network must be created at datacenter 'scenario-network[=datacenter-network-name]' . Can be used several times")
+    instance_scenario_create_parser.add_argument("--keypair", action="append", type=str, dest="keypair", help="public key for ssh access. Format '[user:]key1[,key2...]'. Can be used several times")
+    instance_scenario_create_parser.add_argument("--keypair-auto", action="store_true", dest="keypair_auto", help="Inject the user ssh-keys found at $HOME/.ssh directory")
     instance_scenario_create_parser.add_argument("--description", action="store", help="description of the instance")
     instance_scenario_create_parser.set_defaults(func=instance_create)
 

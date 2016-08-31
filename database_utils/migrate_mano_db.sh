@@ -166,6 +166,7 @@ DATABASE_TARGET_VER_NUM=0
 [ $OPENMANO_VER_NUM -ge 4036 ] && DATABASE_TARGET_VER_NUM=10  #0.4.36=>  10
 [ $OPENMANO_VER_NUM -ge 4043 ] && DATABASE_TARGET_VER_NUM=11  #0.4.43=>  11
 [ $OPENMANO_VER_NUM -ge 4046 ] && DATABASE_TARGET_VER_NUM=12  #0.4.46=>  12
+[ $OPENMANO_VER_NUM -ge 4047 ] && DATABASE_TARGET_VER_NUM=13  #0.4.47=>  13
 #TODO ... put next versions here
 
 
@@ -594,6 +595,22 @@ function downgrade_from_12(){
     echo "ALTER TABLE sce_interfaces DROP COLUMN ip_address;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "DELETE FROM schema_version WHERE version_int='12';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
+
+function upgrade_to_13(){
+    echo "    upgrade database from version 0.12 to version 0.13"
+    echo "      add cloud_config at 'scenarios', 'instance_scenarios'"
+    echo "ALTER TABLE scenarios ADD COLUMN cloud_config MEDIUMTEXT NULL DEFAULT NULL AFTER descriptor;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_scenarios ADD COLUMN cloud_config MEDIUMTEXT NULL DEFAULT NULL AFTER modified_at;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (13, '0.13', '0.4.47', 'insert cloud-config at scenarios,instance_scenarios', '2016-08-30');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+function downgrade_from_12(){
+    echo "    downgrade database from version 0.13 to version 0.12"
+    echo "      remove cloud_config at 'scenarios', 'instance_scenarios'"
+    echo "ALTER TABLE scenarios DROP COLUMN cloud_config;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_scenarios DROP COLUMN cloud_config;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "DELETE FROM schema_version WHERE version_int='13';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+
 
 function upgrade_to_X(){
     echo "      change 'datacenter_nets'"

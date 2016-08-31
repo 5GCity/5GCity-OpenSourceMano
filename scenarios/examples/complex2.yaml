@@ -39,6 +39,7 @@ scenario:
       -   VNF2vms: out
       -   VNF3:    data1
     default:
+      external:  true
       interfaces: 
       -   VNF2vms: control0
       -   VNF2vms: control1
