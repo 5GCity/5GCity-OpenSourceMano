@@ -27,13 +27,14 @@ OSM_load_config
 if [ -d $OSM_MDG ]; then
 	INFO "reusing existing workspace"
 	cd $OSM_MDG
-	git pull 
+	git pull
 else
 	INFO "cloning MDG $OSM_MDG from $OSM_GIT_URL/$OSM_MDG"
 	git clone $OSM_GIT_URL/$OSM_MDG
 	cd $OSM_MDG
 fi
 if [ $# -gt 0 ]; then
+	git fetch origin +refs/for/master || FATAL "git fetch didn't work"
 	git checkout $1 || FATAL "git checkout '$1' didn't work"
 fi
 
