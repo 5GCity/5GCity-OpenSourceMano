@@ -25,6 +25,7 @@ OSM_JENKINS=$(dirname $HERE)
 [ $# -eq 1 ] || FATAL "arg is MDG name"
 
 export OSM_MDG=$1
+shift
 OSM_load_config
 
 if ! container_exists $OSM_BUILD_CONTAINER; then
@@ -53,7 +54,7 @@ else
     fi
 fi
 
-container_exec $OSM_BUILD_CONTAINER ./devops/jenkins/$OSM_MDG/start_build
+container_exec $OSM_BUILD_CONTAINER ./devops/jenkins/$OSM_MDG/start_build $*
 RC=$?
 INFO "$OSM_MDG build complete. Return code was $RC"
 exit $RC

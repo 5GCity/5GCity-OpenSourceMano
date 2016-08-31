@@ -33,14 +33,19 @@ else
 	git clone $OSM_GIT_URL/$OSM_MDG
 	cd $OSM_MDG
 fi
+if [ $# -gt 0 ]; then
+	git checkout $1
+fi
+
 INFO "starting build"
 
 ### for start_build
 ### put your commands here to
 ### build, test and produce coverage reports
 
-#RC=0
-RC=`python -m py_compile *.py`
+rm *.pyc
+python -m py_compile *.py
+RC=$?
 
 INFO "done, RC=$RC"
 exit $RC
