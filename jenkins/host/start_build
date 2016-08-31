@@ -22,7 +22,7 @@ HERE=$(realpath $(dirname $0))
 OSM_JENKINS=$(dirname $HERE)
 . $OSM_JENKINS/common/all_funcs
 
-[ $# -eq 1 ] || FATAL "arg is MDG name"
+[ $# -lt 1 ] && FATAL "arg is MDG name"
 
 export OSM_MDG=$1
 shift
