@@ -59,6 +59,7 @@ scenario:
       - node2:   control
       - node3:   control
     default:
+      external:  true
       interfaces: 
       - node1:   mgmt
       - node2:   mgmt

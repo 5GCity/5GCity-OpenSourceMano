@@ -603,7 +603,7 @@ function upgrade_to_13(){
     echo "ALTER TABLE instance_scenarios ADD COLUMN cloud_config MEDIUMTEXT NULL DEFAULT NULL AFTER modified_at;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (13, '0.13', '0.4.47', 'insert cloud-config at scenarios,instance_scenarios', '2016-08-30');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
-function downgrade_from_12(){
+function downgrade_from_13(){
     echo "    downgrade database from version 0.13 to version 0.12"
     echo "      remove cloud_config at 'scenarios', 'instance_scenarios'"
     echo "ALTER TABLE scenarios DROP COLUMN cloud_config;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1

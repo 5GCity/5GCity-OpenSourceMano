@@ -92,10 +92,9 @@ def get_imagelist(mydb, vnf_id, nfvo_tenant=None):
 
 def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, vim_tenant=None):
     '''Obtain a dictionary of VIM (datacenter) classes with some of the input parameters
-    return result, content:
-        <0, error_text upon error
-        NUMBER, dictionary with datacenter_id: vim_class with these keys: 
+    return dictionary with {datacenter_id: vim_class, ... }. vim_class contain: 
             'nfvo_tenant_id','datacenter_id','vim_tenant_id','vim_url','vim_url_admin','datacenter_name','type','user','passwd'
+        raise exception upon error
     '''
     WHERE_dict={}
     if nfvo_tenant     is not None:  WHERE_dict['nfvo_tenant_id'] = nfvo_tenant
@@ -1337,60 +1336,88 @@ def unify_cloud_config(cloud_config):
     for index in index_to_delete:
         del users[index]
 
+def get_datacenter_by_name_uuid(mydb, tenant_id, datacenter_id_name=None):
+    datacenter_id = None
+    datacenter_name = None
+    if datacenter_id_name:
+        if utils.check_valid_uuid(datacenter_id_name): 
+            datacenter_id = datacenter_id_name
+        else:
+            datacenter_name = datacenter_id_name
+    vims = get_vim(mydb, tenant_id, datacenter_id, datacenter_name, vim_tenant=None)
+    if len(vims) == 0:
+        raise NfvoException("datacenter '{}' not found".format(str(datacenter_id_name)), HTTP_Not_Found)
+    elif len(vims)>1:
+        #print "nfvo.datacenter_action() error. Several datacenters found"
+        raise NfvoException("More than one datacenters found, try to identify with uuid", HTTP_Conflict)
+    return vims.keys()[0], vims.values()[0]
+
 def create_instance(mydb, tenant_id, instance_dict):
     #print "Checking that nfvo_tenant_id exists and getting the VIM URI and the VIM tenant_id"
     logger.debug("Creating instance...")
     scenario = instance_dict["scenario"]
-    datacenter_id = None
-    datacenter_name=None
+    
+    #find main datacenter
+    myvims = {}
     datacenter = instance_dict.get("datacenter")
-    if datacenter:
-        if utils.check_valid_uuid(datacenter): 
-            datacenter_id = datacenter
-        else:
-            datacenter_name = datacenter
-    vims = get_vim(mydb, tenant_id, datacenter_id, datacenter_name, vim_tenant=None)
-    if len(vims) == 0:
-        raise NfvoException("datacenter '{}' not found".format(str(datacenter)), HTTP_Not_Found)
-    elif len(vims)>1:
-        #print "nfvo.datacenter_action() error. Several datacenters found"
-        raise NfvoException("More than one datacenters found, try to identify with uuid", HTTP_Conflict)
-    myvim = vims.values()[0]
+    default_datacenter_id, vim = get_datacenter_by_name_uuid(mydb, tenant_id, datacenter)
+    myvims[default_datacenter_id] = vim
     #myvim_tenant = myvim['tenant_id']
-    datacenter_id = myvim['id']
-    datacenter_name = myvim['name']
-    datacenter_tenant_id = myvim['config']['datacenter_tenant_id']
+#    default_datacenter_name = vim['name']
+    default_datacenter_tenant_id = vim['config']['datacenter_tenant_id']    #TODO revisar
     rollbackList=[]
     
     #print "Checking that the scenario exists and getting the scenario dictionary"
-    scenarioDict = mydb.get_scenario(scenario, tenant_id, datacenter_id)
-    scenarioDict['datacenter_tenant_id'] = datacenter_tenant_id
-    scenarioDict['datacenter_id'] = datacenter_id
+    scenarioDict = mydb.get_scenario(scenario, tenant_id, default_datacenter_id)
+    scenarioDict['datacenter_tenant_id'] = default_datacenter_tenant_id
+    scenarioDict['datacenter_id'] = default_datacenter_id
    
     auxNetDict = {}   #Auxiliar dictionary. First key:'scenario' or sce_vnf uuid. Second Key: uuid of the net/sce_net. Value: vim_net_id
     auxNetDict['scenario'] = {}
     
-    #print "scenario dict: ",yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False) 
+    print "scenario dict: ",yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False)  #TODO quitar 
     instance_name = instance_dict["name"]
     instance_description = instance_dict.get("description")
     try:
     #0 check correct parameters
-        for descriptor_net in instance_dict.get("networks",{}).keys():
+        for net_name, net_instance_desc in instance_dict.get("networks",{}).iteritems():
             found=False
             for scenario_net in scenarioDict['nets']:
-                if descriptor_net == scenario_net["name"]:
+                if net_name == scenario_net["name"]:
                     found = True
                     break
             if not found:
-                raise NfvoException("Invalid scenario network name '{}' at instance:networks".format(descriptor_net), HTTP_Bad_Request)
-        for descriptor_vnf in instance_dict.get("vnfs",{}).keys():
+                raise NfvoException("Invalid scenario network name '{}' at instance:networks".format(net_name), HTTP_Bad_Request)
+            if "sites" not in net_instance_desc:
+                net_instance_desc["sites"] = [ {} ]
+            site_without_datacenter_field = False
+            for site in net_instance_desc["sites"]:
+                if site.get("datacenter"):
+                    if site["datacenter"] not in myvims:
+                        #Add this datacenter to myvims
+                        d, v = get_datacenter_by_name_uuid(mydb, tenant_id, site["datacenter"])
+                        myvims[d] = v
+                        site["datacenter"]  = d #change name to id
+                else:
+                    if site_without_datacenter_field:
+                        raise NfvoException("Found more than one entries without datacenter field at instance:networks:{}:sites".format(net_name), HTTP_Bad_Request)
+                    site_without_datacenter_field = True
+                    site["datacenter"]  = default_datacenter_id #change name to id
+                    
+        for vnf_name, vnf_instance_desc in instance_dict.get("vnfs",{}).iteritems():
             found=False
             for scenario_vnf in scenarioDict['vnfs']:
-                if descriptor_vnf == scenario_vnf['name']:
+                if vnf_name == scenario_vnf['name']:
                     found = True
                     break
             if not found:
-                raise NfvoException("Invalid vnf name '{}' at instance:vnfs".format(descriptor_vnf), HTTP_Bad_Request)
+                raise NfvoException("Invalid vnf name '{}' at instance:vnfs".format(vnf_instance_desc), HTTP_Bad_Request)
+            if "datacenter" in vnf_instance_desc:
+            #Add this datacenter to myvims
+                if vnf_instance_desc["datacenter"] not in myvims:
+                    d, v = get_datacenter_by_name_uuid(mydb, tenant_id, vnf_instance_desc["datacenter"])
+                    myvims[d] = v
+                    scenario_vnf["datacenter"] = d #change name to id
     #0.1 parse cloud-config parameters
         cloud_config = scenarioDict.get("cloud-config", {})
         if instance_dict.get("cloud-config"):
@@ -1403,81 +1430,100 @@ def create_instance(mydb, tenant_id, instance_dict):
         
     #1. Creating new nets (sce_nets) in the VIM"
         for sce_net in scenarioDict['nets']:
+            sce_net["vim_id_sites"]={}
             descriptor_net =  instance_dict.get("networks",{}).get(sce_net["name"],{})
-            net_name = descriptor_net.get("name")
-            net_type = sce_net['type']
-            lookfor_filter = {'admin_state_up': True, 'status': 'ACTIVE'} #'shared': True
-            if sce_net["external"]:
-                if not net_name:
-                    net_name = sce_net["name"] 
-                if "netmap-use" in descriptor_net or "netmap-create" in descriptor_net:
-                    create_network = False
-                    lookfor_network = False
-                    if "netmap-use" in descriptor_net:
-                        lookfor_network = True
-                        if utils.check_valid_uuid(descriptor_net["netmap-use"]):
-                            filter_text = "scenario id '%s'" % descriptor_net["netmap-use"]
-                            lookfor_filter["id"] = descriptor_net["netmap-use"]
-                        else: 
-                            filter_text = "scenario name '%s'" % descriptor_net["netmap-use"]
-                            lookfor_filter["name"] = descriptor_net["netmap-use"]
-                    if "netmap-create" in descriptor_net:
-                        create_network = True
-                        net_vim_name = net_name
-                        if descriptor_net["netmap-create"]:
-                            net_vim_name= descriptor_net["netmap-create"]
-                        
-                elif sce_net['vim_id'] != None:
-                    #there is a netmap at datacenter_nets database
-                    create_network = False
-                    lookfor_network = True
-                    lookfor_filter["id"] = sce_net['vim_id']
-                    filter_text = "vim_id '%s' datacenter_netmap name '%s'. Try to reload vims with datacenter-net-update" % (sce_net['vim_id'], sce_net["name"])
-                    #look for network at datacenter and return error
+            net_name = descriptor_net.get("vim-network-name")
+            auxNetDict['scenario'][sce_net['uuid']] = {}
+
+            sites = descriptor_net.get("sites", [ {} ])
+            for site in sites:
+                if site.get("datacenter"):
+                    vim = myvims[ site["datacenter"] ]
+                    datacenter_id = site["datacenter"]
                 else:
-                    #There is not a netmap, look at datacenter for a net with this name and create if not found
-                    create_network = True
-                    lookfor_network = True
-                    lookfor_filter["name"] = sce_net["name"]
-                    net_vim_name = sce_net["name"]
-                    filter_text = "scenario name '%s'" % sce_net["name"]
-            else:
-                if not net_name:
-                    net_name = "%s.%s" %(instance_name, sce_net["name"])
-                    net_name = net_name[:255]     #limit length
-                net_vim_name = net_name
-                create_network = True
-                lookfor_network = False
+                    vim = myvims[ default_datacenter_id ]
+                    datacenter_id = default_datacenter_id
                 
-            if lookfor_network:
-                vim_nets = myvim.get_network_list(filter_dict=lookfor_filter)
-                if len(vim_nets) > 1:
-                    raise NfvoException("More than one candidate VIM network found for " + filter_text, HTTP_Bad_Request )
-                elif len(vim_nets) == 0:
-                    if not create_network:
-                        raise NfvoException("No candidate VIM network found for " + filter_text, HTTP_Bad_Request )
+                net_type = sce_net['type']
+                lookfor_filter = {'admin_state_up': True, 'status': 'ACTIVE'} #'shared': True
+                if sce_net["external"]:
+                    if not net_name:
+                        net_name = sce_net["name"] 
+                    if "netmap-use" in site or "netmap-create" in site:
+                        create_network = False
+                        lookfor_network = False
+                        if "netmap-use" in site:
+                            lookfor_network = True
+                            if utils.check_valid_uuid(site["netmap-use"]):
+                                filter_text = "scenario id '%s'" % site["netmap-use"]
+                                lookfor_filter["id"] = site["netmap-use"]
+                            else: 
+                                filter_text = "scenario name '%s'" % site["netmap-use"]
+                                lookfor_filter["name"] = site["netmap-use"]
+                        if "netmap-create" in site:
+                            create_network = True
+                            net_vim_name = net_name
+                            if site["netmap-create"]:
+                                net_vim_name = site["netmap-create"]
+                            
+                    elif sce_net['vim_id'] != None:
+                        #there is a netmap at datacenter_nets database   #TODO REVISE!!!!
+                        create_network = False
+                        lookfor_network = True
+                        lookfor_filter["id"] = sce_net['vim_id']
+                        filter_text = "vim_id '%s' datacenter_netmap name '%s'. Try to reload vims with datacenter-net-update" % (sce_net['vim_id'], sce_net["name"])
+                        #look for network at datacenter and return error
+                    else:
+                        #There is not a netmap, look at datacenter for a net with this name and create if not found
+                        create_network = True
+                        lookfor_network = True
+                        lookfor_filter["name"] = sce_net["name"]
+                        net_vim_name = sce_net["name"]
+                        filter_text = "scenario name '%s'" % sce_net["name"]
                 else:
-                    sce_net['vim_id'] = vim_nets[0]['id']
-                    auxNetDict['scenario'][sce_net['uuid']] = vim_nets[0]['id']
-                    create_network = False
-            if create_network:
-                #if network is not external
-                network_id = myvim.new_network(net_vim_name, net_type)
-                sce_net['vim_id'] = network_id
-                auxNetDict['scenario'][sce_net['uuid']] = network_id
-                rollbackList.append({'what':'network','where':'vim','vim_id':datacenter_id,'uuid':network_id})
+                    if not net_name:
+                        net_name = "%s.%s" %(instance_name, sce_net["name"])
+                        net_name = net_name[:255]     #limit length
+                    net_vim_name = net_name
+                    create_network = True
+                    lookfor_network = False
+                    
+                if lookfor_network:
+                    vim_nets = vim.get_network_list(filter_dict=lookfor_filter)
+                    if len(vim_nets) > 1:
+                        raise NfvoException("More than one candidate VIM network found for " + filter_text, HTTP_Bad_Request )
+                    elif len(vim_nets) == 0:
+                        if not create_network:
+                            raise NfvoException("No candidate VIM network found for " + filter_text, HTTP_Bad_Request )
+                    else:
+                        sce_net["vim_id_sites"][datacenter_id] = vim_nets[0]['id']
+                        
+                        auxNetDict['scenario'][sce_net['uuid']][datacenter_id] = vim_nets[0]['id']
+                        create_network = False
+                if create_network:
+                    #if network is not external
+                    network_id = vim.new_network(net_vim_name, net_type)
+                    sce_net["vim_id_sites"][datacenter_id] = network_id
+                    auxNetDict['scenario'][sce_net['uuid']][datacenter_id] = network_id
+                    rollbackList.append({'what':'network', 'where':'vim', 'vim_id':datacenter_id, 'uuid':network_id})
         
     #2. Creating new nets (vnf internal nets) in the VIM"
         #For each vnf net, we create it and we add it to instanceNetlist.
         for sce_vnf in scenarioDict['vnfs']:
             for net in sce_vnf['nets']:
+                if sce_vnf.get("datacenter"):
+                    vim = myvims[ sce_vnf["datacenter"] ]
+                    datacenter_id = sce_vnf["datacenter"]
+                else:
+                    vim = myvims[ default_datacenter_id ]
+                    datacenter_id = default_datacenter_id
                 descriptor_net =  instance_dict.get("vnfs",{}).get(sce_vnf["name"],{})
                 net_name = descriptor_net.get("name")
                 if not net_name:
                     net_name = "%s.%s" %(instance_name, net["name"])
                     net_name = net_name[:255]     #limit length
                 net_type = net['type']
-                network_id = myvim.new_network(net_name, net_type)
+                network_id = vim.new_network(net_name, net_type)
                 net['vim_id'] = network_id
                 if sce_vnf['uuid'] not in auxNetDict:
                     auxNetDict[sce_vnf['uuid']] = {}
@@ -1490,6 +1536,14 @@ def create_instance(mydb, tenant_id, instance_dict):
     #3. Creating new vm instances in the VIM
         #myvim.new_vminstance(self,vimURI,tenant_id,name,description,image_id,flavor_id,net_dict)
         for sce_vnf in scenarioDict['vnfs']:
+            if sce_vnf.get("datacenter"):
+                vim = myvims[ sce_vnf["datacenter"] ]
+                datacenter_id = sce_vnf["datacenter"]
+            else:
+                vim = myvims[ default_datacenter_id ]
+                datacenter_id = default_datacenter_id
+            sce_vnf["datacenter_id"] =  datacenter_id
+            sce_vnf["datacenter_tenant_id"] = vim['config']['datacenter_tenant_id']
             i = 0
             for vm in sce_vnf['vms']:
                 i += 1
@@ -1501,14 +1555,14 @@ def create_instance(mydb, tenant_id, instance_dict):
                 myVMDict['name'] = myVMDict['name'][0:255] #limit name length
                 #create image at vim in case it not exist
                 image_dict = mydb.get_table_by_uuid_name("images", vm['image_id'])
-                image_id = create_or_use_image(mydb, vims, image_dict, [], True)                
+                image_id = create_or_use_image(mydb, {datacenter_id: vim}, image_dict, [], True)                
                 vm['vim_image_id'] = image_id
                     
                 #create flavor at vim in case it not exist
                 flavor_dict = mydb.get_table_by_uuid_name("flavors", vm['flavor_id'])
                 if flavor_dict['extended']!=None:
                     flavor_dict['extended']= yaml.load(flavor_dict['extended'])
-                flavor_id = create_or_use_flavor(mydb, vims, flavor_dict, rollbackList, True)                
+                flavor_id = create_or_use_flavor(mydb, {datacenter_id: vim}, flavor_dict, rollbackList, True)                
                 vm['vim_flavor_id'] = flavor_id
                 
                 myVMDict['imageRef'] = vm['vim_image_id']
@@ -1556,7 +1610,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                             #print iface
                             #print vnf_iface
                             if vnf_iface['interface_id']==iface['uuid']:
-                                netDict['net_id'] = auxNetDict['scenario'][ vnf_iface['sce_net_id'] ]
+                                netDict['net_id'] = auxNetDict['scenario'][ vnf_iface['sce_net_id'] ][datacenter_id]
                                 break
                     else:
                         netDict['net_id'] = auxNetDict[ sce_vnf['uuid'] ][ iface['net_id'] ]
@@ -1569,7 +1623,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                 #print "networks", yaml.safe_dump(myVMDict['networks'], indent=4, default_flow_style=False)
                 #print "interfaces", yaml.safe_dump(vm['interfaces'], indent=4, default_flow_style=False)
                 #print ">>>>>>>>>>>>>>>>>>>>>>>>>>>"
-                vm_id = myvim.new_vminstance(myVMDict['name'],myVMDict['description'],myVMDict.get('start', None),
+                vm_id = vim.new_vminstance(myVMDict['name'],myVMDict['description'],myVMDict.get('start', None),
                         myVMDict['imageRef'],myVMDict['flavorRef'],myVMDict['networks'], cloud_config = cloud_config)
                 vm['vim_id'] = vm_id
                 rollbackList.append({'what':'vm','where':'vim','vim_id':datacenter_id,'uuid':vm_id})
@@ -1581,12 +1635,12 @@ def create_instance(mydb, tenant_id, instance_dict):
                                 iface["vim_id"]=net["vim_id"]
                                 break
         logger.debug("create_instance Deployment done")
-        #print yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False)
+        print yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False)
         #r,c = mydb.new_instance_scenario_as_a_whole(nfvo_tenant,scenarioDict['name'],scenarioDict)
         instance_id = mydb.new_instance_scenario_as_a_whole(tenant_id,instance_name, instance_description, scenarioDict)
         return mydb.get_instance_scenario(instance_id)
     except (NfvoException, vimconn.vimconnException,db_base_Exception)  as e:
-        message = rollback(mydb, vims, rollbackList)
+        message = rollback(mydb, myvims, rollbackList)
         if isinstance(e, db_base_Exception):
             error_text = "database Exception"
         elif isinstance(e, vimconn.vimconnException):
@@ -1655,7 +1709,7 @@ def delete_instance(mydb, tenant_id, instance_id):
         except vimconn.vimconnNotFoundException as e:
             error_msg+="\n    NET id={} not found at VIM".format(net['vim_net_id'])
             logger.warn("NET '%s', VIM id '%s', from VNF_id '%s' not found",
-                net['uuid'], vm['vim_net_id'], sce_vnf['vnf_id'])
+                net['uuid'], net['vim_net_id'], sce_vnf['vnf_id'])
         except vimconn.vimconnException as e:
             error_msg+="\n    Error: " + e.http_code + " Net id=" + net['vim_vm_id']
             logger.error("Error %d deleting NET '%s', VIM id '%s', from VNF_id '%s': %s",
@@ -2202,12 +2256,12 @@ def vim_action_get(mydb, tenant_id, datacenter, item, name):
             content = myvim.get_tenant_list(filter_dict=filter_dict)
         else:
             raise NfvoException(item + "?", HTTP_Method_Not_Allowed)
-        logger.debug("vim_action response ", content) #update nets Change from VIM format to NFVO format
+        logger.debug("vim_action response %s", content) #update nets Change from VIM format to NFVO format
         if name and len(content)==1:
             return {item[:-1]: content[0]}
         elif name and len(content)==0:
             raise NfvoException("No {} found with ".format(item[:-1]) + " and ".join(map(lambda x: str(x[0])+": "+str(x[1]), filter_dict.iteritems())),
-                 -HTTP_Not_Found)
+                 datacenter)
         else:
             return {item: content}
     except vimconn.vimconnException as e:

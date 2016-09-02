@@ -505,21 +505,30 @@ class nfvo_db(db_base.db_base):
                     net_scene2instance={}
                     #instance_nets   #nets interVNF
                     for net in scenarioDict['nets']:
-                        INSERT_={'vim_net_id': net['vim_id'], 'external': net['external'], 'instance_scenario_id':instance_uuid } #,  'type': net['type']
-                        INSERT_['datacenter_id'] = net.get('datacenter_id', datacenter_id) 
-                        INSERT_['datacenter_tenant_id'] = net.get('datacenter_tenant_id', datacenter_tenant_id)
-                        if net.get("uuid"):
-                            INSERT_['sce_net_id'] = net['uuid']
-                        created_time += 0.00001
-                        instance_net_uuid =  self._new_row_internal('instance_nets', INSERT_, True, instance_uuid, created_time)
-                        net_scene2instance[ net['uuid'] ] = instance_net_uuid
-                        net['uuid'] = instance_net_uuid  #overwrite scnario uuid by instance uuid
+                        net_scene2instance[ net['uuid'] ] ={}
+                        datacenter_site_id = net.get('datacenter_id', datacenter_id)
+                        if not "vim_id_sites" in net:
+                            net["vim_id_sites"] ={datacenter_site_id: net['vim_id']}
+                        sce_net_id = net.get("uuid")
+                        
+                        for datacenter_site_id,vim_id in net["vim_id_sites"].iteritems():
+                            INSERT_={'vim_net_id': vim_id, 'external': net['external'], 'instance_scenario_id':instance_uuid } #,  'type': net['type']
+                            INSERT_['datacenter_id'] = datacenter_site_id 
+                            INSERT_['datacenter_tenant_id'] = net.get('datacenter_tenant_id', datacenter_tenant_id) #TODO revise
+                            if sce_net_id:
+                                INSERT_['sce_net_id'] = sce_net_id
+                            created_time += 0.00001
+                            instance_net_uuid =  self._new_row_internal('instance_nets', INSERT_, True, instance_uuid, created_time)
+                            net_scene2instance[ sce_net_id ][datacenter_site_id] = instance_net_uuid
+                            net['uuid'] = instance_net_uuid  #overwrite scnario uuid by instance uuid
                     
                     #instance_vnfs
                     for vnf in scenarioDict['vnfs']:
+                        datacenter_site_id = vnf.get('datacenter_id', datacenter_id)
+                        datacenter_site_tenant_id = vnf.get('datacenter_tenant_id', datacenter_id)
                         INSERT_={'instance_scenario_id': instance_uuid,  'vnf_id': vnf['vnf_id']  }
-                        INSERT_['datacenter_id'] = vnf.get('datacenter_id', datacenter_id) 
-                        INSERT_['datacenter_tenant_id'] = vnf.get('datacenter_tenant_id', datacenter_tenant_id)
+                        INSERT_['datacenter_id'] = datacenter_site_id 
+                        INSERT_['datacenter_tenant_id'] = datacenter_site_tenant_id #TODO revise
                         if vnf.get("uuid"):
                             INSERT_['sce_vnf_id'] = vnf['uuid']
                         created_time += 0.00001
@@ -528,14 +537,15 @@ class nfvo_db(db_base.db_base):
                         
                         #instance_nets   #nets intraVNF
                         for net in vnf['nets']:
+                            net_scene2instance[ net['uuid'] ] = {}
                             INSERT_={'vim_net_id': net['vim_id'], 'external': 'false', 'instance_scenario_id':instance_uuid  } #,  'type': net['type']
-                            INSERT_['datacenter_id'] = net.get('datacenter_id', datacenter_id) 
-                            INSERT_['datacenter_tenant_id'] = net.get('datacenter_tenant_id', datacenter_tenant_id)
+                            INSERT_['datacenter_id'] = net.get('datacenter_id', datacenter_site_id) 
+                            INSERT_['datacenter_tenant_id'] = net.get('datacenter_tenant_id', datacenter_site_tenant_id)
                             if net.get("uuid"):
                                 INSERT_['net_id'] = net['uuid']
                             created_time += 0.00001
                             instance_net_uuid =  self._new_row_internal('instance_nets', INSERT_, True, instance_uuid, created_time)
-                            net_scene2instance[ net['uuid'] ] = instance_net_uuid
+                            net_scene2instance[ net['uuid'] ][datacenter_site_id] = instance_net_uuid
                             net['uuid'] = instance_net_uuid  #overwrite scnario uuid by instance uuid
                         
                         #instance_vms
@@ -557,7 +567,7 @@ class nfvo_db(db_base.db_base):
                                 if net_id is None:
                                     continue
                                 interface_type='external' if interface['external_name'] is not None else 'internal'
-                                INSERT_={'instance_vm_id': instance_vm_uuid,  'instance_net_id': net_scene2instance[net_id],
+                                INSERT_={'instance_vm_id': instance_vm_uuid,  'instance_net_id': net_scene2instance[net_id][datacenter_site_id],
                                     'interface_id': interface['uuid'], 'vim_interface_id': interface.get('vim_id'), 'type':  interface_type  }
                                 #created_time += 0.00001
                                 interface_uuid =  self._new_row_internal('instance_interfaces', INSERT_, True, instance_uuid) #, created_time)

@@ -35,6 +35,7 @@ import logging
 from openmano_schemas import id_schema, name_schema, nameshort_schema, description_schema, \
                             vlan1000_schema, integer0_schema
 from jsonschema import validate as js_v, exceptions as js_e
+from urllib import quote
 
 '''contain the openvim virtual machine status to openmano status'''
 vmStatus2manoFormat={'ACTIVE':'ACTIVE',
@@ -346,7 +347,7 @@ class vimconnector(vimconn.vimconnector):
         if self.tenant:
             return self.tenant
 
-        url = self.url+'/tenants?name='+ self.tenant_name
+        url = self.url+'/tenants?name='+ quote(self.tenant_name)
         self.logger.info("Getting VIM tenant_id GET %s", url)
         vim_response = requests.get(url, headers = self.headers_req)
         self._check_http_request_response(vim_response)
@@ -690,7 +691,7 @@ class vimconnector(vimconn.vimconnector):
         '''Get the image id from image path in the VIM database'''
         try:
             self._get_my_tenant()
-            url=self.url + '/' + self.tenant + '/images?path='+path
+            url=self.url + '/' + self.tenant + '/images?path='+quote(path)
             self.logger.info("Getting images GET %s", url)
             vim_response = requests.get(url)
             self._check_http_request_response(vim_response)
@@ -898,7 +899,7 @@ class vimconnector(vimconn.vimconnector):
                 #get interfaces info
                 try:
                     management_ip = False
-                    url2 = self.url+'/ports?device_id='+ vm_id
+                    url2 = self.url+'/ports?device_id='+ quote(vm_id)
                     self.logger.info("Getting PORTS GET %s", url2)
                     vim_response2 = requests.get(url2, headers = self.headers_req)
                     self._check_http_request_response(vim_response2)

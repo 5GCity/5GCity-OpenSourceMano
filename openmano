@@ -480,6 +480,8 @@ def scenario_deploy(args):
     args.file = None
     args.netmap_use = None
     args.netmap_create = None
+    args.keypair = None
+    args.keypair_auto = None
     return instance_create(args)
 
 #     #print "scenario-deploy",args
@@ -594,7 +596,9 @@ def instance_create(args):
                 net_datacenter = net_tuple[1].strip()
                 if net_scenario not in myInstance["instance"]["networks"]:
                     myInstance["instance"]["networks"][net_scenario] = {} 
-                myInstance["instance"]["networks"][net_scenario]["netmap-use"] = net_datacenter
+                if "sites" not in myInstance["instance"]["networks"][net_scenario]:
+                    myInstance["instance"]["networks"][net_scenario]["sites"] = [ {} ]
+                myInstance["instance"]["networks"][net_scenario]["sites"][0]["netmap-use"] = net_datacenter
     if args.netmap_create:
         if "networks" not in myInstance["instance"]:
             myInstance["instance"]["networks"] = {}
@@ -613,7 +617,9 @@ def instance_create(args):
                     return
                 if net_scenario not in myInstance["instance"]["networks"]:
                     myInstance["instance"]["networks"][net_scenario] = {} 
-                myInstance["instance"]["networks"][net_scenario]["netmap-create"] = net_datacenter
+                if "sites" not in myInstance["instance"]["networks"][net_scenario]:
+                    myInstance["instance"]["networks"][net_scenario]["sites"] = [ {} ]
+                myInstance["instance"]["networks"][net_scenario]["sites"][0]["netmap-create"] = net_datacenter
     if args.keypair:
         if "cloud-config" not in myInstance["instance"]:
             myInstance["instance"]["cloud-config"] = {}

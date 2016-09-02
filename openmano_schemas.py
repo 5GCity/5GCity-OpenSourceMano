@@ -973,12 +973,32 @@ instance_scenario_create_schema_v01 = {
                                         }
                                     }
                                 },
-                                "netmap-create": {"oneOf":[name_schema,{"type": "null"}]}, #datacenter network to use. Null if must be created as an internal net
-                                "netmap-use": name_schema,
-                                #"name": name_schema, #override network name
                                 "ip-profile": ip_profile_schema,
-                                #"datacenter": name_schema,
-                                "vim-network-name": name_schema
+                                #if the network connects VNFs deployed at different sites, you must specify one entry per site that this network connect to 
+                                "sites": {
+                                    "type":"array",
+                                    "minLength":1,
+                                    "items":{
+                                        "type":"object",
+                                        "properties":{
+                                            # By default for an scenario 'external' network openmano looks for an existing VIM network to map this external scenario network,
+                                            # for other networks openamno creates at VIM
+                                            # Use netmap-create to force to create an external scenario network  
+                                            "netmap-create": {"oneOf":[name_schema,{"type": "null"}]}, #datacenter network to use. Null if must be created as an internal net
+                                            #netmap-use:   Indicates an existing VIM network that must be used for this scenario network. 
+                                            #Can use both the VIM network name (if it is not ambiguous) or the VIM net UUID
+                                            #If both 'netmap-create' and 'netmap-use'are supplied, netmap-use precedes, but if fails openmano follows the netmap-create
+                                            #In oder words, it is the same as 'try to map to the VIM network (netmap-use) if exist, and if not create the network (netmap-create)
+                                            "netmap-use": name_schema, # 
+                                            "vim-network-name": name_schema, #override network name
+                                            #"ip-profile": ip_profile_schema,
+                                            "datacenter": name_schema,                                        
+                                        }
+                                    }
+                                },
+                                
+
+
                             }
                         }
                     },
