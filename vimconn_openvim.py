@@ -481,7 +481,7 @@ class vimconnector(vimconn.vimconnector):
         except requests.exceptions.RequestException as e:
             self._format_request_exception(e)
 
-    def new_network(self,net_name,net_type, shared=False, **vim_specific):
+    def new_network(self,net_name, net_type, ip_profile=None, shared=False, **vim_specific):
         '''Adds a tenant network to VIM'''
         '''Returns the network identifier'''
         try:

@@ -160,9 +160,11 @@ class vimconnector():
         '''
         raise vimconnNotImplemented( "Should have implemented this" )
 
-    def new_network(self,net_name, net_type, shared=False):
+    def new_network(self,net_name, net_type, ip_profile=None, shared=False):
         '''Adds a tenant network to VIM
-            net_type can be 'bridge','data'.'ptp'.  TODO: this need to be revised 
+            net_name is the name
+            net_type can be 'bridge','data'.'ptp'.  TODO: this need to be revised
+            ip_profile is a dict containing the IP parameters of the network 
             shared is a boolean
         Returns the network identifier'''
         raise vimconnNotImplemented( "Should have implemented this" )

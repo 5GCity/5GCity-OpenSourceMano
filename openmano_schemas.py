@@ -290,7 +290,8 @@ dhcp_schema = {
         "enabled": {"type": "boolean"},
         "start-address": ip_schema,
         "count": integer1_schema
-    }
+    },
+    "required": ["enabled", "start-address", "count"],
 }
 
 ip_profile_schema = {
@@ -301,7 +302,6 @@ ip_profile_schema = {
         "ip-version": {"type":"string", "enum":["IPv4","IPv6"]},
         "subnet-address": ip_prefix_schema,
         "gateway-address": ip_schema,
-        "security-group": {"type":"string"},
         "dns-address": ip_schema,
         "dhcp": dhcp_schema
     },
@@ -380,11 +380,11 @@ internal_connection_schema_v02 = {
         "name": name_schema,
         "description":description_schema,
         "type": {"type": "string", "enum":["e-line", "e-lan"]},
-        "implementation": {"type": "string", "enum":["virtual", "underlay"]},
+        "implementation": {"type": "string", "enum":["overlay", "underlay"]},
         "ip-profile": ip_profile_schema,
         "elements": {"type" : "array", "items": internal_connection_element_schema_v02, "minItems":2}
     },
-    "required": ["name", "type", "elements"],
+    "required": ["name", "type", "implementation", "elements"],
     "additionalProperties": False
 }
 
@@ -401,15 +401,19 @@ external_connection_schema = {
     "additionalProperties": False
 }
 
+#Not yet used
 external_connection_schema_v02 = {
     "type":"object",
     "properties":{
         "name": name_schema,
+        "mgmt": {"type":"boolean"},
+        "type": {"type": "string", "enum":["e-line", "e-lan"]}, 
+        "implementation": {"type": "string", "enum":["overlay", "underlay"]},
         "VNFC": name_schema,
         "local_iface_name": name_schema ,
         "description":description_schema
     },
-    "required": ["name", "VNFC", "local_iface_name"],
+    "required": ["name", "type", "VNFC", "local_iface_name"],
     "additionalProperties": False
 }
 
@@ -559,7 +563,7 @@ vnfd_schema_v02 = {
                 "public": {"type" : "boolean"},
                 "physical": {"type" : "boolean"},
                 "tenant_id": id_schema, #only valid for admin
-                "external-connections": {"type" : "array", "items": external_connection_schema_v02, "minItems":1},
+                "external-connections": {"type" : "array", "items": external_connection_schema, "minItems":1},
                 "internal-connections": {"type" : "array", "items": internal_connection_schema_v02, "minItems":1},
                 # "cloud-config": cloud_config_schema, #common for all vnfcs
                 "VNFC":{"type" : "array", "items": vnfc_schema, "minItems":1}
@@ -769,15 +773,15 @@ nsd_schema_v03 = {
                                     "items":{
                                         "type":"object",
                                         "properties":{
+                                            "vnf": name_schema,
+                                            "vnf_interface": name_schema,
                                             "ip_address": ip_schema
                                         },
-                                        "patternProperties":{
-                                            ".": {"type": "string"}
-                                        }
+                                        "required": ["vnf", "vnf_interface"],
                                     }
                                 },
                                 "type": {"type": "string", "enum":["e-line", "e-lan"]},
-                                "implementation": {"type": "string", "enum":["virtual", "underlay"]},
+                                "implementation": {"type": "string", "enum":["overlay", "underlay"]},
                                 "external" : {"type": "boolean"},
                                 "graph": graph_schema,
                                 "ip-profile": ip_profile_schema
@@ -966,7 +970,9 @@ instance_scenario_create_schema_v01 = {
                                     "items":{
                                         "type":"object",
                                         "properties":{
-                                            "ip_address": ip_schema
+                                            "ip_address": ip_schema,
+                                            "datacenter": name_schema,
+                                            "vim-network-name": name_schema
                                         },
                                         "patternProperties":{
                                             ".": {"type": "string"}

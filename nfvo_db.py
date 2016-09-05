@@ -32,7 +32,7 @@ import MySQLdb as mdb
 import json
 import yaml
 import time
-
+import sys, os
 
 tables_with_createdat_field=["datacenters","instance_nets","instance_scenarios","instance_vms","instance_vnfs",
                            "interfaces","nets","nfvo_tenants","scenarios","sce_interfaces","sce_nets",
@@ -173,6 +173,164 @@ class nfvo_db(db_base.db_base):
                 self._format_error(e, tries)
             tries -= 1
         
+    def new_vnf_as_a_whole2(self,nfvo_tenant,vnf_name,vnf_descriptor,VNFCDict):
+        self.logger.debug("Adding new vnf to the NFVO database")
+        tries = 2
+        while tries:
+            created_time = time.time()
+            try:
+                with self.con:
+                     
+                    myVNFDict = {}
+                    myVNFDict["name"] = vnf_name
+                    myVNFDict["descriptor"] = vnf_descriptor['vnf'].get('descriptor')
+                    myVNFDict["public"] = vnf_descriptor['vnf'].get('public', "false")
+                    myVNFDict["description"] = vnf_descriptor['vnf']['description']
+                    myVNFDict["class"] = vnf_descriptor['vnf'].get('class',"MISC")
+                    myVNFDict["tenant_id"] = vnf_descriptor['vnf'].get("tenant_id")
+                    
+                    vnf_id = self._new_row_internal('vnfs', myVNFDict, add_uuid=True, root_uuid=None, created_time=created_time)
+                    #print "Adding new vms to the NFVO database"
+                    #For each vm, we must create the appropriate vm in the NFVO database.
+                    vmDict = {}
+                    for _,vm in VNFCDict.iteritems():
+                        #This code could make the name of the vms grow and grow.
+                        #If we agree to follow this convention, we should check with a regex that the vnfc name is not including yet the vnf name  
+                        #vm['name'] = "%s-%s" % (vnf_name,vm['name'])
+                        #print "VM name: %s. Description: %s" % (vm['name'], vm['description'])
+                        vm["vnf_id"] = vnf_id
+                        created_time += 0.00001
+                        vm_id = self._new_row_internal('vms', vm, add_uuid=True, root_uuid=vnf_id, created_time=created_time) 
+                        #print "Internal vm id in NFVO DB: %s" % vm_id
+                        vmDict[vm['name']] = vm_id
+                     
+                    #Collect the data interfaces of each VM/VNFC under the 'numas' field
+                    dataifacesDict = {}
+                    for vm in vnf_descriptor['vnf']['VNFC']:
+                        dataifacesDict[vm['name']] = {}
+                        for numa in vm.get('numas', []):
+                            for dataiface in numa.get('interfaces',[]):
+                                db_base._convert_bandwidth(dataiface)
+                                dataifacesDict[vm['name']][dataiface['name']] = {}
+                                dataifacesDict[vm['name']][dataiface['name']]['vpci'] = dataiface['vpci']
+                                dataifacesDict[vm['name']][dataiface['name']]['bw'] = dataiface['bandwidth']
+                                dataifacesDict[vm['name']][dataiface['name']]['model'] = "PF" if dataiface['dedicated']=="yes" else ("VF"  if dataiface['dedicated']=="no" else "VFnotShared")
+                    
+                    #Collect the bridge interfaces of each VM/VNFC under the 'bridge-ifaces' field
+                    bridgeInterfacesDict = {}
+                    for vm in vnf_descriptor['vnf']['VNFC']:
+                        if 'bridge-ifaces' in  vm:
+                            bridgeInterfacesDict[vm['name']] = {}
+                            for bridgeiface in vm['bridge-ifaces']:
+                                db_base._convert_bandwidth(bridgeiface)
+                                bridgeInterfacesDict[vm['name']][bridgeiface['name']] = {}
+                                bridgeInterfacesDict[vm['name']][bridgeiface['name']]['vpci'] = bridgeiface.get('vpci',None)
+                                bridgeInterfacesDict[vm['name']][bridgeiface['name']]['mac'] = bridgeiface.get('mac_address',None)
+                                bridgeInterfacesDict[vm['name']][bridgeiface['name']]['bw'] = bridgeiface.get('bandwidth', None)
+                                bridgeInterfacesDict[vm['name']][bridgeiface['name']]['model'] = bridgeiface.get('model', None)
+                    
+                    #For each internal connection, we add it to the interfaceDict and we  create the appropriate net in the NFVO database.
+                    #print "Adding new nets (VNF internal nets) to the NFVO database (if any)"
+                    internalconnList = []
+                    if 'internal-connections' in vnf_descriptor['vnf']:
+                        for net in vnf_descriptor['vnf']['internal-connections']:
+                            #print "Net name: %s. Description: %s" % (net['name'], net['description'])
+                            
+                            myNetDict = {}
+                            myNetDict["name"] = net['name']
+                            myNetDict["description"] = net['description']
+                            if (net["implementation"] == "overlay"):
+                                net["type"] = "bridge"
+                                #It should give an error if the type is e-line. For the moment, we consider it as a bridge 
+                            elif (net["implementation"] == "underlay"):
+                                if (net["type"] == "e-line"):
+                                    net["type"] = "ptp"
+                                elif (net["type"] == "e-lan"):
+                                    net["type"] = "data"
+                            net.pop("implementation")
+                            myNetDict["type"] = net['type']
+                            myNetDict["vnf_id"] = vnf_id
+                            
+                            created_time += 0.00001
+                            net_id = self._new_row_internal('nets', myNetDict, add_uuid=True, root_uuid=vnf_id, created_time=created_time)
+                            
+                            if "ip-profile" in net:
+                                ip_profile = net["ip-profile"]
+                                myIPProfileDict = {}
+                                myIPProfileDict["net_id"] = net_id
+                                myIPProfileDict["ip_version"] = ip_profile.get('ip-version',"IPv4")
+                                myIPProfileDict["subnet_address"] = ip_profile.get('subnet-address',None)
+                                myIPProfileDict["gateway_address"] = ip_profile.get('gateway-address',None)
+                                myIPProfileDict["dns_address"] = ip_profile.get('dns-address',None)
+                                if ("dhcp" in ip_profile):
+                                    myIPProfileDict["dhcp_enabled"] = ip_profile["dhcp"].get('enabled',"true")
+                                    myIPProfileDict["dhcp_start_address"] = ip_profile["dhcp"].get('start-address',None)
+                                    myIPProfileDict["dhcp_count"] = ip_profile["dhcp"].get('count',None)
+                                
+                                created_time += 0.00001
+                                ip_profile_id = self._new_row_internal('ip_profiles', myIPProfileDict)
+                                
+                            for element in net['elements']:
+                                ifaceItem = {}
+                                #ifaceItem["internal_name"] = "%s-%s-%s" % (net['name'],element['VNFC'], element['local_iface_name'])  
+                                ifaceItem["internal_name"] = element['local_iface_name']
+                                #ifaceItem["vm_id"] = vmDict["%s-%s" % (vnf_name,element['VNFC'])]
+                                ifaceItem["vm_id"] = vmDict[element['VNFC']]
+                                ifaceItem["net_id"] = net_id
+                                ifaceItem["type"] = net['type']
+                                ifaceItem["ip_address"] = element.get('ip_address',None)
+                                if ifaceItem ["type"] == "data":
+                                    ifaceItem["vpci"] =  dataifacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['vpci'] 
+                                    ifaceItem["bw"] =    dataifacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['bw']
+                                    ifaceItem["model"] = dataifacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['model']
+                                else:
+                                    ifaceItem["vpci"] =  bridgeInterfacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['vpci']
+                                    ifaceItem["mac"] =  bridgeInterfacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['mac']
+                                    ifaceItem["bw"] =    bridgeInterfacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['bw']
+                                    ifaceItem["model"] = bridgeInterfacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['model']
+                                internalconnList.append(ifaceItem)
+                            #print "Internal net id in NFVO DB: %s" % net_id
+                    
+                    #print "Adding internal interfaces to the NFVO database (if any)"
+                    for iface in internalconnList:
+                        print "Iface name: %s" % iface['internal_name']
+                        created_time += 0.00001
+                        iface_id = self._new_row_internal('interfaces', iface, add_uuid=True, root_uuid=vnf_id, created_time=created_time)
+                        #print "Iface id in NFVO DB: %s" % iface_id
+                    
+                    #print "Adding external interfaces to the NFVO database"
+                    for iface in vnf_descriptor['vnf']['external-connections']:
+                        myIfaceDict = {}
+                        #myIfaceDict["internal_name"] = "%s-%s-%s" % (vnf_name,iface['VNFC'], iface['local_iface_name'])  
+                        myIfaceDict["internal_name"] = iface['local_iface_name']
+                        #myIfaceDict["vm_id"] = vmDict["%s-%s" % (vnf_name,iface['VNFC'])]
+                        myIfaceDict["vm_id"] = vmDict[iface['VNFC']]
+                        myIfaceDict["external_name"] = iface['name']
+                        myIfaceDict["type"] = iface['type']
+                        if iface["type"] == "data":
+                            myIfaceDict["vpci"]  = dataifacesDict[ iface['VNFC'] ][ iface['local_iface_name'] ]['vpci']
+                            myIfaceDict["bw"]    = dataifacesDict[ iface['VNFC'] ][ iface['local_iface_name'] ]['bw']
+                            myIfaceDict["model"] = dataifacesDict[ iface['VNFC'] ][ iface['local_iface_name'] ]['model']
+                        else:
+                            myIfaceDict["vpci"]  = bridgeInterfacesDict[ iface['VNFC'] ][ iface['local_iface_name'] ]['vpci']
+                            myIfaceDict["bw"]    = bridgeInterfacesDict[ iface['VNFC'] ][ iface['local_iface_name'] ]['bw']
+                            myIfaceDict["model"] = bridgeInterfacesDict[ iface['VNFC'] ][ iface['local_iface_name'] ]['model']
+                            myIfaceDict["mac"] = bridgeInterfacesDict[ iface['VNFC'] ][ iface['local_iface_name'] ]['mac']
+                        print "Iface name: %s" % iface['name']
+                        created_time += 0.00001
+                        iface_id = self._new_row_internal('interfaces', myIfaceDict, add_uuid=True, root_uuid=vnf_id, created_time=created_time)
+                        #print "Iface id in NFVO DB: %s" % iface_id
+                    
+                    return vnf_id
+                
+            except (mdb.Error, AttributeError) as e:
+                self._format_error(e, tries)
+#             except KeyError as e2:
+#                 exc_type, exc_obj, exc_tb = sys.exc_info()
+#                 fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+#                 self.logger.debug("Exception type: %s; Filename: %s; Line number: %s", exc_type, fname, exc_tb.tb_lineno)
+#                 raise KeyError
+            tries -= 1
 
     def new_scenario(self, scenario_dict):
         tries = 2
@@ -235,6 +393,92 @@ class nfvo_db(db_base.db_base):
                     
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries)
+            tries -= 1
+
+    def new_scenario2(self, scenario_dict):
+        tries = 2
+        while tries:
+            created_time = time.time()
+            try:
+                with self.con:
+                    self.cur = self.con.cursor()
+                    tenant_id = scenario_dict.get('tenant_id')
+                    #scenario
+                    INSERT_={'tenant_id': tenant_id,
+                             'name': scenario_dict['name'],
+                             'description': scenario_dict['description'],
+                             'public': scenario_dict.get('public', "false")}
+                    
+                    scenario_uuid =  self._new_row_internal('scenarios', INSERT_, add_uuid=True, root_uuid=None, created_time=created_time)
+                    #sce_nets
+                    for net in scenario_dict['nets'].values():
+                        net_dict={'scenario_id': scenario_uuid}
+                        net_dict["name"] = net["name"]
+                        net_dict["type"] = net["type"]
+                        net_dict["description"] = net.get("description")
+                        net_dict["external"] = net.get("external", False)
+                        if "graph" in net:
+                            #net["graph"]=yaml.safe_dump(net["graph"],default_flow_style=True,width=256)
+                            #TODO, must be json because of the GUI, change to yaml
+                            net_dict["graph"]=json.dumps(net["graph"])
+                        created_time += 0.00001
+                        net_uuid =  self._new_row_internal('sce_nets', net_dict, add_uuid=True, root_uuid=scenario_uuid, created_time=created_time)
+                        net['uuid']=net_uuid
+                        
+                        if "ip-profile" in net:
+                            ip_profile = net["ip-profile"]
+                            myIPProfileDict = {}
+                            myIPProfileDict["sce_net_id"] = net_uuid
+                            myIPProfileDict["ip_version"] = ip_profile.get('ip-version',"IPv4")
+                            myIPProfileDict["subnet_address"] = ip_profile.get('subnet-address',None)
+                            myIPProfileDict["gateway_address"] = ip_profile.get('gateway-address',None)
+                            myIPProfileDict["dns_address"] = ip_profile.get('dns-address',None)
+                            if ("dhcp" in ip_profile):
+                                myIPProfileDict["dhcp_enabled"] = ip_profile["dhcp"].get('enabled',"true")
+                                myIPProfileDict["dhcp_start_address"] = ip_profile["dhcp"].get('start-address',None)
+                                myIPProfileDict["dhcp_count"] = ip_profile["dhcp"].get('count',None)
+                            
+                            created_time += 0.00001
+                            ip_profile_id = self._new_row_internal('ip_profiles', myIPProfileDict)
+
+                    #sce_vnfs
+                    for k,vnf in scenario_dict['vnfs'].items():
+                        INSERT_={'scenario_id': scenario_uuid,
+                                'name': k,
+                                'vnf_id': vnf['uuid'],
+                                #'description': scenario_dict['name']
+                                'description': vnf['description']
+                            }
+                        if "graph" in vnf:
+                            #INSERT_["graph"]=yaml.safe_dump(vnf["graph"],default_flow_style=True,width=256)
+                            #TODO, must be json because of the GUI, change to yaml
+                            INSERT_["graph"]=json.dumps(vnf["graph"])
+                        created_time += 0.00001
+                        scn_vnf_uuid =  self._new_row_internal('sce_vnfs', INSERT_, add_uuid=True, root_uuid=scenario_uuid, created_time=created_time)
+                        vnf['scn_vnf_uuid']=scn_vnf_uuid
+                        #sce_interfaces
+                        for iface in vnf['ifaces'].values():
+                            #print 'iface', iface
+                            if 'net_key' not in iface:
+                                continue
+                            iface['net_id'] = scenario_dict['nets'][ iface['net_key'] ]['uuid']
+                            INSERT_={'sce_vnf_id': scn_vnf_uuid,
+                                'sce_net_id': iface['net_id'],
+                                'interface_id': iface['uuid'],
+                                'ip_address': iface['ip_address']
+                            }
+                            created_time += 0.00001
+                            iface_uuid =  self._new_row_internal('sce_interfaces', INSERT_, add_uuid=True, root_uuid=scenario_uuid, created_time=created_time)
+                            
+                    return scenario_uuid
+                    
+            except (mdb.Error, AttributeError) as e:
+                self._format_error(e, tries)
+#             except KeyError as e2:
+#                 exc_type, exc_obj, exc_tb = sys.exc_info()
+#                 fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+#                 self.logger.debug("Exception type: %s; Filename: %s; Line number: %s", exc_type, fname, exc_tb.tb_lineno)
+#                 raise KeyError
             tries -= 1
 
     def edit_scenario(self, scenario_dict):
@@ -372,7 +616,7 @@ class nfvo_db(db_base.db_base):
                     scenario_dict['vnfs'] = self.cur.fetchall()
                     for vnf in scenario_dict['vnfs']:
                         #sce_interfaces
-                        cmd = "SELECT uuid,sce_net_id,interface_id FROM sce_interfaces WHERE sce_vnf_id='{}' ORDER BY created_at".format(vnf['uuid'])
+                        cmd = "SELECT scei.uuid,scei.sce_net_id,scei.interface_id,i.external_name,scei.ip_address FROM sce_interfaces as scei join interfaces as i on scei.interface_id=i.uuid WHERE scei.sce_vnf_id='{}' ORDER BY scei.created_at".format(vnf['uuid'])
                         self.logger.debug(cmd)
                         self.cur.execute(cmd)
                         vnf['interfaces'] = self.cur.fetchall()
@@ -400,7 +644,7 @@ class nfvo_db(db_base.db_base):
                                     vm['vim_flavor_id']=vim_flavor_dict['vim_id']
                                 
                             #interfaces
-                            cmd = "SELECT uuid,internal_name,external_name,net_id,type,vpci,mac,bw,model" \
+                            cmd = "SELECT uuid,internal_name,external_name,net_id,type,vpci,mac,bw,model,ip_address" \
                                     " FROM interfaces" \
                                     " WHERE vm_id='{}'" \
                                     " ORDER BY created_at".format(vm['uuid'])
@@ -412,6 +656,17 @@ class nfvo_db(db_base.db_base):
                         self.logger.debug(cmd)
                         self.cur.execute(cmd)
                         vnf['nets'] = self.cur.fetchall()
+                        for vnf_net in vnf['nets']:
+                            SELECT_ = "ip_version,subnet_address,gateway_address,dns_address,dhcp_enabled,dhcp_start_address,dhcp_count"
+                            cmd = "SELECT {} FROM ip_profiles WHERE net_id='{}'".format(SELECT_,vnf_net['uuid'])  
+                            self.logger.debug(cmd)
+                            self.cur.execute(cmd)
+                            ipprofiles = self.cur.fetchall()
+                            if self.cur.rowcount==1:
+                                vnf_net["ip_profile"] = ipprofiles[0]
+                            elif self.cur.rowcount>1:
+                                raise db_base.db_base_Exception("More than one ip-profile found with this criteria: net_id='{}'".format(vnf_net['uuid']), db_base.HTTP_Bad_Request)
+                            
                     #sce_nets
                     cmd = "SELECT uuid,name,type,external,description" \
                           " FROM sce_nets  WHERE scenario_id='{}'" \
@@ -422,6 +677,15 @@ class nfvo_db(db_base.db_base):
                     #datacenter_nets
                     for net in scenario_dict['nets']:
                         if str(net['external']) == 'false':
+                            SELECT_ = "ip_version,subnet_address,gateway_address,dns_address,dhcp_enabled,dhcp_start_address,dhcp_count"
+                            cmd = "SELECT {} FROM ip_profiles WHERE sce_net_id='{}'".format(SELECT_,net['uuid'])  
+                            self.logger.debug(cmd)
+                            self.cur.execute(cmd)
+                            ipprofiles = self.cur.fetchall()
+                            if self.cur.rowcount==1:
+                                net["ip_profile"] = ipprofiles[0]
+                            elif self.cur.rowcount>1:
+                                raise db_base.db_base_Exception("More than one ip-profile found with this criteria: sce_net_id='{}'".format(net['uuid']), db_base.HTTP_Bad_Request)
                             continue
                         WHERE_=" WHERE name='{}'".format(net['name'])
                         if datacenter_id!=None:
@@ -521,6 +785,13 @@ class nfvo_db(db_base.db_base):
                             instance_net_uuid =  self._new_row_internal('instance_nets', INSERT_, True, instance_uuid, created_time)
                             net_scene2instance[ sce_net_id ][datacenter_site_id] = instance_net_uuid
                             net['uuid'] = instance_net_uuid  #overwrite scnario uuid by instance uuid
+                        
+                        if 'ip_profile' in net:
+                            net['ip_profile']['net_id'] = None
+                            net['ip_profile']['sce_net_id'] = None
+                            net['ip_profile']['instance_net_id'] = instance_net_uuid
+                            created_time += 0.00001
+                            ip_profile_id = self._new_row_internal('ip_profiles', net['ip_profile'])
                     
                     #instance_vnfs
                     for vnf in scenarioDict['vnfs']:
@@ -547,7 +818,14 @@ class nfvo_db(db_base.db_base):
                             instance_net_uuid =  self._new_row_internal('instance_nets', INSERT_, True, instance_uuid, created_time)
                             net_scene2instance[ net['uuid'] ][datacenter_site_id] = instance_net_uuid
                             net['uuid'] = instance_net_uuid  #overwrite scnario uuid by instance uuid
-                        
+                            
+                            if 'ip_profile' in net:
+                                net['ip_profile']['net_id'] = None
+                                net['ip_profile']['sce_net_id'] = None
+                                net['ip_profile']['instance_net_id'] = instance_net_uuid
+                                created_time += 0.00001
+                                ip_profile_id = self._new_row_internal('ip_profiles', net['ip_profile'])
+
                         #instance_vms
                         for vm in vnf['vms']:
                             INSERT_={'instance_vnf_id': instance_vnf_uuid,  'vm_id': vm['uuid'], 'vim_vm_id': vm['vim_id']  }
@@ -562,13 +840,16 @@ class nfvo_db(db_base.db_base):
                                     #check if is connected to a inter VNFs net
                                     for iface in vnf['interfaces']:
                                         if iface['interface_id'] == interface['uuid']:
+                                            if 'ip_address' in iface:
+                                                interface['ip_address'] = iface['ip_address']
                                             net_id = iface.get('sce_net_id', None)
                                             break
                                 if net_id is None:
                                     continue
                                 interface_type='external' if interface['external_name'] is not None else 'internal'
                                 INSERT_={'instance_vm_id': instance_vm_uuid,  'instance_net_id': net_scene2instance[net_id][datacenter_site_id],
-                                    'interface_id': interface['uuid'], 'vim_interface_id': interface.get('vim_id'), 'type':  interface_type  }
+                                    'interface_id': interface['uuid'], 'vim_interface_id': interface.get('vim_id'), 'type':  interface_type,
+                                    'ip_address': interface.get('ip_address')  }
                                 #created_time += 0.00001
                                 interface_uuid =  self._new_row_internal('instance_interfaces', INSERT_, True, instance_uuid) #, created_time)
                                 interface['uuid'] = interface_uuid  #overwrite scnario uuid by instance uuid

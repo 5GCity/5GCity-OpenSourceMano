@@ -31,6 +31,7 @@ import vimconn
 import json
 import yaml
 import logging
+import netaddr
 
 from novaclient import client as nClient, exceptions as nvExceptions
 import keystoneclient.v2_0.client as ksClient
@@ -223,7 +224,7 @@ class vimconnector(vimconn.vimconnector):
         except (ksExceptions.ConnectionError, ksExceptions.ClientException)  as e:
             self._format_exception(e)
         
-    def new_network(self,net_name,net_type, shared=False, cidr=None, vlan=None):
+    def new_network(self,net_name, net_type, ip_profile=None, shared=False, vlan=None):
         '''Adds a tenant network to VIM. Returns the network identifier'''
         self.logger.debug("Adding a new network to VIM name '%s', type '%s'", net_name, net_type)
         try:
@@ -239,14 +240,38 @@ class vimconnector(vimconn.vimconnector):
             network_dict["shared"]=shared
             new_net=self.neutron.create_network({'network':network_dict})
             #print new_net
-            #create fake subnetwork
-            if not cidr:
-                cidr="192.168.111.0/24"
+            #create subnetwork, even if there is no profile
+            if not ip_profile:
+                ip_profile = {}
+            if 'subnet_address' not in ip_profile:
+                #Fake subnet is required 
+                ip_profile['subnet_address'] = "192.168.111.0/24"
+            if 'ip_version' not in ip_profile: 
+                ip_profile['ip_version'] = "IPv4"
             subnet={"name":net_name+"-subnet",
                     "network_id": new_net["network"]["id"],
-                    "ip_version": 4,
-                    "cidr": cidr
+                    "ip_version": 4 if ip_profile['ip_version']=="IPv4" else 6,
+                    "cidr": ip_profile['subnet_address']
                     }
+            if 'gateway_address' in ip_profile:
+                subnet['gateway_ip'] = ip_profile['gateway_address']
+            if 'dns_address' in ip_profile:
+                #TODO: manage dns_address as a list of addresses separated by commas 
+                subnet['dns_nameservers'] = []
+                subnet['dns_nameservers'].append(ip_profile['dns_address'])
+            if 'dhcp_enabled' in ip_profile:
+                subnet['enable_dhcp'] = False if ip_profile['dhcp_enabled']=="false" else True
+            if 'dhcp_start_address' in ip_profile:
+                subnet['allocation_pools']=[]
+                subnet['allocation_pools'].append(dict())
+                subnet['allocation_pools'][0]['start'] = ip_profile['dhcp_start_address']
+            if 'dhcp_count' in ip_profile:
+                #parts = ip_profile['dhcp_start_address'].split('.')
+                #ip_int = (int(parts[0]) << 24) + (int(parts[1]) << 16) + (int(parts[2]) << 8) + int(parts[3])
+                ip_int = int(netaddr.IPAddress(ip_profile['dhcp_start_address']))
+                ip_int += ip_profile['dhcp_count']
+                ip_str = str(netaddr.IPAddress(ip_int))
+                subnet['allocation_pools'][0]['end'] = ip_str
             self.neutron.create_subnet({"subnet": subnet} )
             return new_net["network"]["id"]
         except (neExceptions.ConnectionFailed, ksExceptions.ClientException, neExceptions.NeutronException) as e:

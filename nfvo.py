@@ -36,6 +36,7 @@ from db_base import HTTP_Unauthorized, HTTP_Bad_Request, HTTP_Internal_Server_Er
 import console_proxy_thread as cli
 import vimconn
 import logging
+import collections
 from db_base import db_base_Exception
 
 global global_config
@@ -160,7 +161,7 @@ def rollback(mydb,  vims, rollback_list):
                     mydb.delete_row(FROM="datacenters_images", WHERE={"datacenter_id": vim["id"], "vim_id":item["uuid"]})
                 elif item["what"]=="flavor":
                     vim.delete_flavor(item["uuid"])
-                    mydb.delete_row(FROM="datacenters_flavos", WHERE={"datacenter_id": vim["id"], "vim_id":item["uuid"]})
+                    mydb.delete_row(FROM="datacenters_flavors", WHERE={"datacenter_id": vim["id"], "vim_id":item["uuid"]})
                 elif item["what"]=="network":
                     vim.delete_network(item["uuid"])
                 elif item["what"]=="vm":
@@ -551,6 +552,139 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
         #logger.error("start_scenario %s", error_text)
         raise NfvoException(error_text, e.http_code)
         
+def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
+    global global_config
+    
+    # Step 1. Check the VNF descriptor
+    check_vnf_descriptor(vnf_descriptor)
+    # Step 2. Check tenant exist
+    if tenant_id != "any":
+        check_tenant(mydb, tenant_id) 
+        if "tenant_id" in vnf_descriptor["vnf"]:
+            if vnf_descriptor["vnf"]["tenant_id"] != tenant_id:
+                raise NfvoException("VNF can not have a different tenant owner '{}', must be '{}'".format(vnf_descriptor["vnf"]["tenant_id"], tenant_id),
+                                    HTTP_Unauthorized)
+        else:
+            vnf_descriptor['vnf']['tenant_id'] = tenant_id
+        # Step 3. Get the URL of the VIM from the nfvo_tenant and the datacenter
+        vims = get_vim(mydb, tenant_id)
+    else:
+        vims={}
+
+    # Step 4. Review the descriptor and add missing  fields
+    #print vnf_descriptor
+    #logger.debug("Refactoring VNF descriptor with fields: description, public (default: true)")
+    vnf_name = vnf_descriptor['vnf']['name']
+    vnf_descriptor['vnf']['description'] = vnf_descriptor['vnf'].get("description", vnf_name)
+    if "physical" in vnf_descriptor['vnf']:
+        del vnf_descriptor['vnf']['physical']
+    #print vnf_descriptor
+    # Step 5. Check internal connections
+    # TODO: to be moved to step 1????
+    internal_connections=vnf_descriptor['vnf'].get('internal_connections',[])
+    for ic in internal_connections:
+        if len(ic['elements'])>2 and ic['type']=='e-line':
+            raise NfvoException("Mismatch 'type':'e-line' with {} elements at 'vnf':'internal-conections'['name':'{}']. Change 'type' to 'e-lan'".format(len(ic), ic['name']), 
+                                HTTP_Bad_Request)
+        
+    # Step 6. For each VNFC in the descriptor, flavors and images are created in the VIM 
+    logger.debug('BEGIN creation of VNF "%s"' % vnf_name)
+    logger.debug("VNF %s: consisting of %d VNFC(s)" % (vnf_name,len(vnf_descriptor['vnf']['VNFC'])))
+    
+    #For each VNFC, we add it to the VNFCDict and we  create a flavor.
+    VNFCDict = {}     # Dictionary, key: VNFC name, value: dict with the relevant information to create the VNF and VMs in the MANO database
+    rollback_list = []    # It will contain the new images created in mano. It is used for rollback
+    try:
+        logger.debug("Creating additional disk images and new flavors in the VIM for each VNFC")
+        for vnfc in vnf_descriptor['vnf']['VNFC']:
+            VNFCitem={}
+            VNFCitem["name"] = vnfc['name']
+            VNFCitem["description"] = vnfc.get("description", 'VM %s of the VNF %s' %(vnfc['name'],vnf_name))
+            
+            #print "Flavor name: %s. Description: %s" % (VNFCitem["name"]+"-flv", VNFCitem["description"])
+            
+            myflavorDict = {}
+            myflavorDict["name"] = vnfc['name']+"-flv"
+            myflavorDict["description"] = VNFCitem["description"]
+            myflavorDict["ram"] = vnfc.get("ram", 0)
+            myflavorDict["vcpus"] = vnfc.get("vcpus", 0)
+            myflavorDict["disk"] = vnfc.get("disk", 1)
+            myflavorDict["extended"] = {}
+            
+            devices = vnfc.get("devices")
+            if devices != None:
+                myflavorDict["extended"]["devices"] = devices
+            
+            # TODO:
+            # Mapping from processor models to rankings should be available somehow in the NFVO. They could be taken from VIM or directly from a new database table
+            # Another option is that the processor in the VNF descriptor specifies directly the ranking of the host 
+            
+            # Previous code has been commented
+            #if vnfc['processor']['model'] == "Intel(R) Xeon(R) CPU E5-4620 0 @ 2.20GHz" :
+            #    myflavorDict["flavor"]['extended']['processor_ranking'] = 200
+            #elif vnfc['processor']['model'] == "Intel(R) Xeon(R) CPU E5-2697 v2 @ 2.70GHz" :
+            #    myflavorDict["flavor"]['extended']['processor_ranking'] = 300
+            #else:
+            #    result2, message = rollback(myvim, myvimURL, myvim_tenant, flavorList, imageList)
+            #    if result2:
+            #        print "Error creating flavor: unknown processor model. Rollback successful."
+            #        return -HTTP_Bad_Request, "Error creating flavor: unknown processor model. Rollback successful."
+            #    else:
+            #        return -HTTP_Bad_Request, "Error creating flavor: unknown processor model. Rollback fail: you need to access VIM and delete the following %s" % message
+            myflavorDict['extended']['processor_ranking'] = 100  #Hardcoded value, while we decide when the mapping is done
+     
+            if 'numas' in vnfc and len(vnfc['numas'])>0:
+                myflavorDict['extended']['numas'] = vnfc['numas']
+
+            #print myflavorDict
+    
+            # Step 6.2 New flavors are created in the VIM
+            flavor_id = create_or_use_flavor(mydb, vims, myflavorDict, rollback_list)
+
+            #print "Flavor id for VNFC %s: %s" % (vnfc['name'],flavor_id)
+            VNFCitem["flavor_id"] = flavor_id
+            VNFCDict[vnfc['name']] = VNFCitem
+            
+        logger.debug("Creating new images in the VIM for each VNFC")
+        # Step 6.3 New images are created in the VIM
+        #For each VNFC, we must create the appropriate image.
+        #This "for" loop might be integrated with the previous one 
+        #In case this integration is made, the VNFCDict might become a VNFClist.
+        for vnfc in vnf_descriptor['vnf']['VNFC']:
+            #print "Image name: %s. Description: %s" % (vnfc['name']+"-img", VNFCDict[vnfc['name']]['description'])
+            image_dict={'location':vnfc['VNFC image'], 'name':vnfc['name']+"-img", 'description':VNFCDict[vnfc['name']]['description']}
+            image_metadata_dict = vnfc.get('image metadata', None)
+            image_metadata_str = None
+            if image_metadata_dict is not None: 
+                image_metadata_str = yaml.safe_dump(image_metadata_dict,default_flow_style=True,width=256)
+            image_dict['metadata']=image_metadata_str
+            #print "create_or_use_image", mydb, vims, image_dict, rollback_list
+            image_id = create_or_use_image(mydb, vims, image_dict, rollback_list)
+            #print "Image id for VNFC %s: %s" % (vnfc['name'],image_id)
+            VNFCDict[vnfc['name']]["image_id"] = image_id
+            VNFCDict[vnfc['name']]["image_path"] = vnfc['VNFC image']
+
+            
+        # Step 7. Storing the VNF descriptor in the repository
+        if "descriptor" not in vnf_descriptor["vnf"]:
+            vnf_descriptor["vnf"]["descriptor"] = yaml.safe_dump(vnf_descriptor, indent=4, explicit_start=True, default_flow_style=False)
+    
+        # Step 8. Adding the VNF to the NFVO DB
+        vnf_id = mydb.new_vnf_as_a_whole2(tenant_id,vnf_name,vnf_descriptor,VNFCDict)
+        return vnf_id
+    except (db_base_Exception, vimconn.vimconnException, KeyError) as e:
+        _, message = rollback(mydb, vims, rollback_list)
+        if isinstance(e, db_base_Exception):
+            error_text = "Exception at database"
+        elif isinstance(e, KeyError):
+            error_text = "KeyError exception "
+            e.http_code = HTTP_Internal_Server_Error
+        else:
+            error_text = "Exception at VIM"
+        error_text += " {} {}. {}".format(type(e).__name__, str(e), message)
+        #logger.error("start_scenario %s", error_text)
+        raise NfvoException(error_text, e.http_code)
+
 def get_vnf_id(mydb, tenant_id, vnf_id):
     #check valid tenant_id
     check_tenant(mydb, tenant_id) 
@@ -574,12 +708,28 @@ def get_vnf_id(mydb, tenant_id, vnf_id):
         raise NfvoException("vnf '{}' not found".format(vnf_id), HTTP_Not_Found)
 
     data['vnf']['VNFC'] = content
+    #TODO: GET all the information from a VNFC and include it in the output.
+    
     #GET NET
     content = mydb.get_rows(FROM='vnfs join nets on vnfs.uuid=nets.vnf_id', 
                                     SELECT=('nets.uuid as uuid','nets.name as name','nets.description as description', 'nets.type as type', 'nets.multipoint as multipoint'),
                                     WHERE={'vnfs.uuid': vnf_id} )
     data['vnf']['nets'] = content
-    #GET Interfaces
+
+    #GET ip-profile for each net
+    for net in data['vnf']['nets']:
+        ipprofiles = mydb.get_rows(FROM='ip_profiles',
+                                   SELECT=('ip_version','subnet_address','gateway_address','dns_address','dhcp_enabled','dhcp_start_address','dhcp_count'),
+                                   WHERE={'net_id': net["uuid"]} )
+        if len(ipprofiles)==1:
+            net["ip_profile"] = ipprofiles[0]
+        elif len(ipprofiles)>1:
+            raise NfvoException("More than one ip-profile found with this criteria: net_id='{}'".format(net['uuid']), HTTP_Bad_Request)
+        
+    
+    #TODO: For each net, GET its elements and relevant info per element (VNFC, iface, ip_address) and include them in the output.
+     
+    #GET External Interfaces
     content = mydb.get_rows(FROM='vnfs join vms on vnfs.uuid=vms.vnf_id join interfaces on vms.uuid=interfaces.vm_id',\
                                     SELECT=('interfaces.uuid as uuid','interfaces.external_name as external_name', 'vms.name as vm_name', 'interfaces.vm_id as vm_id', \
                                             'interfaces.internal_name as internal_name', 'interfaces.type as type', 'interfaces.vpci as vpci','interfaces.bw as bw'),\
@@ -587,6 +737,7 @@ def get_vnf_id(mydb, tenant_id, vnf_id):
                                     WHERE_NOT={'interfaces.external_name': None} )
     #print content
     data['vnf']['external-connections'] = content
+    
     return data
 
 
@@ -1155,11 +1306,12 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
             myNetDict["name"] = myNetName
             myNetDict["type"] = myNetType
             myNetDict["tenant_id"] = myvim_tenant
+            myNetIPProfile = sce_net.get('ip_profile', None)
             #TODO:
             #We should use the dictionary as input parameter for new_network
             #print myNetDict
             if not sce_net["external"]:
-                network_id = myvim.new_network(myNetName, myNetType)
+                network_id = myvim.new_network(myNetName, myNetType, myNetIPProfile)
                 #print "New VIM network created for scenario %s. Network id:  %s" % (scenarioDict['name'],network_id)
                 sce_net['vim_id'] = network_id
                 auxNetDict['scenario'][sce_net['uuid']] = network_id
@@ -1186,10 +1338,11 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
                 myNetDict["name"] = myNetName
                 myNetDict["type"] = myNetType
                 myNetDict["tenant_id"] = myvim_tenant
+                myNetIPProfile = net.get('ip_profile', None)
                 #print myNetDict
                 #TODO:
                 #We should use the dictionary as input parameter for new_network
-                network_id = myvim.new_network(myNetName, myNetType)
+                network_id = myvim.new_network(myNetName, myNetType, myNetIPProfile)
                 #print "VIM network id for scenario %s: %s" % (scenarioDict['name'],network_id)
                 net['vim_id'] = network_id
                 if sce_vnf['uuid'] not in auxNetDict:
@@ -1315,7 +1468,6 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
         #logger.error("start_scenario %s", error_text)
         raise NfvoException(error_text, e.http_code)
 
-
 def unify_cloud_config(cloud_config):
     index_to_delete = []
     users = cloud_config.get("users", [])
@@ -1352,6 +1504,129 @@ def get_datacenter_by_name_uuid(mydb, tenant_id, datacenter_id_name=None):
         raise NfvoException("More than one datacenters found, try to identify with uuid", HTTP_Conflict)
     return vims.keys()[0], vims.values()[0]
 
+def new_scenario_v03(mydb, tenant_id, scenario_dict):
+    scenario = scenario_dict["scenario"]
+    if tenant_id != "any":
+        check_tenant(mydb, tenant_id) 
+        if "tenant_id" in scenario:
+            if scenario["tenant_id"] != tenant_id:
+                logger("Tenant '%s' not found", tenant_id)
+                raise NfvoException("VNF can not have a different tenant owner '{}', must be '{}'".format(
+                                                    scenario["tenant_id"], tenant_id), HTTP_Unauthorized)
+    else:
+        tenant_id=None
+
+#1: Check that VNF are present at database table vnfs and update content into scenario dict
+    for name,vnf in scenario["vnfs"].iteritems():
+        where={}
+        where_or={"tenant_id": tenant_id, 'public': "true"}
+        error_text = ""
+        error_pos = "'topology':'nodes':'" + name + "'"
+        if 'vnf_id' in vnf:
+            error_text += " 'vnf_id' " +  vnf['vnf_id']
+            where['uuid'] = vnf['vnf_id']
+        if 'vnf_name' in vnf:
+            error_text += " 'vnf_name' " +  vnf['vnf_name']
+            where['name'] = vnf['vnf_name']
+        if len(where) == 0:
+            raise NfvoException("Needed a 'vnf_id' or 'VNF model' at " + error_pos, HTTP_Bad_Request)
+        vnf_db = mydb.get_rows(SELECT=('uuid','name','description'),
+                               FROM='vnfs',
+                               WHERE=where,
+                               WHERE_OR=where_or,
+                               WHERE_AND_OR="AND")
+        if len(vnf_db)==0:
+            raise NfvoException("Unknown" + error_text + " at " + error_pos, HTTP_Not_Found)
+        elif len(vnf_db)>1:
+            raise NfvoException("More than one" + error_text + " at " + error_pos + " Concrete with 'vnf_id'", HTTP_Conflict)
+        vnf['uuid']=vnf_db[0]['uuid']
+        vnf['description']=vnf_db[0]['description']
+        vnf['ifaces'] = {}
+        # get external interfaces
+        ext_ifaces = mydb.get_rows(SELECT=('external_name as name','i.uuid as iface_uuid', 'i.type as type'), 
+            FROM='vnfs join vms on vnfs.uuid=vms.vnf_id join interfaces as i on vms.uuid=i.vm_id', 
+            WHERE={'vnfs.uuid':vnf['uuid']}, WHERE_NOT={'external_name':None} )
+        for ext_iface in ext_ifaces:
+            vnf['ifaces'][ ext_iface['name'] ] = {'uuid':ext_iface['iface_uuid'], 'type':ext_iface['type']}
+        
+        # TODO? get internal-connections from db.nets and their profiles, and update scenario[vnfs][internal-connections] accordingly 
+
+#2: Insert net_key and ip_address at every vnf interface
+    for net_name,net in scenario["networks"].iteritems():
+        net_type_bridge=False
+        net_type_data=False
+        for iface_dict in net["interfaces"]:
+            logger.debug("Iface_dict %s", iface_dict)
+            vnf = iface_dict["vnf"]
+            iface = iface_dict["vnf_interface"]
+            if vnf not in scenario["vnfs"]:
+                error_text = "Error at 'networks':'%s':'interfaces' VNF '%s' not match any VNF at 'vnfs'" % (net_name, vnf)
+                #logger.debug(error_text)
+                raise NfvoException(error_text, HTTP_Not_Found)
+            if iface not in scenario["vnfs"][vnf]['ifaces']:
+                error_text = "Error at 'networks':'%s':'interfaces':'%s' interface not match any VNF interface" % (net_name, iface)
+                #logger.debug(error_text)
+                raise NfvoException(error_text, HTTP_Bad_Request)
+            if "net_key" in scenario["vnfs"][vnf]['ifaces'][iface]:
+                error_text = "Error at 'networks':'%s':'interfaces':'%s' interface already connected at network '%s'" \
+                                % (net_name, iface,scenario["vnfs"][vnf]['ifaces'][iface]['net_key'])
+                #logger.debug(error_text)
+                raise NfvoException(error_text, HTTP_Bad_Request)
+            scenario["vnfs"][vnf]['ifaces'][ iface ]['net_key'] = net_name
+            scenario["vnfs"][vnf]['ifaces'][ iface ]['ip_address'] = iface_dict.get('ip_address',None)
+            iface_type = scenario["vnfs"][vnf]['ifaces'][iface]['type']
+            if iface_type=='mgmt' or iface_type=='bridge':
+                net_type_bridge = True
+            else:
+                net_type_data = True
+        if net_type_bridge and net_type_data:
+            error_text = "Error connection interfaces of bridge type and data type at 'networks':'%s':'interfaces'" % (net_name)
+            #logger.debug(error_text)
+            raise NfvoException(error_text, HTTP_Bad_Request)
+        elif net_type_bridge:
+            type_='bridge'
+        else:
+            type_='data' if len(net["interfaces"])>2 else 'ptp'
+        
+        if ("implementation" in net):
+            if (type_ == "bridge" and net["implementation"] == "underlay"):
+                error_text = "Error connecting interfaces of data type to a network declared as 'underlay' at 'network':'%s'" % (net_name)
+                #logger.debug(error_text)
+                raise NfvoException(error_text, HTTP_Bad_Request)
+            elif (type_ <> "bridge" and net["implementation"] == "overlay"):
+                error_text = "Error connecting interfaces of data type to a network declared as 'overlay' at 'network':'%s'" % (net_name)
+                #logger.debug(error_text)
+                raise NfvoException(error_text, HTTP_Bad_Request)
+            net.pop("implementation")
+        if ("type" in net):
+            if (type_ == "data" and net["type"] == "e-line"):
+                error_text = "Error connecting more than 2 interfaces of data type to a network declared as type 'e-line' at 'network':'%s'" % (net_name)
+                #logger.debug(error_text)
+                raise NfvoException(error_text, HTTP_Bad_Request)
+            elif (type_ == "ptp" and net["type"] == "e-lan"):
+                type_ = "data"
+
+        net['type'] = type_
+        net['name'] = net_name
+        net['external'] = net.get('external', False)
+
+#3: insert at database
+    scenario["nets"] = scenario["networks"]
+    scenario['tenant_id'] = tenant_id
+    scenario_id = mydb.new_scenario2(scenario)
+    return scenario_id
+
+def update(d, u):
+    '''Takes dict d and updates it with the values in dict u.'''
+    '''It merges all depth levels'''
+    for k, v in u.iteritems():
+        if isinstance(v, collections.Mapping):
+            r = update(d.get(k, {}), v)
+            d[k] = r
+        else:
+            d[k] = u[k]
+    return d
+
 def create_instance(mydb, tenant_id, instance_dict):
     #print "Checking that nfvo_tenant_id exists and getting the VIM URI and the VIM tenant_id"
     logger.debug("Creating instance...")
@@ -1364,18 +1639,23 @@ def create_instance(mydb, tenant_id, instance_dict):
     myvims[default_datacenter_id] = vim
     #myvim_tenant = myvim['tenant_id']
 #    default_datacenter_name = vim['name']
-    default_datacenter_tenant_id = vim['config']['datacenter_tenant_id']    #TODO revisar
+    default_datacenter_tenant_id = vim['config']['datacenter_tenant_id']    #TODO review
     rollbackList=[]
     
     #print "Checking that the scenario exists and getting the scenario dictionary"
     scenarioDict = mydb.get_scenario(scenario, tenant_id, default_datacenter_id)
+    
+    #logger.debug("Dictionaries before merging")
+    #logger.debug("InstanceDict:\n{}".format(yaml.safe_dump(instance_dict,default_flow_style=False, width=256)))
+    #logger.debug("ScenarioDict:\n{}".format(yaml.safe_dump(scenarioDict,default_flow_style=False, width=256)))
+    
     scenarioDict['datacenter_tenant_id'] = default_datacenter_tenant_id
     scenarioDict['datacenter_id'] = default_datacenter_id
-   
+
     auxNetDict = {}   #Auxiliar dictionary. First key:'scenario' or sce_vnf uuid. Second Key: uuid of the net/sce_net. Value: vim_net_id
     auxNetDict['scenario'] = {}
     
-    print "scenario dict: ",yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False)  #TODO quitar 
+    logger.debug("scenario dict: {}".format(yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False)))  #TODO remove 
     instance_name = instance_dict["name"]
     instance_description = instance_dict.get("description")
     try:
@@ -1427,6 +1707,36 @@ def create_instance(mydb, tenant_id, instance_dict):
         else:
             scenarioDict["cloud-config"] = cloud_config
             unify_cloud_config(cloud_config)
+
+    #0.2 merge instance information into scenario
+        #Ideally, the operation should be as simple as: update(scenarioDict,instance_dict)
+        #However, this is not possible yet.
+        for net_name, net_instance_desc in instance_dict.get("networks",{}).iteritems():
+            for scenario_net in scenarioDict['nets']:
+                if net_name == scenario_net["name"]:
+                    if 'ip-profile' in net_instance_desc:
+                        ipprofile = net_instance_desc['ip-profile']
+                        ipprofile['subnet_address'] = ipprofile.pop('subnet-address',None)
+                        ipprofile['ip_version'] = ipprofile.pop('ip-version','IPv4')
+                        ipprofile['gateway_address'] = ipprofile.pop('gateway-address',None)
+                        ipprofile['dns_address'] = ipprofile.pop('dns-address',None)
+                        if 'dhcp' in ipprofile:
+                            ipprofile['dhcp_start_address'] = ipprofile['dhcp'].get('start-address',None)
+                            ipprofile['dhcp_enabled'] = ipprofile['dhcp'].get('enabled',True)
+                            ipprofile['dhcp_count'] = ipprofile['dhcp'].get('count',None)
+                            del ipprofile['dhcp']
+                        update(scenario_net['ip_profile'],ipprofile)
+            for interface in net_instance_desc['interfaces']:
+                if 'ip_address' in interface:
+                    for vnf in scenarioDict['vnfs']:
+                        if interface['vnf'] == vnf['name']:
+                            for vnf_interface in vnf['interfaces']:
+                                if interface['vnf_interface'] == vnf_interface['external_name']:
+                                    vnf_interface['ip_address']=interface['ip_address']
+
+        logger.debug("Merged dictionary")
+        logger.debug("ScenarioDict:\n{}".format(yaml.safe_dump(scenarioDict,default_flow_style=False, width=256)))
+
         
     #1. Creating new nets (sce_nets) in the VIM"
         for sce_net in scenarioDict['nets']:
@@ -1502,7 +1812,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                         create_network = False
                 if create_network:
                     #if network is not external
-                    network_id = vim.new_network(net_vim_name, net_type)
+                    network_id = vim.new_network(net_vim_name, net_type, sce_net.get('ip_profile',None))
                     sce_net["vim_id_sites"][datacenter_id] = network_id
                     auxNetDict['scenario'][sce_net['uuid']][datacenter_id] = network_id
                     rollbackList.append({'what':'network', 'where':'vim', 'vim_id':datacenter_id, 'uuid':network_id})
@@ -1523,7 +1833,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                     net_name = "%s.%s" %(instance_name, net["name"])
                     net_name = net_name[:255]     #limit length
                 net_type = net['type']
-                network_id = vim.new_network(net_name, net_type)
+                network_id = vim.new_network(net_name, net_type, net.get('ip_profile',None))
                 net['vim_id'] = network_id
                 if sce_vnf['uuid'] not in auxNetDict:
                     auxNetDict[sce_vnf['uuid']] = {}
@@ -2332,8 +2642,9 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
             net = descriptor["network"]
             net_name = net.pop("name")
             net_type = net.pop("type", "bridge")
-            net_public=net.pop("shared", False)
-            content = myvim.new_network(net_name, net_type, net_public, **net)
+            net_public = net.pop("shared", False)
+            net_ipprofile = net.pop("ip_profile", None)
+            content = myvim.new_network(net_name, net_type, net_ipprofile, shared=net_public, **net)
         elif item=="tenants":
             tenant = descriptor["tenant"]
             content = myvim.new_tenant(tenant["name"], tenant.get("description"))

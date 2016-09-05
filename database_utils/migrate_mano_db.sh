@@ -571,7 +571,6 @@ function upgrade_to_12(){
 	ip_version ENUM('IPv4','IPv6') NOT NULL DEFAULT 'IPv4',
 	subnet_address VARCHAR(64) NULL DEFAULT NULL,
 	gateway_address VARCHAR(64) NULL DEFAULT NULL,
-	security_group VARCHAR(255) NULL DEFAULT NULL,
 	dns_address VARCHAR(64) NULL DEFAULT NULL,
 	dhcp_enabled ENUM('true','false') NOT NULL DEFAULT 'true',
 	dhcp_start_address VARCHAR(64) NULL DEFAULT NULL,
@@ -585,7 +584,7 @@ function upgrade_to_12(){
         ENGINE=InnoDB;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "ALTER TABLE interfaces ADD COLUMN ip_address VARCHAR(64) NULL DEFAULT NULL AFTER mac;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "ALTER TABLE sce_interfaces ADD COLUMN ip_address VARCHAR(64) NULL DEFAULT NULL AFTER interface_id;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
-    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (12, '0.12', '0.4.46', 'create ip_profiles table, with foreign keys to all nets tables, and add ip_address column to interfaces and sce_interfaces', '2016-07-18');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (12, '0.12', '0.4.46', 'create ip_profiles table, with foreign keys to all nets tables, and add ip_address column to interfaces and sce_interfaces', '2016-08-29');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
 function downgrade_from_12(){
     echo "    downgrade database from version 0.12 to version 0.11"

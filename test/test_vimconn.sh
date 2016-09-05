@@ -123,9 +123,13 @@ then
     export OPENMANO_TENANT=$nfvotenant
     openmano instance-scenario-delete -f simple-instance     || echo "fail"
     openmano instance-scenario-delete -f complex2-instance   || echo "fail"
+    openmano instance-scenario-delete -f complex4-instance   || echo "fail"
     openmano scenario-delete -f simple       || echo "fail"
     openmano scenario-delete -f complex2     || echo "fail"
+    openmano scenario-delete -f complex3     || echo "fail"
+    openmano scenario-delete -f complex4     || echo "fail"
     openmano vnf-delete -f linux             || echo "fail"
+    openmano vnf-delete -f linux_2VMs_v02    || echo "fail"
     openmano vnf-delete -f dataplaneVNF_2VMs || echo "fail"
     openmano vnf-delete -f dataplaneVNF3     || echo "fail"
     openmano vnf-delete -f TESTVIM-VNF1          || echo "fail"
@@ -240,7 +244,19 @@ then
     ! is_valid_uuid $vnf && echo FAIL && echo "    $result" && $_exit 1
     echo $vnf
 
-    for sce in simple complex2
+    printf "%-50s" "Creating VNF 'dataplaneVNF_2VMs_v02': "
+    result=`openmano vnf-create $DIRmano/vnfs/examples/dataplaneVNF_2VMs_v02.yaml "--image-path=$VIM_TEST_IMAGE_PATH_NFV,$VIM_TEST_IMAGE_PATH_NFV"`
+    vnf=`echo $result |gawk '{print $1}'`
+    ! is_valid_uuid $vnf && echo FAIL && echo "    $result" && $_exit 1
+    echo $vnf
+
+    printf "%-50s" "Creating VNF 'linux_2VMs_v02': "
+    result=`openmano vnf-create $DIRmano/vnfs/examples/linux_2VMs_v02.yaml "--image-path=$VIM_TEST_IMAGE_PATH_NFV,$VIM_TEST_IMAGE_PATH_NFV"`
+    vnf=`echo $result |gawk '{print $1}'`
+    ! is_valid_uuid $vnf && echo FAIL && echo "    $result" && $_exit 1
+    echo $vnf
+
+    for sce in simple complex2 complex3 complex4
     do
       printf "%-50s" "Creating scenario '$sce':"
       result=`openmano scenario-create $DIRmano/scenarios/examples/${sce}.yaml`
@@ -268,6 +284,13 @@ then
       ! is_valid_uuid $instance && echo FAIL && echo "    $result" && $_exit 1
       echo $instance
     done
+
+    #Testing IP parameters in networks
+    printf "%-50s" "Deploying scenario 'complex4' with IP parameters in networks:"
+    result=`openmano instance-scenario-create --scenario complex4 --name complex4-instance $DIRmano/instance-scenarios/examples/instance-creation-complex4.yaml`
+    instance=`echo $result |gawk '{print $1}'`
+    ! is_valid_uuid $instance && echo FAIL && echo "    $result" && $_exit 1
+    echo $instance
 
     echo
     echo DONE

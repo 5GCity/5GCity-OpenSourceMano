@@ -38,7 +38,7 @@ import logging
 
 from jsonschema import validate as js_v, exceptions as js_e
 from openmano_schemas import vnfd_schema_v01, vnfd_schema_v02, \
-                            nsd_schema_v01, nsd_schema_v02, scenario_edit_schema, \
+                            nsd_schema_v01, nsd_schema_v02, nsd_schema_v03, scenario_edit_schema, \
                             scenario_action_schema, instance_scenario_action_schema, instance_scenario_create_schema_v01, \
                             tenant_schema, tenant_edit_schema,\
                             datacenter_schema, datacenter_edit_schema, datacenter_action_schema, datacenter_associate_schema,\
@@ -212,6 +212,7 @@ def format_in(default_schema, version_fields=None, version_dict_schema=None):
         #    bottle.abort(HTTP_Bad_Request, "Content error, empty")
         #    return
 
+        #logger.debug('client-data: %s', client_data)
         #look for the client provider version
         error_text = "Invalid content "
         client_version = None
@@ -741,11 +742,17 @@ def http_post_vnfs(tenant_id):
     #print "Parsing the YAML file of the VNF"
     #parse input data
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
-    http_content, used_schema = format_in( vnfd_schema_v01, ("version",), {"v0.2": vnfd_schema_v02})
+    http_content, used_schema = format_in( vnfd_schema_v01, ("schema_version",), {"0.2": vnfd_schema_v02})
     r = utils.remove_extra_items(http_content, used_schema)
     if r is not None: print "http_post_vnfs: Warning: remove extra items ", r
     try:
-        vnf_id = nfvo.new_vnf(mydb,tenant_id,http_content)
+        if http_content.get("schema_version") == None:
+            vnf_id = nfvo.new_vnf(mydb,tenant_id,http_content)
+        elif http_content.get("schema_version") == "0.2":
+            vnf_id = nfvo.new_vnf_v02(mydb,tenant_id,http_content)
+        else:
+            logger.warning('Unexpected schema_version: %s', http_content.get("schema_version"))
+            bottle.abort(HTTP_Bad_Request, "Invalid schema version")
         return http_get_vnf_id(tenant_id, vnf_id)
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_vnfs error {}: {}".format(e.http_code, str(e)))
@@ -779,14 +786,14 @@ def http_get_hosts(tenant_id, datacenter):
             result, data = nfvo.get_hosts_info(mydb, tenant_id) #, datacenter)
         
         if result < 0:
-            print "http_post_vnfs error %d %s" % (-result, data)
+            print "http_get_hosts error %d %s" % (-result, data)
             bottle.abort(-result, data)
         else:
             convert_datetime2str(data)
             print json.dumps(data, indent=4)
             return format_out(data)
     except (nfvo.NfvoException, db_base_Exception) as e:
-        logger.error("http_post_vnfs error {}: {}".format(e.http_code, str(e)))
+        logger.error("http_get_hosts error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
 
 
@@ -837,15 +844,20 @@ def http_post_verify(tenant_id):
 def http_post_scenarios(tenant_id):
     '''add a scenario into the catalogue. Creates the scenario and its internal structure in the OPENMANO DB'''
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
-    http_content, used_schema = format_in( nsd_schema_v01, ("schema_version",), {2: nsd_schema_v02})
+    http_content, used_schema = format_in( nsd_schema_v01, ("schema_version",), {2: nsd_schema_v02, "0.3": nsd_schema_v03})
     #r = utils.remove_extra_items(http_content, used_schema)
     #if r is not None: print "http_post_scenarios: Warning: remove extra items ", r
     #print "http_post_scenarios input: ",  http_content
     try:
         if http_content.get("schema_version") == None:
             scenario_id = nfvo.new_scenario(mydb, tenant_id, http_content)
-        else:
+        elif str(http_content.get("schema_version")) == "2":
             scenario_id = nfvo.new_scenario_v02(mydb, tenant_id, http_content)
+        elif http_content.get("schema_version") == "0.3":
+            scenario_id = nfvo.new_scenario_v03(mydb, tenant_id, http_content)
+        else:
+            logger.warning('Unexpected schema_version: %s', http_content.get("schema_version"))
+            bottle.abort(HTTP_Bad_Request, "Invalid schema version")
         #print json.dumps(data, indent=4)
         #return format_out(data)
         return http_get_scenario_id(tenant_id, scenario_id)
