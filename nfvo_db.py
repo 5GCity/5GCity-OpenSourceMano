@@ -32,7 +32,7 @@ import MySQLdb as mdb
 import json
 import yaml
 import time
-import sys, os
+#import sys, os
 
 tables_with_createdat_field=["datacenters","instance_nets","instance_scenarios","instance_vms","instance_vnfs",
                            "interfaces","nets","nfvo_tenants","scenarios","sce_interfaces","sce_nets",

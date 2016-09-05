@@ -287,7 +287,7 @@ then
 
     #Testing IP parameters in networks
     printf "%-50s" "Deploying scenario 'complex4' with IP parameters in networks:"
-    result=`openmano instance-scenario-create --scenario complex4 --name complex4-instance $DIRmano/instance-scenarios/examples/instance-creation-complex4.yaml`
+    result=`openmano instance-scenario-create $DIRmano/instance-scenarios/examples/instance-creation-complex4.yaml "$key_param1" "$key_param2"`
     instance=`echo $result |gawk '{print $1}'`
     ! is_valid_uuid $instance && echo FAIL && echo "    $result" && $_exit 1
     echo $instance

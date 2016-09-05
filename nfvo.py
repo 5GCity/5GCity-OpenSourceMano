@@ -1629,7 +1629,7 @@ def update(d, u):
 
 def create_instance(mydb, tenant_id, instance_dict):
     #print "Checking that nfvo_tenant_id exists and getting the VIM URI and the VIM tenant_id"
-    logger.debug("Creating instance...")
+    #logger.debug("Creating instance...")
     scenario = instance_dict["scenario"]
     
     #find main datacenter
@@ -1655,7 +1655,7 @@ def create_instance(mydb, tenant_id, instance_dict):
     auxNetDict = {}   #Auxiliar dictionary. First key:'scenario' or sce_vnf uuid. Second Key: uuid of the net/sce_net. Value: vim_net_id
     auxNetDict['scenario'] = {}
     
-    logger.debug("scenario dict: {}".format(yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False)))  #TODO remove 
+    logger.debug("Creating instance from scenario-dict:\n%s", yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False))  #TODO remove 
     instance_name = instance_dict["name"]
     instance_description = instance_dict.get("description")
     try:
@@ -1734,8 +1734,8 @@ def create_instance(mydb, tenant_id, instance_dict):
                                 if interface['vnf_interface'] == vnf_interface['external_name']:
                                     vnf_interface['ip_address']=interface['ip_address']
 
-        logger.debug("Merged dictionary")
-        logger.debug("ScenarioDict:\n{}".format(yaml.safe_dump(scenarioDict,default_flow_style=False, width=256)))
+        #logger.debug("Merged dictionary")
+        logger.debug("Creating instance scenario-dict MERGED:\n%s", yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False))
 
         
     #1. Creating new nets (sce_nets) in the VIM"

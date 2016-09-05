@@ -746,9 +746,9 @@ def http_post_vnfs(tenant_id):
     r = utils.remove_extra_items(http_content, used_schema)
     if r is not None: print "http_post_vnfs: Warning: remove extra items ", r
     try:
-        if http_content.get("schema_version") == None:
+        if used_schema == vnfd_schema_v01:
             vnf_id = nfvo.new_vnf(mydb,tenant_id,http_content)
-        elif http_content.get("schema_version") == "0.2":
+        elif used_schema == vnfd_schema_v02:
             vnf_id = nfvo.new_vnf_v02(mydb,tenant_id,http_content)
         else:
             logger.warning('Unexpected schema_version: %s', http_content.get("schema_version"))
@@ -849,11 +849,11 @@ def http_post_scenarios(tenant_id):
     #if r is not None: print "http_post_scenarios: Warning: remove extra items ", r
     #print "http_post_scenarios input: ",  http_content
     try:
-        if http_content.get("schema_version") == None:
+        if used_schema == nsd_schema_v01:
             scenario_id = nfvo.new_scenario(mydb, tenant_id, http_content)
-        elif str(http_content.get("schema_version")) == "2":
+        elif used_schema == nsd_schema_v02:
             scenario_id = nfvo.new_scenario_v02(mydb, tenant_id, http_content)
-        elif http_content.get("schema_version") == "0.3":
+        elif used_schema == nsd_schema_v03:
             scenario_id = nfvo.new_scenario_v03(mydb, tenant_id, http_content)
         else:
             logger.warning('Unexpected schema_version: %s', http_content.get("schema_version"))
