@@ -141,6 +141,8 @@ then
     ${DIRmano}/openmano instance-scenario-delete -f simple-instance     || echo "fail"
     ${DIRmano}/openmano instance-scenario-delete -f complex-instance    || echo "fail"
     ${DIRmano}/openmano instance-scenario-delete -f complex2-instance   || echo "fail"
+    ${DIRmano}/openmano instance-scenario-delete -f complex3-instance   || echo "fail"
+    ${DIRmano}/openmano instance-scenario-delete -f complex4-instance   || echo "fail"
     ${DIRmano}/openmano scenario-delete -f simple           || echo "fail"
     ${DIRmano}/openmano scenario-delete -f complex          || echo "fail"
     ${DIRmano}/openmano scenario-delete -f complex2         || echo "fail"
