@@ -91,7 +91,7 @@ def get_imagelist(mydb, vnf_id, nfvo_tenant=None):
         imageList.append(image['image_id'])
     return imageList
 
-def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, vim_tenant=None):
+def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, vim_tenant=None, vim_tenant_name=None, vim_user=None, vim_passwd=None):
     '''Obtain a dictionary of VIM (datacenter) classes with some of the input parameters
     return dictionary with {datacenter_id: vim_class, ... }. vim_class contain: 
             'nfvo_tenant_id','datacenter_id','vim_tenant_id','vim_url','vim_url_admin','datacenter_name','type','user','passwd'
@@ -135,9 +135,9 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, vi
                 #    return -HTTP_Bad_Request, "You must provide a valid tenant name or uuid for VIM  %s" % ( vim["type"])
                 vim_dict[ vim['datacenter_id'] ] = vimconn_imported[ vim["type"] ].vimconnector(
                                 uuid=vim['datacenter_id'], name=vim['datacenter_name'],
-                                tenant_id=vim.get('vim_tenant_id'), tenant_name=vim.get('vim_tenant_name'),
+                                tenant_id=vim.get('vim_tenant_id',vim_tenant), tenant_name=vim.get('vim_tenant_name',vim_tenant_name),
                                 url=vim['vim_url'], url_admin=vim['vim_url_admin'], 
-                                user=vim.get('user'), passwd=vim.get('passwd'),
+                                user=vim.get('user',vim_user), passwd=vim.get('passwd',vim_passwd),
                                 config=extra
                         )
             except Exception as e:
@@ -2256,6 +2256,17 @@ def delete_tenant(mydb, tenant):
 def new_datacenter(mydb, datacenter_descriptor):
     if "config" in datacenter_descriptor:
         datacenter_descriptor["config"]=yaml.safe_dump(datacenter_descriptor["config"],default_flow_style=True,width=256)
+    #Check that datacenter-type is correct
+    datacenter_type = datacenter_descriptor.get("type", "openvim");
+    module_info = None
+    try:
+        module = "vimconn_" + datacenter_type
+        module_info = imp.find_module(module)
+    except (IOError, ImportError):
+        if module_info and module_info[0]:
+            file.close(module_info[0])
+        raise NfvoException("Incorrect datacenter type '{}'. Plugin '{}'.py not installed".format(datacenter_type, module), HTTP_Bad_Request)
+    
     datacenter_id = mydb.new_row("datacenters", datacenter_descriptor, add_uuid=True)
     return datacenter_id
 
@@ -2295,9 +2306,9 @@ def delete_datacenter(mydb, datacenter):
 def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=None, vim_tenant_name=None, vim_username=None, vim_password=None):
     #get datacenter info
     if utils.check_valid_uuid(datacenter): 
-        vims = get_vim(mydb, datacenter_id=datacenter)
+        vims = get_vim(mydb, datacenter_id=datacenter, vim_tenant_name=vim_tenant_name, vim_user=vim_username, vim_passwd=vim_password)
     else:
-        vims = get_vim(mydb, datacenter_name=datacenter)
+        vims = get_vim(mydb, datacenter_name=datacenter, vim_tenant_name=vim_tenant_name, vim_user=vim_username, vim_passwd=vim_password)
     if len(vims) == 0:
         raise NfvoException("datacenter '{}' not found".format(str(datacenter)), HTTP_Not_Found)
     elif len(vims)>1:
