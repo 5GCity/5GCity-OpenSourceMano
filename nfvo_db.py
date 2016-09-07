@@ -36,7 +36,7 @@ import time
 
 tables_with_createdat_field=["datacenters","instance_nets","instance_scenarios","instance_vms","instance_vnfs",
                            "interfaces","nets","nfvo_tenants","scenarios","sce_interfaces","sce_nets",
-                           "sce_vnfs","tenants_datacenters","datacenter_tenants","vms","vnfs"]
+                           "sce_vnfs","tenants_datacenters","datacenter_tenants","vms","vnfs", "datacenter_nets"]
 
 class nfvo_db(db_base.db_base):
     def __init__(self, host=None, user=None, passwd=None, database=None, log_name='openmano.db', log_level="ERROR"):
