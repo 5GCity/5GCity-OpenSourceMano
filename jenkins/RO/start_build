@@ -1,4 +1,4 @@
-#!/bin/bash
+g!/bin/bash
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -34,8 +34,8 @@ else
 	cd $OSM_MDG
 fi
 if [ $# -gt 0 ]; then
-	git fetch origin +refs/for/master || FATAL "git fetch didn't work"
-	git checkout $1 || FATAL "git checkout '$1' didn't work"
+	git fetch --all || FATAL "git fetch didn't work"
+	git checkout -f $1 || FATAL "git checkout '$1' didn't work"
 fi
 
 INFO "starting build"
