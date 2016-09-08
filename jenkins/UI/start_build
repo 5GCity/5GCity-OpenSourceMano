@@ -39,9 +39,8 @@ else
 fi
 INFO "starting build"
 
-### for start_build
-### put your commands here to 
-### build, test and produce coverage reports
+make -j16 -C UI || FATAL "Make failed"
+sudo make install || FATAL "Make install Failed"
 
 RC=0
 

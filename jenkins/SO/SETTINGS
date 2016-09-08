@@ -17,7 +17,7 @@
 # 24 June 2016 -- Jeremy Mordkoff -- Genesis 
 #
 # this variable holds the name of the container image needed to build or run this product
-export OSM_BASE_IMAGE=ubuntu:16.04
+export OSM_BASE_IMAGE=fedora:20
 #
 # this variable holds the name of the container to be used to build a package
 # if this container already exists, the build process can skip the container build
