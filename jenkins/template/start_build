@@ -37,11 +37,25 @@ else
 	git clone $OSM_GIT_URL/$OSM_MDG
 	cd $OSM_MDG
 fi
-INFO "starting build"
 
+# Gerrit arranges to call this script with two parameters -- the refspec and commit ID that needs to be built
+if [ $# -gt 0 ]; then
+    INFO "Code to compile: gerrit refspec '$1', commit-id: '$2'"
+    git fetch origin $1 || FATAL "git fetch origin '$1' didn't work"
+    git checkout -f $2 || FATAL "git checkout -f '$2' didn't work"
+else
+    INFO "Code to compile: master"
+    git checkout master
+fi
+
+INFO "starting build"
 ### for start_build
 ### put your commands here to 
 ### build, test and produce coverage reports
+# E.G.
+#make clean || FATAL "make clean failed"
+#make || FATAL "make failed"
+#sudo make install || FATAL "make install failed"
 
 RC=0
 

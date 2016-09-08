@@ -29,20 +29,26 @@ OSM_load_config
 
 # Here is an example for how to handle an incremental build
 if [ -d $OSM_MDG ]; then
-	INFO "reusing existing workspace"
-	cd $OSM_MDG
-	git pull 
+    INFO "reusing existing workspace"
+    cd $OSM_MDG
+    git pull 
 else
-	INFO "cloning MDG $OSM_MDG from $OSM_GIT_URL/$OSM_MDG"
-	git clone $OSM_GIT_URL/$OSM_MDG
-	cd $OSM_MDG
+    INFO "cloning MDG $OSM_MDG from $OSM_GIT_URL/$OSM_MDG"
+    git clone $OSM_GIT_URL/$OSM_MDG
+    cd $OSM_MDG
 fi
+
+if [ $# -gt 0 ]; then
+    INFO "Code to compile: gerrit refspec '$1', commit-id: '$2'"
+    git fetch origin $1 || FATAL "git fetch origin '$1' didn't work"
+    git checkout -f $2 || FATAL "git checkout -f '$2' didn't work"
+else
+    INFO "Code to compile: master"
+    git checkout master
+fi
+
 INFO "starting build"
-
-### for start_build
-### put your commands here to 
-### build, test and produce coverage reports
-
+make clean || FATAL "make clean failed"
 ./BUILD.sh
 
 RC=$?
