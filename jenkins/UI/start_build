@@ -39,7 +39,7 @@ else
 fi
 INFO "starting build"
 
-make -j16 -C UI || FATAL "Make failed"
+make -j16 || FATAL "Make failed"
 sudo make install || FATAL "Make install Failed"
 
 RC=0
