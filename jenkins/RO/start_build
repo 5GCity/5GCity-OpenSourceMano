@@ -38,19 +38,14 @@ fi
 
 if [ $# -gt 0 ]; then
         INFO "Code to compile: gerrit refspec '$1', commit-id: '$2'"
-	FATAL "Testing"
-	#git fetch origin $1 || FATAL "git fetch origin '$1' didn't work"
-	#git checkout -f $2 || FATAL "git checkout -f '$2' didn't work"
+	git fetch origin $1 || FATAL "git fetch origin '$1' didn't work"
+	git checkout -f $2 || FATAL "git checkout -f '$2' didn't work"
 else
         INFO "Code to compile: master"
 	git checkout master
 fi
 
 INFO "starting build"
-
-### for start_build
-### put your commands here to
-### build, test and produce coverage reports
 
 rm *.pyc
 python -m py_compile *.py
