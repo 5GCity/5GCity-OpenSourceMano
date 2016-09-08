@@ -27,15 +27,23 @@ OSM_load_config
 if [ -d $OSM_MDG ]; then
 	INFO "reusing existing workspace"
 	cd $OSM_MDG
+        git checkout master  #to make sure that we are in the right branch before pulling the code
 	git pull
+        # TO DO: probably it makes sense to fetch all branches, but this requires creating the branches locally
 else
 	INFO "cloning MDG $OSM_MDG from $OSM_GIT_URL/$OSM_MDG"
 	git clone $OSM_GIT_URL/$OSM_MDG
 	cd $OSM_MDG
 fi
+
 if [ $# -gt 0 ]; then
-	git fetch --all || FATAL "git fetch didn't work"
-	git checkout -f $1 || FATAL "git checkout '$1' didn't work"
+        INFO "Code to compile: gerrit refspec '$1', commit-id: '$2'"
+	FATAL "Testing"
+	#git fetch origin $1 || FATAL "git fetch origin '$1' didn't work"
+	#git checkout -f $2 || FATAL "git checkout -f '$2' didn't work"
+else
+        INFO "Code to compile: master"
+	git checkout master
 fi
 
 INFO "starting build"
@@ -47,6 +55,7 @@ INFO "starting build"
 rm *.pyc
 python -m py_compile *.py
 RC=$?
+git checkout master #Cleaning the environment. It's also done at the beginning, but it's done just in case.
 
 INFO "done, RC=$RC"
 exit $RC
