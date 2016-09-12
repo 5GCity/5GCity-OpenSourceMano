@@ -324,7 +324,7 @@ echo '
 #####             CONFIGURE OPENMANO SERVICE                #####
 #################################################################'
 
-    ./openmano/scripts/install-service-openmano.sh -f openmano #-u $SUDO_USER
+    ./openmano/scripts/install-openmano-service.sh -f openmano #-u $SUDO_USER
 #    alias service-openmano="service openmano"
 #    echo 'alias service-openmano="service openmano"' >> ${HOME}/.bashrc
 
