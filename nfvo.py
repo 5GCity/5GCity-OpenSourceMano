@@ -41,10 +41,11 @@ from db_base import db_base_Exception
 
 global global_config
 global vimconn_imported
+global logger
 
 
 vimconn_imported={} #dictionary with VIM type as key, loaded module as value
-logger = logging.getLogger('mano.nfvo')
+logger = logging.getLogger('openmano.nfvo')
 
 class NfvoException(Exception):
     def __init__(self, message, http_code):

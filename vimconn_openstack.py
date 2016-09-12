@@ -82,7 +82,7 @@ class vimconnector(vimconn.vimconnector):
             self.k_creds['password'] = passwd
             self.n_creds['api_key']  = passwd
         self.reload_client       = True
-        self.logger = logging.getLogger('mano.vim.openstack')
+        self.logger = logging.getLogger('openmano.vim.openstack')
     
     def __setitem__(self,index, value):
         '''Set individuals parameters 

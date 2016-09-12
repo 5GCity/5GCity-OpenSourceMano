@@ -52,6 +52,7 @@ global mydb
 global url_base
 global logger
 url_base="/openmano"
+logger = None
 
 HTTP_Bad_Request =          400
 HTTP_Unauthorized =         401 
@@ -112,7 +113,8 @@ class httpserver(threading.Thread):
         global mydb
         global logger
         #initialization
-        logger = logging.getLogger('openmano.http')
+        if not logger:
+            logger = logging.getLogger('openmano.http')
         threading.Thread.__init__(self)
         self.host = host
         self.port = port   #Port where the listen service must be started

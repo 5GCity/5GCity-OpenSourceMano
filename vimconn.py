@@ -92,7 +92,7 @@ class vimconnector():
         self.user      = user
         self.passwd    = passwd
         self.config    = config
-        self.logger = logging.getLogger('mano.vim')
+        self.logger = logging.getLogger('openmano.vim')
         self.logger.setLevel( getattr(logging, log_level) )
         if not self.url_admin:  #try to use normal url 
             self.url_admin = self.url

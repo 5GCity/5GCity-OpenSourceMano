@@ -33,7 +33,7 @@ It loads the configuration file and launches the http_server thread that will li
 '''
 __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$26-aug-2014 11:09:29$"
-__version__="0.4.51-r493"
+__version__="0.4.52-r494"
 version_date="Sep 2016"
 database_version="0.13"      #expected database schema version
 
@@ -125,9 +125,9 @@ def usage():
     print( "      -p|--port [port_number]: changes port number and overrides the port number in the configuration file (default: 9090)")
     print( "      -P|--adminport [port_number]: changes admin port number and overrides the port number in the configuration file (default: 9095)")
     #print( "      -V|--vnf-repository: changes the path of the vnf-repository and overrides the path in the configuration file")
-    print( "      --log-socket-host: send logs to this host")
-    print( "      --log-socket-port: send logs using this port (default: 9022)")
-    print( "      --log-file: send logs to this file")
+    print( "      --log-socket-host HOST: send logs to this host")
+    print( "      --log-socket-port PORT: send logs using this port (default: 9022)")
+    print( "      --log-file FILE: send logs to this file")
     return
     
 if __name__=="__main__":
@@ -149,7 +149,7 @@ if __name__=="__main__":
     # Read parameters and configuration file 
     try:
         #load parameters and configuration
-        opts, args = getopt.getopt(sys.argv[1:], "hvc:V:p:P:", ["config", "help", "version", "port", "vnf-repository", "adminport", "log-socket-host=", "log-socket-port=", "log-file="])
+        opts, args = getopt.getopt(sys.argv[1:], "hvc:V:p:P:", ["config=", "help", "version", "port=", "vnf-repository=", "adminport=", "log-socket-host=", "log-socket-port=", "log-file="])
         port=None
         port_admin = None
         config_file = 'openmanod.cfg'
@@ -240,6 +240,23 @@ if __name__=="__main__":
         #logging.basicConfig(level = getattr(logging, global_config.get('log_level',"debug")))
         logger.setLevel(getattr(logging, global_config['log_level']))
         logger.critical("Starting openmano server command: '%s'", sys.argv[0])
+        
+        for log_module in ("nfvo", "http", "vim", "db"):
+            log_level_module = "log_level_" + log_module
+            log_file_module = "log_file_" + log_module
+            logger_module = logging.getLogger('openmano.' + log_module)
+            if log_level_module in global_config:
+                logger_module.setLevel(global_config[log_level_module])
+            if log_file_module in global_config:
+                try:
+                    file_handler= logging.handlers.RotatingFileHandler(global_config[log_file_module], maxBytes=100e6, backupCount=9, delay=0)
+                    file_handler.setFormatter(log_formatter_simple)
+                    logger_module.addHandler(file_handler)
+                except IOError as e:
+                    raise LoadConfigurationException("Cannot open logging file '{}': {}. Check folder exist and permissions".format(global_config[log_file_module], str(e)) ) 
+            global_config["logger_"+log_module] = logger_module
+        #httpserver.logger = global_config["logger_http"]
+        #nfvo.logger = global_config["logger_nfvo"]
         
         # Initialize DB connection
         mydb = nfvo_db.nfvo_db(log_level=global_config["log_level_db"]);

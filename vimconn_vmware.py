@@ -113,14 +113,14 @@ class vimconnector():
         self.user      = user
         self.passwd    = passwd
         self.config    = config
-        self.logger = logging.getLogger('mano.vim.vmware')
+        self.logger = logging.getLogger('openmano.vim.vmware')
 
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        ch = logging.StreamHandler()
-        ch.setLevel(log_level)
-        ch.setFormatter(formatter)
-        self.logger.addHandler(ch)
-        self.logger.setLevel( getattr(logging, log_level))
+#         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+#         ch = logging.StreamHandler()
+#         ch.setLevel(log_level)
+#         ch.setFormatter(formatter)
+#         self.logger.addHandler(ch)
+#         self.logger.setLevel( getattr(logging, log_level))
 
 #        self.logger = logging.getLogger('mano.vim.vmware')
 
