@@ -37,9 +37,9 @@ if ! container_exists $OSM_BUILD_CONTAINER; then
 	wait_container_up $OSM_BUILD_CONTAINER
 	RE="fedora|fc[0-9]"
 	if [[ $OSM_BASE_IMAGE =~ $RE ]]; then
-		container_exec $OSM_BUILD_CONTAINER yum -y install git tar
+		container_exec $OSM_BUILD_CONTAINER yum -y install git tar make sudo
 	else
-		container_exec $OSM_BUILD_CONTAINER apt -y install git realpath
+		container_exec $OSM_BUILD_CONTAINER apt -y install git realpath make sudo 
 	fi
     if [ ${OSM_USE_LOCAL_DEVOPS:-false} ]; then
         container_push_devops $OSM_BUILD_CONTAINER
