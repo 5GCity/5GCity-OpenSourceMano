@@ -1727,7 +1727,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                             ipprofile['dhcp_count'] = ipprofile['dhcp'].get('count',None)
                             del ipprofile['dhcp']
                         update(scenario_net['ip_profile'],ipprofile)
-            for interface in net_instance_desc['interfaces']:
+            for interface in net_instance_desc.get('interfaces', () ):
                 if 'ip_address' in interface:
                     for vnf in scenarioDict['vnfs']:
                         if interface['vnf'] == vnf['name']:
