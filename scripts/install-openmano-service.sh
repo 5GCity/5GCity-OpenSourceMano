@@ -37,7 +37,7 @@ function usage(){
 
 function uninstall(){
     service openmano stop
-    for file in /opt/openmano /etc/default/openmanod.cfg /var/log/openmano /etc/systemd/system/openmano.service
+    for file in /opt/openmano /etc/default/openmanod.cfg /var/log/openmano /etc/systemd/system/openmano.service /usr/sbin/openmano
     do
         rm -rf $file || ! echo "Can not delete '$file'. Needed root privileges?" >&2 || exit 1
     done
@@ -122,10 +122,12 @@ rm -rf /opt/openmano
 rm -f /etc/default/openmanod.cfg
 rm -f /var/log/openmano
 cp -r $FILE /opt/openmano         || ! echo $BAD_PATH_ERROR >&2 || exit 1
-mkdir /opt/openmano/logs
+mkdir -p /opt/openmano/logs
+rm -rf /usr/sbin/openmano
 #cp ${FILE}/openmano /usr/sbin/    || ! echo $BAD_PATH_ERROR >&2 || exit 1
 ln -s /opt/openmano/openmanod.cfg /etc/default/openmanod.cfg  || echo "warning cannot create link '/etc/default/openmanod.cfg'"
 ln -s /opt/openmano/logs /var/log/openmano  || echo "warning cannot create link '/var/log/openmano'"
+ln -s /opt/openmano/openmano /usr/sbin/openmano
 
 chown $USER_OWNER /opt/openmano/openmanod.cfg
 chown -R $USER_OWNER /opt/openmano
