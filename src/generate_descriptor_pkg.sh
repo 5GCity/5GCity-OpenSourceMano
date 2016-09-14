@@ -284,10 +284,10 @@ EOF
             -   id: ${name}_vld${i}
                 name: ${name}_vld${i}
                 type: ELAN
-                provider-network:
-                    overlay-type: VLAN
-                    physical-network: <update>
-                    segmentation_id: <update>
+                # provider-network:
+                #     overlay-type: VLAN
+                #     physical-network: <update>
+                #     segmentation_id: <update>
                 vnfd-connection-point-ref:
                 # Specify the constituent VNFs
                 # member-vnf-index-ref - entry from constituent vnf
@@ -295,7 +295,7 @@ EOF
                 # vnfd-connection-point-ref - connection point name in the VNFD
                 -   nsd:member-vnf-index-ref: 1
                     nsd:vnfd-id-ref: ${vnfd}
-                    # Validate the entry below
+                    # NOTE: Validate the entry below
                     nsd:vnfd-connection-point-ref: eth${eth}
 EOF
         done
@@ -540,19 +540,19 @@ if [[ -z "$PKG" ]]; then
     exit 1
 fi
 
-cd $BASE_DIR
-if [ $? -ne 0 ]; then
+if [[ ! -d $BASE_DIR ]]; then
     if [ $CREATE == true ]; then
         mkdir -p $BASE_DIR
         if [ $? -ne 0 ]; then
             echo "ERROR: Unable to create base directory $BASE_DIR" >&2
             exit 1
         fi
-        cd $BASE_DIR
-    else
-        echo "ERROR: Unable to change to base directory $BASE_DIR!" >&2
-        exit 1
     fi
+fi
+cd $BASE_DIR
+if [ $? -ne 0 ]; then
+    echo "ERROR: Unable to change to base directory $BASE_DIR!" >&2
+    exit 1
 fi
 
 # Get full base dir path
