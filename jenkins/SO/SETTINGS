@@ -17,11 +17,11 @@
 # 24 June 2016 -- Jeremy Mordkoff -- Genesis 
 #
 # this variable holds the name of the container image needed to build or run this product
-export OSM_BASE_IMAGE=fedora:20
+export OSM_BASE_IMAGE=ubuntu:16.04
 #
 # this variable holds the name of the container to be used to build a package
 # if this container already exists, the build process can skip the container build
-export OSM_BUILD_CONTAINER=SO-build
+export OSM_BUILD_CONTAINER=SO-ub
 #
 # this variable must be set to allow creating the build container in privileged mode
 # this variable should be removed in the future when no privileged mode is required
@@ -29,7 +29,7 @@ export OSM_BUILD_CONTAINER=SO-build
 #
 # this variable holds the name of the container to be used to run a package
 # if this container already exists, the run processes can skip the container build
-export OSM_RUNTIME_CONTAINER=SO-runtime
+export OSM_RUNTIME_CONTAINER=SO-ub
 #
 # this variable must be set to allow creating the runtime container in privileged mode
 # this variable should be removed in the future when no privileged mode is required
