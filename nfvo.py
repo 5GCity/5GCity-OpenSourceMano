@@ -953,6 +953,7 @@ def new_scenario(mydb, tenant_id, topo):
 #1.4 get list of connections
     conections = topo['topology']['connections']
     conections_list = []
+    conections_list_name = []
     for k in conections.keys():
         if type(conections[k]['nodes'])==dict: #dict with node:iface pairs
             ifaces_list = conections[k]['nodes'].items()
@@ -981,7 +982,7 @@ def new_scenario(mydb, tenant_id, topo):
         if con_type == "dataplane_net" or con_type == "bridge_net": 
             other_nets[k]["model"] = con_type
         
-        
+        conections_list_name.append(k)
         conections_list.append(set(ifaces_list)) #from list to set to operate as a set (this conversion removes elements that are repeated in a list)
         #print set(ifaces_list)
     #check valid VNF and iface names
@@ -1001,6 +1002,7 @@ def new_scenario(mydb, tenant_id, topo):
             if len(conections_list[index] & conections_list[index2])>0: #common interface, join nets
                 conections_list[index] |= conections_list[index2]
                 del conections_list[index2]
+                del conections_list_name[index2]
             else:
                 index2 += 1
         conections_list[index] = list(conections_list[index])  # from set to list again
@@ -1107,7 +1109,8 @@ def new_scenario(mydb, tenant_id, topo):
                 net_type_bridge=False
                 net_type_data=False
                 net_target = "__-__net"+str(net_nb)
-                net_list[net_target] = {'name': "net-"+str(net_nb), 'description':"net-%s in scenario %s" %(net_nb,topo['name']),
+                net_list[net_target] = {'name': conections_list_name[net_nb],  #"net-"+str(net_nb), 
+                    'description':"net-%s in scenario %s" %(net_nb,topo['name']),
                     'external':False} 
                 for iface in con:
                     vnfs[ iface[0] ]['ifaces'][ iface[1] ]['net_key'] = net_target

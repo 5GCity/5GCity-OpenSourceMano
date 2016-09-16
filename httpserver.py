@@ -143,7 +143,7 @@ def run_bottle(db, host_='localhost', port_=9090):
 
 @bottle.route(url_base + '/', method='GET')
 def http_get():
-    print 
+    #print 
     return 'works' #TODO: to be completed
 
 #
@@ -172,7 +172,7 @@ def change_keys_http2db(data, http_db, reverse=False):
 
 def format_out(data):
     '''return string of dictionary data according to requested json, yaml, xml. By default json'''
-    logger.debug(yaml.safe_dump(data, explicit_start=True, indent=4, default_flow_style=False, tags=False, encoding='utf-8', allow_unicode=True) )
+    logger.debug("OUT: " + yaml.safe_dump(data, explicit_start=True, indent=4, default_flow_style=False, tags=False, encoding='utf-8', allow_unicode=True) )
     if 'application/yaml' in bottle.request.headers.get('Accept'):
         bottle.response.content_type='application/yaml'
         return yaml.safe_dump(data, explicit_start=True, indent=4, default_flow_style=False, tags=False, encoding='utf-8', allow_unicode=True) #, canonical=True, default_style='"'
@@ -207,14 +207,14 @@ def format_in(default_schema, version_fields=None, version_dict_schema=None):
         elif 'application/xml' in format_type:
             bottle.abort(501, "Content-Type: application/xml not supported yet.")
         else:
-            print 'Content-Type ' + str(format_type) + ' not supported.'
+            logger.warning('Content-Type ' + str(format_type) + ' not supported.')
             bottle.abort(HTTP_Not_Acceptable, 'Content-Type ' + str(format_type) + ' not supported.')
             return
         #if client_data == None:
         #    bottle.abort(HTTP_Bad_Request, "Content error, empty")
         #    return
 
-        #logger.debug('client-data: %s', client_data)
+        logger.debug('IN: %s', yaml.safe_dump(client_data, explicit_start=True, indent=4, default_flow_style=False, tags=False, encoding='utf-8', allow_unicode=True) )
         #look for the client provider version
         error_text = "Invalid content "
         client_version = None
@@ -241,10 +241,10 @@ def format_in(default_schema, version_fields=None, version_dict_schema=None):
         return client_data, used_schema
     except (ValueError, yaml.YAMLError) as exc:
         error_text += str(exc)
-        print error_text 
+        logger.error(error_text) 
         bottle.abort(HTTP_Bad_Request, error_text)
     except js_e.ValidationError as exc:
-        print "validate_in error, jsonschema exception ", exc.message, "at", exc.path
+        logger.error("validate_in error, jsonschema exception at '%s' '%s' ", str(exc.path), str(exc.message))
         error_pos = ""
         if len(exc.path)>0: error_pos=" at " + ":".join(map(json.dumps, exc.path))
         bottle.abort(HTTP_Bad_Request, error_text + exc.message + error_pos)
@@ -344,7 +344,8 @@ def http_post_tenants():
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     http_content,_ = format_in( tenant_schema )
     r = utils.remove_extra_items(http_content, tenant_schema)
-    if r is not None: print "http_post_tenants: Warning: remove extra items ", r
+    if r:
+        logger.debug("Remove received extra items %s", str(r))
     try: 
         data = nfvo.new_tenant(mydb, http_content['tenant'])
         return http_get_tenant_id(data)
@@ -359,7 +360,8 @@ def http_edit_tenant_id(tenant_id):
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     http_content,_ = format_in( tenant_edit_schema )
     r = utils.remove_extra_items(http_content, tenant_edit_schema)
-    if r is not None: print "http_edit_tenant_id: Warning: remove extra items ", r
+    if r:
+        logger.debug("Remove received extra items %s", str(r))
     
     #obtain data, check that only one exist
     try: 
@@ -457,7 +459,7 @@ def http_get_datacenter_id(tenant_id, datacenter_id):
                 config_dict = yaml.load(datacenter['config'])
                 datacenter['config'] = config_dict
             except Exception, e:
-                print "Exception '%s' while trying to load config information" % str(e)
+                logger.error("Exception '%s' while trying to load config information", str(e))
         #change_keys_http2db(content, http2db_datacenter, reverse=True)
         convert_datetime2str(datacenter)
         data={'datacenter' : datacenter}
@@ -473,7 +475,8 @@ def http_post_datacenters():
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     http_content,_ = format_in( datacenter_schema )
     r = utils.remove_extra_items(http_content, datacenter_schema)
-    if r is not None: print "http_post_datacenters: Warning: remove extra items ", r
+    if r:
+        logger.debug("Remove received extra items %s", str(r))
     try:
         data = nfvo.new_datacenter(mydb, http_content['datacenter'])
         return http_get_datacenter_id('any', data)
@@ -488,7 +491,8 @@ def http_edit_datacenter_id(datacenter_id_name):
     #parse input data
     http_content,_ = format_in( datacenter_edit_schema )
     r = utils.remove_extra_items(http_content, datacenter_edit_schema)
-    if r is not None: print "http_edit_datacenter_id: Warning: remove extra items ", r
+    if r:
+        logger.debug("Remove received extra items %s", str(r))
     
     try:
         datacenter_id = nfvo.edit_datacenter(mydb, datacenter_id_name, http_content['datacenter'])
@@ -576,8 +580,8 @@ def http_postnetmap_datacenter_id(tenant_id, datacenter_id):
     #parse input data
     http_content,_ = format_in( netmap_new_schema )
     r = utils.remove_extra_items(http_content, netmap_new_schema)
-    if r is not None: print "http_postnetmap_datacenter_id: Warning: remove extra items ", r
-    
+    if r:
+        logger.debug("Remove received extra items %s", str(r))
     try:
         #obtain data, check that only one exist
         netmaps = nfvo.datacenter_new_netmap(mydb, tenant_id, datacenter_id, http_content)
@@ -596,7 +600,8 @@ def http_putnettmap_datacenter_id(tenant_id, datacenter_id, netmap_id):
     #parse input data
     http_content,_ = format_in( netmap_edit_schema )
     r = utils.remove_extra_items(http_content, netmap_edit_schema)
-    if r is not None: print "http_putnettmap_datacenter_id: Warning: remove extra items ", r
+    if r:
+        logger.debug("Remove received extra items %s", str(r))
     
     #obtain data, check that only one exist
     try:
@@ -614,8 +619,8 @@ def http_action_datacenter_id(tenant_id, datacenter_id):
     #parse input data
     http_content,_ = format_in( datacenter_action_schema )
     r = utils.remove_extra_items(http_content, datacenter_action_schema)
-    if r is not None: print "http_action_datacenter_id: Warning: remove extra items ", r
-    
+    if r:
+        logger.debug("Remove received extra items %s", str(r))
     try:
         #obtain data, check that only one exist
         result = nfvo.datacenter_action(mydb, tenant_id, datacenter_id, http_content)
@@ -647,7 +652,8 @@ def http_associate_datacenters(tenant_id, datacenter_id):
     #parse input data
     http_content,_ = format_in( datacenter_associate_schema )
     r = utils.remove_extra_items(http_content, datacenter_associate_schema)
-    if r != None: print "http_associate_datacenters: Warning: remove extra items ", r
+    if r:
+        logger.debug("Remove received extra items %s", str(r))
     try:
         id_ = nfvo.associate_datacenter_to_tenant(mydb, tenant_id, datacenter_id, 
                                     http_content['datacenter'].get('vim_tenant'),
@@ -746,7 +752,8 @@ def http_post_vnfs(tenant_id):
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     http_content, used_schema = format_in( vnfd_schema_v01, ("schema_version",), {"0.2": vnfd_schema_v02})
     r = utils.remove_extra_items(http_content, used_schema)
-    if r is not None: print "http_post_vnfs: Warning: remove extra items ", r
+    if r:
+        logger.debug("Remove received extra items %s", str(r))
     try:
         if used_schema == vnfd_schema_v01:
             vnf_id = nfvo.new_vnf(mydb,tenant_id,http_content)
@@ -788,11 +795,11 @@ def http_get_hosts(tenant_id, datacenter):
             result, data = nfvo.get_hosts_info(mydb, tenant_id) #, datacenter)
         
         if result < 0:
-            print "http_get_hosts error %d %s" % (-result, data)
+            #print "http_get_hosts error %d %s" % (-result, data)
             bottle.abort(-result, data)
         else:
             convert_datetime2str(data)
-            print json.dumps(data, indent=4)
+            #print json.dumps(data, indent=4)
             return format_out(data)
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_hosts error {}: {}".format(e.http_code, str(e)))
@@ -877,7 +884,8 @@ def http_post_scenario_action(tenant_id, scenario_id):
         #parse input data
         http_content,_ = format_in( scenario_action_schema )
         r = utils.remove_extra_items(http_content, scenario_action_schema)
-        if r is not None: print "http_post_scenario_action: Warning: remove extra items ", r
+        if r:
+            logger.debug("Remove received extra items %s", str(r))
         if "start" in http_content:
             data = nfvo.start_scenario(mydb, tenant_id, scenario_id, http_content['start']['instance_name'], \
                         http_content['start'].get('description',http_content['start']['instance_name']),
@@ -1074,7 +1082,8 @@ def http_post_instance_scenario_action(tenant_id, instance_id):
         #parse input data
         http_content,_ = format_in( instance_scenario_action_schema )
         r = utils.remove_extra_items(http_content, instance_scenario_action_schema)
-        if r is not None: print "http_post_instance_scenario_action: Warning: remove extra items ", r
+        if r:
+            logger.debug("Remove received extra items %s", str(r))
         #print "http_post_instance_scenario_action input: ", http_content
         #obtain data
         instance = mydb.get_instance_scenario(instance_id, tenant_id)
