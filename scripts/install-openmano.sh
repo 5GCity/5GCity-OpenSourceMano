@@ -265,9 +265,7 @@ user=$DBUSER
 password=$DBPASSWD
 EOF
 
-db_exists "mano_db" $TEMPFILE
-DBEXISTS=$?
-if [[ $DBEXISTS -eq 0 ]] ; then
+if db_exists "mano_db" $TEMPFILE ; then
     if [[ -n $FORCEDB ]]; then
         echo "   Deleting previous database mano_db"
         DBDELETEPARAM=""
@@ -284,7 +282,7 @@ if [[ $DBEXISTS -eq 0 ]] ; then
         echo "Database exists. Use option '--forcedb' to force the deletion of the existing one" && exit 1
     fi
 else
-    mysqladmin -u$DBUSER $DBPASSWD_PARAM -s create mano_db || ( echo "Error creating mano_db database" && exit 1 )
+    mysqladmin -u$DBUSER $DBPASSWD_PARAM -s create mano_db || ! echo "Error creating mano_db database" || exit 1 
     echo "CREATE USER 'mano'@'localhost' identified by 'manopw';"   | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
     echo "GRANT ALL PRIVILEGES ON mano_db.* TO 'mano'@'localhost';" | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
     echo " Database 'mano_db' created, user 'mano' password 'manopw'"
