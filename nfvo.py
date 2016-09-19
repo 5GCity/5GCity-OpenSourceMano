@@ -1186,7 +1186,7 @@ def new_scenario_v02(mydb, tenant_id, scenario_dict):
         where={}
         where_or={"tenant_id": tenant_id, 'public': "true"}
         error_text = ""
-        error_pos = "'topology':'nodes':'" + name + "'"
+        error_pos = "'scenario':'vnfs':'" + name + "'"
         if 'vnf_id' in vnf:
             error_text += " 'vnf_id' " +  vnf['vnf_id']
             where['uuid'] = vnf['vnf_id']
@@ -1194,7 +1194,7 @@ def new_scenario_v02(mydb, tenant_id, scenario_dict):
             error_text += " 'vnf_name' " +  vnf['vnf_name']
             where['name'] = vnf['vnf_name']
         if len(where) == 0:
-            raise NfvoException("Needed a 'vnf_id' or 'VNF model' at " + error_pos, HTTP_Bad_Request)
+            raise NfvoException("Needed a 'vnf_id' or 'vnf_name' at " + error_pos, HTTP_Bad_Request)
         vnf_db = mydb.get_rows(SELECT=('uuid','name','description'),
                                FROM='vnfs',
                                WHERE=where,
@@ -1525,7 +1525,7 @@ def new_scenario_v03(mydb, tenant_id, scenario_dict):
         where={}
         where_or={"tenant_id": tenant_id, 'public': "true"}
         error_text = ""
-        error_pos = "'topology':'nodes':'" + name + "'"
+        error_pos = "'scenario':'vnfs':'" + name + "'"
         if 'vnf_id' in vnf:
             error_text += " 'vnf_id' " +  vnf['vnf_id']
             where['uuid'] = vnf['vnf_id']
@@ -1533,7 +1533,7 @@ def new_scenario_v03(mydb, tenant_id, scenario_dict):
             error_text += " 'vnf_name' " +  vnf['vnf_name']
             where['name'] = vnf['vnf_name']
         if len(where) == 0:
-            raise NfvoException("Needed a 'vnf_id' or 'VNF model' at " + error_pos, HTTP_Bad_Request)
+            raise NfvoException("Needed a 'vnf_id' or 'vnf_name' at " + error_pos, HTTP_Bad_Request)
         vnf_db = mydb.get_rows(SELECT=('uuid','name','description'),
                                FROM='vnfs',
                                WHERE=where,
