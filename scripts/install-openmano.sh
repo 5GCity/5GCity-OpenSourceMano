@@ -289,12 +289,19 @@ else
 fi
 
 
+#Next operations require knowing OPENMANO_BASEFOLDER
+HERE=$(realpath $(dirname $0))
+if [[ -z $NOCLONE ]]; then
+    OPENMANO_BASEFOLDER="${HERE}/openmano"
+else
+    OPENMANO_BASEFOLDER=$(dirname $HERE)
+fi
+
+
 echo '
 #################################################################
 #####        INIT DATABASE                                  #####
 #################################################################'
-HERE=$(realpath $(dirname $0))
-OPENMANO_BASEFOLDER=$(dirname $HERE)
 su $SUDO_USER -c "${OPENMANO_BASEFOLDER}"'/database_utils/init_mano_db.sh -u mano -p manopw -d mano_db' || ! echo "Failed while initializing database" || exit 1
 
 
