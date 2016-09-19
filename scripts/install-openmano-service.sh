@@ -117,7 +117,7 @@ then
     DELETE=y
 fi
 
-#make idenpotent
+#make idempotent
 rm -rf /opt/openmano
 rm -f /etc/default/openmanod.cfg
 rm -f /var/log/openmano
@@ -132,7 +132,7 @@ ln -s /opt/openmano/openmano /usr/sbin/openmano
 chown $USER_OWNER /opt/openmano/openmanod.cfg
 chown -R $USER_OWNER /opt/openmano
 
-mkdir -p etc/systemd/system/
+mkdir -p /etc/systemd/system/
 cat  > /etc/systemd/system/openmano.service  << EOF 
 [Unit]
 Description=openmano server

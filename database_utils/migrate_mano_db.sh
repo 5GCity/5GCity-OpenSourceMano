@@ -109,27 +109,42 @@ then
 fi
 OPENMANO_VER_NUM=`printf "%d%03d%03d" ${VERSION_1} ${VERSION_2} ${VERSION_3}`
 
+#Creating temporary file
+TEMPFILE="$(mktemp -q --tmpdir "migratemanodb.XXXXXX")"
+trap 'rm -f "$TEMPFILE"' EXIT
+chmod 0600 "$TEMPFILE"
+cat >"$TEMPFILE" <<EOF
+[client]
+user="${DBUSER}"
+password="${DBPASS}"
+EOF
+DEF_EXTRA_FILE_PARAM="--defaults-extra-file=$TEMPFILE"
+
+
 #check and ask for database user password
 DBUSER_="-u$DBUSER"
 [ -n "$DBPASS" ] && DBPASS_="-p$DBPASS"
 DBHOST_="-h$DBHOST"
 DBPORT_="-P$DBPORT"
-while !  echo ";" | mysql $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_ $DBNAME >/dev/null 2>&1
+while ! mysql $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_ $DBNAME -e "quit" >/dev/null 2>&1
 do
         [ -n "$logintry" ] &&  echo -e "\nInvalid database credentials!!!. Try again (Ctrl+c to abort)"
         [ -z "$logintry" ] &&  echo -e "\nProvide database name and credentials"
         read -e -p "mysql database name($DBNAME): " KK
         [ -n "$KK" ] && DBNAME="$KK"
         read -e -p "mysql user($DBUSER): " KK
-        [ -n "$KK" ] && DBUSER="$KK" && DBUSER_="-u$DBUSER"
+        [ -n "$KK" ] && DBUSER="$KK"
         read -e -s -p "mysql password: " DBPASS
-        [ -n "$DBPASS" ] && DBPASS_="-p$DBPASS"
-        [ -z "$DBPASS" ] && DBPASS_=""
+        cat >"$TEMPFILE" <<EOF
+[client]
+user="${DBUSER}"
+password="${DBPASS}"
+EOF
         logintry="yes"
         echo
 done
 
-DBCMD="mysql $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_ $DBNAME"
+DBCMD="mysql $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_ $DBNAME"
 #echo DBCMD $DBCMD
 
 #GET DATABASE VERSION

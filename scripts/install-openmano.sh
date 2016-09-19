@@ -21,7 +21,7 @@
 # contact with: nfvlabs@tid.es
 ##
 
-#ONLY TESTED for Ubuntu 14.10 14.04, CentOS7 and RHEL7
+#ONLY TESTED in Ubuntu 16.04
 #Get needed packages, source code and configure to run openmano
 #Ask for database user and password if not provided
 #        $1: database user
@@ -34,9 +34,11 @@ function usage(){
     echo -e "  OPTIONS"
     echo -e "     -u USER:    database admin user. 'root' by default. Prompts if needed"
     echo -e "     -p PASS:    database admin password to be used or installed. Prompts if needed"
-    echo -e "     -q --quiet: install in an unattended mode"
+    echo -e "     -q --quiet: install in unattended mode"
     echo -e "     -h --help:  show this help"
     echo -e "     --develop:  install last version for developers, and do not configure as a service"
+    echo -e "     --forcedb:  reinstall mano_db DB, deleting previous database and creating a new one"
+    echo -e "     --noclone:  assumes that openmano was cloned previously and that this script is run from the local repo"
 }
 
 function install_packages(){
@@ -52,9 +54,19 @@ function install_packages(){
         if [ "$PACKAGE_INSTALLED" = "no" ]
         then
             echo "failed to install package '$PACKAGE'. Revise network connectivity and try again" >&2
-            exit -1
+            exit 1
        fi
     done
+}
+
+function db_exists() {
+    RESULT=`mysqlshow --defaults-extra-file="$2" | grep -v Wildcard | grep -o $1`
+    if [ "$RESULT" == "$1" ]; then
+        echo " DB $1 exists"
+        return 0
+    fi
+    echo " DB $1 does not exist"
+    return 1
 }
 
 GIT_URL=https://osm.etsi.org/gerrit/osm/RO.git
@@ -63,6 +75,8 @@ DBPASSWD=""
 DBPASSWD_PARAM=""
 QUIET_MODE=""
 DEVELOP=""
+FORCEDB=""
+NOCLONE=""
 while getopts ":u:p:hiq-:" o; do
     case "${o}" in
         u)
@@ -82,6 +96,8 @@ while getopts ":u:p:hiq-:" o; do
         -)
             [ "${OPTARG}" == "help" ] && usage && exit 0
             [ "${OPTARG}" == "develop" ] && DEVELOP="y" && continue
+            [ "${OPTARG}" == "forcedb" ] && FORCEDB="y" && continue
+            [ "${OPTARG}" == "noclone" ] && NOCLONE="y" && continue
             [ "${OPTARG}" == "quiet" ] && export QUIET_MODE=yes && export DEBIAN_FRONTEND=noninteractive && continue
             echo -e "Invalid option: '--$OPTARG'\nTry $0 --help for more information" >&2 
             exit 1
@@ -96,13 +112,13 @@ while getopts ":u:p:hiq-:" o; do
             ;;
         *)
             usage >&2
-            exit -1
+            exit 1
             ;;
     esac
 done
 
 #check root privileges and non a root user behind
-[ "$USER" != "root" ] && echo "Needed root privileges" >&2 && exit -1
+[ "$USER" != "root" ] && echo "Needed root privileges" >&2 && exit 1
 if [[ -z "$SUDO_USER" ]] || [[ "$SUDO_USER" = "root" ]]
 then
     [[ -z $QUIET_MODE ]] && read -e -p "Install in the root user (y/N)?" KK
@@ -199,7 +215,7 @@ fi
 if [[ -n $QUIET_MODE ]]
 then 
     echo -e "\nCheking database connection and ask for credentials"
-    while ! mysqladmin -s -u$DBUSER $DBPASSWD_PARAM ping
+    while ! mysqladmin -s -u$DBUSER $DBPASSWD_PARAM status >/dev/null
     do
         [ -n "$logintry" ] &&  echo -e "\nInvalid database credentials!!!. Try again (Ctrl+c to abort)"
         [ -z "$logintry" ] &&  echo -e "\nProvide database credentials"
@@ -226,24 +242,63 @@ echo '
 [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-novaclient python-keystoneclient python-glanceclient python-neutronclient"
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-devel" && easy_install python-novaclient python-keystoneclient python-glanceclient python-neutronclient #TODO revise if gcc python-pip is needed
 
-echo '
+if [[ -z $NOCLONE ]]; then
+    echo '
 #################################################################
 #####        DOWNLOAD SOURCE                                #####
 #################################################################'
-su $SUDO_USER -c 'git clone '"${GIT_URL}"' openmano'
-#[[ -z $DEVELOP ]] && su $SUDO_USER -c 'git checkout <tag version>'
+    su $SUDO_USER -c 'git clone '"${GIT_URL}"' openmano'
+    #[[ -z $DEVELOP ]] && su $SUDO_USER -c 'git checkout <tag version>'
+fi
 
 echo '
 #################################################################
 #####        CREATE DATABASE                                #####
 #################################################################'
-mysqladmin -u$DBUSER $DBPASSWD_PARAM -s create mano_db || exit 1
+echo -e "\nCreating temporary file form MYSQL installation and initialization"
+TEMPFILE="$(mktemp -q --tmpdir "installopenmano.XXXXXX")"
+trap 'rm -f "$TEMPFILE"' EXIT
+chmod 0600 "$TEMPFILE"
+cat >"$TEMPFILE" <<EOF
+[client]
+user=$DBUSER
+password=$DBPASSWD
+EOF
 
-echo "CREATE USER 'mano'@'localhost' identified by 'manopw';"   | mysql -u$DBUSER $DBPASSWD_PARAM -s || ! echo "Failed while creating user mano at dabase" || exit 1
-echo "GRANT ALL PRIVILEGES ON mano_db.* TO 'mano'@'localhost';" | mysql -u$DBUSER $DBPASSWD_PARAM -s || ! echo "Failed while creating user mano at dabase" || exit 1
-echo " Database 'mano_db' created, user 'mano' password 'manopw'"
+db_exists "mano_db" $TEMPFILE
+DBEXISTS=$?
+if [[ $DBEXISTS -eq 0 ]] ; then
+    if [[ -n $FORCEDB ]]; then
+        echo "   Deleting previous database mano_db"
+        DBDELETEPARAM=""
+        [[ -n $QUIET_MODE ]] && DBDELETEPARAM="-f"
+        mysqladmin --defaults-extra-file=$TEMPFILE -s drop mano_db $DBDELETEPARAM || ! echo "Could not delete mano_db database" || exit 1
+        #echo "REVOKE ALL PRIVILEGES ON mano_db.* FROM 'mano'@'localhost';" | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
+        #echo "DELETE USER 'mano'@'localhost';"   | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
+        mysqladmin --defaults-extra-file=$TEMPFILE -s create mano_db || ! echo "Error creating mano_db database" || exit 1
+        echo "DROP USER 'mano'@'localhost';"   | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
+        echo "CREATE USER 'mano'@'localhost' identified by 'manopw';"   | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
+        echo "GRANT ALL PRIVILEGES ON mano_db.* TO 'mano'@'localhost';" | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
+        echo " Database 'mano_db' created, user 'mano' password 'manopw'"
+    else
+        echo "Database exists. Use option '--forcedb' to force the deletion of the existing one" && exit 1
+    fi
+else
+    mysqladmin -u$DBUSER $DBPASSWD_PARAM -s create mano_db || ( echo "Error creating mano_db database" && exit 1 )
+    echo "CREATE USER 'mano'@'localhost' identified by 'manopw';"   | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
+    echo "GRANT ALL PRIVILEGES ON mano_db.* TO 'mano'@'localhost';" | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
+    echo " Database 'mano_db' created, user 'mano' password 'manopw'"
+fi
 
-su $SUDO_USER -c 'openmano/database_utils/init_mano_db.sh -u mano -p manopw -d mano_db' || ! echo "Failed while creating user mano at dabase" || exit 1
+
+echo '
+#################################################################
+#####        INIT DATABASE                                  #####
+#################################################################'
+HERE=$(realpath $(dirname $0))
+OPENMANO_BASEFOLDER=$(dirname $HERE)
+su $SUDO_USER -c "${OPENMANO_BASEFOLDER}"'/database_utils/init_mano_db.sh -u mano -p manopw -d mano_db' || ! echo "Failed while initializing database" || exit 1
+
 
 if [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ]
 then
@@ -283,10 +338,11 @@ echo '
 #creates a link at ~/bin
 su $SUDO_USER -c 'mkdir -p ${HOME}/bin'
 su $SUDO_USER -c 'rm -f ${HOME}/bin/openmano'
+su $SUDO_USER -c 'rm -f ${HOME}/bin/openmano-report'
 su $SUDO_USER -c 'rm -f ${HOME}/bin/service-openmano'
-su $SUDO_USER -c 'ln -s ${PWD}/openmano/openmano ${HOME}/bin/openmano'
-su $SUDO_USER -c 'ln -s '${PWD}'/openmano/scripts/openmano-report.sh   ${HOME}/bin/openmano-report'
-su $SUDO_USER -c 'ln -s '${PWD}'/openmano/scripts/service-openmano.sh  ${HOME}/bin/service-openmano'
+su $SUDO_USER -c 'ln -s '${OPENMANO_BASEFOLDER}'/openmano ${HOME}/bin/openmano'
+su $SUDO_USER -c 'ln -s '${OPENMANO_BASEFOLDER}'/scripts/openmano-report.sh   ${HOME}/bin/openmano-report'
+su $SUDO_USER -c 'ln -s '${OPENMANO_BASEFOLDER}'/scripts/service-openmano.sh  ${HOME}/bin/service-openmano'
 
 #insert /home/<user>/bin in the PATH
 #skiped because normally this is done authomatically when ~/bin exist
@@ -324,7 +380,7 @@ echo '
 #####             CONFIGURE OPENMANO SERVICE                #####
 #################################################################'
 
-    ./openmano/scripts/install-openmano-service.sh -f openmano #-u $SUDO_USER
+    ${OPENMANO_BASEFOLDER}/scripts/install-openmano-service.sh -f ${OPENMANO_BASEFOLDER} #-u $SUDO_USER
 #    alias service-openmano="service openmano"
 #    echo 'alias service-openmano="service openmano"' >> ${HOME}/.bashrc
 

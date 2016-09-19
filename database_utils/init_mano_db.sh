@@ -91,35 +91,49 @@ done
 shift $((OPTIND-1))
 
 #check and ask for database user password
-DBUSER_="-u$DBUSER"
-DBPASS_=""
-[ -n "$DBPASS" ] && DBPASS_="-p$DBPASS"
+#DBUSER_="-u$DBUSER"
+#DBPASS_=""
+#[ -n "$DBPASS" ] && DBPASS_="-p$DBPASS"
 DBHOST_="-h$DBHOST"
 DBPORT_="-P$DBPORT"
-while !  echo ";" | mysql $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_ >/dev/null 2>&1
+
+TEMPFILE="$(mktemp -q --tmpdir "initmanodb.XXXXXX")"
+trap 'rm -f "$TEMPFILE"' EXIT
+chmod 0600 "$TEMPFILE"
+cat >"$TEMPFILE" <<EOF
+[client]
+user="${DBUSER}"
+password="${DBPASS}"
+EOF
+DEF_EXTRA_FILE_PARAM="--defaults-extra-file=$TEMPFILE"
+
+while !  mysql $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_ -e "quit" >/dev/null 2>&1
 do
         [ -n "$logintry" ] &&  echo -e "\nInvalid database credentials!!!. Try again (Ctrl+c to abort)"
         [ -z "$logintry" ] &&  echo -e "\nProvide database credentials"
 #        read -e -p "mysql database name($DBNAME): " KK
 #        [ -n "$KK" ] && DBNAME="$KK"
         read -e -p "mysql user($DBUSER): " KK
-        [ -n "$KK" ] && DBUSER="$KK" && DBUSER_="-u$DBUSER"
+        [ -n "$KK" ] && DBUSER="$KK"
         read -e -s -p "mysql password: " DBPASS
-        [ -n "$DBPASS" ] && DBPASS_="-p$DBPASS"
-        [ -z "$DBPASS" ] && DBPASS_=""
+        cat >"$TEMPFILE" <<EOF
+[client]
+user="${DBUSER}"
+password="${DBPASS}"
+EOF
         logintry="yes"
         echo
 done
 
 if [ -n "${CREATEDB}" ]; then
     echo "    deleting previous database ${DBNAME}"
-    echo "DROP DATABASE IF EXISTS ${DBNAME}" | mysql $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_
+    echo "DROP DATABASE IF EXISTS ${DBNAME}" | mysql $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_
     echo "    creating database ${DBNAME}"
-    mysqladmin $DBUSER_ $DBPASS_ -s create ${DBNAME} || exit 1
+    mysqladmin $DEF_EXTRA_FILE_PARAM -s create ${DBNAME} || exit 1
 fi
 
 echo "    loading ${DIRNAME}/${DBNAME}_structure.sql"
-mysql  $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_ $DBNAME < ${DIRNAME}/mano_db_structure.sql
+mysql $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT $DBNAME < ${DIRNAME}/mano_db_structure.sql
 
 echo "    migrage database version"
 ${DIRNAME}/migrate_mano_db.sh $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_ -d$DBNAME
