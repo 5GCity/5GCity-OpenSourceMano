@@ -1,6 +1,7 @@
 # This file is meant to be SOURCED
 #
 #   Copyright 2016 RIFT.IO Inc
+#   Copyright 2016 Telefónica Investigación y Desarrollo S.A.U.
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -16,6 +17,7 @@
 #
 # container_funcs
 # 24 June 2016 -- Jeremy Mordkoff -- Genesis
+#              -- Gerardo García
 
 container_exists() { 
 	if [ $# -ne 1 ]; then
@@ -32,21 +34,15 @@ container_exists() {
 }
 
 create_container() { 
-	if [ $# -ne 2 ]; then
-		FATAL "args are image container"
+	if [ $# -lt 2 ]; then
+		FATAL "args are image container [options]"
 	fi
 	INFO "creating container $2 using image $1"
-	DEBUG "lxc launch $1 $2"
-	lxc launch "$1" "$2"
-}
-
-create_privileged_container() {
-	if [ $# -ne 2 ]; then
-		FATAL "args are image container"
-	fi
-	INFO "creating container $2 using image $1"
-	DEBUG "lxc launch $1 $2"
-	lxc launch "$1" "$2" -c security.privileged=true
+	image=$1
+	container=$2
+	shift 2
+	DEBUG "lxc launch $image $container $*"
+	lxc launch "$image" "$container" "$*"
 }
 
 container_exec() { 

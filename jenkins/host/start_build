@@ -1,5 +1,6 @@
 #!/bin/bash
 #   Copyright 2016 RIFT.IO Inc
+#   Copyright 2016 Telefónica Investigación y Desarrollo S.A.U.
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -16,6 +17,7 @@
 # start-build is run on a host to start a MDG build
 #
 # 24 June 2016 -- Jeremy Mordkoff -- Genesis
+#              -- Gerardo Garcia
 
 
 HERE=$(realpath $(dirname $0))
@@ -29,11 +31,10 @@ shift
 OSM_load_config
 
 if ! container_exists $OSM_BUILD_CONTAINER; then
-	if [[ "$OSM_BUILD_CONTAINER_PRIVILEGED" == yes ]]; then
-		create_privileged_container $OSM_BASE_IMAGE $OSM_BUILD_CONTAINER
-	else
-		create_container $OSM_BASE_IMAGE $OSM_BUILD_CONTAINER
-	fi
+	CONTAINER_OPTS=""
+	[[ "$OSM_BUILD_CONTAINER_PRIVILEGED" == yes ]] && CONTAINER_OPTS="$CONTAINER_OPTS -c security.privileged=true"
+	[[ "$OSM_BUILD_CONTAINER_ALLOW_NESTED" == yes ]] && CONTAINER_OPTS="$CONTAINER_OPTS -c security.nesting=true"
+	create_container $OSM_BASE_IMAGE $OSM_BUILD_CONTAINER $CONTAINER_OPTS
 	wait_container_up $OSM_BUILD_CONTAINER
 	RE="fedora|fc[0-9]"
 	if [[ $OSM_BASE_IMAGE =~ $RE ]]; then

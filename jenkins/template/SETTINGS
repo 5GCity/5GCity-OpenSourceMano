@@ -1,4 +1,5 @@
 #   Copyright 2016 RIFT.IO Inc
+#   Copyright 2016 Telefónica Investigación y Desarrollo, S.A.U.
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -14,7 +15,9 @@
 #
 # sample SETTINGS file
 #
-# 24 June 2016 -- Jeremy Mordkoff -- Genesis 
+# Authors:
+#         24 June 2016 -- Jeremy Mordkoff -- Genesis 
+#                      -- Gerardo Garcia
 #
 # this variable holds the name of the container image needed to build or run this product
 export OSM_BASE_IMAGE=ubuntu:16.04
@@ -27,6 +30,9 @@ export OSM_BUILD_CONTAINER=container_name-build
 # this variable should be removed in the future when no privileged mode is required
 #export OSM_BUILD_CONTAINER_PRIVILEGED=yes
 #
+# this variable must be set to allow ensted containers in the build container
+#export OSM_BUILD_CONTAINER_ALLOW_NESTED=yes
+#
 # this variable holds the name of the container to be used to run a package
 # if this container already exists, the run processes can skip the container build
 export OSM_RUNTIME_CONTAINER=container_name-runtime
@@ -34,4 +40,7 @@ export OSM_RUNTIME_CONTAINER=container_name-runtime
 # this variable must be set to allow creating the runtime container in privileged mode
 # this variable should be removed in the future when no privileged mode is required
 #export OSM_RUNTIME_CONTAINER_PRIVILEGED=yes
-
+#
+# this variable must be set to allow ensted containers in the build container
+#export OSM_RUNTIME_CONTAINER_ALLOW_NESTED=yes
+#

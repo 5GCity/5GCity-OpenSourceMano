@@ -1,4 +1,6 @@
 #
+#   Copyright 2016 Telefónica Investigación y Desarrollo, S.A.U.
+#
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
 #   You may obtain a copy of the License at
@@ -11,9 +13,11 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 #
+# Authors:
+#    - Gerardo Garcia - gerardo.garciadeblas@telefonica.com
 #
 # this variable holds the name of the container image needed to build or run this product
-export OSM_BASE_IMAGE=ubuntu:14.04
+export OSM_BASE_IMAGE=ubuntu:16.04
 #
 # this variable holds the name of the container to be used to build a package
 # if this container already exists, the build process can skip the container build
