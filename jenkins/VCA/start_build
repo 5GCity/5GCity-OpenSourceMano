@@ -16,6 +16,10 @@
 # 20 Sep 2016 -- Gerardo Garcia -- adapted from template
 # 
 
+HERE=$(realpath $(dirname $0))
+OSM_JENKINS=$(dirname $HERE)
+. $OSM_JENKINS/common/all_funcs
+
 INFO "installing packages"
 apt update
 lxd init --auto
