@@ -91,14 +91,14 @@ done
 shift $((OPTIND-1))
 
 #check and ask for database user password
-#DBUSER_="-u$DBUSER"
-#DBPASS_=""
-#[ -n "$DBPASS" ] && DBPASS_="-p$DBPASS"
+DBUSER_="-u$DBUSER"
+DBPASS_=""
+[ -n "$DBPASS" ] && DBPASS_="-p$DBPASS"
 DBHOST_="-h$DBHOST"
 DBPORT_="-P$DBPORT"
 
 TEMPFILE="$(mktemp -q --tmpdir "initmanodb.XXXXXX")"
-trap 'rm -f "$TEMPFILE"' EXIT
+trap 'rm -f "$TEMPFILE"' EXIT SIGINT SIGTERM
 chmod 0600 "$TEMPFILE"
 cat >"$TEMPFILE" <<EOF
 [client]
@@ -133,7 +133,8 @@ if [ -n "${CREATEDB}" ]; then
 fi
 
 echo "    loading ${DIRNAME}/${DBNAME}_structure.sql"
-mysql $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT $DBNAME < ${DIRNAME}/mano_db_structure.sql
+#echo 'mysql '$DEF_EXTRA_FILE_PARAM' '$DBHOST_' '$DBPORT_' '$DBNAME' < '${DIRNAME}'/mano_db_structure.sql'
+mysql $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_ $DBNAME < ${DIRNAME}/mano_db_structure.sql
 
 echo "    migrage database version"
 ${DIRNAME}/migrate_mano_db.sh $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_ -d$DBNAME
