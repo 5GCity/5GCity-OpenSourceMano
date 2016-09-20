@@ -42,17 +42,17 @@ if ! container_exists $OSM_BUILD_CONTAINER; then
 	else
 		container_exec $OSM_BUILD_CONTAINER apt -y install git realpath make sudo 
 	fi
-    if [ ${OSM_USE_LOCAL_DEVOPS:-false} ]; then
-        container_push_devops $OSM_BUILD_CONTAINER
-    else
-	    container_exec $OSM_BUILD_CONTAINER git clone ${OSM_GIT_URL}/devops
-    fi
+	if [ ${OSM_USE_LOCAL_DEVOPS:-false} ]; then
+		container_push_devops $OSM_BUILD_CONTAINER
+	else
+		container_exec $OSM_BUILD_CONTAINER git clone ${OSM_GIT_URL}/devops
+	fi
 else
-    if [ ${OSM_USE_LOCAL_DEVOPS:-false} ]; then
-        container_push_devops $OSM_BUILD_CONTAINER
-    else
-	    container_exec $OSM_BUILD_CONTAINER git -C devops pull
-    fi
+	if [ ${OSM_USE_LOCAL_DEVOPS:-false} ]; then
+		container_push_devops $OSM_BUILD_CONTAINER
+	else
+		container_exec $OSM_BUILD_CONTAINER git -C devops pull
+	fi
 fi
 
 container_exec $OSM_BUILD_CONTAINER ./devops/jenkins/$OSM_MDG/start_build $*
