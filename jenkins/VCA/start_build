@@ -1,0 +1,55 @@
+#!/bin/bash
+#   Copyright 2016 Telefónica Investigación y Desarrollo S.A.U.
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+# 
+# 20 Sep 2016 -- Gerardo Garcia -- adapted from template
+# 
+
+INFO "installing packages"
+apt update
+lxd init --auto
+lxd waitready
+systemctl stop lxd-bridge
+systemctl --system daemon-reload
+cat <<EOF > /etc/default/lxd-bridge
+USE_LXD_BRIDGE="true"
+LXD_BRIDGE="lxdbr0"
+UPDATE_PROFILE="true"
+LXD_CONFILE=""
+LXD_DOMAIN="lxd"
+LXD_IPV4_ADDR="10.44.127.1"
+LXD_IPV4_NETMASK="255.255.255.0"
+LXD_IPV4_NETWORK="10.44.127.1/24"
+LXD_IPV4_DHCP_RANGE="10.44.127.2,10.44.127.254"
+LXD_IPV4_DHCP_MAX="252"
+LXD_IPV4_NAT="true"
+LXD_IPV6_ADDR=""
+LXD_IPV6_MASK=""
+LXD_IPV6_NETWORK=""
+LXD_IPV6_NAT="false"
+LXD_IPV6_PROXY="false"
+EOF
+
+systemctl enable lxd-bridge
+systemctl start lxd-bridge
+lxc image copy ubuntu:16.04 local: --alias ubuntu-xenial
+apt install -y juju
+juju bootstrap juju localhost
+
+RC=0
+
+INFO "done, RC=$RC"
+exit $RC
+
+

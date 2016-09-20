@@ -1,0 +1,41 @@
+#!/bin/bash
+#   Copyright 2016 Telefónica Investigación y Desarrollo S.A.U.
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# clean_container is run on a host to clean an MDG container
+#
+# 20 Sept 2016 -- Gerardo Garcia -- Genesis
+#
+
+HERE=$(realpath $(dirname $0))
+OSM_JENKINS=$(dirname $HERE)
+. $OSM_JENKINS/common/all_funcs
+
+[ $# -lt 1 ] && FATAL "arg is MDG name"
+
+export OSM_MDG=$1
+OSM_load_config
+
+if container_exists $OSM_BUILD_CONTAINER; then
+	INFO "Container exists. Deleting ..."
+	lxc stop $OSM_BUILD_CONTAINER
+	lxc delete $OSM_BUILD_CONTAINER
+	INFO "$OSM_BUILD_CONTAINER container deleted."
+else
+	INFO "Container does not exist. Nothing to be done."
+fi
+
+INFO "$OSM_MDG clean-container DONE."
+exit 0
+
