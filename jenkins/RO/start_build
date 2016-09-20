@@ -52,9 +52,9 @@ fi
 INFO "starting build"
 
 INFO "  cleaning .pyc"
-rm *.pyc
+rm -f *.pyc
 INFO "  installing openmano packages and dependencies from current repo (--noclone)"
-./scripts/install_openmano.sh --noclone -q
+./scripts/install-openmano.sh --noclone -q
 INFO "  compiling *.py"
 python -m py_compile *.py
 RC=$?
