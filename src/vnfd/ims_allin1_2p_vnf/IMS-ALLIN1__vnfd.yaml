@@ -11,7 +11,7 @@ vnfd:vnfd-catalog:
             config-attributes:
                 config-delay: '0'
                 config-priority: '1'
-            config-primitive:
+            service-primitive:
             -   name: config
                 parameter:
                 -   name: home_domain
@@ -21,7 +21,6 @@ vnfd:vnfd-catalog:
                 -   name: password
                     data-type: string
                     mandatory: 'true'
-                    name: password
                     default-value: cw-aio
             -   name: create-update-user
                 parameter:

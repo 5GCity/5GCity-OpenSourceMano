@@ -32,7 +32,7 @@ nsd:nsd-catalog:
             -   member-vnf-index-ref: '1'
                 vnfd-connection-point-ref: eth1
                 vnfd-id-ref: IMS-ALLIN1_2p
-        config-primitive:
+        service-primitive:
         -   name: Update Domain
             vnf-primitive-group:
             -   member-vnf-index-ref: '1'

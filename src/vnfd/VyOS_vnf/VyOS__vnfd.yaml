@@ -11,7 +11,7 @@ vnfd:vnfd-catalog:
             config-attributes:
                 config-delay: '0'
                 config-priority: '1'
-            config-primitive:
+            service-primitive:
             -   name: config
                 parameter:
                 -   name: user
@@ -19,7 +19,7 @@ vnfd:vnfd-catalog:
                     mandatory: 'true'
                     default-value: vyos
                 -   name: pass
-                    data-type: string
+                    data-type: STRING
                     mandatory: 'true'
                     default-value: vyos
             -   name: ping
