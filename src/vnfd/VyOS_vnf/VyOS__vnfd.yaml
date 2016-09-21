@@ -36,6 +36,8 @@ vnfd:vnfd-catalog:
                 parameter:
                 -   name: hostname
                     value: <rw_mgmt_ip>
+                -   name: pass
+                    value: vyos
                 seq: '1'
             juju:
                 charm: VyOS-proxy
