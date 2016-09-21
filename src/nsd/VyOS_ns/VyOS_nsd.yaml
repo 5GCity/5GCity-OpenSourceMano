@@ -11,6 +11,7 @@ nsd:nsd-catalog:
         vld:
         -   id: data
             name: data
+            short-name: data
             type: ELAN
             provider-network:
                 overlay-type: VLAN
@@ -20,6 +21,7 @@ nsd:nsd-catalog:
                 vnfd-id-ref: VyOS
         -   id: management
             name: management
+            short-name: management
             type: ELAN
             provider-network:
                 overlay-type: VLAN

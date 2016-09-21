@@ -7,38 +7,38 @@ vnfd:vnfd-catalog:
         logo: osm_2x.png
         mgmt-interface:
             vdu-id: VyOS-VM
-            vnf-configuration:
-                config-attributes:
-                    config-delay: '0'
-                    config-priority: '1'
-                config-primitive:
-                -   name: config
-                    parameter:
-                    -   name: user
-                        data-type: STRING
-                        mandatory: 'true'
-                        default-value: vyos
-                    -   name: pass
-                        data-type: string
-                        mandatory: 'true'
-                        default-value: vyos
-                -   name: ping
-                    parameter:
-                    -   name: destination
-                        data-type: STRING
-                        mandatory: 'true'
-                    -   name: count
-                        data-type: INTEGER
-                        mandatory: 'false'
-                        default-value: 5
-                initial-config-primitive:
-                -   name: config
-                    parameter:
-                    -   name: hostname
-                        value: <rw_mgmt_ip>
-                    seq: '1'
-                juju:
-                    charm: VyOS-proxy
+        vnf-configuration:
+            config-attributes:
+                config-delay: '0'
+                config-priority: '1'
+            config-primitive:
+            -   name: config
+                parameter:
+                -   name: user
+                    data-type: STRING
+                    mandatory: 'true'
+                    default-value: vyos
+                -   name: pass
+                    data-type: string
+                    mandatory: 'true'
+                    default-value: vyos
+            -   name: ping
+                parameter:
+                -   name: destination
+                    data-type: STRING
+                    mandatory: 'true'
+                -   name: count
+                    data-type: INTEGER
+                    mandatory: 'false'
+                    default-value: 5
+            initial-config-primitive:
+            -   name: config
+                parameter:
+                -   name: hostname
+                    value: <rw_mgmt_ip>
+                seq: '1'
+            juju:
+                charm: VyOS-proxy
         connection-point:
         -   name: eth0
             type: VPORT

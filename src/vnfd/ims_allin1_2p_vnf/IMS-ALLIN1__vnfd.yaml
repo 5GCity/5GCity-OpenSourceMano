@@ -7,43 +7,43 @@ vnfd:vnfd-catalog:
         logo: metaswitch_2x.png
         mgmt-interface:
             vdu-id: IMS-ALLIN1_2p-VM
-            vnf-configuration:
-                config-attributes:
-                    config-delay: '0'
-                    config-priority: '1'
-                config-primitive:
-                -   name: config
-                    parameter:
-                    -   name: home_domain
-                        data-type: STRING
-                        mandatory: 'true'
-                        default-value: ims.com
-                    -   name: password
-                        data-type: string
-                        mandatory: 'true'
-                        name: password
-                        default-value: cw-aio
-                -   name: create-update-user
-                    parameter:
-                    -   name: number
-                        data-type: STRING
-                        mandatory: 'true'
-                    -   name: password
-                        data-type: STRING
-                        mandatory: 'true'
-                -   name: delete-user
-                    parameter:
-                    -   name: number
-                        data-type: STRING
-                        mandatory: 'true'
-                initial-config-primitive:
-                -   name: config
-                    parameter:
-                    -   name: proxied_ip
-                        value: <rw_mgmt_ip>
-                    seq: '1'
-                juju:
-                    charm: clearwater-aio-proxy
+        vnf-configuration:
+            config-attributes:
+                config-delay: '0'
+                config-priority: '1'
+            config-primitive:
+            -   name: config
+                parameter:
+                -   name: home_domain
+                    data-type: STRING
+                    mandatory: 'true'
+                    default-value: ims.com
+                -   name: password
+                    data-type: string
+                    mandatory: 'true'
+                    name: password
+                    default-value: cw-aio
+            -   name: create-update-user
+                parameter:
+                -   name: number
+                    data-type: STRING
+                    mandatory: 'true'
+                -   name: password
+                    data-type: STRING
+                    mandatory: 'true'
+            -   name: delete-user
+                parameter:
+                -   name: number
+                    data-type: STRING
+                    mandatory: 'true'
+            initial-config-primitive:
+            -   name: config
+                parameter:
+                -   name: proxied_ip
+                    value: <rw_mgmt_ip>
+                seq: '1'
+            juju:
+                charm: clearwater-aio-proxy
         connection-point:
         -   name: eth0
             type: VPORT
