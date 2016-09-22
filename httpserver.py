@@ -1052,6 +1052,9 @@ def http_get_instance_id(tenant_id, instance_id):
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_instance_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("http_get_instance_id error {}".format(str(e)))
+        bottle.abort(HTTP_Internal_Server_Error, str(e))
 
 @bottle.route(url_base + '/<tenant_id>/instances/<instance_id>', method='DELETE')
 def http_delete_instance_id(tenant_id, instance_id):

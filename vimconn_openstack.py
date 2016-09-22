@@ -172,8 +172,8 @@ class vimconnector(vimconn.vimconnector):
     def _format_exception(self, exception):
         '''Transform a keystone, nova, neutron  exception into a vimconn exception'''
         if isinstance(exception, (HTTPException, gl1Exceptions.HTTPException, gl1Exceptions.CommunicationError,
-                                  ConnectionError, ksExceptions.ConnectionError, neExceptions.ConnectionFailed,
-                                  neClient.exceptions.ConnectionFailed)):
+                                  ConnectionError, ksExceptions.ConnectionError, neExceptions.ConnectionFailed
+                                  )):
             raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))            
         elif isinstance(exception, (nvExceptions.ClientException, ksExceptions.ClientException, 
                                     neExceptions.NeutronException, nvExceptions.BadRequest)):
@@ -201,7 +201,7 @@ class vimconnector(vimconn.vimconnector):
             for tenant in tenant_class_list:
                 tenant_list.append(tenant.to_dict())
             return tenant_list
-        except (ksExceptions.ConnectionError, ksExceptions.ClientException)  as e:
+        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
             self._format_exception(e)
 
     def new_tenant(self, tenant_name, tenant_description):
@@ -211,7 +211,7 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             tenant=self.keystone.tenants.create(tenant_name, tenant_description)
             return tenant.id
-        except (ksExceptions.ConnectionError, ksExceptions.ClientException)  as e:
+        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
             self._format_exception(e)
 
     def delete_tenant(self, tenant_id):
@@ -221,7 +221,7 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             self.keystone.tenants.delete(tenant_id)
             return tenant_id
-        except (ksExceptions.ConnectionError, ksExceptions.ClientException)  as e:
+        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
             self._format_exception(e)
         
     def new_network(self,net_name, net_type, ip_profile=None, shared=False, vlan=None):
@@ -274,7 +274,7 @@ class vimconnector(vimconn.vimconnector):
                 subnet['allocation_pools'][0]['end'] = ip_str
             self.neutron.create_subnet({"subnet": subnet} )
             return new_net["network"]["id"]
-        except (neExceptions.ConnectionFailed, ksExceptions.ClientException, neExceptions.NeutronException) as e:
+        except (neExceptions.ConnectionFailed, ksExceptions.ClientException, neExceptions.NeutronException, ConnectionError) as e:
             self._format_exception(e)
 
     def get_network_list(self, filter_dict={}):
@@ -295,7 +295,7 @@ class vimconnector(vimconn.vimconnector):
             net_list=net_dict["networks"]
             self.__net_os2mano(net_list)
             return net_list
-        except (neExceptions.ConnectionFailed, neClient.exceptions.ConnectionFailed, ksExceptions.ClientException, neExceptions.NeutronException) as e:
+        except (neExceptions.ConnectionFailed, ksExceptions.ClientException, neExceptions.NeutronException, ConnectionError) as e:
             self._format_exception(e)
 
     def get_network(self, net_id):
@@ -335,7 +335,7 @@ class vimconnector(vimconn.vimconnector):
             self.neutron.delete_network(net_id)
             return net_id
         except (neExceptions.ConnectionFailed, neExceptions.NetworkNotFoundClient, neExceptions.NeutronException,
-                neClient.exceptions.ConnectionFailed, ksExceptions.ClientException, neExceptions.NeutronException) as e:
+                ksExceptions.ClientException, neExceptions.NeutronException, ConnectionError) as e:
             self._format_exception(e)
 
     def refresh_nets_status(self, net_list):
@@ -366,9 +366,12 @@ class vimconnector(vimconn.vimconnector):
                     net["status"] = "OTHER"
                     net["error_msg"] = "VIM status reported " + net_vim['status']
                     
-                if net['status'] == "ACIVE" and not net_vim['admin_state_up']:
+                if net['status'] == "ACTIVE" and not net_vim['admin_state_up']:
                     net['status'] = 'DOWN'
-                net['vim_info']  = yaml.safe_dump(net_vim)
+                try:
+                    net['vim_info'] = yaml.safe_dump(net_vim, default_flow_style=True, width=256)
+                except yaml.representer.RepresenterError:
+                    net['vim_info'] = str(net_vim)
                 if net_vim.get('fault'):  #TODO
                     net['error_msg'] = str(net_vim['fault'])
             except vimconn.vimconnNotFoundException as e:
@@ -390,7 +393,7 @@ class vimconnector(vimconn.vimconnector):
             flavor = self.nova.flavors.find(id=flavor_id)
             #TODO parse input and translate to VIM format (openmano_schemas.new_vminstance_response_schema)
             return flavor.to_dict()
-        except (nvExceptions.NotFound, nvExceptions.ClientException, ksExceptions.ClientException) as e:
+        except (nvExceptions.NotFound, nvExceptions.ClientException, ksExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)
 
     def new_flavor(self, flavor_data, change_name_if_used=True):
@@ -476,7 +479,7 @@ class vimconnector(vimconn.vimconnector):
             self.nova.flavors.delete(flavor_id)
             return flavor_id
         #except nvExceptions.BadRequest as e:
-        except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException) as e:
+        except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)
 
     def new_image(self,image_dict):
@@ -538,7 +541,7 @@ class vimconnector(vimconn.vimconnector):
                 return new_image.id
             except (nvExceptions.Conflict, ksExceptions.ClientException, nvExceptions.ClientException) as e:
                 self._format_exception(e)
-            except (HTTPException, gl1Exceptions.HTTPException, gl1Exceptions.CommunicationError) as e:
+            except (HTTPException, gl1Exceptions.HTTPException, gl1Exceptions.CommunicationError, ConnectionError) as e:
                 if retry==max_retries:
                     continue
                 self._format_exception(e)
@@ -553,7 +556,7 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             self.nova.images.delete(image_id)
             return image_id
-        except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError) as e: #TODO remove
+        except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e: #TODO remove
             self._format_exception(e)
 
     def get_image_id_from_path(self, path):
@@ -566,7 +569,7 @@ class vimconnector(vimconn.vimconnector):
                 if image.metadata.get("location")==path:
                     return image.id
             raise vimconn.vimconnNotFoundException("image with location '{}' not found".format( path))
-        except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError) as e: 
+        except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
             self._format_exception(e)
         
     def new_vminstance(self,name,description,start,image_id,flavor_id,net_list,cloud_config=None):
@@ -685,8 +688,8 @@ class vimconnector(vimconn.vimconnector):
 #        except nvExceptions.NotFound as e:
 #            error_value=-vimconn.HTTP_Not_Found
 #            error_text= "vm instance %s not found" % vm_id
-        except (ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError,
-                neClient.exceptions.ConnectionFailed) as e:
+        except (ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError
+                ) as e:
             self._format_exception(e)
         except TypeError as e:
             raise vimconn.vimconnException(type(e).__name__ + ": "+  str(e), http_code=vimconn.HTTP_Bad_Request)
@@ -699,7 +702,7 @@ class vimconnector(vimconn.vimconnector):
             server = self.nova.servers.find(id=vm_id)
             #TODO parse input and translate to VIM format (openmano_schemas.new_vminstance_response_schema)
             return server.to_dict()
-        except (ksExceptions.ClientException, nvExceptions.ClientException, nvExceptions.NotFound) as e:
+        except (ksExceptions.ClientException, nvExceptions.ClientException, nvExceptions.NotFound, ConnectionError) as e:
             self._format_exception(e)
 
     def get_vminstance_console(self,vm_id, console_type="vnc"):
@@ -750,7 +753,7 @@ class vimconnector(vimconn.vimconnector):
                     return console_dict
             raise vimconn.vimconnUnexpectedResponse("Unexpected response from VIM")
             
-        except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, nvExceptions.BadRequest) as e:
+        except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, nvExceptions.BadRequest, ConnectionError) as e:
             self._format_exception(e)
 
     def delete_vminstance(self, vm_id):
@@ -768,7 +771,7 @@ class vimconnector(vimconn.vimconnector):
                     self.logger.error("Error deleting port: " + type(e).__name__ + ": "+  str(e))
             self.nova.servers.delete(vm_id)
             return vm_id
-        except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException) as e:
+        except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)
         #TODO insert exception vimconn.HTTP_Unauthorized
         #if reaching here is because an exception
@@ -807,7 +810,10 @@ class vimconnector(vimconn.vimconnector):
                 else:
                     vm['status']    = "OTHER"
                     vm['error_msg'] = "VIM status reported " + vm_vim['status']
-                vm['vim_info']  = yaml.safe_dump(vm_vim)
+                try:
+                    vm['vim_info']  = yaml.safe_dump(vm_vim, default_flow_style=True, width=256)
+                except yaml.representer.RepresenterError:
+                    vm['vim_info'] = str(vm_vim)
                 vm["interfaces"] = []
                 if vm_vim.get('fault'):
                     vm['error_msg'] = str(vm_vim['fault'])
@@ -817,7 +823,10 @@ class vimconnector(vimconn.vimconnector):
                     port_dict=self.neutron.list_ports(device_id=vm_id)
                     for port in port_dict["ports"]:
                         interface={}
-                        interface['vim_info']  = yaml.safe_dump(port)
+                        try:
+                            interface['vim_info'] = yaml.safe_dump(port, default_flow_style=True, width=256)
+                        except yaml.representer.RepresenterError:
+                            interface['vim_info'] = str(port)
                         interface["mac_address"] = port.get("mac_address")
                         interface["vim_net_id"] = port["network_id"]
                         interface["vim_interface_id"] = port["id"]
@@ -914,7 +923,7 @@ class vimconnector(vimconn.vimconnector):
                     raise vimconn.vimconnException("Unexpected response from VIM " + str(console_dict))
             
             return vm_id
-        except (ksExceptions.ClientException, nvExceptions.ClientException, nvExceptions.NotFound) as e:
+        except (ksExceptions.ClientException, nvExceptions.ClientException, nvExceptions.NotFound, ConnectionError) as e:
             self._format_exception(e)
         #TODO insert exception vimconn.HTTP_Unauthorized
 

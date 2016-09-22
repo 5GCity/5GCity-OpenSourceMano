@@ -910,7 +910,7 @@ class vimconnector(vimconn.vimconnector):
                         interface={}
                         interface['vim_info']  = yaml.safe_dump(port)
                         interface["mac_address"] = port.get("mac_address")
-                        interface["vim_net_id"] = port["network_id"]
+                        interface["vim_net_id"] = port.get("network_id")
                         interface["vim_interface_id"] = port["id"]
                         interface["ip_address"] = port.get("ip_address")
                         if interface["ip_address"]:
