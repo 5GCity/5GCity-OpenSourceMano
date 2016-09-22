@@ -8,7 +8,6 @@ from charmhelpers.core.hookenv import (
 )
 
 from charms.reactive import (
-    hook,
     when,
     when_not,
     helpers,
@@ -22,13 +21,15 @@ import subprocess
 cfg = config()
 
 
-@hook('config-changed')
+@when('config.changed')
 def validate_config():
     try:
         """
         If the ssh credentials are available, we'll act as a proxy charm.
         Otherwise, we execute against the unit we're deployed on to.
         """
+        status_set('maintenance', 'configuring ssh connection')
+        remove_state('vpe.configured')
         if all(k in cfg for k in ['pass', 'vpe-router', 'user']):
             routerip = cfg['vpe-router']
             user = cfg['user']
@@ -62,8 +63,8 @@ def validate_config():
                         (' '.join(e.cmd), str(e.output)))
                     raise
 
-        set_state('vpe.configured')
-        status_set('active', 'ready!')
+                set_state('vpe.configured')
+                status_set('active', 'ready!')
 
     except Exception as e:
         log(repr(e))
