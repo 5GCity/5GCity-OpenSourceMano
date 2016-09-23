@@ -54,11 +54,15 @@ INFO "starting build"
 INFO "  cleaning .pyc"
 rm -f *.pyc
 INFO "  installing openmano packages and dependencies from current repo (--noclone)"
-./scripts/install-openmano.sh --noclone -q
+./scripts/install-openmano.sh --develop --noclone -q
 INFO "  compiling *.py"
 python -m py_compile *.py
 RC=$?
-#git checkout master #Cleaning the environment. It's also done at the beginning, but it's done just in case.
+
+if RC; then
+	#basic test HERE
+	#RC=$?
+fi
 
 INFO "done, RC=$RC"
 exit $RC
