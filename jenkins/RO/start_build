@@ -56,14 +56,10 @@ rm -f *.pyc
 INFO "  installing openmano packages and dependencies from current repo (--noclone)"
 ./scripts/install-openmano.sh --develop --noclone -q
 INFO "  compiling *.py"
-python -m py_compile *.py
+python -m py_compile *.py   #&&     #uncomment to concatenate commands
+#basic test HERE            #&&     #uncomment to concatenate commands
+
 RC=$?
-
-if RC; then
-	#basic test HERE
-	#RC=$?
-fi
-
 INFO "done, RC=$RC"
 exit $RC
 
