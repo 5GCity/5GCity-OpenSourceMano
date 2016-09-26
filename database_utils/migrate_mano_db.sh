@@ -182,6 +182,7 @@ DATABASE_TARGET_VER_NUM=0
 [ $OPENMANO_VER_NUM -ge 4043 ] && DATABASE_TARGET_VER_NUM=11  #0.4.43=>  11
 [ $OPENMANO_VER_NUM -ge 4046 ] && DATABASE_TARGET_VER_NUM=12  #0.4.46=>  12
 [ $OPENMANO_VER_NUM -ge 4047 ] && DATABASE_TARGET_VER_NUM=13  #0.4.47=>  13
+[ $OPENMANO_VER_NUM -ge 4057 ] && DATABASE_TARGET_VER_NUM=14  #0.4.57=>  14
 #TODO ... put next versions here
 
 
@@ -625,6 +626,20 @@ function downgrade_from_13(){
     echo "DELETE FROM schema_version WHERE version_int='13';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
 
+function upgrade_to_14(){
+    echo "    upgrade database from version 0.13 to version 0.14"
+    echo "      remove unique index vim_net_id, instance_scenario_id at table 'instance_nets'"
+    echo "ALTER TABLE instance_nets DROP INDEX vim_net_id_instance_scenario_id;"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_nets CHANGE COLUMN external created ENUM('true','false') NOT NULL DEFAULT 'false' COMMENT 'Created or already exists at VIM' AFTER multipoint;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (14, '0.14', '0.4.57', 'remove unique index vim_net_id, instance_scenario_id', '2016-09-26');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+function downgrade_from_14(){
+    echo "    downgrade database from version 0.14 to version 0.13"
+    echo "      remove cloud_config at 'scenarios', 'instance_scenarios'"
+    echo "ALTER TABLE instance_nets ADD UNIQUE INDEX vim_net_id_instance_scenario_id (vim_net_id, instance_scenario_id);"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_nets CHANGE COLUMN created external ENUM('true','false') NOT NULL DEFAULT 'false' COMMENT 'If external, means that it already exists at VIM' AFTER multipoint;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "DELETE FROM schema_version WHERE version_int='14';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
 
 function upgrade_to_X(){
     echo "      change 'datacenter_nets'"

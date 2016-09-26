@@ -1320,6 +1320,7 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
                 sce_net['vim_id'] = network_id
                 auxNetDict['scenario'][sce_net['uuid']] = network_id
                 rollbackList.append({'what':'network','where':'vim','vim_id':datacenter_id,'uuid':network_id})
+                sce_net["created"] = True
             else:
                 if sce_net['vim_id'] == None:
                     error_text = "Error, datacenter '%s' does not have external network '%s'." % (datacenter_name, sce_net['name'])
@@ -1353,6 +1354,7 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
                     auxNetDict[sce_vnf['uuid']] = {}
                 auxNetDict[sce_vnf['uuid']][net['uuid']] = network_id
                 rollbackList.append({'what':'network','where':'vim','vim_id':datacenter_id,'uuid':network_id})
+                net["created"] = True
     
         #print "auxNetDict:"
         #print yaml.safe_dump(auxNetDict, indent=4, default_flow_style=False)
@@ -1820,6 +1822,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                     sce_net["vim_id_sites"][datacenter_id] = network_id
                     auxNetDict['scenario'][sce_net['uuid']][datacenter_id] = network_id
                     rollbackList.append({'what':'network', 'where':'vim', 'vim_id':datacenter_id, 'uuid':network_id})
+                    sce_net["created"] = True
         
     #2. Creating new nets (vnf internal nets) in the VIM"
         #For each vnf net, we create it and we add it to instanceNetlist.
@@ -1843,6 +1846,8 @@ def create_instance(mydb, tenant_id, instance_dict):
                     auxNetDict[sce_vnf['uuid']] = {}
                 auxNetDict[sce_vnf['uuid']][net['uuid']] = network_id
                 rollbackList.append({'what':'network','where':'vim','vim_id':datacenter_id,'uuid':network_id})
+                net["created"] = True
+
     
         #print "auxNetDict:"
         #print yaml.safe_dump(auxNetDict, indent=4, default_flow_style=False)
@@ -2014,7 +2019,7 @@ def delete_instance(mydb, tenant_id, instance_id):
     #2.2 deleting NETS
     #net_fail_list=[]
     for net in instanceDict['nets']:
-        if net['external']:
+        if not net['created']:
             continue #skip not created nets
         if not myvim:
             continue

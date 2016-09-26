@@ -776,7 +776,7 @@ class nfvo_db(db_base.db_base):
                         sce_net_id = net.get("uuid")
                         
                         for datacenter_site_id,vim_id in net["vim_id_sites"].iteritems():
-                            INSERT_={'vim_net_id': vim_id, 'external': net['external'], 'instance_scenario_id':instance_uuid } #,  'type': net['type']
+                            INSERT_={'vim_net_id': vim_id, 'created': net.get('created', False), 'instance_scenario_id':instance_uuid } #,  'type': net['type']
                             INSERT_['datacenter_id'] = datacenter_site_id 
                             INSERT_['datacenter_tenant_id'] = net.get('datacenter_tenant_id', datacenter_tenant_id) #TODO revise
                             if sce_net_id:
@@ -809,7 +809,7 @@ class nfvo_db(db_base.db_base):
                         #instance_nets   #nets intraVNF
                         for net in vnf['nets']:
                             net_scene2instance[ net['uuid'] ] = {}
-                            INSERT_={'vim_net_id': net['vim_id'], 'external': 'false', 'instance_scenario_id':instance_uuid  } #,  'type': net['type']
+                            INSERT_={'vim_net_id': net['vim_id'], 'created': net.get('created', False), 'instance_scenario_id':instance_uuid  } #,  'type': net['type']
                             INSERT_['datacenter_id'] = net.get('datacenter_id', datacenter_site_id) 
                             INSERT_['datacenter_tenant_id'] = net.get('datacenter_tenant_id', datacenter_site_tenant_id)
                             if net.get("uuid"):
@@ -935,7 +935,7 @@ class nfvo_db(db_base.db_base):
                     #from_text = "instance_nets join instance_scenarios on instance_nets.instance_scenario_id=instance_scenarios.uuid " + \
                     #            "join sce_nets on instance_scenarios.scenario_id=sce_nets.scenario_id"
                     #where_text = "instance_nets.instance_scenario_id='"+ instance_dict['uuid'] + "'"
-                    cmd = "SELECT uuid,vim_net_id,status,error_msg,vim_info,external, sce_net_id, net_id as vnf_net_id, datacenter_id, datacenter_tenant_id"\
+                    cmd = "SELECT uuid,vim_net_id,status,error_msg,vim_info,created, sce_net_id, net_id as vnf_net_id, datacenter_id, datacenter_tenant_id"\
                             " FROM instance_nets" \
                             " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid'])
                     self.logger.debug(cmd)
@@ -943,7 +943,7 @@ class nfvo_db(db_base.db_base):
                     instance_dict['nets'] = self.cur.fetchall()
                     
                     db_base._convert_datetime2str(instance_dict)
-                    db_base._convert_str2boolean(instance_dict, ('public','shared','external') )
+                    db_base._convert_str2boolean(instance_dict, ('public','shared','created') )
                     return instance_dict
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries)
