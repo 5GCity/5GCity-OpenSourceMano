@@ -141,7 +141,7 @@ class db_base_Exception(Exception):
 class db_base():
     tables_with_created_field=()
     
-    def __init__(self, host=None, user=None, passwd=None, database=None, log_name='db', log_level="ERROR"):
+    def __init__(self, host=None, user=None, passwd=None, database=None, log_name='db', log_level=None):
         self.host = host
         self.user = user
         self.passwd = passwd
@@ -149,7 +149,8 @@ class db_base():
         self.con = None
         self.log_level=log_level
         self.logger = logging.getLogger(log_name)
-        self.logger.setLevel( getattr(logging, log_level) )
+        if self.log_level:
+            self.logger.setLevel( getattr(logging, log_level) )
         
     def connect(self, host=None, user=None, passwd=None, database=None):
         '''Connect to specific data base. 

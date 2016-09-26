@@ -39,7 +39,7 @@ tables_with_createdat_field=["datacenters","instance_nets","instance_scenarios",
                            "sce_vnfs","tenants_datacenters","datacenter_tenants","vms","vnfs", "datacenter_nets"]
 
 class nfvo_db(db_base.db_base):
-    def __init__(self, host=None, user=None, passwd=None, database=None, log_name='openmano.db', log_level="ERROR"):
+    def __init__(self, host=None, user=None, passwd=None, database=None, log_name='openmano.db', log_level=None):
         db_base.db_base.__init__(self, host, user, passwd, database, log_name, log_level)
         db_base.db_base.tables_with_created_field=tables_with_createdat_field
         return

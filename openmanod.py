@@ -33,7 +33,7 @@ It loads the configuration file and launches the http_server thread that will li
 '''
 __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$26-aug-2014 11:09:29$"
-__version__="0.4.55-r497"
+__version__="0.4.56-r498"
 version_date="Sep 2016"
 database_version="0.13"      #expected database schema version
 
@@ -62,9 +62,6 @@ def load_configuration(configuration_file):
                      'http_console_proxy': True,
                      'http_console_host': None,
                      'log_level': 'DEBUG',
-                     'log_level_db': 'ERROR',
-                     'log_level_vimconn': 'DEBUG',
-                     'log_level_nfvo': 'DEBUG',
                      'log_socket_port': 9022,
                     }
     try:
@@ -259,7 +256,7 @@ if __name__=="__main__":
         #nfvo.logger = global_config["logger_nfvo"]
         
         # Initialize DB connection
-        mydb = nfvo_db.nfvo_db(log_level=global_config["log_level_db"]);
+        mydb = nfvo_db.nfvo_db();
         if mydb.connect(global_config['db_host'], global_config['db_user'], global_config['db_passwd'], global_config['db_name']) == -1:
             logger.critical("Cannot connect to database %s at %s@%s", global_config['db_name'], global_config['db_user'], global_config['db_host'])
             exit(-1)
