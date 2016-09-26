@@ -28,8 +28,8 @@ openmano client used to interact with openmano-server (openmanod)
 '''
 __author__="Alfonso Tierno, Gerardo Garcia"
 __date__ ="$09-oct-2014 09:09:48$"
-__version__="0.4.5-r489"
-version_date="Aug 2016"
+__version__="0.4.6-r500"
+version_date="Sep 2016"
 
 from argcomplete.completers import FilesCompleter
 import os
@@ -742,12 +742,12 @@ def instance_scenario_list(args):
                 print "---------------------------------------"
                 print "Internal nets:"
                 for net in instance['nets']:
-                    if not net['external']:
+                    if net['created']:
                         print "    %s %s VIM ID: %s" %(net['uuid'].ljust(38), net['status'].ljust(12), net['vim_net_id'])
                 print "---------------------------------------"
                 print "External nets:"
                 for net in instance['nets']:
-                    if net['external']:
+                    if not net['created']:
                         print "    %s %s VIM ID: %s" %(net['uuid'].ljust(38), net['status'].ljust(12), net['vim_net_id'])
             print "---------------------------------------"
             print "VM instances:"
