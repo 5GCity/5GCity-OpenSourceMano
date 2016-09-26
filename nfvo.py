@@ -2085,7 +2085,7 @@ def refresh_instance(mydb, nfvo_tenant, instanceDict, datacenter=None, vim_tenan
                     if iface["type"]=="mgmt":
                         has_mgmt_iface = True
                 if vm_dict[vm_id]['status'] == "ACTIVE:NoMgmtIP" and not has_mgmt_iface:
-                        vm_dict[vm_id]['status'] = "ACTIVE"
+                    vm_dict[vm_id]['status'] = "ACTIVE"
                 if vm['status'] != vm_dict[vm_id]['status'] or vm.get('error_msg')!=vm_dict[vm_id].get('error_msg') or vm.get('vim_info')!=vm_dict[vm_id].get('vim_info'):
                     vm['status']    = vm_dict[vm_id]['status']
                     vm['error_msg'] = vm_dict[vm_id].get('error_msg')
@@ -2101,16 +2101,16 @@ def refresh_instance(mydb, nfvo_tenant, instanceDict, datacenter=None, vim_tenan
                 # 2.2. Update in openmano DB the interface VMs
                 for interface in interfaces:
                     #translate from vim_net_id to instance_net_id
-                    network_id=None
+                    network_id_list=[]
                     for net in instanceDict['nets']:
                         if net["vim_net_id"] == interface["vim_net_id"]:
-                            network_id = net["uuid"]
-                            break
-                    if not network_id:
+                            network_id_list.append(net["uuid"])
+                    if not network_id_list:
                         continue
                     del interface["vim_net_id"]
-                    try: 
-                        mydb.update_rows('instance_interfaces', UPDATE=interface, WHERE={'instance_vm_id':vm["uuid"], "instance_net_id":network_id})
+                    try:
+                        for network_id in network_id_list:
+                            mydb.update_rows('instance_interfaces', UPDATE=interface, WHERE={'instance_vm_id':vm["uuid"], "instance_net_id":network_id})
                     except db_base_Exception as e:
                         logger.error( "nfvo.refresh_instance error with vm=%s, interface_net_id=%s", vm["uuid"], network_id)        
         
