@@ -36,6 +36,7 @@ function usage(){
     echo -e "  OPTIONS:"
     echo -e "    -f --force       does not prompt for confirmation"
     echo -e "    -h --help        shows this help"
+    echo -e "    --screen         forces to run openmano (and openvim) service in a screen"
     echo -e "    --insert-bashrc  insert the created tenant,datacenter variables at"
     echo -e "                     ~/.bashrc to be available by openmano CLI"
     echo -e "    --init-openvim   if openvim runs locally, an init is called to clean openvim"
@@ -48,55 +49,46 @@ function is_valid_uuid(){
 }
 
 #detect if is called with a source to use the 'exit'/'return' command for exiting
+DIRNAME=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
+DIRmano=$(dirname $DIRNAME)
+DIRscript=${DIRmano}/scripts
+
 [[ ${BASH_SOURCE[0]} != $0 ]] && _exit="return" || _exit="exit"
 
 
-#check correct arguments
-force=""
-action_list=""
-insert_bashrc=""
-init_openvim=""
+#process options
+source ${DIRscript}/get-options.sh "force:f help:h insert-bashrc init-openvim screen" $* || $_exit 1
 
-while [[ $# -gt 0 ]]
+#help
+[ -n "$option_help" ] && usage && $_exit 0
+
+#check correct arguments
+force_param="" && [[ -n "$option_force" ]] && force_param=" -f"
+insert_bashrc_param="" && [[ -n "$option_insert_bashrc" ]] && insert_bashrc_param=" --insert-bashrc"
+screen_mano_param="" && [[ -n "$option_screen" ]] && screen_mano_param=" --screen-name=mano" 
+screen_vim_param=""  && [[ -n "$option_screen" ]] && screen_vim_param=" --screen-name=vim" 
+
+action_list=""
+
+for argument in $params
 do
-    argument="$1"
-    shift
     if [[ $argument == reset ]] || [[ $argument == create ]] || [[ $argument == delete ]]
     then
         action_list="$action_list $argument"
         continue
-    #short options
-    elif [[ ${argument:0:1} == "-" ]] && [[ ${argument:1:1} != "-" ]] && [[ ${#argument} -ge 2 ]]
-    then
-        index=0
-        while index=$((index+1)) && [[ $index -lt ${#argument} ]]
-        do
-            [[ ${argument:$index:1} == h ]]  && usage   && $_exit 0
-            [[ ${argument:$index:1} == f ]]  && force="-f" && continue
-            echo "invalid option '${argument:$index:1}'?  Type -h for help" >&2 && $_exit 1
-        done
-        continue
     fi
-    #long options
-    [[ $argument == --help ]]   && usage   && $_exit 0
-    [[ $argument == --force ]]  && force="-f" && continue
-    [[ $argument == --insert-bashrc ]] && insert_bashrc="--insert-bashrc" && continue
-    [[ $argument == --init-openvim ]] && init_openvim="y" && continue
     echo "invalid argument '$argument'?  Type -h for help" >&2 && $_exit 1
 done
 
-DIRNAME=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
-DIRmano=$(dirname $DIRNAME)
-DIRscript=${DIRmano}/scripts
 export OPENMANO_HOST=localhost
 export OPENMANO_PORT=9090
-[[ -n "$insert_bashrc" ]] && echo -e "\nexport OPENMANO_HOST=localhost"  >> ~/.bashrc
-[[ -n "$insert_bashrc" ]] && echo -e "\nexport OPENMANO_PORT=9090"  >> ~/.bashrc
+[[ -n "$option_insert_bashrc" ]] && echo -e "\nexport OPENMANO_HOST=localhost"  >> ~/.bashrc
+[[ -n "$option_insert_bashrc" ]] && echo -e "\nexport OPENMANO_PORT=9090"  >> ~/.bashrc
 
 
 #by default action should be reset and create
 [[ -z $action_list ]]  && action_list="reset create delete"
-[[ -z $init_openvim ]] || initopenvim $force $insert_bashrc || echo "WARNING openvim cannot be initialized. The rest of test can fail!"
+[[ -z "$option_init_openvim" ]] || initopenvim${force_param}${insert_bashrc_param}${screen_vim_param} || echo "WARNING openvim cannot be initialized. The rest of test can fail!"
 
 #check openvim client variables are set
 #fail=""
@@ -120,15 +112,15 @@ then
 
     #ask for confirmation if argument is not -f --force
     force_=y
-    [[ -z $force ]] && read -e -p "WARNING: reset openmano database, content will be lost!!! Continue(y/N) " force_
+    [[ -z "$option_force" ]] && read -e -p "WARNING: reset openmano database, content will be lost!!! Continue(y/N) " force_
     [[ $force_ != y ]] && [[ $force_ != yes ]] && echo "aborted!" && $_exit
 
     echo "Stopping openmano"
-    $DIRscript/service-openmano.sh mano stop
+    $DIRscript/service-openmano.sh mano stop${screen_mano_param}
     echo "Initializing openmano database"
     $DIRmano/database_utils/init_mano_db.sh -u mano -p manopw --createdb
     echo "Starting openmano"
-    $DIRscript/service-openmano.sh mano start
+    $DIRscript/service-openmano.sh mano start${screen_mano_param}
     echo
 
 elif [[ $action == "delete" ]]
@@ -167,7 +159,7 @@ then
     #check a valid uuid is obtained
     ! is_valid_uuid $nfvotenant && echo "FAIL" && echo "    $result" && $_exit 1
     export OPENMANO_TENANT=$nfvotenant
-    [[ -n "$insert_bashrc" ]] && echo -e "\nexport OPENMANO_TENANT=$nfvotenant"  >> ~/.bashrc
+    [[ -n "$option_insert_bashrc" ]] && echo -e "\nexport OPENMANO_TENANT=$nfvotenant"  >> ~/.bashrc
     echo $nfvotenant
 
     printf "%-50s" "Creating datacenter 'TEST-dc' in openmano:"
@@ -181,7 +173,7 @@ then
     ! is_valid_uuid $datacenter && echo "FAIL" && echo "    $result" && $_exit 1
     echo $datacenter
     export OPENMANO_DATACENTER=$datacenter
-    [[ -n "$insert_bashrc" ]] && echo -e "\nexport OPENMANO_DATACENTER=$datacenter"  >> ~/.bashrc
+    [[ -n "$option_insert_bashrc" ]] && echo -e "\nexport OPENMANO_DATACENTER=$datacenter"  >> ~/.bashrc
 
     printf "%-50s" "Attaching openmano tenant to the datacenter:"
     result=`${DIRmano}/openmano datacenter-attach TEST-dc`

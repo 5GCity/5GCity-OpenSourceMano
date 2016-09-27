@@ -21,11 +21,9 @@
 # contact with: nfvlabs@tid.es
 ##
 
-#ONLY TESTED in Ubuntu 16.04
+#ONLY TESTED in Ubuntu 16.04   partially tested in Ubuntu 14.10 14.04 16.04, CentOS7 and RHEL7
 #Get needed packages, source code and configure to run openmano
 #Ask for database user and password if not provided
-#        $1: database user
-#        $2: database password 
 
 function usage(){
     echo -e "usage: sudo $0 [OPTIONS]"
@@ -39,6 +37,7 @@ function usage(){
     echo -e "     --develop:  install last version for developers, and do not configure as a service"
     echo -e "     --forcedb:  reinstall mano_db DB, deleting previous database and creating a new one"
     echo -e "     --noclone:  assumes that openmano was cloned previously and that this script is run from the local repo"
+    echo -e "     --no-install-packages: use this option to skip updating and installing the requires packages. This avoid wasting time if you are sure requires packages are present e.g. because of a previous installation"
 }
 
 function install_packages(){
@@ -77,6 +76,7 @@ QUIET_MODE=""
 DEVELOP=""
 FORCEDB=""
 NOCLONE=""
+NO_PACKAGES=""
 while getopts ":u:p:hiq-:" o; do
     case "${o}" in
         u)
@@ -99,6 +99,7 @@ while getopts ":u:p:hiq-:" o; do
             [ "${OPTARG}" == "forcedb" ] && FORCEDB="y" && continue
             [ "${OPTARG}" == "noclone" ] && NOCLONE="y" && continue
             [ "${OPTARG}" == "quiet" ] && export QUIET_MODE=yes && export DEBIAN_FRONTEND=noninteractive && continue
+            [ "${OPTARG}" == "no-install-packages" ] && export NO_PACKAGES=yes && continue
             echo -e "Invalid option: '--$OPTARG'\nTry $0 --help for more information" >&2 
             exit 1
             ;; 
@@ -166,6 +167,8 @@ fi
 
 
 
+if [[ -z "$NO_PACKAGES" ]]
+then
 echo '
 #################################################################
 #####        UPDATE REPOSITORIES                            #####
@@ -178,7 +181,10 @@ echo '
   && sudo rpm -ivh epel-release-7-5.noarch.rpm && sudo yum install -y epel-release && rm -f epel-release-7-5.noarch.rpm
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && sudo yum repolist
 
+fi
 
+if [[ -z "$NO_PACKAGES" ]]
+then
 echo '
 #################################################################
 #####               INSTALL REQUIRED PACKAGES               #####
@@ -210,6 +216,7 @@ then
         firewall-cmd --permanent --zone=public --add-service=https &&
         firewall-cmd --reload
 fi
+fi  #[[ -z "$NO_PACKAGES" ]]
 
 #check and ask for database user password. Must be done after database installation
 if [[ -n $QUIET_MODE ]]
@@ -228,6 +235,8 @@ then
     done
 fi
 
+if [[ -z "$NO_PACKAGES" ]]
+then
 echo '
 #################################################################
 #####        INSTALL PYTHON PACKAGES                        #####
@@ -241,6 +250,7 @@ echo '
 #install openstack client needed for using openstack as a VIM
 [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-novaclient python-keystoneclient python-glanceclient python-neutronclient"
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-devel" && easy_install python-novaclient python-keystoneclient python-glanceclient python-neutronclient #TODO revise if gcc python-pip is needed
+fi  #[[ -z "$NO_PACKAGES" ]]
 
 if [[ -z $NOCLONE ]]; then
     echo '
