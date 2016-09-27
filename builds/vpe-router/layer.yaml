@@ -1,0 +1,9 @@
+"options":
+  "layer-basic":
+    "use_venv": !!bool "false"
+    "packages": []
+    "include_system_packages": !!bool "false"
+  "vpe-router": {}
+"includes":
+- "layer:basic"
+"is": "vpe-router"
