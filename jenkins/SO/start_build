@@ -49,7 +49,7 @@ fi
 
 INFO "starting build"
 make clean || FATAL "make clean failed"
-./BUILD_UB.sh
+./BUILD.sh
 
 RC=$?
 
