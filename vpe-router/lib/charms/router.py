@@ -54,10 +54,9 @@ def _run(cmd, env=None):
     stdout, stderr = p.communicate()
     retcode = p.poll()
     if retcode > 0:
-        raise subprocess.CalledProcessError(
-            returncode=retcode,
-            cmd=cmd,
-            output=stderr.decode("utf-8").strip())
+        raise subprocess.CalledProcessError(returncode=retcode,
+                                            cmd=cmd,
+                                            output=stderr.decode("utf-8").strip())
     return (''.join(stdout), ''.join(stderr))
 
 

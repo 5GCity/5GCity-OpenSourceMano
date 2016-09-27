@@ -1,12 +1,1 @@
-"options":
-  "basic":
-    "packages":
-    - "python-dev"
-    - "libffi-dev"
-    - "libssl-dev"
-    "use_venv": !!bool "false"
-    "include_system_packages": !!bool "false"
-  "vpe-router": {}
-"includes":
-- "layer:basic"
-"is": "vpe-router"
+includes: ['layer:basic']
