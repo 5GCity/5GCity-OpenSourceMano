@@ -65,7 +65,7 @@ INTF_TYPE='VIRTIO'
 VCPU=2
 MEMORY=4096
 STORAGE=10
-INTERFACES=1
+INTERFACES=2
 
 function usage() {
     cat <<EOF
@@ -98,7 +98,7 @@ Usage:
 
             --vendor : Vendor name for descriptor. Default OSM
 
-            --interface-type : Interface type [VIRTIO|SR-IOV|PCI-PASSTHROUGH|E1000|OM-MGMT]
+            --interface-type : Interface type [VIRTIO|SR-IOV|PCI-PASSTHROUGH|E1000]
                                Default VIRTIO
 
           VM Flavour options:
@@ -118,7 +118,7 @@ Usage:
             --cloud-init : Cloud init script. Will be ignored if
                            cloud-init-file is specified
 
-            --interfaces : Number of external interfaces. Default 1.
+            --interfaces : Number of external interfaces. Default 2.
 
         End of create descriptor specific options
 
@@ -211,8 +211,18 @@ EOF
             # There can be multiple interfaces defined
 EOF
 
+    # Add mgmt interface
+    cat >>$desc_file <<EOF
+            -   name: eth0
+                virtual-interface:
+                    type: OM-MGMT
+                    bandwidth: '0'
+                    vpci: 0000:00:0a.0
+                vnfd-connection-point-ref: eth0
+EOF
+
     # Add external interfaces
-    for i in `seq 1 ${INTERFACES}`; do
+    for i in `seq 2 ${INTERFACES}`; do
         eth=$(($i - 1))
         pci=$(get_pci $eth)
         cat >>$desc_file <<EOF
@@ -277,15 +287,38 @@ EOF
         # Networks for the VNFs
 EOF
 
-    for i in `seq 1 ${INTERFACES}`; do
+    # Add management VLD
+    cat >>$desc_file <<EOF
+            -   id: ${name}_vld${i}
+                name: management
+                short-name: management
+                type: ELAN
+                # vim-network-name: <update>
+                # provider-network:
+                #     overlay-type: VLAN
+                #     segmentation_id: <update>
+                vnfd-connection-point-ref:
+                # Specify the constituent VNFs
+                # member-vnf-index-ref - entry from constituent vnf
+                # vnfd-id-ref - VNFD id
+                # vnfd-connection-point-ref - connection point name in the VNFD
+                -   nsd:member-vnf-index-ref: 1
+                    nsd:vnfd-id-ref: ${vnfd}
+                    # NOTE: Validate the entry below
+                    nsd:vnfd-connection-point-ref: eth0
+EOF
+
+    # Add rest of VLDs
+    for i in `seq 2 ${INTERFACES}`; do
         eth=$(($i - 1))
         cat >>$desc_file <<EOF
             -   id: ${name}_vld${i}
                 name: ${name}_vld${i}
+                short-name: ${name}_vld${i}
                 type: ELAN
+                # vim-network-name: <update>
                 # provider-network:
                 #     overlay-type: VLAN
-                #     physical-network: <update>
                 #     segmentation_id: <update>
                 vnfd-connection-point-ref:
                 # Specify the constituent VNFs

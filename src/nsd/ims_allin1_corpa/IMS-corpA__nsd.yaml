@@ -13,6 +13,7 @@ nsd:nsd-catalog:
             name: data
             short-name: data
             type: ELAN
+            vim-network-name: net-corp:108
             provider-network:
                 overlay-type: VLAN
                 physical-network: net-corp
@@ -25,9 +26,9 @@ nsd:nsd-catalog:
             name: management
             short-name: management
             type: ELAN
+            vim-network-name: net-mgmtOS
             provider-network:
                 overlay-type: VLAN
-                physical-network: net-mgmtOS
             vnfd-connection-point-ref:
             -   member-vnf-index-ref: '1'
                 vnfd-connection-point-ref: eth1

@@ -23,9 +23,9 @@ nsd:nsd-catalog:
             -   id: cirros_nsd_vld1
                 name: cirros_nsd_vld1
                 type: ELAN
+                # vim-network-name: <update>
                 # provider-network:
                 #     overlay-type: VLAN
-                #     physical-network: <update>
                 #     segmentation_id: <update>
                 vnfd-connection-point-ref:
                 # Specify the constituent VNFs
