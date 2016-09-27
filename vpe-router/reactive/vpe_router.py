@@ -39,6 +39,8 @@ def validate_config():
                 out, err = router.ssh(['whoami'], routerip,
                                       user, passwd)
                 if out.strip() != user:
+                    remove_state('vpe.configured')
+                    status_set('blocked', 'vpe is not configured')
                     raise Exception('invalid credentials')
 
                 # Set the router's hostname
@@ -56,14 +58,17 @@ def validate_config():
                                                ],
                                               routerip,
                                               user, passwd)
-
+                        set_state('vpe.configured')
+                        status_set('active', 'ready!')
+                    else:
+                        remove_state('vpe.configured')
+                        status_set('blocked', 'vpe is not configured')
                 except subprocess.CalledProcessError as e:
+                    remove_state('vpe.configured')
+                    status_set('blocked', 'validation failed: %s' % e)
                     log('Command failed: %s (%s)' %
                         (' '.join(e.cmd), str(e.output)))
                     raise
-
-        set_state('vpe.configured')
-        status_set('active', 'ready!')
 
     except Exception as e:
         log(repr(e))
