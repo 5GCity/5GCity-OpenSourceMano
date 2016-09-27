@@ -98,7 +98,7 @@ DBHOST_="-h$DBHOST"
 DBPORT_="-P$DBPORT"
 
 TEMPFILE="$(mktemp -q --tmpdir "initmanodb.XXXXXX")"
-trap 'rm -f "$TEMPFILE"' EXIT SIGINT SIGTERM
+trap 'rm -f "$TEMPFILE"' EXIT
 chmod 0600 "$TEMPFILE"
 cat >"$TEMPFILE" <<EOF
 [client]
