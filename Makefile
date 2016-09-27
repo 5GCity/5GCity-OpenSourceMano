@@ -18,7 +18,7 @@
 #
 BUILD_DIR = build
 
-NSDS := gw_corpa_ns ims_allin1_corpa mwc16_gen_ns mwc16_pe_ns VyOS_ns cirros_ns cirros_2vnf_ns
+NSDS := gw_corpa_ns ims_allin1_corpa mwc16_gen_ns mwc16_pe_ns VyOS_ns cirros_ns cirros_2vnf_ns ubuntu_xenial_ns
 NSD_SRC_DIR := src/nsd
 NSD_BUILD_DIR := $(BUILD_DIR)/nsd
 
@@ -27,7 +27,7 @@ NSD_BUILD_DIRS := $(addprefix $(NSD_BUILD_DIR)/, $(NSDS))
 NSD_PKGS := $(addsuffix .tar.gz, $(NSDS))
 NSD_BUILD_PKGS := $(addprefix $(NSD_BUILD_DIR)_pkgs/, $(NSD_PKGS))
 
-VNFDS := 6wind_vnf gw_corpa_pe1_vnf gw_corpa_pe2_vnf ims_allin1_2p_vnf tidgen_mwc16_vnf VyOS_vnf cirros_vnf
+VNFDS := 6wind_vnf gw_corpa_pe1_vnf gw_corpa_pe2_vnf ims_allin1_2p_vnf tidgen_mwc16_vnf VyOS_vnf cirros_vnf ubuntu_xenial_vnf
 VNFD_SRC_DIR := src/vnfd
 VNFD_BUILD_DIR := $(BUILD_DIR)/vnfd
 

@@ -65,7 +65,6 @@ INTF_TYPE='VIRTIO'
 VCPU=2
 MEMORY=4096
 STORAGE=10
-CLOUD_INIT='#cloud-config '
 INTERFACES=1
 
 function usage() {
@@ -198,7 +197,7 @@ EOF
             # Cloud init file
             cloud-init-file: '${cif}'
 EOF
-    else
+    elif [[ -n ${CLOUD_INIT} ]]; then
         cat >>$desc_file <<EOF
             # Cloud init to use
             cloud-init: '${CLOUD_INIT}'
