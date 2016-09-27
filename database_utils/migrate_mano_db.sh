@@ -111,7 +111,7 @@ OPENMANO_VER_NUM=`printf "%d%03d%03d" ${VERSION_1} ${VERSION_2} ${VERSION_3}`
 
 #Creating temporary file
 TEMPFILE="$(mktemp -q --tmpdir "migratemanodb.XXXXXX")"
-trap 'rm -f "$TEMPFILE"' EXIT SIGINT SIGTERM
+trap 'rm -f "$TEMPFILE"' EXIT
 chmod 0600 "$TEMPFILE"
 cat >"$TEMPFILE" <<EOF
 [client]

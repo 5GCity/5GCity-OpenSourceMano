@@ -257,7 +257,7 @@ echo '
 #################################################################'
 echo -e "\nCreating temporary file form MYSQL installation and initialization"
 TEMPFILE="$(mktemp -q --tmpdir "installopenmano.XXXXXX")"
-trap 'rm -f "$TEMPFILE"' EXIT SIGINT SIGTERM
+trap 'rm -f "$TEMPFILE"' EXIT
 chmod 0600 "$TEMPFILE"
 cat >"$TEMPFILE" <<EOF
 [client]
