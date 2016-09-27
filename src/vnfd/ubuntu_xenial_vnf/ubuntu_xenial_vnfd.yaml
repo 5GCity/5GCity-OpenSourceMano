@@ -28,7 +28,7 @@ vnfd:vnfd-catalog:
                 storage-gb: 10
 
             # Image including the full path
-            image: '/mnt/powervault/virtualization/vnfs/demos/ubuntu/ubuntu-16.06.img'
+            image: '/mnt/powervault/virtualization/vnfs/demos/ubuntu/ubuntu-16.04.img'
 
             external-interface:
             # Specify the external interfaces
