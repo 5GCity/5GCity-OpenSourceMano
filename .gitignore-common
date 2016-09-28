@@ -1,0 +1,35 @@
+# Created by .ignore support plugin (hsz.mobi)
+#this is a template with common files to be igonored, after clone make a copy to .gitignore
+#cp .gitignore-common .gitignore
+
+*.pyc         
+
+#auto-ignore
+.gitignore
+
+#logs of openmano
+logs 
+
+#pycham
+.idea
+
+#eclpise
+.project     
+.pydevproject
+.settings
+
+#local stuff files that end in ".local" or folders called "local"
+*.local
+vnfs/*.local
+test/*.local
+scenarios/*.local
+instance-scenarios/*.local
+database_utils/*.local
+scripts/*.local
+local
+vnfs/local
+test/local
+scenarios/local
+instance-scenarios/local
+database_utils/local
+scripts/local
