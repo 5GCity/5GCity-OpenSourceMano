@@ -527,8 +527,10 @@ def boot_image(vim=None, image_name=None, vm_name=None):
         The image name can be UUID of name.
 
         Args:
-             image_name - image identified by UUID or text string.
-             vm_name
+            vim - vim connector
+            image_name - image identified by UUID or text string.
+            vm_name - vmname
+
 
          Returns:
              The return true if image uploaded correctly

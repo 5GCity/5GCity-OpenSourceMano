@@ -364,7 +364,7 @@ class vimconnector(vimconn.vimconnector):
         else:
             raise vimconn.vimconnException("Failed create tenant {}".format(tenant_name))
 
-    def delete_tenant(self, tenant_id, ):
+    def delete_tenant(self, tenant_id=None):
         """Delete a tenant from VIM"""
         'Returns the tenant identifier'
         raise vimconn.vimconnNotImplemented("Should have implemented this")
@@ -767,8 +767,7 @@ class vimconnector(vimconn.vimconnector):
                     media = mediaType.parseString(response.content, True)
                     link = \
                         filter(lambda link: link.get_rel() == 'upload:default',
-                               media.get_Files().get_File()[0].get_Link())[
-                            0]
+                               media.get_Files().get_File()[0].get_Link())[0]
                     headers = vca.vcloud_session.get_vcloud_headers()
                     headers['Content-Type'] = 'Content-Type text/xml'
                     response = Http.put(link.get_href(), data=open(media_file_name, 'rb'), headers=headers,
@@ -791,49 +790,47 @@ class vimconnector(vimconn.vimconnector):
                                     logger=self.logger)
                 if response.status_code == requests.codes.ok:
                     media = mediaType.parseString(response.content, True)
-                    link = \
-                        filter(lambda link: link.get_rel() == 'upload:default',
-                               media.get_Files().get_File()[0].get_Link())[
-                            0]
+                    links_list = filter(lambda link: link.get_rel() == 'upload:default',
+                                        media.get_Files().get_File()[0].get_Link())
 
-                    # The OVF file and VMDK must be in a same directory
-                    head, tail = os.path.split(media_file_name)
-                    filevmdk = head + '/' + os.path.basename(link.get_href())
+                    for link in links_list:
+                        # The OVF file and VMDK must be in a same directory
+                        head, tail = os.path.split(media_file_name)
+                        media_file_name = link.get_href()
+                        if 'ovf' in media_file_name:
+                            print "skiping {}".format(media_file_name)
+                            continue
+                        file_vmdk = head + '/' + os.path.basename(link.get_href())
+                        os.path.isfile(file_vmdk)
+                        statinfo = os.stat(file_vmdk)
 
-                    os.path.isfile(filevmdk)
-                    statinfo = os.stat(filevmdk)
+                        # in case first element is pointer to OVF.
+                        hrefvmdk = link.get_href().replace("descriptor.ovf", media_file_name)
+                        print("Uploading file {}".format(hrefvmdk))
 
-                    # TODO debug output remove it
-                    # print media.get_Files().get_File()[0].get_Link()[0].get_href()
-                    # print media.get_Files().get_File()[1].get_Link()[0].get_href()
-                    # print link.get_href()
-
-                    # in case first element is pointer to OVF.
-                    hrefvmdk = link.get_href().replace("descriptor.ovf", "Cirros-disk1.vmdk")
-
-                    f = open(filevmdk, 'rb')
-                    bytes_transferred = 0
-                    while bytes_transferred < statinfo.st_size:
-                        my_bytes = f.read(chunk_bytes)
-                        if len(my_bytes) <= chunk_bytes:
-                            headers = vca.vcloud_session.get_vcloud_headers()
-                            headers['Content-Range'] = 'bytes %s-%s/%s' % (
-                                bytes_transferred, len(my_bytes) - 1, statinfo.st_size)
-                            headers['Content-Length'] = str(len(my_bytes))
-                            response = Http.put(hrefvmdk,
-                                                headers=headers,
-                                                data=my_bytes,
-                                                verify=vca.verify,
-                                                logger=None)
-                            if response.status_code == requests.codes.ok:
-                                bytes_transferred += len(my_bytes)
-                                self.logger.debug('transferred %s of %s bytes' % (str(bytes_transferred),
-                                                                                  str(statinfo.st_size)))
-                            else:
-                                self.logger.debug('file upload failed with error: [%s] %s' % (response.status_code,
-                                                                                              response.content))
-                                return False
-                    f.close()
+                        f = open(file_vmdk, 'rb')
+                        bytes_transferred = 0
+                        while bytes_transferred < statinfo.st_size:
+                            my_bytes = f.read(chunk_bytes)
+                            if len(my_bytes) <= chunk_bytes:
+                                headers = vca.vcloud_session.get_vcloud_headers()
+                                headers['Content-Range'] = 'bytes %s-%s/%s' % (
+                                    bytes_transferred, len(my_bytes) - 1, statinfo.st_size)
+                                headers['Content-Length'] = str(len(my_bytes))
+                                response = Http.put(hrefvmdk,
+                                                    headers=headers,
+                                                    data=my_bytes,
+                                                    verify=vca.verify,
+                                                    logger=None)
+                                if response.status_code == requests.codes.ok:
+                                    bytes_transferred += len(my_bytes)
+                                    self.logger.debug('transferred %s of %s bytes' % (str(bytes_transferred),
+                                                                                      str(statinfo.st_size)))
+                                else:
+                                    self.logger.debug('file upload failed with error: [%s] %s' % (response.status_code,
+                                                                                                  response.content))
+                                    return False
+                        f.close()
                     return True
                 else:
                     self.logger.debug("Failed retrieve vApp template for catalog name {} for OVF {}".
