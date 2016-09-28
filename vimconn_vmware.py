@@ -25,9 +25,10 @@
 vimconn_vmware implementation an Abstract class in order to interact with VMware  vCloud Director.
 mbayramov@vmware.com
 '''
+
+import vimconn
 import os
 import traceback
-
 import itertools
 import requests
 
@@ -53,21 +54,16 @@ import time
 import uuid
 import httplib
 
+# global variable for vcd connector type
+STANDALONE = 'standalone'
+
+# global variable for number of retry
 DELETE_INSTANCE_RETRY = 3
+
+VCAVERSION = '5.9'
 
 __author__ = "Mustafa Bayramov"
 __date__ = "$26-Aug-2016 11:09:29$"
-
-# Error variables
-HTTP_Bad_Request = 400
-HTTP_Unauthorized = 401
-HTTP_Not_Found = 404
-HTTP_Method_Not_Allowed = 405
-HTTP_Request_Timeout = 408
-HTTP_Conflict = 409
-HTTP_Not_Implemented = 501
-HTTP_Service_Unavailable = 503
-HTTP_Internal_Server_Error = 500
 
 #     -1: "Could not be created",
 #     0: "Unresolved",
@@ -101,68 +97,15 @@ netStatus2manoFormat = {'ACTIVE': 'ACTIVE', 'PAUSED': 'PAUSED', 'INACTIVE': 'INA
                         'ERROR': 'ERROR', 'DELETED': 'DELETED'
                         }
 
-
-class vimconnException(Exception):
-    '''Common and base class Exception for all vimconnector exceptions'''
-
-    def __init__(self, message, http_code=HTTP_Bad_Request):
-        Exception.__init__(self, message)
-        self.http_code = http_code
-
-
-class vimconnConnectionException(vimconnException):
-    '''Connectivity error with the VIM'''
-
-    def __init__(self, message, http_code=HTTP_Service_Unavailable):
-        vimconnException.__init__(self, message, http_code)
-
-
-class vimconnUnexpectedResponse(vimconnException):
-    '''Get an wrong response from VIM'''
-
-    def __init__(self, message, http_code=HTTP_Service_Unavailable):
-        vimconnException.__init__(self, message, http_code)
-
-
-class vimconnAuthException(vimconnException):
-    '''Invalid credentials or authorization to perform this action over the VIM'''
-
-    def __init__(self, message, http_code=HTTP_Unauthorized):
-        vimconnException.__init__(self, message, http_code)
-
-
-class vimconnNotFoundException(vimconnException):
-    '''The item is not found at VIM'''
-
-    def __init__(self, message, http_code=HTTP_Not_Found):
-        vimconnException.__init__(self, message, http_code)
-
-
-class vimconnConflictException(vimconnException):
-    '''There is a conflict, e.g. more item found than one'''
-
-    def __init__(self, message, http_code=HTTP_Conflict):
-        vimconnException.__init__(self, message, http_code)
-
-
-class vimconnNotImplemented(vimconnException):
-    '''The method is not implemented by the connected'''
-
-    def __init__(self, message, http_code=HTTP_Not_Implemented):
-        vimconnException.__init__(self, message, http_code)
-
-
+# dict used to store flavor in memory
 flavorlist = {}
 
 
-class vimconnector():
-    '''Vmware VIM Connector base class
-    '''
-
-    def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None,
-                 log_level="ERROR", config={}):
-
-        print config
+class vimconnector(vimconn.vimconnector):
+    def __init__(self, uuid=None, name=None, tenant_id=None, tenant_name=None,
+                 url=None, url_admin=None, user=None, passwd=None, log_level="ERROR", config={}):
+        vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url,
+                                      url_admin, user, passwd, log_level, config)
         self.id = uuid
         self.name = name
         self.org_name = name
@@ -177,12 +120,13 @@ class vimconnector():
         self.admin_user = None
 
         self.logger = logging.getLogger('openmano.vim.vmware')
+        self.logger.setLevel(10)
 
         try:
             self.admin_user = config['admin_username']
             self.admin_password = config['admin_password']
         except KeyError:
-            raise vimconnException(message="Error admin username or admin password is empty.")
+            raise vimconn.vimconnException(message="Error admin username or admin password is empty.")
 
         self.logger = logging.getLogger('mano.vim.vmware')
         self.org_uuid = None
@@ -194,8 +138,6 @@ class vimconnector():
         if not self.url_admin:  # try to use normal url
             self.url_admin = self.url
 
-        self.vcaversion = '5.6'
-
         logging.debug("Calling constructor with following paramters")
         logging.debug("UUID: {} name: {} tenant_id: {} tenant name {}".format(self.id, self.name,
                                                                               self.tenant_id, self.tenant_name))
@@ -203,8 +145,8 @@ class vimconnector():
         logging.debug("vcd admin username {} vcd admin passowrd {}".format(self.admin_user, self.admin_password))
 
         # initialize organization
-        if self.user is not None and self.passwd is not None:
-            self.init_org_uuid()
+        if self.user is not None and self.passwd is not None and self.url:
+            self.init_organization()
 
     def __getitem__(self, index):
         if index == 'tenant_id':
@@ -267,18 +209,18 @@ class vimconnector():
         """
 
         self.logger.debug("Logging in to a vca {} as admin.".format(self.name))
+        service_type = STANDALONE
 
-        service_type = 'standalone'
-        version = '5.6'
         vca_admin = VCA(host=self.url,
                         username=self.admin_user,
-                        service_type=service_type,
-                        version=version,
+                        service_type=STANDALONE,
+                        version=VCAVERSION,
                         verify=False,
                         log=False)
         result = vca_admin.login(password=self.admin_password, org='System')
         if not result:
-            raise vimconnConnectionException("Can't connect to a vCloud director as: {}".format(self.admin_user))
+            raise vimconn.vimconnConnectionException(
+                "Can't connect to a vCloud director as: {}".format(self.admin_user))
         result = vca_admin.login(token=vca_admin.token, org='System', org_url=vca_admin.vcloud_session.org_url)
         if result is True:
             self.logger.info(
@@ -299,21 +241,26 @@ class vimconnector():
         self.logger.debug("Logging in to a vca {} as {} to datacenter {}.".format(self.name, self.user, self.name))
         vca = VCA(host=self.url,
                   username=self.user,
-                  service_type=service_type,
-                  version=version,
+                  service_type=STANDALONE,
+                  version=VCAVERSION,
                   verify=False,
                   log=False)
         result = vca.login(password=self.passwd, org=self.name)
         if not result:
-            raise vimconnConnectionException("Can't connect to a vCloud director as: {}".format(self.user))
+            raise vimconn.vimconnConnectionException("Can't connect to a vCloud director as: {}".format(self.user))
         result = vca.login(token=vca.token, org=self.name, org_url=vca.vcloud_session.org_url)
         if result is True:
             self.logger.info("Successfully logged to a vcloud direct org: {} as user: {}".format(self.name, self.user))
 
         return vca
 
-    def init_org_uuid(self):
-        """ Method available organization for a logged in tenant
+    def init_organization(self):
+        """ Method initialize organization UUID and VDC parameters.
+
+            At bare minimum client must provide organization name that present in vCloud director and VDC.
+
+            The VDC - UUID ( tenant_id) will be initialized at the run time if client didn't call constructor.
+            The Org - UUID will be initialized at the run time if data center present in vCloud director.
 
             Returns:
                 The return vca object that letter can be used to connect to vcloud direct as admin
@@ -322,8 +269,46 @@ class vimconnector():
             if self.org_uuid is None:
                 org_dict = self.get_org_list()
                 for org in org_dict:
+                    # we set org UUID at the init phase but we can do it only when we have valid credential.
                     if org_dict[org] == self.org_name:
                         self.org_uuid = org
+                        self.logger.debug("Setting organization UUID {}".format(self.org_uuid))
+                        break
+
+                else:
+                    raise vimconn.vimconnException("Vcloud director organization {} not found".format(self.org_name))
+
+                # if well good we require for org details
+                org_details_dict = self.get_org(org_uuid=self.org_uuid)
+
+                # we have two case if we want to initialize VDC ID or VDC name at run time
+                # tenant_name provided but no tenant id
+                print ("Setting vdc from name {} {} {} {}".format(self.tenant_id, self.tenant_name,
+                                                                  org_details_dict.has_key('vdcs'), org_details_dict))
+                if self.tenant_id is None and self.tenant_name is not None and org_details_dict.has_key('vdcs'):
+                    print ("Setting vdc from name")
+                    vdcs_dict = org_details_dict['vdcs']
+                    print ("Searching vdc UUUID")
+                    for vdc in vdcs_dict:
+                        if vdcs_dict[vdc] == self.tenant_name:
+                            self.tenant_id = vdc
+                            self.logger.debug("Setting vdc uuid {} for organization UUID {}".format(self.tenant_id,
+                                                                                                    self.name))
+                            break
+                    else:
+                        raise vimconn.vimconnException("Tenant name indicated but not present in vcloud director.")
+                    # case two we have tenant_id but we don't have tenant name so we find and set it.
+                    if self.tenant_id is not None and self.tenant_name is None and org_details_dict.has_key('vdcs'):
+                        print ("setting vdc from id")
+                        vdcs_dict = org_details_dict['vdcs']
+                        for vdc in vdcs_dict:
+                            if vdc == self.tenant_id:
+                                self.tenant_name = vdcs_dict[vdc]
+                                self.logger.debug("Setting vdc uuid {} for organization UUID {}".format(self.tenant_id,
+                                                                                                        self.name))
+                                break
+                        else:
+                            raise vimconn.vimconnException("Tenant id indicated but not present in vcloud director")
             self.logger.debug("Setting organization uuid {}".format(self.org_uuid))
         except:
             self.logger.debug("Failed initialize organization UUID for org {}".format(self.org_name))
@@ -331,30 +316,24 @@ class vimconnector():
             self.org_uuid = None
 
     def new_tenant(self, tenant_name=None, tenant_description=None):
-        """
-        Adds a new tenant to VIM with this name and description
+        """Adds a new tenant to VIM with this name and description
 
-        :param tenant_name:
-        :param tenant_description:
-        :return: returns the tenant identifier
-        """
+            :param tenant_name:
+            :param tenant_description:
+            :return: returns the tenant identifier
+            """
         vdc_task = self.create_vdc(vdc_name=tenant_name)
         if vdc_task is not None:
             vdc_uuid, value = vdc_task.popitem()
             self.logger.info("Crated new vdc {} and uuid: {}".format(tenant_name, vdc_uuid))
             return vdc_uuid
         else:
-            raise vimconnException("Failed create tenant {}".format(tenant_name))
+            raise vimconn.vimconnException("Failed create tenant {}".format(tenant_name))
 
     def delete_tenant(self, tenant_id, ):
         """Delete a tenant from VIM"""
         'Returns the tenant identifier'
-
-        print(" ")
-        print(" ######## delete_tenant {} ".format(tenant_id))
-        print(" ")
-
-        raise vimconnNotImplemented("Should have implemented this")
+        raise vimconn.vimconnNotImplemented("Should have implemented this")
 
     def get_tenant_list(self, filter_dict={}):
         '''Obtain tenants of VIM
@@ -405,7 +384,7 @@ class vimconnector():
         if network_uuid is not None:
             return network_uuid
         else:
-            raise vimconnUnexpectedResponse("Failed create a new network {}".format(net_name))
+            raise vimconn.vimconnUnexpectedResponse("Failed create a new network {}".format(net_name))
 
     def get_vcd_network_list(self):
         """ Method available organization for a logged in tenant
@@ -567,22 +546,22 @@ class vimconnector():
             raise vimconn.vimconnNotFoundException("Network {} not found".format(net_id))
 
     def refresh_nets_status(self, net_list):
-        '''Get the status of the networks
+        """Get the status of the networks
            Params: the list of network identifiers
            Returns a dictionary with:
                 net_id:         #VIM id of this network
                     status:     #Mandatory. Text with one of:
                                 #  DELETED (not found at vim)
-                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...) 
+                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
                                 #  OTHER (Vim reported other status not understood)
                                 #  ERROR (VIM indicates an ERROR status)
-                                #  ACTIVE, INACTIVE, DOWN (admin down), 
+                                #  ACTIVE, INACTIVE, DOWN (admin down),
                                 #  BUILD (on building process)
                                 #
-                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR 
+                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
                     vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
 
-        '''
+        """
 
         # for net in net_list:
         #     net['status']
@@ -616,7 +595,7 @@ class vimconnector():
 
         return dict_entry
 
-    def get_flavor(flavor_id):
+    def get_flavor(self, flavor_id):
         """Obtain flavor details from the  VIM
             Returns the flavor dict details {'id':<>, 'name':<>, other vim specific } #TODO to concrete
         """
@@ -675,12 +654,7 @@ class vimconnector():
     def delete_image(self, image_id):
         '''Deletes a tenant image from VIM'''
         '''Returns the HTTP response code and a message indicating details of the success or fail'''
-
-        print " ################################################################### "
-        print " delete_image contains  {}".format(image_id)
-        print " ################################################################### "
-
-        raise vimconnNotImplemented("Should have implemented this")
+        raise vimconn.vimconnNotImplemented("Should have implemented this")
 
     def catalog_exists(self, catalog_name, catalogs):
         for catalog in catalogs:
@@ -1014,13 +988,18 @@ class vimconnector():
         # we check for presence of VDC, Catalog entry and Flavor.
         vdc = vca.get_vdc(self.tenant_name)
         if vdc is None:
-            return -1, " Failed create vApp {}: (Failed reprieve VDC information)".format(name)
+            raise vimconn.vimconnUnexpectedResponse(
+                "new_vminstance(): Failed create vApp {}: (Failed reprieve VDC information)".format(name))
         catalogs = vca.get_catalogs()
         if catalogs is None:
-            return -2, " Failed create vApp {}: (Failed reprieve Catalog information)".format(name)
+            raise vimconn.vimconnUnexpectedResponse(
+                "new_vminstance(): Failed create vApp {}: Failed create vApp {}: (Failed reprieve Catalog information)".format(
+                    name))
+
         flavor = flavorlist[flavor_id]
         if catalogs is None:
-            return -3, " Failed create vApp {}: (Failed reprieve Flavor information)".format(name)
+            raise vimconn.vimconnUnexpectedResponse(
+                "new_vminstance(): Failed create vApp {}: (Failed reprieve Flavor information)".format(name))
 
         # image upload creates template name as catalog name space Template.
         templateName = self.get_catalogbyid(image_id, catalogs) + ' Template'
@@ -1031,7 +1010,7 @@ class vimconnector():
         # client must provide at least one entry in net_list if not we report error
         primary_net = net_list[0]
         if primary_net is None:
-            return -4, "Failed create vApp {}: (Network list is empty)".format(name)
+            raise vimconn.vimconnUnexpectedResponse("new_vminstance(): Failed network list is empty.".format(name))
 
         primary_net_id = primary_net['net_id']
         primary_net_name = self.get_network_name_by_id(primary_net_id)
@@ -1048,14 +1027,15 @@ class vimconnector():
                                    vm_memory=flavor['ram'])
 
         if vapptask is None or vapptask is False:
-            return -1, "create_vapp(): failed deploy vApp {}".format(name)
+            raise vimconn.vimconnUnexpectedResponse("new_vminstance(): failed deploy vApp {}".format(name))
         if type(vapptask) is VappTask:
             vca.block_until_completed(vapptask)
 
         # we should have now vapp in undeployed state.
         vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), name)
         if vapp is None:
-            return -1, "get_vapp(): failed retrieve vApp {}".format(name)
+            raise vimconn.vimconnUnexpectedResponse(
+                "new_vminstance(): Failed failed retrieve vApp {} after we deployed".format(name))
 
         # add first NIC
         try:
@@ -1083,9 +1063,9 @@ class vimconnector():
                             vca.block_until_completed(task)
             nicIndex += 1
         except KeyError:
-            # TODO
             # it might be a case if specific mandatory entry in dict is empty
             self.logger.debug("Key error {}".format(KeyError.message))
+            raise vimconn.vimconnUnexpectedResponse("new_vminstance(): Failed create new vm instance {}".format(name))
 
         # deploy and power on vm
         task = vapp.poweron()
@@ -1099,8 +1079,8 @@ class vimconnector():
         vapp_uuid = self.get_vappid(vca.get_vdc(self.tenant_name), name)
         if vapp_uuid is not None:
             return vapp_uuid
-
-        return -1, " Failed create vApp {}".format(name)
+        else:
+            raise vimconn.vimconnUnexpectedResponse("new_vminstance(): Failed create new vm instance {}".format(name))
 
     ##
     ##
@@ -1186,7 +1166,8 @@ class vimconnector():
         if vdc is None:
             self.logger.debug("delete_vminstance(): Failed to get a reference of VDC for a tenant {}".format(
                 self.tenant_name))
-            raise vimconnException("delete_vminstance(): Failed to get a reference of VDC for a tenant {}".format(self.tenant_name))
+            raise vimconn.vimconnException(
+                "delete_vminstance(): Failed to get a reference of VDC for a tenant {}".format(self.tenant_name))
 
         try:
             vapp_name = self.get_namebyvappid(vca, vdc, vm__vim_uuid)
@@ -1230,16 +1211,17 @@ class vimconnector():
                     if type(task) is GenericTask:
                         vca.block_until_completed(delete_task)
                     if not delete_task:
-                        self.loggger.debug("delete_vminstance(): Failed delete uuid {} ".format(vm__vim_uuid))
+                        self.logger.debug("delete_vminstance(): Failed delete uuid {} ".format(vm__vim_uuid))
                     retry += 1
 
-            if vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name) is None:
-                return vm__vim_uuid
         except:
             self.logger.debug(traceback.format_exc())
-            raise vimconnException("delete_vminstance(): Failed to get a reference of VDC for a tenant {}".format(self.tenant_name))
+            raise vimconn.vimconnException("delete_vminstance(): Failed delete vm instance {}".format(vm__vim_uuid))
 
-        return -1
+        if vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name) is None:
+            return vm__vim_uuid
+        else:
+            raise vimconn.vimconnException("delete_vminstance(): Failed delete vm instance {}".format(vm__vim_uuid))
 
     def refresh_vms_status(self, vm_list):
         """Get the status of the virtual machines and their interfaces/ports
@@ -1272,7 +1254,7 @@ class vimconnector():
 
         vdc = vca.get_vdc(self.tenant_name)
         if vdc is None:
-            raise vimconnException("Failed to get a reference of VDC for a tenant {}".format(self.tenant_name))
+            raise vimconn.vimconnException("Failed to get a reference of VDC for a tenant {}".format(self.tenant_name))
 
         vms_dict = {}
         for vmuuid in vm_list:
@@ -1315,7 +1297,7 @@ class vimconnector():
 
         self.logger.debug("Received action for vm {} and action dict {}".format(vm__vim_uuid, action_dict))
         if vm__vim_uuid is None or action_dict is None:
-            raise vimconnException("Invalid request. VM id or action is None.")
+            raise vimconn.vimconnException("Invalid request. VM id or action is None.")
 
         vca = self.connect()
         if not vca:
@@ -1328,7 +1310,7 @@ class vimconnector():
         vapp_name = self.get_namebyvappid(vca, vdc, vm__vim_uuid)
         if vapp_name is None:
             self.logger.debug("action_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
-            raise vimconnException("Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
+            raise vimconn.vimconnException("Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
         else:
             self.logger.info("Action_vminstance vApp {} and UUID {}".format(vapp_name, vm__vim_uuid))
 
@@ -1378,7 +1360,7 @@ class vimconnector():
                 port:     the http, ssh, ... port
                 suffix:   extra text, e.g. the http path and query string
         """
-        raise vimconnNotImplemented("Should have implemented this")
+        raise vimconn.vimconnNotImplemented("Should have implemented this")
 
     # NOT USED METHODS in current version
 
@@ -1386,46 +1368,46 @@ class vimconnector():
         '''Transform host dictionary from VIM format to GUI format,
         and append to the server_dict
         '''
-        raise vimconnNotImplemented("Should have implemented this")
+        raise vimconn.vimconnNotImplemented("Should have implemented this")
 
     def get_hosts_info(self):
         '''Get the information of deployed hosts
         Returns the hosts content'''
-        raise vimconnNotImplemented("Should have implemented this")
+        raise vimconn.vimconnNotImplemented("Should have implemented this")
 
     def get_hosts(self, vim_tenant):
         '''Get the hosts and deployed instances
         Returns the hosts content'''
-        raise vimconnNotImplemented("Should have implemented this")
+        raise vimconn.vimconnNotImplemented("Should have implemented this")
 
     def get_processor_rankings(self):
         '''Get the processor rankings in the VIM database'''
-        raise vimconnNotImplemented("Should have implemented this")
+        raise vimconn.vimconnNotImplemented("Should have implemented this")
 
     def new_host(self, host_data):
         '''Adds a new host to VIM'''
         '''Returns status code of the VIM response'''
-        raise vimconnNotImplemented("Should have implemented this")
+        raise vimconn.vimconnNotImplemented("Should have implemented this")
 
     def new_external_port(self, port_data):
         '''Adds a external port to VIM'''
         '''Returns the port identifier'''
-        raise vimconnNotImplemented("Should have implemented this")
+        raise vimconn.vimconnNotImplemented("Should have implemented this")
 
     def new_external_network(self, net_name, net_type):
         '''Adds a external network to VIM (shared)'''
         '''Returns the network identifier'''
-        raise vimconnNotImplemented("Should have implemented this")
+        raise vimconn.vimconnNotImplemented("Should have implemented this")
 
     def connect_port_network(self, port_id, network_id, admin=False):
         '''Connects a external port to a network'''
         '''Returns status code of the VIM response'''
-        raise vimconnNotImplemented("Should have implemented this")
+        raise vimconn.vimconnNotImplemented("Should have implemented this")
 
     def new_vminstancefromJSON(self, vm_data):
         '''Adds a VM instance to VIM'''
         '''Returns the instance identifier'''
-        raise vimconnNotImplemented("Should have implemented this")
+        raise vimconn.vimconnNotImplemented("Should have implemented this")
 
     def get_network_name_by_id(self, network_name=None):
         """Method gets vcloud director network named based on supplied uuid.
