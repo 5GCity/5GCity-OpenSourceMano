@@ -183,6 +183,7 @@ DATABASE_TARGET_VER_NUM=0
 [ $OPENMANO_VER_NUM -ge 4046 ] && DATABASE_TARGET_VER_NUM=12  #0.4.46=>  12
 [ $OPENMANO_VER_NUM -ge 4047 ] && DATABASE_TARGET_VER_NUM=13  #0.4.47=>  13
 [ $OPENMANO_VER_NUM -ge 4057 ] && DATABASE_TARGET_VER_NUM=14  #0.4.57=>  14
+[ $OPENMANO_VER_NUM -ge 4059 ] && DATABASE_TARGET_VER_NUM=15  #0.4.59=>  15
 #TODO ... put next versions here
 
 
@@ -579,7 +580,7 @@ function downgrade_from_11(){
 function upgrade_to_12(){
     echo "    upgrade database from version 0.11 to version 0.12"
     echo "      create ip_profiles table, with foreign keys to all nets tables, and add ip_address column to 'interfaces' and 'sce_interfaces'"
-    echo "CREATE TABLE ip_profiles (
+    echo "CREATE TABLE IF NOT EXISTS ip_profiles (
 	id INT(11) NOT NULL AUTO_INCREMENT,
 	net_id VARCHAR(36) NULL DEFAULT NULL,
 	sce_net_id VARCHAR(36) NULL DEFAULT NULL,
@@ -639,6 +640,29 @@ function downgrade_from_14(){
     echo "ALTER TABLE instance_nets ADD UNIQUE INDEX vim_net_id_instance_scenario_id (vim_net_id, instance_scenario_id);"  | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "ALTER TABLE instance_nets CHANGE COLUMN created external ENUM('true','false') NOT NULL DEFAULT 'false' COMMENT 'If external, means that it already exists at VIM' AFTER multipoint;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "DELETE FROM schema_version WHERE version_int='14';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+
+function upgrade_to_15(){
+    echo "    upgrade database from version 0.14 to version 0.15"
+    echo "      add columns 'universal_name' and 'checksum' at table 'images', add unique index universal_name_checksum, and change location to allow NULL; change column 'image_path' in table 'vms' to allow NULL"
+    echo "ALTER TABLE images ADD COLUMN checksum VARCHAR(32) NULL DEFAULT NULL AFTER name;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE images ALTER location DROP DEFAULT;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE images ADD COLUMN universal_name VARCHAR(255) NULL AFTER name, CHANGE COLUMN location location VARCHAR(200) NULL AFTER checksum, ADD UNIQUE INDEX universal_name_checksum (universal_name, checksum);" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE vms ALTER image_path DROP DEFAULT;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE vms CHANGE COLUMN image_path image_path VARCHAR(100) NULL COMMENT 'Path where the image of the VM is located' AFTER image_id;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (15, '0.15', '0.4.59', 'add columns universal_name and checksum at table images, add unique index universal_name_checksum, and change location to allow NULL; change column image_path in table vms to allow NULL', '2016-09-27');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+function downgrade_from_15(){
+    echo "    downgrade database from version 0.15 to version 0.14"
+    echo "      remove columns 'universal_name' and 'checksum' from table 'images', remove index universal_name_checksum, change location NOT NULL; change column 'image_path' in table 'vms' to NOT NULL"
+    echo "ALTER TABLE images DROP INDEX universal_name_checksum;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE images ALTER location DROP DEFAULT;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE images CHANGE COLUMN location location VARCHAR(200) NOT NULL AFTER checksum;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE images DROP COLUMN universal_name;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE images DROP COLUMN checksum;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE vms ALTER image_path DROP DEFAULT;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE vms CHANGE COLUMN image_path image_path VARCHAR(100) NOT NULL COMMENT 'Path where the image of the VM is located' AFTER image_id;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "DELETE FROM schema_version WHERE version_int='15';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
 
 function upgrade_to_X(){

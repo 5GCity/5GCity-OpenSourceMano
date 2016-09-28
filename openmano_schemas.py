@@ -54,6 +54,7 @@ object_schema={"type":"object"}
 schema_version_2={"type":"integer","minimum":2,"maximum":2}
 #schema_version_string={"type":"string","enum": ["0.1", "2", "0.2", "3", "0.3"]}
 log_level_schema={"type":"string", "enum":["DEBUG", "INFO", "WARNING","ERROR","CRITICAL"]}
+checksum_schema={"type":"string", "pattern":"^[0-9a-fA-F]{32}$"}
 
 metadata_schema={
     "type":"object",
@@ -461,6 +462,8 @@ devices_schema={
         "properties":{
             "type":{"type":"string", "enum":["disk","cdrom","xml"] },
             "image": path_schema,
+            "image name": name_schema,
+            "image checksum": checksum_schema,
             "image metadata": metadata_schema, 
             "vpci":pci_schema,
             "xml":xml_text_schema,
@@ -493,6 +496,8 @@ vnfc_schema = {
         "name": name_schema,
         "description": description_schema,
         "VNFC image": {"oneOf": [path_schema, http_schema]},
+        "image name": name_schema,
+        "image checksum": checksum_schema,
         "image metadata": metadata_schema, 
         #"cloud-config": cloud_config_schema, #common for all vnfs in the scenario
         "processor": {
@@ -522,7 +527,11 @@ vnfc_schema = {
         "devices": devices_schema
         
     },
-    "required": ["name", "VNFC image"],
+    "required": ["name"],
+    "oneOf": [
+        {"required": ["VNFC image"]},
+        {"required": ["image name"]}
+    ],
     "additionalProperties": False
 }
 

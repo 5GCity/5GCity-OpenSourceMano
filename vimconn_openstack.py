@@ -560,8 +560,7 @@ class vimconnector(vimconn.vimconnector):
             self._format_exception(e)
 
     def get_image_id_from_path(self, path):
-        '''Get the image id from image path in the VIM database. Returns the image_id 
-        '''
+        '''Get the image id from image path in the VIM database. Returns the image_id''' 
         try:
             self._reload_connection()
             images = self.nova.images.list()
@@ -572,6 +571,35 @@ class vimconnector(vimconn.vimconnector):
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
             self._format_exception(e)
         
+    def get_image_list(self, filter_dict={}):
+        '''Obtain tenant images from VIM
+        Filter_dict can be:
+            id: image id
+            name: image name
+            checksum: image checksum
+        Returns the image list of dictionaries:
+            [{<the fields at Filter_dict plus some VIM specific>}, ...]
+            List can be empty
+        '''
+        self.logger.debug("Getting image list from VIM filter: '%s'", str(filter_dict))
+        try:
+            self._reload_connection()
+            filter_dict_os=filter_dict.copy()
+            #First we filter by the available filter fields: name, id. The others are removed.
+            filter_dict_os.pop('checksum',None)
+            image_list=self.nova.images.findall(**filter_dict_os)
+            if len(image_list)==0:
+                return []
+            #Then we filter by the rest of filter fields: checksum
+            filtered_list = []
+            for image in image_list:
+                image_dict=glance.images.get(image.id)
+                if image_dict['checksum']==filter_dict.get('checksum'):
+                    filtered_list.append(image)
+            return filtered_list
+        except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
+            self._format_exception(e)
+
     def new_vminstance(self,name,description,start,image_id,flavor_id,net_list,cloud_config=None):
         '''Adds a VM instance to VIM
         Params:

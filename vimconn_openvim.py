@@ -688,7 +688,7 @@ class vimconnector(vimconn.vimconnector):
 
     
     def get_image_id_from_path(self, path):
-        '''Get the image id from image path in the VIM database'''
+        '''Get the image id from image path in the VIM database. Returns the image_id'''
         try:
             self._get_my_tenant()
             url=self.url + '/' + self.tenant + '/images?path='+quote(path)
@@ -707,6 +707,36 @@ class vimconnector(vimconn.vimconnector):
             elif len(response['images'])>1:
                 raise vimconn.vimconnConflictException("More than one image found at VIM with path '%s'", path)
             return response['images'][0]['id']
+        except (requests.exceptions.RequestException, js_e.ValidationError) as e:
+            self._format_request_exception(e)
+
+    def get_image_list(self, filter_dict={}):
+        '''Obtain tenant images from VIM
+        Filter_dict can be:
+            name: image name
+            id: image uuid
+            checksum: image checksum
+            location: image path
+        Returns the image list of dictionaries:
+            [{<the fields at Filter_dict plus some VIM specific>}, ...]
+            List can be empty
+        '''
+        try:
+            self._get_my_tenant()
+            filterquery=[]
+            filterquery_text=''
+            for k,v in filter_dict.iteritems():
+                filterquery.append(str(k)+'='+str(v))
+            if len(filterquery)>0:
+                filterquery_text='?'+ '&'.join(filterquery)
+            url = self.url+'/'+self.tenant+'/images'+filterquery_text
+            self.logger.info("Getting image list GET %s", url)
+            vim_response = requests.get(url, headers = self.headers_req)
+            self._check_http_request_response(vim_response)
+            self.logger.debug(vim_response.text)
+            #print json.dumps(vim_response.json(), indent=4)
+            response = vim_response.json()
+            return response['images']
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
 

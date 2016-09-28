@@ -257,13 +257,17 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
     if only_create_at_vim:
         image_mano_id = image_dict['uuid']
     else:
-        images = mydb.get_rows(FROM="images", WHERE={'location':image_dict['location'], 'metadata':image_dict['metadata']})
+        if image_dict['location'] is not None:
+            images = mydb.get_rows(FROM="images", WHERE={'location':image_dict['location'], 'metadata':image_dict['metadata']})
+        else:
+            images = mydb.get_rows(FROM="images", WHERE={'universal_name':image_dict['universal_name'], 'checksum':image_dict['checksum']})
         if len(images)>=1:
             image_mano_id = images[0]['uuid']
         else:
             #create image
             temp_image_dict={'name':image_dict['name'],         'description':image_dict.get('description',None),
-                            'location':image_dict['location'],  'metadata':image_dict.get('metadata',None)
+                            'location':image_dict['location'],  'metadata':image_dict.get('metadata',None),
+                            'universal_name':image_dict['universal_name'] , 'checksum':image_dict['checksum']
                             }
             image_mano_id = mydb.new_row('images', temp_image_dict, add_uuid=True)
             rollback_list.append({"where":"mano", "what":"image","uuid":image_mano_id})
@@ -274,7 +278,20 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
         image_db = mydb.get_rows(FROM="datacenters_images", WHERE={'datacenter_id':vim_id, 'image_id':image_mano_id})
         #look at VIM if this image exist
         try:
-            image_vim_id = vim.get_image_id_from_path(image_dict['location'])
+            if image_dict['location'] is not None:
+                image_vim_id = vim.get_image_id_from_path(image_dict['location'])
+            else:
+                filter_dict={}
+                filter_dict['name']=image_dict['universal_name']
+                filter_dict['checksum']=image_dict['checksum']
+                vim_images = vim.get_image_list(filter_dict)
+                if len(vim_images) > 1:
+                    raise NfvoException("More than one candidate VIM image found for filter: " + str(filter_dict), HTTP_Conflict)
+                elif len(vim_nets) == 0:
+                    raise NfvoException("Image not found at VIM with filter: '%s'", str(filter_dict))
+                else:
+                    image_vim_id = vim_images[0].id
+
         except vimconn.vimconnNotFoundException as e:
             #Create the image in VIM
             try: 
@@ -289,10 +306,10 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
                 logger.warn("Error creating image at VIM: %s", str(e))
                 continue
         except vimconn.vimconnException as e:
-            logger.warn("Error contacting VIM to know if the image exist at VIM: %s", str(e))
+            logger.warn("Error contacting VIM to know if the image exists at VIM: %s", str(e))
             image_vim_id = str(e)
             continue    
-        #if reach here the image has been create or exist
+        #if we reach here, the image has been created or existed
         if len(image_db)==0:
             #add new vim_id at datacenters_images
             mydb.new_row('datacenters_images', {'datacenter_id':vim_id, 'image_id':image_mano_id, 'vim_id': image_vim_id, 'created':image_created})
@@ -326,9 +343,14 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
             if 'extended' in flavor_dict and flavor_dict['extended']!=None:
                 dev_nb=0
                 for device in flavor_dict['extended'].get('devices',[]):
-                    if "image" not in device:
+                    if "image" not in device or "image name" not in device:
                         continue
-                    image_dict={'location':device['image'], 'name':flavor_dict['name']+str(dev_nb)+"-img", 'description':flavor_dict.get('description')}
+                    image_dict={}
+                    image_dict['name']=device.get('image name',flavor_dict['name']+str(dev_nb)+"-img")
+                    image_dict['universal_name']=device.get('image name')
+                    image_dict['description']=flavor_dict['name']+str(dev_nb)+"-img"
+                    image_dict['location']=device.get('image')
+                    image_dict['checksum']=device.get('image checksum')
                     image_metadata_dict = device.get('image metadata', None)
                     image_metadata_str = None
                     if image_metadata_dict != None: 
@@ -374,9 +396,14 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
             dev_nb=0
             for index in range(0,len(devices_original)) :
                 device=devices_original[index]
-                if "image" not in device:
+                if "image" not in device or "image name" not in device:
                     continue
-                image_dict={'location':device['image'], 'name':flavor_dict['name']+str(dev_nb)+"-img", 'description':flavor_dict.get('description')}
+                image_dict={}
+                image_dict['name']=device.get('image name',flavor_dict['name']+str(dev_nb)+"-img")
+                image_dict['universal_name']=device.get('image name')
+                image_dict['description']=flavor_dict['name']+str(dev_nb)+"-img"
+                image_dict['location']=device.get('image')
+                image_dict['checksum']=device.get('image checksum')
                 image_metadata_dict = device.get('image metadata', None)
                 image_metadata_str = None
                 if image_metadata_dict != None: 
@@ -472,7 +499,7 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
             #print "Flavor name: %s. Description: %s" % (VNFCitem["name"]+"-flv", VNFCitem["description"])
             
             myflavorDict = {}
-            myflavorDict["name"] = vnfc['name']+"-flv"
+            myflavorDict["name"] = vnfc['name']+"-flv"   #Maybe we could rename the flavor by using the field "image name" if exists
             myflavorDict["description"] = VNFCitem["description"]
             myflavorDict["ram"] = vnfc.get("ram", 0)
             myflavorDict["vcpus"] = vnfc.get("vcpus", 0)
@@ -520,7 +547,12 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
         #In case this integration is made, the VNFCDict might become a VNFClist.
         for vnfc in vnf_descriptor['vnf']['VNFC']:
             #print "Image name: %s. Description: %s" % (vnfc['name']+"-img", VNFCDict[vnfc['name']]['description'])
-            image_dict={'location':vnfc['VNFC image'], 'name':vnfc['name']+"-img", 'description':VNFCDict[vnfc['name']]['description']}
+            image_dict={}
+            image_dict['name']=vnfc.get('image name',vnf_name+"-"+vnfc['name']+"-img")
+            image_dict['universal_name']=vnfc.get('image name')
+            image_dict['description']=vnfc.get('image name', VNFCDict[vnfc['name']]['description'])
+            image_dict['location']=vnfc.get('VNFC image')
+            image_dict['checksum']=vnfc.get('image checksum')
             image_metadata_dict = vnfc.get('image metadata', None)
             image_metadata_str = None
             if image_metadata_dict is not None: 
@@ -530,7 +562,7 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
             image_id = create_or_use_image(mydb, vims, image_dict, rollback_list)
             #print "Image id for VNFC %s: %s" % (vnfc['name'],image_id)
             VNFCDict[vnfc['name']]["image_id"] = image_id
-            VNFCDict[vnfc['name']]["image_path"] = vnfc['VNFC image']
+            VNFCDict[vnfc['name']]["image_path"] = vnfc.get('VNFC image')
 
             
         # Step 7. Storing the VNF descriptor in the repository
@@ -605,7 +637,7 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
             #print "Flavor name: %s. Description: %s" % (VNFCitem["name"]+"-flv", VNFCitem["description"])
             
             myflavorDict = {}
-            myflavorDict["name"] = vnfc['name']+"-flv"
+            myflavorDict["name"] = vnfc['name']+"-flv"   #Maybe we could rename the flavor by using the field "image name" if exists
             myflavorDict["description"] = VNFCitem["description"]
             myflavorDict["ram"] = vnfc.get("ram", 0)
             myflavorDict["vcpus"] = vnfc.get("vcpus", 0)
@@ -653,7 +685,12 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
         #In case this integration is made, the VNFCDict might become a VNFClist.
         for vnfc in vnf_descriptor['vnf']['VNFC']:
             #print "Image name: %s. Description: %s" % (vnfc['name']+"-img", VNFCDict[vnfc['name']]['description'])
-            image_dict={'location':vnfc['VNFC image'], 'name':vnfc['name']+"-img", 'description':VNFCDict[vnfc['name']]['description']}
+            image_dict={}
+            image_dict['name']=vnfc.get('image name',vnf_name+"-"+vnfc['name']+"-img")
+            image_dict['universal_name']=vnfc.get('image name')
+            image_dict['description']=vnfc.get('image name', VNFCDict[vnfc['name']]['description'])
+            image_dict['location']=vnfc.get('VNFC image')
+            image_dict['checksum']=vnfc.get('image checksum')
             image_metadata_dict = vnfc.get('image metadata', None)
             image_metadata_str = None
             if image_metadata_dict is not None: 
@@ -663,7 +700,7 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
             image_id = create_or_use_image(mydb, vims, image_dict, rollback_list)
             #print "Image id for VNFC %s: %s" % (vnfc['name'],image_id)
             VNFCDict[vnfc['name']]["image_id"] = image_id
-            VNFCDict[vnfc['name']]["image_path"] = vnfc['VNFC image']
+            VNFCDict[vnfc['name']]["image_path"] = vnfc.get('VNFC image')
 
             
         # Step 7. Storing the VNF descriptor in the repository

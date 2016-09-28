@@ -263,14 +263,22 @@ class vimconnector():
         raise vimconnNotImplemented( "Should have implemented this" )
 
     def get_image_id_from_path(self, path):
-        '''Get the image id from image path in the VIM database'''
-        '''Returns:
-             0,"Image not found"   if there are no images with that path
-             1,image-id            if there is one image with that path
-             <0,message            if there was an error (Image not found, error contacting VIM, more than 1 image with that path, etc.) 
-        '''
+        '''Get the image id from image path in the VIM database. Returns the image_id'''
         raise vimconnNotImplemented( "Should have implemented this" )
         
+    def get_image_list(self, filter_dict={}):
+        '''Obtain tenant images from VIM
+        Filter_dict can be:
+            name: image name
+            id: image uuid
+            checksum: image checksum
+            location: image path
+        Returns the image list of dictionaries:
+            [{<the fields at Filter_dict plus some VIM specific>}, ...]
+            List can be empty
+        '''
+        raise vimconnNotImplemented( "Should have implemented this" )
+
     def new_vminstance(self,name,description,start,image_id,flavor_id,net_list,cloud_config=None):
         '''Adds a VM instance to VIM
         Params:

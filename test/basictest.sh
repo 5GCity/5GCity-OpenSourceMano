@@ -144,6 +144,7 @@ then
     ${DIRmano}/openmano vnf-delete -f linux_2VMs_v02        || echo "fail"
     ${DIRmano}/openmano vnf-delete -f dataplaneVNF_2VMs     || echo "fail"
     ${DIRmano}/openmano vnf-delete -f dataplaneVNF_2VMs_v02 || echo "fail"
+    ${DIRmano}/openmano vnf-delete -f dataplaneVNF_2VMs_v02_withimagename || echo "fail"
     ${DIRmano}/openmano vnf-delete -f dataplaneVNF2         || echo "fail"
     ${DIRmano}/openmano vnf-delete -f dataplaneVNF3         || echo "fail"
     ${DIRmano}/openmano datacenter-detach TEST-dc           || echo "fail"
@@ -187,7 +188,7 @@ then
     [[ $? != 0 ]] && echo  "FAIL" && echo "    $result"  && $_exit 1
     echo OK
 
-    for VNF in linux dataplaneVNF1 dataplaneVNF2 dataplaneVNF_2VMs dataplaneVNF_2VMs_v02 dataplaneVNF3 linux_2VMs_v02
+    for VNF in linux dataplaneVNF1 dataplaneVNF2 dataplaneVNF_2VMs dataplaneVNF_2VMs_v02 dataplaneVNF3 linux_2VMs_v02 dataplaneVNF_2VMs_v02_withimagename
     do    
         printf "%-50s" "Creating VNF '${VNF}': "
         result=`$DIRmano/openmano vnf-create $DIRmano/vnfs/examples/${VNF}.yaml`
