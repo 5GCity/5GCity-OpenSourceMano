@@ -1,4 +1,3 @@
-#   Copyright 2016 RIFT.IO Inc
 #   Copyright 2016 Telefónica Investigación y Desarrollo S.A.U.
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,12 +12,6 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+This directory holds the scripts and tools needed to install OSM
 
-README for https://osm.etsi.org/gerrit/osm/devops.git
-
-subdirectories:
-    jenkins -- scripts executed by jenkins on the container host and some initial scripts executed inside the container to start a build
-               see jenkins/README for more
-    installers -- scripts to be executed to install OSM from source, builds or packages
-               see installers/README for more
 

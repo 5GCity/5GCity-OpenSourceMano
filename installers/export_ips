@@ -1,4 +1,5 @@
-#   Copyright 2016 RIFT.IO Inc
+# This file is meant to be SOURCED
+#
 #   Copyright 2016 Telefónica Investigación y Desarrollo S.A.U.
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,13 +13,13 @@
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
+#
+# 23 Sept 2016 -- Gerardo Garcia -- Genesis
 
-
-README for https://osm.etsi.org/gerrit/osm/devops.git
-
-subdirectories:
-    jenkins -- scripts executed by jenkins on the container host and some initial scripts executed inside the container to start a build
-               see jenkins/README for more
-    installers -- scripts to be executed to install OSM from source, builds or packages
-               see installers/README for more
+#Get IP addresses
+DEFAULT_IF=`route -n |awk '$1~/0.0.0.0/ {print $8}'`
+export DEFAULT_IP=`ip -o -4 a |grep ${DEFAULT_IF}|awk '{split($4,a,"/"); print a[1]}'`
+export VCA_CONTAINER_IP=`lxc list VCA -c 4|grep eth0 |awk '{print $2}'`
+export SO_CONTAINER_IP=`lxc list SO-ub -c 4|grep eth0 |awk '{print $2}'`
+export RO_CONTAINER_IP=`lxc list RO -c 4|grep eth0 |awk '{print $2}'`
 
