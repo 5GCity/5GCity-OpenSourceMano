@@ -39,15 +39,7 @@ vnfd:vnfd-catalog:
                     bandwidth: '0'
                     vpci: 0000:00:0a.0
                 vnfd-connection-point-ref: eth0
-            -   name: eth1
-                virtual-interface:
-                    type: VIRTIO
-                    bandwidth: '0'
-                    vpci: 0000:00:0b.0
-                vnfd-connection-point-ref: eth1
 
         connection-point:
             -   name: eth0
-                type: VPORT
-            -   name: eth1
                 type: VPORT

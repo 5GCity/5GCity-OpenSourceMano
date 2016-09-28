@@ -38,21 +38,3 @@ nsd:nsd-catalog:
                     nsd:vnfd-id-ref: ubuntu_xenial_vnfd
                     # NOTE: Validate the entry below
                     nsd:vnfd-connection-point-ref: eth0
-            -   id: ubuntu_xenial_nsd_vld2
-                name: data
-                short-name: data
-                type: ELAN
-                vim-network-name: net-corp
-                # vim-network-name: <update>
-                # provider-network:
-                #     overlay-type: VLAN
-                #     segmentation_id: <update>
-                vnfd-connection-point-ref:
-                # Specify the constituent VNFs
-                # member-vnf-index-ref - entry from constituent vnf
-                # vnfd-id-ref - VNFD id
-                # vnfd-connection-point-ref - connection point name in the VNFD
-                -   nsd:member-vnf-index-ref: 1
-                    nsd:vnfd-id-ref: ubuntu_xenial_vnfd
-                    # NOTE: Validate the entry below
-                    nsd:vnfd-connection-point-ref: eth1
