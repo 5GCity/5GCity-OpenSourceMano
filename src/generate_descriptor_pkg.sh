@@ -65,7 +65,7 @@ INTF_TYPE='VIRTIO'
 VCPU=2
 MEMORY=4096
 STORAGE=10
-INTERFACES=2
+INTERFACES=1
 
 function usage() {
     cat <<EOF
@@ -118,7 +118,7 @@ Usage:
             --cloud-init : Cloud init script. Will be ignored if
                            cloud-init-file is specified
 
-            --interfaces : Number of external interfaces. Default 2.
+            --interfaces : Number of external interfaces in additon to OM-MGMT. Default 1.
 
         End of create descriptor specific options
 
@@ -222,8 +222,8 @@ EOF
 EOF
 
     # Add external interfaces
-    for i in `seq 2 ${INTERFACES}`; do
-        eth=$(($i - 1))
+    for i in `seq 1 ${INTERFACES}`; do
+        eth=$(($i))
         pci=$(get_pci $eth)
         cat >>$desc_file <<EOF
             -   name: eth${eth}
@@ -241,8 +241,8 @@ EOF
         connection-point:
 EOF
 
-    for i in `seq 1 ${INTERFACES}`; do
-        eth=$(($i - 1))
+    for i in `seq 0 ${INTERFACES}`; do
+        eth=$(($i))
         cat >>$desc_file <<EOF
             -   name: eth${eth}
                 type: ${CP_TYPE}
@@ -289,7 +289,7 @@ EOF
 
     # Add management VLD
     cat >>$desc_file <<EOF
-            -   id: ${name}_vld${i}
+            -   id: ${name}_vld0
                 name: management
                 short-name: management
                 type: ELAN
@@ -309,8 +309,8 @@ EOF
 EOF
 
     # Add rest of VLDs
-    for i in `seq 2 ${INTERFACES}`; do
-        eth=$(($i - 1))
+    for i in `seq 1 ${INTERFACES}`; do
+        eth=$(($i))
         cat >>$desc_file <<EOF
             -   id: ${name}_vld${i}
                 name: ${name}_vld${i}
