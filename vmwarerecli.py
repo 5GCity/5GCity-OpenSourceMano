@@ -63,6 +63,7 @@ __author__ = "Mustafa Bayramov"
 __date__ = "$16-Sep-2016 11:09:29$"
 
 
+#TODO move to main vim
 def delete_network_action(vca=None, network_uuid=None):
     """
     Method leverages vCloud director and query network based on network uuid
@@ -104,7 +105,6 @@ def print_vapp(vapp_dict=None):
     """
 
     # following key available to print
-
     # {'status': 'POWERED_OFF', 'storageProfileName': '*', 'hardwareVersion': '7', 'vmToolsVersion': '0',
     #  'memoryMB': '384',
     #  'href': 'https://172.16.254.206/api/vAppTemplate/vm-129e22e8-08dc-4cb6-8358-25f635e65d3b',
@@ -125,7 +125,6 @@ def print_vapp(vapp_dict=None):
                             'category name',
                             'storageProfileName',
                             'vcpu', 'memory', 'hw ver'])
-
     for k in vapp_dict:
         entry = []
         entry.append(k)
@@ -361,35 +360,25 @@ def create_actions(vim=None, action=None, namespace=None):
 
 
 def vmwarecli(command=None, action=None, namespace=None):
-    print namespace
 
+    logger.debug("Namespace {}".format(namespace))
     urllib3.disable_warnings()
-    vim = vimconnector('0cd19677-7517-11e6-aa08-000c29db3077',
-                       'test',
-                       'a5056f85-418c-4bfd-8041-adb0f48be9d9',
-                       namespace.vcdvdc,
-                       'https://172.16.254.206',
-                       'https://172.16.254.206',
-                       'admin',
-                       'qwerty123',
-                       "DEBUG", config={'admin_username': 'Administrator', 'admin_password': 'qwerty123'})
 
+    if namespace.vcdpassword is None:
+        vcdpasword = input("vcd password ")
+    else:
+        vcdpasword = namespace.vcdpassword
+    vim = vimconnector(uuid=None,
+                       name=namespace.org_name,
+                       tenant_id=None,
+                       tenant_name=namespace.vcdvdc,
+                       url=namespace.vcdhost,
+                       url_admin=namespace.vcdhost,
+                       user=namespace.vcduser,
+                       passwd=namespace.vcdpassword,
+                       log_level="DEBUG",
+                       config={'admin_username': namespace.vcdamdin, 'admin_password': namespace.vcdadminpassword})
     vim.vca = vim.connect()
-    #
-    #     "{'status': 'ACTIVE'}
-    # 2016-09-26 13:06:33,989 - mano.vim.vmware - DEBUG - Adding  4d2e9ec6-e3d8-4014-a1ab-8b622524bd9c to a list vcd id a5056f85-418c-4bfd-8041-adb0f48be9d9 network tefexternal
-    # Dict contains {'status': 'ACTIVE'}
-    # 2016-09-26 13:06:33,989 - mano.vim.vmware - DEBUG - Adding  93729eaa-4159-4d18-ac28-b000f91bd331 to a list vcd id a5056f85-418c-4bfd-8041-adb0f48be9d9 network default
-    # Dict contains {'status': 'ACTIVE'}
-
-    vim.get_network_list(filter_dict={'status': 'ACTIVE', 'type': 'bridge'})
-    # vim.get_network_list(filter_dict={'status' : 'ACTIVE'})
-
-    #    print vim.get_vminstance('7e06889a-50c4-4b08-8877-c1ef001eb030')
-    #   vim.get_network_name_by_id()
-
-    #  exit()
-    # get_network_action(vca=vca, network_uuid="123")
 
     # list
     if command == 'list' or namespace.command == 'list':
@@ -413,12 +402,6 @@ def vmwarecli(command=None, action=None, namespace=None):
         create_actions(vim=vim, action=action, namespace=namespace)
 
 
-# def get_vappid(vdc, vapp_name):
-#     refs = filter(lambda ref: ref.name == vapp_name and ref.type_ == 'application/vnd.vmware.vcloud.vApp+xml',vdc.ResourceEntities.ResourceEntity)
-#     if len(refs) == 1:
-#         return refs[0].href.split("vapp")[1][1:]
-#     return None
-
 if __name__ == '__main__':
     defaults = {'vcdvdc': 'default',
                 'vcduser': 'admin',
@@ -430,6 +413,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-u', '--vcduser', help='vcloud director username', type=str)
     parser.add_argument('-p', '--vcdpassword', help='vcloud director password', type=str)
+    parser.add_argument('-U', '--vcdamdin', help='vcloud director password', type=str)
+    parser.add_argument('-P', '--vcdadminpassword', help='vcloud director password', type=str)
     parser.add_argument('-c', '--vcdhost', help='vcloud director host', type=str)
     parser.add_argument('-o', '--vcdorg', help='vcloud director org', type=str)
     parser.add_argument('-v', '--vcdvdc', help='vcloud director vdc', type=str)
@@ -532,5 +517,7 @@ if __name__ == '__main__':
         "Connecting {} username: {} org: {} vdc: {} ".format(d['vcdhost'], d['vcduser'], d['vcdorg'], d['vcdvdc']))
 
     logger.debug("command: \"{}\" actio: \"{}\"".format(d['command'], d['action']))
+
+    # main entry point.
     vmwarecli(namespace=namespace)
 
