@@ -74,7 +74,7 @@ $(VNFD_BUILD_DIR)/ims_allin1_2p_vnf/charms/clearwater-aio-proxy: $(VNFD_BUILD_DI
 
 $(VNFD_BUILD_DIR)/6wind_vnf/charms/vpe-router: $(VNFD_BUILD_DIR)/6wind_vnf $(BUILD_DIR)/juju-charms
 	# Copy the PE Charm into the PE vnf package directory before packaging
-	cp -rf $(BUILD_DIR)/juju-charms/vpe-router $(VNFD_BUILD_DIR)/6wind_vnf/charms
+	cp -rf $(BUILD_DIR)/juju-charms/builds/vpe-router $(VNFD_BUILD_DIR)/6wind_vnf/charms
 
 $(BUILD_DIR)/vnfd_pkgs/%.tar.gz: $(VNFD_BUILD_DIR)/% $(VNFD_BUILD_DIR)/ims_allin1_2p_vnf/charms/clearwater-aio-proxy $(VNFD_BUILD_DIR)/6wind_vnf/charms/vpe-router
 	src/generate_descriptor_pkg.sh -d $(BUILD_DIR)/vnfd_pkgs $<
