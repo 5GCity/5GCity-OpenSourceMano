@@ -82,7 +82,7 @@ class vimconnector():
     These plugins must implement a vimconnector class derived from this 
     and all these methods
     ''' 
-    def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level="ERROR", config={}):
+    def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None, config={}):
         self.id        = uuid
         self.name      = name
         self.url       = url
@@ -93,7 +93,8 @@ class vimconnector():
         self.passwd    = passwd
         self.config    = config
         self.logger = logging.getLogger('openmano.vim')
-        self.logger.setLevel( getattr(logging, log_level) )
+        if log_level:
+            self.logger.setLevel( getattr(logging, log_level) )
         if not self.url_admin:  #try to use normal url 
             self.url_admin = self.url
     

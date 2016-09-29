@@ -103,7 +103,7 @@ flavorlist = {}
 
 class vimconnector(vimconn.vimconnector):
     def __init__(self, uuid=None, name=None, tenant_id=None, tenant_name=None,
-                 url=None, url_admin=None, user=None, passwd=None, log_level="ERROR", config={}):
+                 url=None, url_admin=None, user=None, passwd=None, log_level=None, config={}):
         """
         Constructor create vmware connector to vCloud director.
 
@@ -151,7 +151,8 @@ class vimconnector(vimconn.vimconnector):
         self.admin_user = None
 
         self.logger = logging.getLogger('openmano.vim.vmware')
-        self.logger.setLevel(10)
+        if log_level:
+            self.logger.setLevel( getattr(logging, log_level) )
 
         try:
             self.admin_user = config['admin_username']
@@ -159,7 +160,6 @@ class vimconnector(vimconn.vimconnector):
         except KeyError:
             raise vimconn.vimconnException(message="Error admin username or admin password is empty.")
 
-        self.logger = logging.getLogger('mano.vim.vmware')
         self.org_uuid = None
         self.vca = None
 
