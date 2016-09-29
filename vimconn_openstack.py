@@ -227,7 +227,9 @@ class vimconnector(vimconn.vimconnector):
     def new_network(self,net_name, net_type, ip_profile=None, shared=False, vlan=None):
         '''Adds a tenant network to VIM. Returns the network identifier'''
         self.logger.debug("Adding a new network to VIM name '%s', type '%s'", net_name, net_type)
+        #self.logger.debug(">>>>>>>>>>>>>>>>>> IP profile %s", str(ip_profile))
         try:
+            new_net = None
             self._reload_connection()
             network_dict = {'name': net_name, 'admin_state_up': True}
             if net_type=="data" or net_type=="ptp":
@@ -255,7 +257,7 @@ class vimconnector(vimconn.vimconnector):
                     }
             if 'gateway_address' in ip_profile:
                 subnet['gateway_ip'] = ip_profile['gateway_address']
-            if 'dns_address' in ip_profile:
+            if ip_profile.get('dns_address'):
                 #TODO: manage dns_address as a list of addresses separated by commas 
                 subnet['dns_nameservers'] = []
                 subnet['dns_nameservers'].append(ip_profile['dns_address'])
@@ -272,9 +274,12 @@ class vimconnector(vimconn.vimconnector):
                 ip_int += ip_profile['dhcp_count']
                 ip_str = str(netaddr.IPAddress(ip_int))
                 subnet['allocation_pools'][0]['end'] = ip_str
+            #self.logger.debug(">>>>>>>>>>>>>>>>>> Subnet: %s", str(subnet))
             self.neutron.create_subnet({"subnet": subnet} )
             return new_net["network"]["id"]
         except (neExceptions.ConnectionFailed, ksExceptions.ClientException, neExceptions.NeutronException, ConnectionError) as e:
+            if new_net:
+                self.neutron.delete_network(new_net['network']['id'])
             self._format_exception(e)
 
     def get_network_list(self, filter_dict={}):

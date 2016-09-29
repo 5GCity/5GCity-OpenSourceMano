@@ -322,8 +322,8 @@ def http_get_tenants():
         logger.error("http_get_tenants error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 
 @bottle.route(url_base + '/tenants/<tenant_id>', method='GET')
@@ -341,8 +341,8 @@ def http_get_tenant_id(tenant_id):
         logger.error("http_get_tenant_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 
 @bottle.route(url_base + '/tenants', method='POST')
@@ -361,8 +361,8 @@ def http_post_tenants():
         logger.error("http_post_tenants error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 
 @bottle.route(url_base + '/tenants/<tenant_id>', method='PUT')
@@ -387,8 +387,8 @@ def http_edit_tenant_id(tenant_id):
         logger.error("http_edit_tenant_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 
 @bottle.route(url_base + '/tenants/<tenant_id>', method='DELETE')
@@ -402,8 +402,8 @@ def http_delete_tenant_id(tenant_id):
         logger.error("http_delete_tenant_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 
 @bottle.route(url_base + '/<tenant_id>/datacenters', method='GET')
@@ -434,8 +434,8 @@ def http_get_datacenters(tenant_id):
         logger.error("http_get_datacenters error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>', method='GET')
@@ -491,8 +491,9 @@ def http_get_datacenter_id(tenant_id, datacenter_id):
         logger.error("http_get_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/datacenters', method='POST')
 def http_post_datacenters():
@@ -510,8 +511,9 @@ def http_post_datacenters():
         logger.error("http_post_datacenters error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/datacenters/<datacenter_id_name>', method='PUT')
 def http_edit_datacenter_id(datacenter_id_name):
@@ -530,8 +532,9 @@ def http_edit_datacenter_id(datacenter_id_name):
         logger.error("http_edit_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/networks', method='GET')  #deprecated
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/netmaps', method='GET')
@@ -565,8 +568,9 @@ def http_getnetmap_datacenter_id(tenant_id, datacenter_id, netmap_id=None):
         logger.error("http_getnetwork_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/netmaps', method='DELETE')
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/netmaps/<netmap_id>', method='DELETE')
@@ -594,8 +598,8 @@ def http_delnetmap_datacenter_id(tenant_id, datacenter_id, netmap_id=None):
         logger.error("http_delnetmap_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/netmaps/upload', method='POST')
@@ -611,8 +615,9 @@ def http_uploadnetmap_datacenter_id(tenant_id, datacenter_id):
         logger.error("http_uploadnetmap_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/netmaps', method='POST')
 def http_postnetmap_datacenter_id(tenant_id, datacenter_id):
@@ -634,8 +639,9 @@ def http_postnetmap_datacenter_id(tenant_id, datacenter_id):
         logger.error("http_postnetmap_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/netmaps/<netmap_id>', method='PUT')
 def http_putnettmap_datacenter_id(tenant_id, datacenter_id, netmap_id):
@@ -655,8 +661,8 @@ def http_putnettmap_datacenter_id(tenant_id, datacenter_id, netmap_id):
         logger.error("http_putnettmap_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
     
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/action', method='POST')
@@ -679,8 +685,8 @@ def http_action_datacenter_id(tenant_id, datacenter_id):
         logger.error("http_action_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 
 @bottle.route(url_base + '/datacenters/<datacenter_id>', method='DELETE')
@@ -695,8 +701,9 @@ def http_delete_datacenter_id( datacenter_id):
         logger.error("http_delete_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>', method='POST')
 def http_associate_datacenters(tenant_id, datacenter_id):
@@ -719,8 +726,9 @@ def http_associate_datacenters(tenant_id, datacenter_id):
         logger.error("http_associate_datacenters error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>', method='DELETE')
 def http_deassociate_datacenters(tenant_id, datacenter_id):
@@ -733,8 +741,9 @@ def http_deassociate_datacenters(tenant_id, datacenter_id):
         logger.error("http_deassociate_datacenters error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
        
 @bottle.route(url_base + '/<tenant_id>/vim/<datacenter_id>/<item>', method='GET')
 @bottle.route(url_base + '/<tenant_id>/vim/<datacenter_id>/<item>/<name>', method='GET')
@@ -747,8 +756,9 @@ def http_get_vim_items(tenant_id, datacenter_id, item, name=None):
         logger.error("http_get_vim_items error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/vim/<datacenter_id>/<item>/<name>', method='DELETE')
 def http_del_vim_items(tenant_id, datacenter_id, item, name):
@@ -760,8 +770,9 @@ def http_del_vim_items(tenant_id, datacenter_id, item, name):
         logger.error("http_del_vim_items error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/vim/<datacenter_id>/<item>', method='POST')
 def http_post_vim_items(tenant_id, datacenter_id, item):
@@ -774,8 +785,9 @@ def http_post_vim_items(tenant_id, datacenter_id, item):
         logger.error("http_post_vim_items error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/vnfs', method='GET')
 def http_get_vnfs(tenant_id):
@@ -800,8 +812,9 @@ def http_get_vnfs(tenant_id):
         logger.error("http_get_vnfs error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/vnfs/<vnf_id>', method='GET')
 def http_get_vnf_id(tenant_id,vnf_id):
@@ -816,8 +829,9 @@ def http_get_vnf_id(tenant_id,vnf_id):
         logger.error("http_get_vnf_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/vnfs', method='POST')
 def http_post_vnfs(tenant_id):
@@ -842,8 +856,9 @@ def http_post_vnfs(tenant_id):
         logger.error("http_post_vnfs error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
             
 @bottle.route(url_base + '/<tenant_id>/vnfs/<vnf_id>', method='DELETE')
 def http_delete_vnf_id(tenant_id,vnf_id):
@@ -858,8 +873,9 @@ def http_delete_vnf_id(tenant_id,vnf_id):
         logger.error("http_delete_vnf_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 #@bottle.route(url_base + '/<tenant_id>/hosts/topology', method='GET')
 #@bottle.route(url_base + '/<tenant_id>/physicalview/Madrid-Alcantara', method='GET')
@@ -886,8 +902,8 @@ def http_get_hosts(tenant_id, datacenter):
         logger.error("http_get_hosts error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 
 @bottle.route(url_base + '/<path:path>', method='OPTIONS')
@@ -921,8 +937,9 @@ def http_post_deploy(tenant_id):
         logger.error("http_post_deploy error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/topology/verify', method='POST')
 def http_post_verify(tenant_id):
@@ -961,8 +978,9 @@ def http_post_scenarios(tenant_id):
         logger.error("http_post_scenarios error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/scenarios/<scenario_id>/action', method='POST')
 def http_post_scenario_action(tenant_id, scenario_id):
@@ -1002,8 +1020,9 @@ def http_post_scenario_action(tenant_id, scenario_id):
         logger.error("http_post_scenario_action error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/scenarios', method='GET')
 def http_get_scenarios(tenant_id):
@@ -1029,8 +1048,9 @@ def http_get_scenarios(tenant_id):
         logger.error("http_get_scenarios error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/scenarios/<scenario_id>', method='GET')
 def http_get_scenario_id(tenant_id, scenario_id):
@@ -1049,8 +1069,9 @@ def http_get_scenario_id(tenant_id, scenario_id):
         logger.error("http_get_scenarios error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/scenarios/<scenario_id>', method='DELETE')
 def http_delete_scenario_id(tenant_id, scenario_id):
@@ -1067,8 +1088,8 @@ def http_delete_scenario_id(tenant_id, scenario_id):
         logger.error("http_delete_scenario_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 
 @bottle.route(url_base + '/<tenant_id>/scenarios/<scenario_id>', method='PUT')
@@ -1088,12 +1109,12 @@ def http_put_scenario_id(tenant_id, scenario_id):
         logger.error("http_put_scenario_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 @bottle.route(url_base + '/<tenant_id>/instances', method='POST')
 def http_post_instances(tenant_id):
-    '''take an action over a scenario'''
+    '''create an instance-scenario'''
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     try:
         #check valid tenant_id
@@ -1110,8 +1131,8 @@ def http_post_instances(tenant_id):
         logger.error("http_post_instances error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 #
 # INSTANCES
@@ -1136,8 +1157,9 @@ def http_get_instances(tenant_id):
         logger.error("http_get_instances error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/instances/<instance_id>', method='GET')
 def http_get_instance_id(tenant_id, instance_id):
@@ -1164,8 +1186,9 @@ def http_get_instance_id(tenant_id, instance_id):
         logger.error("http_get_instance_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/instances/<instance_id>', method='DELETE')
 def http_delete_instance_id(tenant_id, instance_id):
@@ -1184,8 +1207,9 @@ def http_delete_instance_id(tenant_id, instance_id):
         logger.error("http_delete_instance_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/instances/<instance_id>/action', method='POST')
 def http_post_instance_scenario_action(tenant_id, instance_id):
@@ -1212,8 +1236,8 @@ def http_post_instance_scenario_action(tenant_id, instance_id):
         logger.error("http_post_instance_scenario_action error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
-        logger.error("Unexpected exception %s", str(e))
-        bottle.abort(HTTP_Internal_Server_Error, str(e))
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 
 @bottle.error(400)
