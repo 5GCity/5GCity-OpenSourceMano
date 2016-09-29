@@ -273,7 +273,7 @@ class vimconnector(vimconn.vimconnector):
                 #parts = ip_profile['dhcp_start_address'].split('.')
                 #ip_int = (int(parts[0]) << 24) + (int(parts[1]) << 16) + (int(parts[2]) << 8) + int(parts[3])
                 ip_int = int(netaddr.IPAddress(ip_profile['dhcp_start_address']))
-                ip_int += ip_profile['dhcp_count']
+                ip_int += ip_profile['dhcp_count'] - 1
                 ip_str = str(netaddr.IPAddress(ip_int))
                 subnet['allocation_pools'][0]['end'] = ip_str
             #self.logger.debug(">>>>>>>>>>>>>>>>>> Subnet: %s", str(subnet))
