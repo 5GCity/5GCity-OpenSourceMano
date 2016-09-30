@@ -21,8 +21,8 @@
 ---
 schema_version: "0.2"
 vnf:
-    name:        dataplaneVNF_2VMs_v02_withimagename
-    description: "Example of a dataplane VNF consisting of two VMs for data plane workloads with one internal network"
+    name:        dataplaneVNF4
+    description: "Example of a dataplane VNF consisting of two VMs for data plane workloads with one internal network. VMs use image name instead of the path"
     # class: parent      # Optional. Used to organize VNFs
     internal-connections:
     -   name:        datanet

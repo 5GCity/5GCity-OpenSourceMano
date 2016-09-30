@@ -135,16 +135,18 @@ then
     ${DIRmano}/openmano instance-scenario-delete -f complex2-instance   || echo "fail"
     ${DIRmano}/openmano instance-scenario-delete -f complex3-instance   || echo "fail"
     ${DIRmano}/openmano instance-scenario-delete -f complex4-instance   || echo "fail"
+    ${DIRmano}/openmano instance-scenario-delete -f complex5-instance   || echo "fail"
     ${DIRmano}/openmano scenario-delete -f simple           || echo "fail"
     ${DIRmano}/openmano scenario-delete -f complex          || echo "fail"
     ${DIRmano}/openmano scenario-delete -f complex2         || echo "fail"
     ${DIRmano}/openmano scenario-delete -f complex3         || echo "fail"
     ${DIRmano}/openmano scenario-delete -f complex4         || echo "fail"
+    ${DIRmano}/openmano scenario-delete -f complex5         || echo "fail"
     ${DIRmano}/openmano vnf-delete -f linux                 || echo "fail"
     ${DIRmano}/openmano vnf-delete -f linux_2VMs_v02        || echo "fail"
     ${DIRmano}/openmano vnf-delete -f dataplaneVNF_2VMs     || echo "fail"
     ${DIRmano}/openmano vnf-delete -f dataplaneVNF_2VMs_v02 || echo "fail"
-    ${DIRmano}/openmano vnf-delete -f dataplaneVNF_2VMs_v02_withimagename || echo "fail"
+    ${DIRmano}/openmano vnf-delete -f dataplaneVNF4 || echo "fail"
     ${DIRmano}/openmano vnf-delete -f dataplaneVNF2         || echo "fail"
     ${DIRmano}/openmano vnf-delete -f dataplaneVNF3         || echo "fail"
     ${DIRmano}/openmano datacenter-detach TEST-dc           || echo "fail"
@@ -188,7 +190,7 @@ then
     [[ $? != 0 ]] && echo  "FAIL" && echo "    $result"  && $_exit 1
     echo OK
 
-    for VNF in linux dataplaneVNF1 dataplaneVNF2 dataplaneVNF_2VMs dataplaneVNF_2VMs_v02 dataplaneVNF3 linux_2VMs_v02 dataplaneVNF_2VMs_v02_withimagename
+    for VNF in linux dataplaneVNF1 dataplaneVNF2 dataplaneVNF_2VMs dataplaneVNF_2VMs_v02 dataplaneVNF3 linux_2VMs_v02 dataplaneVNF4
     do    
         printf "%-50s" "Creating VNF '${VNF}': "
         result=`$DIRmano/openmano vnf-create $DIRmano/vnfs/examples/${VNF}.yaml`
@@ -197,7 +199,7 @@ then
         ! is_valid_uuid $vnf && echo FAIL && echo "    $result" &&  $_exit 1
         echo $vnf
     done
-    for NS in simple complex complex2 complex3 complex4
+    for NS in simple complex complex2 complex3 complex4 complex5
     do
         printf "%-50s" "Creating scenario '${NS}':"
         result=`$DIRmano/openmano scenario-create $DIRmano/scenarios/examples/${NS}.yaml`
@@ -206,7 +208,7 @@ then
         echo $scenario
     done
 
-    for IS in simple complex complex2 complex3
+    for IS in simple complex complex2 complex3 complex5
     do
         printf "%-50s" "Creating instance-scenario '${IS}':"
         result=`$DIRmano/openmano instance-scenario-create  --scenario ${IS} --name ${IS}-instance`
