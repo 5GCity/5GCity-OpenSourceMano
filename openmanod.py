@@ -173,7 +173,7 @@ if __name__=="__main__":
                 port_admin = a
             elif o == "--log-socket-port":
                 log_socket_port = a
-            elif o == "--log-socket-port":
+            elif o == "--log-socket-host":
                 log_socket_host = a
             elif o == "--log-file":
                 log_file = a
