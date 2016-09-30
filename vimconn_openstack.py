@@ -600,7 +600,7 @@ class vimconnector(vimconn.vimconnector):
             #Then we filter by the rest of filter fields: checksum
             filtered_list = []
             for image in image_list:
-                image_dict=glance.images.get(image.id)
+                image_dict=self.glance.images.get(image.id)
                 if image_dict['checksum']==filter_dict.get('checksum'):
                     filtered_list.append(image)
             return filtered_list

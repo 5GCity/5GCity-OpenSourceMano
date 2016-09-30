@@ -284,10 +284,11 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
                 filter_dict={}
                 filter_dict['name']=image_dict['universal_name']
                 filter_dict['checksum']=image_dict['checksum']
+                #logger.debug('>>>>>>>> Filter dict: %s', str(filter_dict))
                 vim_images = vim.get_image_list(filter_dict)
                 if len(vim_images) > 1:
                     raise NfvoException("More than one candidate VIM image found for filter: " + str(filter_dict), HTTP_Conflict)
-                elif len(vim_nets) == 0:
+                elif len(vim_images) == 0:
                     raise NfvoException("Image not found at VIM with filter: '%s'", str(filter_dict))
                 else:
                     image_vim_id = vim_images[0].id
@@ -1688,9 +1689,9 @@ def create_instance(mydb, tenant_id, instance_dict):
     #print "Checking that the scenario exists and getting the scenario dictionary"
     scenarioDict = mydb.get_scenario(scenario, tenant_id, default_datacenter_id)
     
-    #logger.debug("Dictionaries before merging")
-    #logger.debug("InstanceDict:\n{}".format(yaml.safe_dump(instance_dict,default_flow_style=False, width=256)))
-    #logger.debug("ScenarioDict:\n{}".format(yaml.safe_dump(scenarioDict,default_flow_style=False, width=256)))
+    #logger.debug(">>>>>>> Dictionaries before merging")
+    #logger.debug(">>>>>>> InstanceDict:\n{}".format(yaml.safe_dump(instance_dict,default_flow_style=False, width=256)))
+    #logger.debug(">>>>>>> ScenarioDict:\n{}".format(yaml.safe_dump(scenarioDict,default_flow_style=False, width=256)))
     
     scenarioDict['datacenter_tenant_id'] = default_datacenter_tenant_id
     scenarioDict['datacenter_id'] = default_datacenter_id
@@ -1780,7 +1781,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                                 if interface['vnf_interface'] == vnf_interface['external_name']:
                                     vnf_interface['ip_address']=interface['ip_address']
 
-        #logger.debug("Merged dictionary")
+        #logger.debug(">>>>>>>> Merged dictionary")
         logger.debug("Creating instance scenario-dict MERGED:\n%s", yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False))
 
         
