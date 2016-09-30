@@ -151,6 +151,18 @@ get_pci() {
    printf '%02x' $((10 + $1)) | tr '[:upper:]' '[:lower:]'
 }
 
+function write_readme() {
+    dir=$1
+    file=${dir}/README
+    date=$(date)
+
+    cat >$file <<EOF
+Descriptor created by OSM descriptor package generated
+Created on $date
+EOF
+
+}
+
 function write_vnfd_tmpl() {
     name=$(basename $1)
     desc_file="${name}.yaml"
@@ -174,6 +186,8 @@ vnfd:vnfd-catalog:
 
         # Atleast one VDU need to be specified
         vdu:
+        # Additional VDUs can be created by copying the
+        # VDU descriptor below
         -   id: ${name}-VM
             name: ${name}-VM
             description: ${name}-VM
@@ -248,6 +262,37 @@ EOF
                 type: ${CP_TYPE}
 EOF
     done
+
+    cat >>$desc_file <<EOF
+
+        # Uncomment and update below to enable juju
+        # charm configuration for the VNF
+        # vnf-configuration:
+        #     juju:
+        #         charm: <charm name>
+        #     service-primitive:
+        #     -   name: config
+        #         parameter:
+        #         -   name: <config parameter>
+        #             data-type: [STRING|INTEGER]
+        #             mandatory: [true|false]
+        #             default-value: <value>
+        #     -   name: <action name>
+        #         parameter:
+        #         -   name: <action parameter>
+        #             data-type: [STRING|INTEGER]
+        #             mandatory: [true|false]
+        #             default-value: <value>
+        #     initial-config-primitive:
+        #     -   name: config
+        #         parameter:
+        #         -   name: <config name>
+        #             value: <value>
+        #     -   name: <action name>
+        #         parameter:
+        #         -   name: <action parameter>
+        #             value: <value>
+EOF
 
     if [ $VERBOSE == true ]; then
         echo "INFO: Created $desc_file"
@@ -474,6 +519,8 @@ function generate_package(){
     else
         write_nsd_tmpl $dir $vnfd
     fi
+
+    write_readme $dir
 
     if [ $ARCHIVE == true ]; then
         # Create archive of the package
