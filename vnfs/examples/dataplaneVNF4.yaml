@@ -69,7 +69,6 @@ vnf:
     VNFC:
     -   name:        VNF_2VMs-VM1
         description: "Dataplane VM1 with 4 threads, 2 GB hugepages, 2 SR-IOV interface"
-        #Copy the image to a compute path and edit this path
         image name: dataplaneVNF_2VMs-image
         disk: 10
         numas: 
@@ -91,7 +90,6 @@ vnf:
 
     -   name:        VNF_2VMs-VM2
         description: "Dataplane VM1 with 2 threads, 2 GB hugepages, 2 SR-IOV interface"
-        #Copy the image to a compute path and edit this path
         image name: dataplaneVNF_2VMs-image
         disk: 10
         numas: 
