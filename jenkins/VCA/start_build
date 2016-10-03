@@ -48,6 +48,8 @@ EOF
 systemctl enable lxd-bridge
 systemctl start lxd-bridge
 lxc image copy ubuntu:16.04 local: --alias ubuntu-xenial
+add-apt-repository ppa:juju/devel
+apt update
 apt install -y juju
 juju bootstrap juju localhost
 
