@@ -60,7 +60,7 @@ INFO "starting build"
 INFO "  cleaning .pyc"
 rm -f *.pyc
 INFO "  installing openmano packages and dependencies from current repo (--noclone)"
-./scripts/install-openmano.sh --develop --noclone -q
+./scripts/install-openmano.sh --noclone -q
 INFO "  compiling *.py"
 python -m py_compile *.py   #&&     #uncomment to concatenate commands
 #basic test HERE            #&&     #uncomment to concatenate commands
