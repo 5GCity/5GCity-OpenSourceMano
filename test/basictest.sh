@@ -167,7 +167,7 @@ then
     [[ -z $OPENVIM_HOST ]] && OPENVIM_HOST=localhost
     [[ -z $OPENVIM_PORT ]] && OPENVIM_PORT=9080
     URL_ADMIN_PARAM=""
-    [[ -n $OPENVIM_ADMIN_PORT ]] && URL_ADMIN_PARAM="--url_admin=http://${$OPENVIM_HOST}:${OPENVIM_ADMIN_PORT}/openvim"
+    [[ -n $OPENVIM_ADMIN_PORT ]] && URL_ADMIN_PARAM="--url_admin=http://${OPENVIM_HOST}:${OPENVIM_ADMIN_PORT}/openvim"
     result=`${DIRmano}/openmano datacenter-create TEST-dc "http://${OPENVIM_HOST}:${OPENVIM_PORT}/openvim" --type=openvim $URL_ADMIN_PARAM`
     datacenter=`echo $result |gawk '{print $1}'`
     #check a valid uuid is obtained
