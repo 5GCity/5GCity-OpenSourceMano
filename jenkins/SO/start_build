@@ -39,9 +39,14 @@ else
 fi
 
 if [ $# -gt 0 ]; then
-    INFO "Code to compile: gerrit refspec '$1', commit-id: '$2'"
-    git fetch origin $1 || FATAL "git fetch origin '$1' didn't work"
-    git checkout -f $2 || FATAL "git checkout -f '$2' didn't work"
+    if [ "$1" = "checkout" ]; then
+        INFO "Code to compile: '$2'"
+        git checkout $2
+    else
+        INFO "Code to compile: gerrit refspec '$1', commit-id: '$2'"
+        git fetch origin $1 || FATAL "git fetch origin '$1' didn't work"
+        git checkout -f $2 || FATAL "git checkout -f '$2' didn't work"
+    fi
 else
     INFO "Code to compile: master"
     git checkout master
