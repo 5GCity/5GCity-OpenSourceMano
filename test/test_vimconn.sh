@@ -268,13 +268,8 @@ then
     #USER_KEY=""
     key_param1=""
     key_param2=""
-    #for file_key in ${HOME}/.ssh/*.pub
-    #do
-    #    [[ -n ${USER_KEY} ]] && USER_KEY="${USER_KEY},"
-    #    USER_KEY="${USER_KEY}$(cat $file_key)"
-    #done
-    #[[  -n ${USER_KEY} ]] && key_param1="--keypair=${USER}:${USER_KEY}" && key_param2="--keypair=${USER_KEY}"
-    key_param1=--keypair-auto
+    #add user keys if present at .ssh    
+    ls ${HOME}/.ssh/*.pub > /dev/null 2>&1 && key_param1=--keypair-auto
 
     for sce in simple complex2
     do 
