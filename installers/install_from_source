@@ -107,7 +107,7 @@ echo -e "\nConfiguring components"
 echo -e "       Configuring RO"
 lxc exec RO -- sed -i -e "s/^\#\?log_socket_host:.*/log_socket_host: $SO_CONTAINER_IP/g" /opt/openmano/openmanod.cfg
 lxc exec RO -- service openmano restart
-sleep 5
+time=0; step=1; timelength=10; while [ $time -le $timelength ]; do sleep $step; echo -n "."; time=$((time+step)); done; echo
 RO_TENANT_ID=`lxc exec RO -- openmano tenant-create osm |awk '{print $1}'`
 
 echo -e "       Configuring VCA"
@@ -118,7 +118,8 @@ JUJU_CONTROLLER_IP=`lxc exec VCA -- lxc list -c 4 |grep eth0 |awk '{print $2}'`
 echo -e "       Configuring SO"
 sudo route add -host $JUJU_CONTROLLER_IP gw $VCA_CONTAINER_IP
 lxc exec SO-ub -- nohup sudo -b -H /usr/rift/rift-shell -r -i /usr/rift -a /usr/rift/.artifacts -- ./demos/launchpad.py --use-xml-mode
-sleep 60
+time=0; step=18; timelength=180; while [ $time -le $timelength ]; do sleep $step; echo -n "."; time=$((time+step)); done; echo
+
 curl -k --request POST \
   --url https://$SO_CONTAINER_IP:8008/api/config/config-agent \
   --header 'accept: application/vnd.yang.data+json' \
