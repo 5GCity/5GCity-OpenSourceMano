@@ -255,10 +255,12 @@ def check_vnf_descriptor(vnf_descriptor):
                                     HTTP_Bad_Request)
                 return -HTTP_Bad_Request, 
 
-def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vim=False, return_on_error = False):
+def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vim=False, return_on_error = None):
     #look if image exist
     if only_create_at_vim:
         image_mano_id = image_dict['uuid']
+        if return_on_error == None:
+            return_on_error = True
     else:
         if image_dict['location'] is not None:
             images = mydb.get_rows(FROM="images", WHERE={'location':image_dict['location'], 'metadata':image_dict['metadata']})
@@ -306,12 +308,15 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
                 if return_on_error:
                     logger.error("Error creating image at VIM: %s", str(e))
                     raise
-                image_vim_id = str(e)
+                image_vim_id = None
                 logger.warn("Error creating image at VIM: %s", str(e))
                 continue
         except vimconn.vimconnException as e:
+            if return_on_error:
+                logger.error("Error contacting VIM to know if the image exists at VIM: %s", str(e))
+                raise
             logger.warn("Error contacting VIM to know if the image exists at VIM: %s", str(e))
-            image_vim_id = str(e)
+            image_vim_id = None
             continue    
         #if we reach here, the image has been created or existed
         if len(image_db)==0:
@@ -323,7 +328,7 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
             
     return image_vim_id if only_create_at_vim else image_mano_id
 
-def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_vim=False, return_on_error = False):
+def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_vim=False, return_on_error = None):
     temp_flavor_dict= {'disk':flavor_dict.get('disk',1),
             'ram':flavor_dict.get('ram'),
             'vcpus':flavor_dict.get('vcpus'),
@@ -336,6 +341,8 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
     #look if flavor exist
     if only_create_at_vim:
         flavor_mano_id = flavor_dict['uuid']
+        if return_on_error == None:
+            return_on_error = True
     else:
         flavors = mydb.get_rows(FROM="flavors", WHERE=temp_flavor_dict)
         if len(flavors)>=1:
@@ -437,6 +444,7 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
                 logger.error("Error creating flavor at VIM %s: %s.", vim["name"], str(e))
                 raise
             logger.warn("Error creating flavor at VIM %s: %s.", vim["name"], str(e))
+            flavor_vim_id = None
             continue
         #if reach here the flavor has been create or exist
         if len(flavor_db)==0:
@@ -1904,7 +1912,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                 myVMDict['name'] = myVMDict['name'][0:255] #limit name length
                 #create image at vim in case it not exist
                 image_dict = mydb.get_table_by_uuid_name("images", vm['image_id'])
-                image_id = create_or_use_image(mydb, {datacenter_id: vim}, image_dict, [], True)                
+                image_id = create_or_use_image(mydb, {datacenter_id: vim}, image_dict, [], True)
                 vm['vim_image_id'] = image_id
                     
                 #create flavor at vim in case it not exist
