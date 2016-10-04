@@ -552,6 +552,7 @@ def boot_image(vim=None, image_name=None, vm_name=None):
             if vim_catalog is None:
                 return None
 
+        print (" Booting {} image id {} ".format(vm_name, vim_catalog))
         vm_uuid = vim.new_vminstance(name=vm_name, image_id=vim_catalog)
         if vm_uuid is not None and validate_uuid4(vm_uuid):
             print("Image booted and vm uuid {}".format(vm_uuid))
@@ -559,10 +560,17 @@ def boot_image(vim=None, image_name=None, vm_name=None):
             if vapp_dict is not None:
                 print_vapp(vapp_dict=vapp_dict)
         return True
+    except vimconn.vimconnNotFoundException as notFound:
+        print("Failed boot {} image".format(image_name))
+        print(notFound.message)
+    except vimconn.vimconnException as vimconError:
+        print("Failed boot {} image".format(image_name))
+        print(vimconError.message)
     except:
-        print("Failed uploaded {} image".format(image_name))
+        print("Failed boot {} image".format(image_name))
 
-    return False
+
+        return False
 
 
 def image_action(vim=None, action=None, namespace=None):
