@@ -241,8 +241,14 @@ echo '
 #################################################################
 #####        INSTALL PYTHON PACKAGES                        #####
 #################################################################'
-[ "$_DISTRO" == "Ubuntu" ] && install_packages "python-yaml python-bottle python-mysqldb python-jsonschema python-paramiko python-argcomplete python-requests python-logutils"
-[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "PyYAML MySQL-python python-jsonschema python-paramiko python-argcomplete python-requests python-logutils"
+[ "$_DISTRO" == "Ubuntu" ] && install_packages "python-yaml python-bottle python-mysqldb python-jsonschema python-paramiko python-argcomplete python-requests python-logutils libxml2-dev libxslt-dev python-dev python-pip"
+[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "PyYAML MySQL-python python-jsonschema python-paramiko python-argcomplete python-requests python-logutils libxslt-devel libxml2-devel python-devel python-pip"
+
+#required for vmware connector TODO move that to separete opt in install script
+sudo pip install --upgrade pip
+sudo pip install pyvcloud
+sudo pip install progressbar
+sudo pip install prettytable
 
 #The only way to install python-bottle on Centos7 is with easy_install or pip
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && easy_install -U bottle

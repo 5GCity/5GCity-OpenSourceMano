@@ -62,6 +62,7 @@ import uuid
 
 from xml.etree import ElementTree as ET
 
+import sys
 from pyvcloud import Http
 
 import logging
@@ -420,7 +421,6 @@ def view_actions(vim=None, action=None, namespace=None):
 
     # view vapp action
     if action == 'vapp' or namespace.action == 'vapp':
-        print namespace.vapp_name
         if namespace.vapp_name is not None and namespace.uuid:
             logger.debug("Requesting vapp {} for vdc {}".format(namespace.vapp_name, namespace.vcdvdc))
             vapp_dict = {}
@@ -432,8 +432,12 @@ def view_actions(vim=None, action=None, namespace=None):
                     print("Can't find vapp by given name {}".format(namespace.vapp_name))
                     return
 
-            vapp_dict = vim.get_vapp(vdc_name=namespace.vcdvdc, vapp_name=vapp_uuid, isuuid=True)
-            if vapp_dict is not None:
+            print " namespace {}".format(namespace)
+            if vapp_dict is not None and namespace.osm:
+                vm_info_dict = vim.get_vminstance(vim_vm_uuid=vapp_uuid)
+                print vm_info_dict
+            if vapp_dict is not None and namespace.osm != True:
+                vapp_dict = vim.get_vapp(vdc_name=namespace.vcdvdc, vapp_name=vapp_uuid, isuuid=True)
                 print_vapp(vapp_dict=vapp_dict)
 
     # view network
@@ -512,13 +516,13 @@ def upload_image(vim=None, image_file=None):
             The return true if image uploaded correctly
     """
     try:
-        catalog_uuid = vim.get_image_id_from_path(path=image_file)
+        catalog_uuid = vim.get_image_id_from_path(path=image_file, progress=True)
         if catalog_uuid is not None and validate_uuid4(catalog_uuid):
             print("Image uploaded and uuid {}".format(catalog_uuid))
             return True
-    except:
+    except vimconn.vimconnException as upload_exception:
         print("Failed uploaded {} image".format(image_file))
-
+        print("Error Reason: {}".format(upload_exception.message))
     return False
 
 
@@ -557,6 +561,8 @@ def boot_image(vim=None, image_name=None, vm_name=None):
         return True
     except:
         print("Failed uploaded {} image".format(image_name))
+
+    return False
 
 
 def image_action(vim=None, action=None, namespace=None):
@@ -638,6 +644,7 @@ def vmwarecli(command=None, action=None, namespace=None):
                            log_level="DEBUG",
                            config={'admin_username': namespace.vcdamdin, 'admin_password': namespace.vcdadminpassword})
         vim.vca = vim.connect()
+
     except vimconn.vimconnConnectionException:
         print("Failed connect to vcloud director. Please check credential and hostname.")
         return
@@ -746,6 +753,7 @@ if __name__ == '__main__':
     view_vapp_parser.add_argument('vapp_name', action='store',
                                   help='- view vapp for specific vapp name in vcloud director')
     view_vapp_parser.add_argument('-u', '--uuid', default=False, action='store_true', help='view vapp based on uuid')
+    view_vapp_parser.add_argument('-o', '--osm', default=False, action='store_true',  help='provide view in OSM format')
 
     # view network
     view_network = view_sub_subparsers.add_parser('network')
