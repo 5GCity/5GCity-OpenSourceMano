@@ -54,7 +54,6 @@ def openvim_available(openvim, db):
             if kvdb.get('openvim_uri') == openvim_uri:
                 return
 
-            import pdb; pdb.set_trace()
             # TODO: encapsulate the logic in create-datacenter.sh into python
             try:
                 cmd = './scripts/create-datacenter.sh {} {} {} {}'.format(
