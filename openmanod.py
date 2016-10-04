@@ -33,7 +33,7 @@ It loads the configuration file and launches the http_server thread that will li
 '''
 __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$26-aug-2014 11:09:29$"
-__version__="0.4.62-r506"
+__version__="0.5.0-r507"
 version_date="Oct 2016"
 database_version="0.15"      #expected database schema version
 
