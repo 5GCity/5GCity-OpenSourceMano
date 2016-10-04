@@ -56,11 +56,12 @@ trap 'rm -rf "$TEMPDIR"' EXIT
 echo -e "\nCloning devops repo temporarily"
 git clone https://osm.etsi.org/gerrit/osm/devops.git $TEMPDIR
 RC_CLONE=$?
-
 OSM_DEVOPS=$TEMPDIR
+OSM_JENKINS="$TEMPDIR/jenkins"
+. $OSM_JENKINS/common/all_funcs
 
 if [ -n "$UNINSTALL" ]; then
-    if $RC_CLONE; then
+    if [ $RC_CLONE ]; then
         $OSM_DEVOPS/jenkins/host/clean_container RO
         $OSM_DEVOPS/jenkins/host/clean_container VCA
         $OSM_DEVOPS/jenkins/host/clean_container SO
@@ -74,46 +75,54 @@ if [ -n "$UNINSTALL" ]; then
 fi
 
 if [ -n "$NAT" ]; then
-    $OSM_DEVOPS/installers/nat-osm || FATAL "Failed to run nat-osm"
+    sudo $OSM_DEVOPS/installers/nat_osm
+    exit 0
 fi
 
 #Installation starts here
+wget -q -O- https://osm-download.etsi.org/ftp/osm-1.0-one/README.txt &> /dev/null
+
 echo -e "\nInstalling required packages: git, wget, curl, tar"
-echo -e "\n   Required root privileges"
+echo -e "   Required root privileges"
 sudo apt install -y git wget curl tar
 
 echo -e "\nCreating the containers and building ..."
-. $OSM_DEVOPS/jenkins/common/all_funcs
-$OSM_DEVOPS/jenkins/host/start_build RO
+COMMIT_ID="master"
+$OSM_DEVOPS/jenkins/host/start_build RO checkout $COMMIT_ID
 $OSM_DEVOPS/jenkins/host/start_build VCA
-$OSM_DEVOPS/jenkins/host/start_build SO
-$OSM_DEVOPS/jenkins/host/start_build UI
+$OSM_DEVOPS/jenkins/host/start_build SO checkout $COMMIT_ID
+$OSM_DEVOPS/jenkins/host/start_build UI checkout $COMMIT_ID
 
 #Configure NAT rules
 echo -e "\nConfiguring NAT rules"
-echo -e "\n   Required root privileges"
-sudo $OSM_DEVOPS/installers/nat-osm
+echo -e "   Required root privileges"
+sudo $OSM_DEVOPS/installers/nat_osm
 
 #Configure components
-# TO BE DONE
 echo -e "\nConfiguring components"
 . $OSM_DEVOPS/installers/export_ips
 
-echo -e "\n       Configuring RO"
-#RO_TENANT_ID=`lxc exec RO -- openmano tenant-create osm |awk '{print $1}'`
+echo -e "       Configuring RO"
+lxc exec RO -- sed -i -e "s/^\#\?log_socket_host:.*/log_socket_host: $SO_CONTAINER_IP/g" /opt/openmano/openmanod.cfg
+lxc exec RO -- service openmano restart
+sleep 5
+RO_TENANT_ID=`lxc exec RO -- openmano tenant-create osm |awk '{print $1}'`
 
-echo -e "\n       Configuring VCA"
-#JUJU_PASSWD=`date +%s | sha256sum | base64 | head -c 32`
-#lxc exec VCA -- juju change-user-password $JUJUPASSWD
-#JUJU_CONTROLLER_IP=`lxc exec VCA -- lxc list -c 4 |grep eth0 |awk '{print $2}'`
+echo -e "       Configuring VCA"
+JUJU_PASSWD=`date +%s | sha256sum | base64 | head -c 32`
+echo -e "$JUJU_PASSWD\n$JUJU_PASSWD" | lxc exec VCA -- juju change-user-password
+JUJU_CONTROLLER_IP=`lxc exec VCA -- lxc list -c 4 |grep eth0 |awk '{print $2}'`
 
-echo -e "\n       Configuring SO"
-#sudo route add -net $JUJU_CONTROLLER_IP/32 gw $VCA_CONTAINER_IP
-#lxc exec SO-ub -- sudo -H /usr/rift/rift-shell -r -i /usr/rift -a /usr/rift/.artifacts -- ./demos/launchpad.py --use-xml-mode --test-name "launchpad"
-#sleep 2
+echo -e "       Configuring SO"
+sudo route add -host $JUJU_CONTROLLER_IP gw $VCA_CONTAINER_IP
+#lxc exec SO-ub -- nohup sudo -H /usr/rift/rift-shell -r -i /usr/rift -a /usr/rift/.artifacts -- ./demos/launchpad.py --use-xml-mode &
+lxc exec SO-ub -- nohup sudo -H /usr/rift/rift-shell -r -i /usr/rift -a /usr/rift/.artifacts -- ./demos/launchpad.py --use-xml-mode
+sleep 60
 #lxc exec SO-ub -- resource-orchestrator name openmano account-type openmano openmano host $RO_CONTAINER_IP tenant-id $RO_TENANT_ID port 9090
 #lxc exec SO-ub -- config-agent account juju account-type juju juju ip-address $JUJU_CONTROLLER_IP port 17070 user admin secret $JUJU_PASSWD
+#curl --request POST --url http://$SO_CONTAINER_IP:8008/api/config/config-agent --header 'accept: application/vnd.yang.data+json' --header 'authorization: Basic YWRtaW46YWRtaW4=' --header 'cache-control: no-cache' --header 'content-type: application/vnd.yang.data+json' --data '{\n "account": [\n {\n "name": "osmjuju",\n "juju": {\n "ip-address": "$JUJU_CONTROLLER_IP",\n "port": "17070",\n "user": "admin",\n "secret": "$JUJU_PASSWD"\n }\n }\n ]\n}'
+#curl --request PUT --url https://$SO_CONTAINER_IP:8008/api/config/resource-orchestrator --header 'accept: application/vnd.yang.data+json' --header 'authorization: Basic YWRtaW46YWRtaW4=' --header 'cache-control: no-cache' --header 'content-type: application/vnd.yang.data+json' --data '{\n "openmano": {\n "host": "$RO_CONTAINER_IP",\n "port": "9090",\n "tenant-id": "$RO_TENANT_ID"\n },\n "name": "osmopenmano",\n "account-type": "openmano"\n}'
 
-echo "\nDONE"
+echo -e "\nDONE"
 
 
