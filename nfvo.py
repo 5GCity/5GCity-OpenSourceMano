@@ -344,7 +344,7 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
             if 'extended' in flavor_dict and flavor_dict['extended']!=None:
                 dev_nb=0
                 for device in flavor_dict['extended'].get('devices',[]):
-                    if "image" not in device or "image name" not in device:
+                    if "image" not in device and "image name" not in device:
                         continue
                     image_dict={}
                     image_dict['name']=device.get('image name',flavor_dict['name']+str(dev_nb)+"-img")
