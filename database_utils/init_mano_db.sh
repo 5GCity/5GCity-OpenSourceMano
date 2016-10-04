@@ -129,7 +129,7 @@ if [ -n "${CREATEDB}" ]; then
     echo "    deleting previous database ${DBNAME}"
     echo "DROP DATABASE IF EXISTS ${DBNAME}" | mysql $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_
     echo "    creating database ${DBNAME}"
-    mysqladmin $DEF_EXTRA_FILE_PARAM -s create ${DBNAME} || exit 1
+    mysqladmin $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_ -s create ${DBNAME} || exit 1
 fi
 
 echo "    loading ${DIRNAME}/${DBNAME}_structure.sql"
