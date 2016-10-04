@@ -119,19 +119,22 @@ echo -e "       Configuring SO"
 sudo route add -host $JUJU_CONTROLLER_IP gw $VCA_CONTAINER_IP
 lxc exec SO-ub -- nohup sudo -b -H /usr/rift/rift-shell -r -i /usr/rift -a /usr/rift/.artifacts -- ./demos/launchpad.py --use-xml-mode
 sleep 60
-#lxc exec SO-ub -- resource-orchestrator name openmano account-type openmano openmano host $RO_CONTAINER_IP tenant-id $RO_TENANT_ID port 9090
-#lxc exec SO-ub -- config-agent account juju account-type juju juju ip-address $JUJU_CONTROLLER_IP port 17070 user admin secret $JUJU_PASSWD
-#curl --request POST --url http://$SO_CONTAINER_IP:8008/api/config/config-agent --header 'accept: application/vnd.yang.data+json' --header 'authorization: Basic YWRtaW46YWRtaW4=' --header 'cache-control: no-cache' --header 'content-type: application/vnd.yang.data+json' --data '{\n "account": [\n {\n "name": "osmjuju",\n "juju": {\n "ip-address": "$JUJU_CONTROLLER_IP",\n "port": "17070",\n "user": "admin",\n "secret": "$JUJU_PASSWD"\n }\n }\n ]\n}'
 curl -k --request POST \
-  --url https://$SO_CONTAINER:8008/api/config/config-agent \
+  --url https://$SO_CONTAINER_IP:8008/api/config/config-agent \
   --header 'accept: application/vnd.yang.data+json' \
   --header 'authorization: Basic YWRtaW46YWRtaW4=' \
   --header 'cache-control: no-cache' \
   --header 'content-type: application/vnd.yang.data+json' \
-  --data '{\n  "account": [\n    {\n      "name": "osmjuju",\n      "account-type": "juju",\n      "juju": {\n        "ip-address": " $JUJU_CONTROLLER_IP",\n        "port": "17070",\n        "user": "-admin",\n        "secret": "$JUJU_PASSWD"\n      }\n    }\n  ]\n}'
+  --data '{"account": [ { "name": "osmjuju", "account-type": "juju", "juju": { "ip-address": "'$JUJU_CONTROLLER_IP'", "port": "17070", "user": "admin", "secret": "'$JUJU_PASSWD'" }  }  ]}'
 
-#curl --request PUT --url https://$SO_CONTAINER_IP:8008/api/config/resource-orchestrator --header 'accept: application/vnd.yang.data+json' --header 'authorization: Basic YWRtaW46YWRtaW4=' --header 'cache-control: no-cache' --header 'content-type: application/vnd.yang.data+json' --data '{\n "openmano": {\n "host": "$RO_CONTAINER_IP",\n "port": "9090",\n "tenant-id": "$RO_TENANT_ID"\n },\n "name": "osmopenmano",\n "account-type": "openmano"\n}'
-curl -k --request PUT --url https://$SO_CONTAINER_IP:8008/api/config/resource-orchestrator --header 'accept: application/vnd.yang.data+json' --header 'authorization: Basic YWRtaW46YWRtaW4=' --header 'cache-control: no-cache' --header 'content-type: application/vnd.yang.data+json' --data '{\n "openmano": {\n "host": "$RO_CONTAINER_IP",\n "port": "9090",\n "tenant-id": "$RO_TENANT_ID"\n },\n "name": "osmopenmano",\n "account-type": "openmano"\n}'
+curl -k --request PUT \
+  --url https://$SO_CONTAINER_IP:8008/api/config/resource-orchestrator \
+  --header 'accept: application/vnd.yang.data+json' \
+  --header 'authorization: Basic YWRtaW46YWRtaW4=' \
+  --header 'cache-control: no-cache' \
+  --header 'content-type: application/vnd.yang.data+json' \
+  --data '{ "openmano": { "host": "'$RO_CONTAINER_IP'", "port": "9090", "tenant-id": "'$RO_TENANT_ID'" }, "name": "osmopenmano", "account-type": "openmano" }'
+
 
 echo -e "\nDONE"
 
