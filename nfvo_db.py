@@ -44,7 +44,6 @@ class nfvo_db(db_base.db_base):
         db_base.db_base.tables_with_created_field=tables_with_createdat_field
         return
 
-
     def new_vnf_as_a_whole(self,nfvo_tenant,vnf_name,vnf_descriptor,VNFCDict):
         self.logger.debug("Adding new vnf to the NFVO database")
         tries = 2
@@ -707,7 +706,6 @@ class nfvo_db(db_base.db_base):
                 self._format_error(e, tries)
             tries -= 1
 
-
     def delete_scenario(self, scenario_id, tenant_id=None):
         '''Deletes a scenario, filtering by one or several of the tenant, uuid or name
         scenario_id is the uuid or the name if it is not a valid uuid format
@@ -752,10 +750,9 @@ class nfvo_db(db_base.db_base):
                 with self.con:
                     self.cur = self.con.cursor()
                     #instance_scenarios
-                    datacenter_tenant_id = scenarioDict['datacenter_tenant_id']
                     datacenter_id = scenarioDict['datacenter_id']
                     INSERT_={'tenant_id': tenant_id,
-                        'datacenter_tenant_id': datacenter_tenant_id,
+                        'datacenter_tenant_id': scenarioDict["datacenter2tenant"][datacenter_id],
                         'name': instance_scenario_name,
                         'description': instance_scenario_description,
                         'scenario_id' : scenarioDict['uuid'],
@@ -773,12 +770,13 @@ class nfvo_db(db_base.db_base):
                         datacenter_site_id = net.get('datacenter_id', datacenter_id)
                         if not "vim_id_sites" in net:
                             net["vim_id_sites"] ={datacenter_site_id: net['vim_id']}
+                            net["vim_id_sites"]["datacenter_site_id"] = {datacenter_site_id: net['vim_id']}
                         sce_net_id = net.get("uuid")
                         
                         for datacenter_site_id,vim_id in net["vim_id_sites"].iteritems():
                             INSERT_={'vim_net_id': vim_id, 'created': net.get('created', False), 'instance_scenario_id':instance_uuid } #,  'type': net['type']
                             INSERT_['datacenter_id'] = datacenter_site_id 
-                            INSERT_['datacenter_tenant_id'] = net.get('datacenter_tenant_id', datacenter_tenant_id) #TODO revise
+                            INSERT_['datacenter_tenant_id'] = scenarioDict["datacenter2tenant"][datacenter_site_id]
                             if sce_net_id:
                                 INSERT_['sce_net_id'] = sce_net_id
                             created_time += 0.00001
@@ -796,10 +794,9 @@ class nfvo_db(db_base.db_base):
                     #instance_vnfs
                     for vnf in scenarioDict['vnfs']:
                         datacenter_site_id = vnf.get('datacenter_id', datacenter_id)
-                        datacenter_site_tenant_id = vnf.get('datacenter_tenant_id', datacenter_id)
                         INSERT_={'instance_scenario_id': instance_uuid,  'vnf_id': vnf['vnf_id']  }
                         INSERT_['datacenter_id'] = datacenter_site_id 
-                        INSERT_['datacenter_tenant_id'] = datacenter_site_tenant_id #TODO revise
+                        INSERT_['datacenter_tenant_id'] = scenarioDict["datacenter2tenant"][datacenter_site_id]
                         if vnf.get("uuid"):
                             INSERT_['sce_vnf_id'] = vnf['uuid']
                         created_time += 0.00001
@@ -811,7 +808,7 @@ class nfvo_db(db_base.db_base):
                             net_scene2instance[ net['uuid'] ] = {}
                             INSERT_={'vim_net_id': net['vim_id'], 'created': net.get('created', False), 'instance_scenario_id':instance_uuid  } #,  'type': net['type']
                             INSERT_['datacenter_id'] = net.get('datacenter_id', datacenter_site_id) 
-                            INSERT_['datacenter_tenant_id'] = net.get('datacenter_tenant_id', datacenter_site_tenant_id)
+                            INSERT_['datacenter_tenant_id'] = scenarioDict["datacenter2tenant"][datacenter_id]
                             if net.get("uuid"):
                                 INSERT_['net_id'] = net['uuid']
                             created_time += 0.00001
