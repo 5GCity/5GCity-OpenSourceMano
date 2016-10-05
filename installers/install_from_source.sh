@@ -95,6 +95,11 @@ $OSM_DEVOPS/jenkins/host/start_build VCA
 $OSM_DEVOPS/jenkins/host/start_build SO checkout $COMMIT_ID
 $OSM_DEVOPS/jenkins/host/start_build UI checkout $COMMIT_ID
 
+#Install iptables-persistent
+echo -e "\nInstalling iptables-persistent"
+echo -e "   Required root privileges"
+sudo DEBIAN_FRONTEND=noninteractive apt-get -yq install iptables-persistent
+
 #Configure NAT rules
 echo -e "\nConfiguring NAT rules"
 echo -e "   Required root privileges"
