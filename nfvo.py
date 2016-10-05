@@ -2169,6 +2169,8 @@ def refresh_instance(mydb, nfvo_tenant, instanceDict, datacenter=None, vim_tenan
                     has_mgmt_iface = True
             if vm_dict[vm_id]['status'] == "ACTIVE:NoMgmtIP" and not has_mgmt_iface:
                 vm_dict[vm_id]['status'] = "ACTIVE"
+            if vm_dict[vm_id].get('error_msg') and len(vm_dict[vm_id]['error_msg']) >= 1024:
+                vm_dict[vm_id]['error_msg'] = vm_dict[vm_id]['error_msg'][:516] + " ... " + vm_dict[vm_id]['error_msg'][-500:]
             if vm['status'] != vm_dict[vm_id]['status'] or vm.get('error_msg')!=vm_dict[vm_id].get('error_msg') or vm.get('vim_info')!=vm_dict[vm_id].get('vim_info'):
                 vm['status']    = vm_dict[vm_id]['status']
                 vm['error_msg'] = vm_dict[vm_id].get('error_msg')
@@ -2221,6 +2223,8 @@ def refresh_instance(mydb, nfvo_tenant, instanceDict, datacenter=None, vim_tenan
     # TODO: update nets inside a vnf
     for net in instanceDict['nets']:
         net_id = net['vim_net_id']
+        if net_dict[net_id].get('error_msg') and len(net_dict[net_id]['error_msg']) >= 1024:
+            net_dict[net_id]['error_msg'] = net_dict[net_id]['error_msg'][:516] + " ... " + net_dict[vm_id]['error_msg'][-500:]
         if net['status'] != net_dict[net_id]['status'] or net.get('error_msg')!=net_dict[net_id].get('error_msg') or net.get('vim_info')!=net_dict[net_id].get('vim_info'):
             net['status']    = net_dict[net_id]['status']
             net['error_msg'] = net_dict[net_id].get('error_msg')
