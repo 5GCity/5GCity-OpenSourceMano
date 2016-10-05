@@ -265,7 +265,7 @@ if [[ -z $NOCLONE ]]; then
 #################################################################'
     su $SUDO_USER -c 'git clone '"${GIT_URL}"' openmano'
     su $SUDO_USER -c 'cp openmano/.gitignore-common openmano/.gitignore'
-    [[ -z $DEVELOP ]] && su $SUDO_USER -c 'git checkout tags/v1.0' 
+    [[ -z $DEVELOP ]] && su $SUDO_USER -c 'cd openmano; git checkout tags/v1.0; cd ..' 
 fi
 
 echo '
