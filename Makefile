@@ -58,6 +58,7 @@ $(BUILD_DIR)/clearwater-juju:
 $(BUILD_DIR)/juju-charms:
 	mkdir -p $(BUILD_DIR)
 	-cd $(BUILD_DIR) && (test -e juju-charms || git clone $(CHARM_REPO))
+	-cd $(BUILD_DIR)/juju-charms && make
 
 $(NSD_BUILD_DIR)/%: $(NSD_SRC_DIR)/%
 	mkdir -p $(NSD_BUILD_DIR)
