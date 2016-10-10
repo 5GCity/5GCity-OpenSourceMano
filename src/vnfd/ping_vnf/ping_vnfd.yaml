@@ -16,78 +16,78 @@
 #
 
 vnfd:vnfd-catalog:
-    vnfd:vnfd:
-    -   vnfd:connection-point:
-        -   vnfd:name: ping_vnfd/cp0
-            vnfd:type: VPORT
-        -   vnfd:name: ping_vnfd/cp1
-            vnfd:type: VPORT
-        vnfd:description: This is an example RIFT.ware VNF
-        vnfd:http-endpoint:
-        -   vnfd:path: api/v1/ping/stats
-            vnfd:polling_interval_secs: '2'
-            vnfd:port: '18888'
-        vnfd:id: 8759e766-8b99-11e6-9664-02b76030c497
-        vnfd:logo: rift_logo.png
-        vnfd:mgmt-interface:
-            vnfd:dashboard-params:
-                vnfd:path: api/v1/ping/stats
-                vnfd:port: '18888'
-            vnfd:port: '18888'
-            vnfd:vdu-id: iovdu_0
-        vnfd:monitoring-param:
-        -   vnfd:description: no of ping requests
-            vnfd:group-tag: Group1
-            vnfd:http-endpoint-ref: api/v1/ping/stats
-            vnfd:id: '1'
-            vnfd:json-query-method: NAMEKEY
-            vnfd:name: ping-request-tx-count
-            vnfd:units: packets
-            vnfd:value-type: INT
-            vnfd:widget-type: COUNTER
-        -   vnfd:description: no of ping responses
-            vnfd:group-tag: Group1
-            vnfd:http-endpoint-ref: api/v1/ping/stats
-            vnfd:id: '2'
-            vnfd:json-query-method: NAMEKEY
-            vnfd:name: ping-response-rx-count
-            vnfd:units: packets
-            vnfd:value-type: INT
-            vnfd:widget-type: COUNTER
-        vnfd:name: ping_vnfd
-        vnfd:placement-groups:
-        -   vnfd:member-vdus:
-            -   vnfd:member-vdu-ref: iovdu_0
-            vnfd:name: Eris
-            vnfd:requirement: Place this VM on the Kuiper belt object Eris
-            vnfd:strategy: COLOCATION
-        vnfd:short-name: ping_vnfd
-        vnfd:vdu:
-        -   vnfd:count: '1'
-            vnfd:external-interface:
-            -   vnfd:name: eth0
-                vnfd:virtual-interface:
-                    vnfd:type: OM-MGMT
-                vnfd:vnfd-connection-point-ref: ping_vnfd/cp0
-            -   vnfd:name: eth1
-                vnfd:virtual-interface:
-                    vnfd:type: VIRTIO
-                vnfd:vnfd-connection-point-ref: ping_vnfd/cp1
-            vnfd:id: iovdu_0
-            vnfd:image: Fedora-x86_64-20-20131211.1-sda-ping.qcow2
-            vnfd:image-checksum: a6ffaa77f949a9e4ebb082c6147187cf
-            vnfd:name: iovdu_0
-            vnfd:vm-flavor:
-                vnfd:memory-mb: '512'
-                vnfd:storage-gb: '4'
-                vnfd:vcpu-count: '1'
-        vnfd:vendor: RIFT.io
-        vnfd:version: '1.0'
-        vnfd:vnf-configuration:
-            vnfd:config-attributes:
-                vnfd:config-delay: '0'
-                vnfd:config-priority: '2'
-            vnfd:config-template: "\n#!/bin/bash\n\n# Rest API config\nping_mgmt_ip='<rw_mgmt_ip>'\n\
+    vnfd:   
+    -   connection-point:
+        -   name: ping_vnfd/cp0
+            type: VPORT
+        -   name: ping_vnfd/cp1
+            type: VPORT
+        description: This is an example RIFT.ware VNF
+        http-endpoint:
+        -   path: api/v1/ping/stats
+            polling_interval_secs: '2'
+            port: '18888'
+        id: 8759e766-8b99-11e6-9664-02b76030c497
+        logo: rift_logo.png
+        mgmt-interface:
+            dashboard-params:
+                path: api/v1/ping/stats
+                port: '18888'
+            port: '18888'
+            vdu-id: iovdu_0
+        monitoring-param:
+        -   description: no of ping requests
+            group-tag: Group1
+            http-endpoint-ref: api/v1/ping/stats
+            id: '1'
+            json-query-method: NAMEKEY
+            name: ping-request-tx-count
+            units: packets
+            value-type: INT
+            widget-type: COUNTER
+        -   description: no of ping responses
+            group-tag: Group1
+            http-endpoint-ref: api/v1/ping/stats
+            id: '2'
+            json-query-method: NAMEKEY
+            name: ping-response-rx-count
+            units: packets
+            value-type: INT
+            widget-type: COUNTER
+        name: ping_vnfd
+        placement-groups:
+        -   member-vdus:
+            -   member-vdu-ref: iovdu_0
+            name: Eris
+            requirement: Place this VM on the Kuiper belt object Eris
+            strategy: COLOCATION
+        short-name: ping_vnfd
+        vdu:
+        -   count: '1'
+            external-interface:
+            -   name: eth0
+                virtual-interface:
+                    type: OM-MGMT
+                vnfd-connection-point-ref: ping_vnfd/cp0
+            -   name: eth1
+                virtual-interface:
+                    type: VIRTIO
+                vnfd-connection-point-ref: ping_vnfd/cp1
+            id: iovdu_0
+            image: Fedora-x86_64-20-20131211.1-sda-ping.qcow2
+            image-checksum: a6ffaa77f949a9e4ebb082c6147187cf
+            name: iovdu_0
+            vm-flavor:
+                memory-mb: '512'
+                storage-gb: '4'
+                vcpu-count: '1'
+        vendor: RIFT.io
+        version: '1.0'
+        vnf-configuration:
+            config-attributes:
+                config-delay: '0'
+                config-priority: '2'
+            config-template: "\n#!/bin/bash\n\n# Rest API config\nping_mgmt_ip='<rw_mgmt_ip>'\n\
                 ping_mgmt_port=18888\n\n# VNF specific configuration\npong_server_ip='<rw_connection_point_name\
                 \ pong_vnfd/cp0>'\nping_rate=5\nserver_port=5555\n\n# Make rest API\
                 \ calls to configure VNF\ncurl -D /dev/stdout \\\n    -H \"Accept:\
@@ -106,5 +106,5 @@ vnfd:vnfd-catalog:
                 \"enable\\\":true}\" \\\n    http://${ping_mgmt_ip}:${ping_mgmt_port}/api/v1/ping/adminstatus/state)\n\
                 if [[ $output == *\"Internal Server Error\"* ]]\nthen\n    echo $output\n\
                 \    exit 3\nelse\n    echo $output\nfi\n\nexit 0\n"
-            vnfd:script:
-                vnfd:script-type: bash
+            script:
+                script-type: bash
