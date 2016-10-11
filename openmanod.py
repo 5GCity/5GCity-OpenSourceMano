@@ -45,6 +45,7 @@ import yaml
 import nfvo_db
 from jsonschema import validate as js_v, exceptions as js_e
 from openmano_schemas import config_schema
+from db_base import db_base_Exception
 import nfvo
 import logging
 import logging.handlers as log_handlers
@@ -257,17 +258,19 @@ if __name__=="__main__":
         
         # Initialize DB connection
         mydb = nfvo_db.nfvo_db();
-        if mydb.connect(global_config['db_host'], global_config['db_user'], global_config['db_passwd'], global_config['db_name']) == -1:
-            logger.critical("Cannot connect to database %s at %s@%s", global_config['db_name'], global_config['db_user'], global_config['db_host'])
+        mydb.connect(global_config['db_host'], global_config['db_user'], global_config['db_passwd'], global_config['db_name'])
+        try:
+            r = mydb.get_db_version()
+            if r[1] != database_version:
+                logger.critical("DATABASE wrong version '%s'. \
+                                Try to upgrade/downgrade to version '%s' with './database_utils/migrate_mano_db.sh'",
+                                r[1], database_version)
+                exit(-1)
+        except db_base_Exception as e:
+            logger.critical("DATABASE is not a MANO one or it is a '0.0' version. Try to upgrade to version '%s' with \
+                            './database_utils/migrate_mano_db.sh'", database_version)
             exit(-1)
-        r = mydb.get_db_version()
-        if r[0]<0:
-            logger.critical("DATABASE is not a MANO one or it is a '0.0' version. Try to upgrade to version '%s' with './database_utils/migrate_mano_db.sh'", database_version)
-            exit(-1)
-        elif r[1]!=database_version:
-            logger.critical("DATABASE wrong version '%s'. Try to upgrade/downgrade to version '%s' with './database_utils/migrate_mano_db.sh'", r[1], database_version)
-            exit(-1)
-        
+
         nfvo.global_config=global_config
         
         httpthread = httpserver.httpserver(mydb, False, global_config['http_host'], global_config['http_port'])
@@ -303,6 +306,9 @@ if __name__=="__main__":
         #usage()
         exit(-1)
     except LoadConfigurationException as e:
+        logger.critical(str(e))
+        exit(-1)
+    except db_base_Exception as e:
         logger.critical(str(e))
         exit(-1)
 

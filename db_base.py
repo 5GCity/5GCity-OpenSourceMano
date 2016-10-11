@@ -75,7 +75,7 @@ def _convert_datetime2str(var):
         for v in var:
             _convert_datetime2str(v)
 
-def _convert_bandwidth(data, reverse=False):
+def _convert_bandwidth(data, reverse=False, logger=None):
     '''Check the field bandwidth recursivelly and when found, it removes units and convert to number 
     It assumes that bandwidth is well formed
     Attributes:
@@ -87,7 +87,7 @@ def _convert_bandwidth(data, reverse=False):
     if type(data) is dict:
         for k in data.keys():
             if type(data[k]) is dict or type(data[k]) is tuple or type(data[k]) is list:
-                _convert_bandwidth(data[k], reverse)
+                _convert_bandwidth(data[k], reverse, logger)
         if "bandwidth" in data:
             try:
                 value=str(data["bandwidth"])
@@ -102,12 +102,13 @@ def _convert_bandwidth(data, reverse=False):
                     if value % 1000 == 0: data["bandwidth"]=str(value/1000) + " Gbps"
                     else: data["bandwidth"]=str(value) + " Mbps"
             except:
-                print "convert_bandwidth exception for type", type(data["bandwidth"]), " data", data["bandwidth"]
+                if logger:
+                    logger.error("convert_bandwidth exception for type '%s' data '%s'", type(data["bandwidth"]), data["bandwidth"])
                 return
     if type(data) is tuple or type(data) is list:
         for k in data:
             if type(k) is dict or type(k) is tuple or type(k) is list:
-                _convert_bandwidth(k, reverse)
+                _convert_bandwidth(k, reverse, logger)
 
 def _convert_str2boolean(data, items):
     '''Check recursively the content of data, and if there is an key contained in items, convert value from string to boolean 
@@ -164,10 +165,11 @@ class db_base():
             if database:    self.database = database
 
             self.con = mdb.connect(self.host, self.user, self.passwd, self.database)
-            print "DB: connected to %s@%s -> %s" % (self.user, self.host, self.database)
-        except mdb.Error, e:
-            raise db_base_Exception("Cannot connect to DB {}@{} -> {} Error {}: {}".format(self.user, self.host, self.database, e.args[0], e.args[1]),
-                                    code = HTTP_Internal_Server_Error )
+            self.logger.debug("DB: connected to '%s' at '%s@%s'", self.database, self.user, self.host)
+        except mdb.Error as e:
+            raise db_base_Exception("Cannot connect to DataBase '{}' at '{}@{}' Error {}: {}".format(
+                                    self.database, self.user, self.host, e.args[0], e.args[1]),
+                                    http_code = HTTP_Unauthorized )
         
     def get_db_version(self):
         ''' Obtain the database schema version.
