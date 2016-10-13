@@ -24,6 +24,11 @@ build/vnfd_pkgs and build/nsd_pkgs.
 
 To clean, type 'make clean'.
 
+You need to install charm tools to compile the charms required for the packages.
+On Fedora, install using: pip install charm-tools
+On Ubuntu, install using: apt install charm-tools
+For other platforms, check https://jujucharms.com/docs/2.0/tools-charm-tools
+
 Due to license issues, for the IMS VNFD package, the IMS charm is fetched
 extracted from the respective git repository prior to packaging.  Because of
 this, internet access is required to reach github.
