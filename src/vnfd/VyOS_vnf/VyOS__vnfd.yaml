@@ -40,7 +40,7 @@ vnfd:vnfd-catalog:
                     value: vyos
                 seq: '1'
             juju:
-                charm: VyOS-proxy
+                charm: vyos-proxy
         connection-point:
         -   name: eth0
             type: VPORT
