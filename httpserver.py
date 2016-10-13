@@ -450,7 +450,7 @@ def http_get_datacenter_id(tenant_id, datacenter_id):
         what = 'uuid' if utils.check_valid_uuid(datacenter_id) else 'name'
         where_={}
         where_[what] = datacenter_id
-        select_=['uuid', 'name','vim_url', 'vim_url_admin', 'type', 'config', 'description', 'd.created_at as created_at']
+        select_=['uuid', 'name','vim_url', 'vim_url_admin', 'type', 'd.config as config', 'description', 'd.created_at as created_at']
         if tenant_id != 'any':
             select_.append("datacenter_tenant_id")
             where_['td.nfvo_tenant_id']= tenant_id
@@ -470,13 +470,22 @@ def http_get_datacenter_id(tenant_id, datacenter_id):
         if tenant_id != 'any':
             #get vim tenant info
             vim_tenants = mydb.get_rows(
-                    SELECT=("vim_tenant_name", "vim_tenant_id", "user"),
+                    SELECT=("vim_tenant_name", "vim_tenant_id", "user", "passwd", "config"),
                     FROM="datacenter_tenants",
                     WHERE={"uuid": datacenters[0]["datacenter_tenant_id"]},
                     ORDER_BY=("created", ) )
             del datacenter["datacenter_tenant_id"]
             datacenter["vim_tenants"] = vim_tenants
-    
+            for vim_tenant in vim_tenants:
+                if vim_tenant["passwd"]:
+                    vim_tenant["passwd"] = "******"
+                if vim_tenant['config'] != None:
+                    try:
+                        config_dict = yaml.load(vim_tenant['config'])
+                        vim_tenant['config'] = config_dict
+                    except Exception, e:
+                        logger.error("Exception '%s' while trying to load config information", str(e))
+
         if datacenter['config'] != None:
             try:
                 config_dict = yaml.load(datacenter['config'])
@@ -719,8 +728,9 @@ def http_associate_datacenters(tenant_id, datacenter_id):
                                     http_content['datacenter'].get('vim_tenant'),
                                     http_content['datacenter'].get('vim_tenant_name'),
                                     http_content['datacenter'].get('vim_username'),
-                                    http_content['datacenter'].get('vim_password')
-                         )
+                                    http_content['datacenter'].get('vim_password'),
+                                    http_content['datacenter'].get('config')
+        )
         return http_get_datacenter_id(tenant_id, id_)
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_associate_datacenters error {}: {}".format(e.http_code, str(e)))
