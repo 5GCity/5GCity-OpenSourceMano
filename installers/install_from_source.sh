@@ -53,8 +53,13 @@ echo -e "\nCreating temporary dir for OSM installation"
 TEMPDIR="$(mktemp -d -q --tmpdir "installosm.XXXXXX")"
 trap 'rm -rf "$TEMPDIR"' EXIT
 
+echo -e "Checking required packages: git"
+dpkg -l git &>/dev/null || ! echo -e "     git not installed.\nInstalling git requires root privileges" || sudo apt install -y git
 echo -e "\nCloning devops repo temporarily"
 git clone https://osm.etsi.org/gerrit/osm/devops.git $TEMPDIR
+#DEVOPS_COMMITID="tags/v1.0.0"
+DEVOPS_COMMITID="master"
+git -C $TEMPDIR checkout $DEVOPS_COMMITID
 RC_CLONE=$?
 OSM_DEVOPS=$TEMPDIR
 OSM_JENKINS="$TEMPDIR/jenkins"
@@ -75,6 +80,9 @@ if [ -n "$UNINSTALL" ]; then
 fi
 
 if [ -n "$NAT" ]; then
+    echo -e "\nChecking required packages: iptables-persistent"
+    dpkg -l iptables-persistent &>/dev/null || ! echo -e "    Not installed.\nInstalling iptables-persistent requires root privileges" || \
+    sudo DEBIAN_FRONTEND=noninteractive apt-get -yq install iptables-persistent
     sudo $OSM_DEVOPS/installers/nat_osm
     exit 0
 fi
@@ -82,12 +90,11 @@ fi
 #Installation starts here
 wget -q -O- https://osm-download.etsi.org/ftp/osm-1.0-one/README.txt &> /dev/null
 
-echo -e "\nInstalling required packages: git, wget, curl, tar"
-echo -e "   Required root privileges"
-sudo apt install -y git wget curl tar
+echo -e "\nChecking required packages: wget, curl, tar"
+dpkg -l wget curl tar &>/dev/null || ! echo -e "    One or several packages are not installed.\nInstalling required packages\n     Root privileges are required" || sudo apt install -y wget curl tar
 
 echo -e "\nCreating the containers and building ..."
-COMMIT_ID="tags/v1.0"
+COMMIT_ID="tags/v1.0.0"
 #COMMIT_ID="master"
 [ -n "$DEVELOP" ] && COMMIT_ID="master"
 $OSM_DEVOPS/jenkins/host/start_build RO checkout $COMMIT_ID
@@ -96,8 +103,8 @@ $OSM_DEVOPS/jenkins/host/start_build SO checkout $COMMIT_ID
 $OSM_DEVOPS/jenkins/host/start_build UI checkout $COMMIT_ID
 
 #Install iptables-persistent
-echo -e "\nInstalling iptables-persistent"
-echo -e "   Required root privileges"
+echo -e "\nChecking required packages: iptables-persistent"
+dpkg -l iptables-persistent &>/dev/null || ! echo -e "    Not installed.\nInstalling iptables-persistent requires root privileges" || \
 sudo DEBIAN_FRONTEND=noninteractive apt-get -yq install iptables-persistent
 
 #Configure NAT rules
