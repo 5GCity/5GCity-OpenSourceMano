@@ -25,35 +25,8 @@ OSM_JENKINS=$(dirname $HERE)
 # SET YOU MDG repository name here
 export OSM_MDG=RO
 OSM_load_config
+OSM_git_checkout "$@"
 
-
-# Updates all the branches in the local repo (clones if it does not exist)
-if [ -d $OSM_MDG ]; then
-    INFO "reusing existing workspace"
-    cd $OSM_MDG
-    git pull --all
-    #git checkout master  #to make sure that we are in the right branch before pulling the code
-    #git pull
-else
-    INFO "cloning MDG $OSM_MDG from $OSM_GIT_URL/$OSM_MDG"
-    git clone $OSM_GIT_URL/$OSM_MDG
-    cd $OSM_MDG
-    for remote in `git branch -r`; do git branch --track ${remote#origin/} $remote; done
-fi
-
-if [ $# -gt 0 ]; then
-    if [ "$1" = "checkout" ]; then
-        INFO "Code to compile: '$2'"
-        git checkout $2
-    else
-        INFO "Code to compile: gerrit refspec '$1', commit-id: '$2'"
-        git fetch origin $1 || FATAL "git fetch origin '$1' didn't work"
-        git checkout -f $2 || FATAL "git checkout -f '$2' didn't work"
-    fi
-else
-    INFO "Code to compile: master"
-    git checkout master
-fi
 
 INFO "starting build"
 

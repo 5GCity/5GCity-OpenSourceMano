@@ -35,13 +35,13 @@ print_stack() {
 
 
 FATAL() { 
-	echo "### $(date) ${FUNCNAME[1]}: FATAL error: $*" >&2
+	echo -e "\n### $(date) ${FUNCNAME[1]}: FATAL error: $*" >&2
 	print_stack
 	exit 1
 }
 	
 WARNING() { 
-	echo "### $(date) ${FUNCNAME[1]}: WARNING error: $*" >&2
+	echo -e "\n### $(date) ${FUNCNAME[1]}: WARNING error: $*" >&2
 }
 
 INFO() { 
@@ -50,4 +50,12 @@ INFO() {
 
 DEBUG() { 
 	echo "#   $(date) ${FUNCNAME[1]}: $*" >&2
+}
+
+CMD() {
+	echo "# executing '$*' ..."
+	"$@"
+	rc=$?
+	echo "# .... '$*' done RC was $rc"
+	return $rc
 }

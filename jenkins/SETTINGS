@@ -19,3 +19,12 @@
 #
 # base url for all repositories
 OSM_GIT_URL=https://osm.etsi.org/gerrit/osm
+#
+# OSM_USE_LOCAL_DEVOPS
+#
+# this option disables the clone inside the
+# the container and instead copies this directory tree
+# into the container. Very useful for testing
+# default is false
+#
+# OSM_USE_LOCAL_DEVOPS=true

@@ -25,41 +25,15 @@ OSM_JENKINS=$(dirname $HERE)
 # SET YOU MDG repository name here
 export OSM_MDG=UI
 OSM_load_config
+OSM_git_checkout "$@"
 
-
-# Here is an example for how to handle an incremental build
-if [ -d $OSM_MDG ]; then
-	INFO "reusing existing workspace"
-	cd $OSM_MDG
-	git pull 
-else
-	INFO "cloning MDG $OSM_MDG from $OSM_GIT_URL/$OSM_MDG"
-	git clone $OSM_GIT_URL/$OSM_MDG
-	cd $OSM_MDG
-fi
-
-if [ $# -gt 0 ]; then
-    if [ "$1" = "checkout" ]; then
-        INFO "Code to compile: '$2'"
-        git checkout $2
-    else
-        INFO "Code to compile: gerrit refspec '$1', commit-id: '$2'"
-        git fetch origin $1 || FATAL "git fetch origin '$1' didn't work"
-        git checkout -f $2 || FATAL "git checkout -f '$2' didn't work"
-    fi
-else
-    INFO "Code to compile: master"
-    git checkout master
-fi
 
 INFO "starting build"
 make clean || FATAL "Make clean failed"
 make -j16 || FATAL "Make failed"
 sudo make install || FATAL "Make install Failed"
 
-RC=0
-
-INFO "done, RC=$RC"
-exit $RC
+INFO "build done"
+exit 0
 
 
