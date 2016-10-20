@@ -237,7 +237,8 @@ if __name__=="__main__":
                 raise LoadConfigurationException("Cannot open logging file '{}': {}. Check folder exist and permissions".format(global_config["log_file"], str(e)) ) 
         #logging.basicConfig(level = getattr(logging, global_config.get('log_level',"debug")))
         logger.setLevel(getattr(logging, global_config['log_level']))
-        logger.critical("Starting openmano server command: '%s'", sys.argv[0])
+        logger.critical("Starting openmano server version: '%s %s' command: '%s'",  
+                         __version__, version_date, " ".join(sys.argv))
         
         for log_module in ("nfvo", "http", "vim", "db"):
             log_level_module = "log_level_" + log_module
