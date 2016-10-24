@@ -43,7 +43,7 @@ function usage(){
     echo -e "   if openmano_version is not provided it tries to get from openmanod.py using relative path"
     echo -e "  OPTIONS"
     echo -e "     -u USER  database user. '$DBUSER' by default. Prompts if DB access fails"
-    echo -e "     -p PASS  database password. 'No password' by default. Prompts if DB access fails"
+    echo -e "     -p PASS  database password. 'No password' or 'manopw' by default. Prompts if DB access fails"
     echo -e "     -P PORT  database port. '$DBPORT' by default"
     echo -e "     -h HOST  database host. '$DBHOST' by default"
     echo -e "     -d NAME  database name. '$DBNAME' by default.  Prompts if DB access fails"
@@ -113,20 +113,23 @@ OPENMANO_VER_NUM=`printf "%d%03d%03d" ${VERSION_1} ${VERSION_2} ${VERSION_3}`
 TEMPFILE="$(mktemp -q --tmpdir "migratemanodb.XXXXXX")"
 trap 'rm -f "$TEMPFILE"' EXIT
 chmod 0600 "$TEMPFILE"
-cat >"$TEMPFILE" <<EOF
-[client]
-user="${DBUSER}"
-password="${DBPASS}"
-EOF
-DEF_EXTRA_FILE_PARAM="--defaults-extra-file=$TEMPFILE"
 
-
-#check and ask for database user password
-DBUSER_="-u$DBUSER"
-[ -n "$DBPASS" ] && DBPASS_="-p$DBPASS"
+#if password is missing, before prompting for it try without password and with "manopw"
 DBHOST_="-h$DBHOST"
 DBPORT_="-P$DBPORT"
-while ! mysql $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_ $DBNAME -e "quit" >/dev/null 2>&1
+DEF_EXTRA_FILE_PARAM="--defaults-extra-file=$TEMPFILE"
+if [ -z "${DBPASS}" ]
+then
+    password_ok=""
+    echo -e "[client]\nuser='${DBUSER}'\npassword='manopw'" > "$TEMPFILE"
+    mysql "$DEF_EXTRA_FILE_PARAM" $DBHOST_ $DBPORT_ $DBNAME -e "quit" >/dev/null 2>&1 && DBPASS="manopw"
+    echo -e "[client]\nuser='${DBUSER}'\npassword=''" > "$TEMPFILE"
+    mysql "$DEF_EXTRA_FILE_PARAM" $DBHOST_ $DBPORT_ $DBNAME -e "quit" >/dev/null 2>&1 && DBPASS=""
+fi
+echo -e "[client]\nuser='${DBUSER}'\npassword='${DBPASS}'" > "$TEMPFILE"
+
+#check and ask for database user password
+while ! mysql "$DEF_EXTRA_FILE_PARAM" $DBHOST_ $DBPORT_ $DBNAME -e "quit" >/dev/null 2>&1
 do
         [ -n "$logintry" ] &&  echo -e "\nInvalid database credentials!!!. Try again (Ctrl+c to abort)"
         [ -z "$logintry" ] &&  echo -e "\nProvide database name and credentials"
@@ -135,11 +138,7 @@ do
         read -e -p "mysql user($DBUSER): " KK
         [ -n "$KK" ] && DBUSER="$KK"
         read -e -s -p "mysql password: " DBPASS
-        cat >"$TEMPFILE" <<EOF
-[client]
-user="${DBUSER}"
-password="${DBPASS}"
-EOF
+        echo -e "[client]\nuser='${DBUSER}'\npassword='${DBPASS}'" > "$TEMPFILE"
         logintry="yes"
         echo
 done
