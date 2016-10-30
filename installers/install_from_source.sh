@@ -59,7 +59,8 @@ function configure(){
     echo -e "       Configuring RO"
     lxc exec RO -- sed -i -e "s/^\#\?log_socket_host:.*/log_socket_host: $SO_CONTAINER_IP/g" /opt/openmano/openmanod.cfg
     lxc exec RO -- service openmano restart
-    time=0; step=1; timelength=10; while [ $time -le $timelength ]; do sleep $step; echo -n "."; time=$((time+step)); done; echo
+    time=0; step=2; timelength=20; while [ $time -le $timelength ]; do sleep $step; echo -n "."; time=$((time+step)); done; echo
+    lxc exec RO -- openmano tenant-delete -f osm >/dev/null
     RO_TENANT_ID=`lxc exec RO -- openmano tenant-create osm |awk '{print $1}'`
 
     echo -e "       Configuring VCA"
@@ -70,7 +71,7 @@ function configure(){
     echo -e "       Configuring SO"
     sudo route add -host $JUJU_CONTROLLER_IP gw $VCA_CONTAINER_IP
     lxc exec SO-ub -- nohup sudo -b -H /usr/rift/rift-shell -r -i /usr/rift -a /usr/rift/.artifacts -- ./demos/launchpad.py --use-xml-mode
-    time=0; step=20; timelength=200; while [ $time -le $timelength ]; do sleep $step; echo -n "."; time=$((time+step)); done; echo
+    time=0; step=30; timelength=300; while [ $time -le $timelength ]; do sleep $step; echo -n "."; time=$((time+step)); done; echo
 
     curl -k --request POST \
       --url https://$SO_CONTAINER_IP:8008/api/config/config-agent \
@@ -142,9 +143,9 @@ OSM_DEVOPS=$TEMPDIR
 OSM_JENKINS="$TEMPDIR/jenkins"
 . $OSM_JENKINS/common/all_funcs
 
-[ -n "$UNINSTALL" ] && uninstall && exit 0
-[ -n "$NAT" ] && nat && exit 0
-[ -n "$RECONFIGURE" ] && configure && exit 0
+[ -n "$UNINSTALL" ] && uninstall && echo -e "\nDONE" && exit 0
+[ -n "$NAT" ] && nat && echo -e "\nDONE" && exit 0
+[ -n "$RECONFIGURE" ] && configure && echo -e "\nDONE" && exit 0
 
 #Installation starts here
 wget -q -O- https://osm-download.etsi.org/ftp/osm-1.0-one/README.txt &> /dev/null
