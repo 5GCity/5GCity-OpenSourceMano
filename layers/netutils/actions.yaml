@@ -1,0 +1,32 @@
+nmap:
+  description: "nmap a thing!"
+  params:
+    destination:
+      description: "destination to scan"
+      type: string
+  required:
+    - destination
+ping:
+  description: 'ping a thing!'
+  params:
+    count:
+      description: "Stop after sending count ECHO_REQUEST packets"
+      type: integer
+      default: 30
+    destination:
+      description: "destination of ping request"
+      type: string
+  required:
+    - destination
+traceroute:
+  description: 'trace a thing!'
+  params:
+    hops:
+      description: "Stop tracing after count hops"
+      type: integer
+      default: 30
+    destination:
+      description: "destination of traceroute request"
+      type: string
+  required:
+    - destination
