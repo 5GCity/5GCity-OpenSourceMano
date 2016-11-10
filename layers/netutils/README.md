@@ -38,6 +38,16 @@ timing:
   enqueued: 2016-06-29 14:50:03 +0000 UTC
   started: 2016-06-29 14:50:03 +0000 UTC
 ```
+## iperf3
+
+Because iperf3 has a client and server component, the netutils charm can operate
+as both. Setting the iperf3 configuration value to True will start iperf3 in
+server mode, running as a daemon.
+```
+$ juju deploy cs:~nfv/netutils client
+$ juju deploy cs:~nfv/netutils server iperf3=True
+$ juju run-action client/0 iperf host=<ip of server> [...]
+```
 
 ## Scale out Usage
 
