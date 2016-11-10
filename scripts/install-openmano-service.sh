@@ -127,7 +127,8 @@ rm -rf /usr/sbin/openmano
 #cp ${FILE}/openmano /usr/sbin/    || ! echo $BAD_PATH_ERROR >&2 || exit 1
 ln -s /opt/openmano/openmanod.cfg /etc/default/openmanod.cfg  || echo "warning cannot create link '/etc/default/openmanod.cfg'"
 ln -s /opt/openmano/logs /var/log/openmano  || echo "warning cannot create link '/var/log/openmano'"
-ln -s /opt/openmano/openmano /usr/sbin/openmano
+ln -s /opt/openmano/openmano /usr/bin/openmano
+ln -s /opt/openmano/scripts/openmano-report.sh /usr/bin/openmano-report
 
 chown $USER_OWNER /opt/openmano/openmanod.cfg
 chown -R $USER_OWNER /opt/openmano
