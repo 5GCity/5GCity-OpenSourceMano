@@ -36,20 +36,20 @@ function usage(){
 }
 
 function uninstall(){
-    service openmano stop
-    for file in /opt/openmano /etc/default/openmanod.cfg /var/log/openmano /etc/systemd/system/openmano.service /usr/sbin/openmano
+    echo "systemctl disable openmano.service " &&  systemctl disable openmano.service 2>/dev/null || echo "  Already done"
+    echo "service openmano stop " && service openmano stop 2>/dev/null || echo "  Already done"
+    for file in /opt/openmano /etc/default/openmanod.cfg /var/log/openmano /etc/systemd/system/openmano.service /usr/bin/openmano /usr/sbin/service-openmano /usr/bin/openmano-report
     do
+        echo rm $file
         rm -rf $file || ! echo "Can not delete '$file'. Needed root privileges?" >&2 || exit 1
     done
     echo "Done"
 }
 
-BAD_PATH_ERROR="Path '$FILE' does not contain a valid openmano distribution"
 GIT_URL=https://osm.etsi.org/gerrit/osm/RO.git
 USER_OWNER="root"
 QUIET_MODE=""
 FILE=""
-DELETE=""
 while getopts ":u:f:hq-:" o; do
     case "${o}" in
         u)
@@ -84,6 +84,7 @@ while getopts ":u:f:hq-:" o; do
             ;;
     esac
 done
+BAD_PATH_ERROR="Path '$FILE' does not contain a valid openmano distribution"
 
 #check root privileges
 [ "$USER" != "root" ] && echo "Needed root privileges" >&2 && exit 1
@@ -109,28 +110,26 @@ else
 fi
 
 
-if [[ -z $FILE ]]
+if [[ -z "$FILE" ]]
 then
-    git clone $GIT_URL __temp__ || ! echo "Cannot get openmano source code from $GIT_URL" >&2 || exit 1
-    #git checkout <tag version>
-    FILE=./__temp__
-    DELETE=y
+    FILE=__temp__${RANDOM}
+    git clone $GIT_URL $FILE || ! echo "Cannot get openmano source code from $GIT_URL" >&2 || exit 1
+else
+    [[ -d  "$FILE" ]] || ! echo $BAD_PATH_ERROR >&2 || exit 1
 fi
 
 #make idempotent
-rm -rf /opt/openmano
-rm -f /etc/default/openmanod.cfg
-rm -f /var/log/openmano
-cp -r $FILE /opt/openmano         || ! echo $BAD_PATH_ERROR >&2 || exit 1
+uninstall
+#copy files
+cp -r "$FILE" /opt/openmano         || ! echo $BAD_PATH_ERROR >&2 || exit 1
 mkdir -p /opt/openmano/logs
-rm -rf /usr/sbin/openmano
-#cp ${FILE}/openmano /usr/sbin/    || ! echo $BAD_PATH_ERROR >&2 || exit 1
-ln -s /opt/openmano/openmanod.cfg /etc/default/openmanod.cfg  || echo "warning cannot create link '/etc/default/openmanod.cfg'"
-ln -s /opt/openmano/logs /var/log/openmano  || echo "warning cannot create link '/var/log/openmano'"
-ln -s /opt/openmano/openmano /usr/bin/openmano
-ln -s /opt/openmano/scripts/openmano-report.sh /usr/bin/openmano-report
+#makes links
+ln -s -v /opt/openmano/openmanod.cfg /etc/default/openmanod.cfg  || echo "warning cannot create link '/etc/default/openmanod.cfg'"
+ln -s -v /opt/openmano/logs /var/log/openmano  || echo "warning cannot create link '/var/log/openmano'"
+ln -s -v /opt/openmano/openmano /usr/bin/openmano
+ln -s -v /opt/openmano/scripts/service-openmano.sh /usr/sbin/service-openmano
+ln -s -v /opt/openmano/scripts/openmano-report.sh /usr/bin/openmano-report
 
-chown $USER_OWNER /opt/openmano/openmanod.cfg
 chown -R $USER_OWNER /opt/openmano
 
 mkdir -p /etc/systemd/system/
@@ -147,9 +146,10 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
-[[ -n $DELETE ]] && rm -rf $FILE
+rm -rf ${FILE}
 
 service openmano start
+systemctl enable openmano.service
 
 echo Done
 exit

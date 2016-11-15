@@ -35,7 +35,8 @@ function usage(){
     echo -e "     -q --quiet: install in unattended mode"
     echo -e "     -h --help:  show this help"
     echo -e "     --develop:  install last version for developers, and do not configure as a service"
-    echo -e "     --forcedb:  reinstall mano_db DB, deleting previous database and creating a new one"
+    echo -e "     --forcedb:  reinstall mano_db DB, deleting previous database if exists and creating a new one"
+    echo -e "     --force:    makes idenpotent, delete previous installations folders if needed"
     echo -e "     --noclone:  assumes that openmano was cloned previously and that this script is run from the local repo"
     echo -e "     --no-install-packages: use this option to skip updating and installing the requires packages. This avoid wasting time if you are sure requires packages are present e.g. because of a previous installation"
 }
@@ -75,6 +76,7 @@ DBPASSWD_PARAM=""
 QUIET_MODE=""
 DEVELOP=""
 FORCEDB=""
+FORCE=""
 NOCLONE=""
 NO_PACKAGES=""
 while getopts ":u:p:hiq-:" o; do
@@ -97,6 +99,7 @@ while getopts ":u:p:hiq-:" o; do
             [ "${OPTARG}" == "help" ] && usage && exit 0
             [ "${OPTARG}" == "develop" ] && DEVELOP="y" && continue
             [ "${OPTARG}" == "forcedb" ] && FORCEDB="y" && continue
+            [ "${OPTARG}" == "force" ]   && FORCEDB="y" && FORCE="y" && continue
             [ "${OPTARG}" == "noclone" ] && NOCLONE="y" && continue
             [ "${OPTARG}" == "quiet" ] && export QUIET_MODE=yes && export DEBIAN_FRONTEND=noninteractive && continue
             [ "${OPTARG}" == "no-install-packages" ] && export NO_PACKAGES=yes && continue
@@ -165,6 +168,17 @@ else  #[ "$_DISTRO" != "Ubuntu" -a "$_DISTRO" != "CentOS" -a "$_DISTRO" != "Red"
     [[ -z $QUIET_MODE ]] && [[ "$KK" != "y" ]] && [[ "$KK" != "yes" ]] && echo "Cancelled" && exit 1
 fi
 
+#check if installed as a service
+INSTALL_AS_A_SERVICE=""
+[[ "$_DISTRO" == "Ubuntu" ]] &&  [[ ${_RELEASE%%.*} == 16 ]] && [[ -z $DEVELOP ]] && INSTALL_AS_A_SERVICE="y"
+#Next operations require knowing OPENMANO_BASEFOLDER
+if [[ -z "$NOCLONE" ]]; then
+    OPENMANO_BASEFOLDER="${PWD}/openmano"
+    [[ -n "$FORCE" ]] && rm -rf $OPENMANO_BASEFOLDER #make idenpotent
+else
+    HERE=$(realpath $(dirname $0))
+    OPENMANO_BASEFOLDER=$(dirname $HERE)
+fi
 
 
 if [[ -z "$NO_PACKAGES" ]]
@@ -263,9 +277,9 @@ if [[ -z $NOCLONE ]]; then
 #################################################################
 #####        DOWNLOAD SOURCE                                #####
 #################################################################'
-    su $SUDO_USER -c 'git clone '"${GIT_URL}"' openmano'
-    su $SUDO_USER -c 'cp openmano/.gitignore-common openmano/.gitignore'
-    [[ -z $DEVELOP ]] && su $SUDO_USER -c 'cd openmano; git checkout tags/v1.0; cd ..' 
+    su $SUDO_USER -c "git clone ${GIT_URL} ${OPENMANO_BASEFOLDER}"
+    su $SUDO_USER -c "cp ${OPENMANO_BASEFOLDER}/.gitignore-common ${OPENMANO_BASEFOLDER}/.gitignore"
+    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C  ${OPENMANO_BASEFOLDER} checkout tags/v1.0.1"
 fi
 
 echo '
@@ -276,11 +290,7 @@ echo -e "\nCreating temporary file form MYSQL installation and initialization"
 TEMPFILE="$(mktemp -q --tmpdir "installopenmano.XXXXXX")"
 trap 'rm -f "$TEMPFILE"' EXIT
 chmod 0600 "$TEMPFILE"
-cat >"$TEMPFILE" <<EOF
-[client]
-user=$DBUSER
-password=$DBPASSWD
-EOF
+echo -e "[client]\n user='$DBUSER'\n password='$DBPASSWD'">"$TEMPFILE"
 
 if db_exists "mano_db" $TEMPFILE ; then
     if [[ -n $FORCEDB ]]; then
@@ -306,20 +316,11 @@ else
 fi
 
 
-#Next operations require knowing OPENMANO_BASEFOLDER
-HERE=$(realpath $(dirname $0))
-if [[ -z $NOCLONE ]]; then
-    OPENMANO_BASEFOLDER="${HERE}/openmano"
-else
-    OPENMANO_BASEFOLDER=$(dirname $HERE)
-fi
-
-
 echo '
 #################################################################
 #####        INIT DATABASE                                  #####
 #################################################################'
-su $SUDO_USER -c "${OPENMANO_BASEFOLDER}"'/database_utils/init_mano_db.sh -u mano -p manopw -d mano_db' || ! echo "Failed while initializing database" || exit 1
+su $SUDO_USER -c "${OPENMANO_BASEFOLDER}/database_utils/init_mano_db.sh -u mano -p manopw -d mano_db" || ! echo "Failed while initializing database" || exit 1
 
 
 if [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ]
@@ -357,29 +358,32 @@ echo '
 #################################################################
 #####             CONFIGURE OPENMANO CLIENT                 #####
 #################################################################'
-#creates a link at ~/bin
-su $SUDO_USER -c 'mkdir -p ${HOME}/bin'
-su $SUDO_USER -c 'rm -f ${HOME}/bin/openmano'
-su $SUDO_USER -c 'rm -f ${HOME}/bin/openmano-report'
-su $SUDO_USER -c 'rm -f ${HOME}/bin/service-openmano'
-su $SUDO_USER -c 'ln -s '${OPENMANO_BASEFOLDER}'/openmano ${HOME}/bin/openmano'
-su $SUDO_USER -c 'ln -s '${OPENMANO_BASEFOLDER}'/scripts/openmano-report.sh   ${HOME}/bin/openmano-report'
-su $SUDO_USER -c 'ln -s '${OPENMANO_BASEFOLDER}'/scripts/service-openmano.sh  ${HOME}/bin/service-openmano'
-
-#insert /home/<user>/bin in the PATH
-#skiped because normally this is done authomatically when ~/bin exist
-#if ! su $SUDO_USER -c 'echo $PATH' | grep -q "${HOME}/bin"
-#then
-#    echo "    inserting /home/$SUDO_USER/bin in the PATH at .bashrc"
-#    su $SUDO_USER -c 'echo "PATH=\$PATH:\${HOME}/bin" >> ~/.bashrc'
-#fi
-if [[ $SUDO_USER == root ]] 
+#creates a link at ~/bin if not configured as a service
+if [[ -z "$INSTALL_AS_A_SERVICE" ]]
 then
-    if ! echo $PATH | grep -q "${HOME}/bin"
+    su $SUDO_USER -c 'mkdir -p ${HOME}/bin'
+    su $SUDO_USER -c 'rm -f ${HOME}/bin/openmano'
+    su $SUDO_USER -c 'rm -f ${HOME}/bin/openmano-report'
+    su $SUDO_USER -c 'rm -f ${HOME}/bin/service-openmano'
+    su $SUDO_USER -c 'ln -s '${OPENMANO_BASEFOLDER}'/openmano ${HOME}/bin/openmano'
+    su $SUDO_USER -c 'ln -s '${OPENMANO_BASEFOLDER}'/scripts/openmano-report.sh   ${HOME}/bin/openmano-report'
+    su $SUDO_USER -c 'ln -s '${OPENMANO_BASEFOLDER}'/scripts/service-openmano.sh  ${HOME}/bin/service-openmano'
+
+    #insert /home/<user>/bin in the PATH
+    #skiped because normally this is done authomatically when ~/bin exist
+    #if ! su $SUDO_USER -c 'echo $PATH' | grep -q "${HOME}/bin"
+    #then
+    #    echo "    inserting /home/$SUDO_USER/bin in the PATH at .bashrc"
+    #    su $SUDO_USER -c 'echo "PATH=\$PATH:\${HOME}/bin" >> ~/.bashrc'
+    #fi
+    if [[ $SUDO_USER == root ]] 
     then
-        echo "PATH=\$PATH:\${HOME}/bin" >> ${HOME}/.bashrc
-    fi
-fi 
+        if ! echo $PATH | grep -q "${HOME}/bin"
+        then
+            echo "PATH=\$PATH:\${HOME}/bin" >> ${HOME}/.bashrc
+        fi
+    fi 
+fi
 
 #configure arg-autocomplete for this user
 #in case of minimal instalation this package is not installed by default
@@ -395,7 +399,7 @@ fi
 
 
 
-if [[ "$_DISTRO" == "Ubuntu" ]] &&  [[ ${_RELEASE%%.*} == 16 ]] && [[ -z $DEVELOP ]]
+if [[ -n "$INSTALL_AS_A_SERVICE"  ]]
 then
 echo '
 #################################################################
@@ -403,19 +407,20 @@ echo '
 #################################################################'
 
     ${OPENMANO_BASEFOLDER}/scripts/install-openmano-service.sh -f ${OPENMANO_BASEFOLDER} #-u $SUDO_USER
+#    rm -rf ${OPENMANO_BASEFOLDER}
 #    alias service-openmano="service openmano"
 #    echo 'alias service-openmano="service openmano"' >> ${HOME}/.bashrc
 
     echo
-    echo "Done!  you may need to logout and login again for loading client configuration"
-    echo " Manage server with 'service openmano start|stop|status|...' "
+    echo "Done!  installed at /opt/openmano"
+    echo " Manage server with 'sudo service openmano start|stop|status|...' "
 
 
 else
 
     echo
     echo "Done!  you may need to logout and login again for loading client configuration"
-    echo " Run './openmano/scripts/service-openmano.sh start' for starting openmano in a screen"
+    echo " Run './${OPENMANO_BASEFOLDER}/scripts/service-openmano.sh start' for starting openmano in a screen"
 
 fi
 
