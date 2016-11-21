@@ -83,6 +83,17 @@ class vimconnector():
     and all these methods
     ''' 
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None, config={}):
+        """Constructor of VIM
+        "uuid": id asigned to this VIM
+        "name": name assigned to this VIM, can be used for logging
+        "tenant_id", tenant_name:  VIM tenant to be used
+        "url_admin": optional, url used for administrative tasks
+        "user", "passwd": credentials of the VIM user
+        "log_level": if must use a different log_level than the general one
+        "config": dictionary with extra VIM information. This contains a consolidate version of general VIM config at create
+            and particular VIM config at attach
+        Returns can raise an exception if some check is done and fails
+        """
         self.id        = uuid
         self.name      = name
         self.url       = url
@@ -141,33 +152,45 @@ class vimconnector():
             raise KeyError("Invalid key '%s'" %str(index))
         
     def new_tenant(self,tenant_name,tenant_description):
-        '''Adds a new tenant to VIM with this name and description,
-        returns the tenant identifier'''
+        """Adds a new tenant to VIM with this name and description, this is done using admin_url if provided
+        "tenant_name": string max lenght 64
+        "tenant_description": string max length 256
+        returns the tenant identifier or raise exception
+        """
         raise vimconnNotImplemented( "Should have implemented this" )
 
     def delete_tenant(self,tenant_id,):
-        '''Delete a tenant from VIM'''
-        '''Returns the tenant identifier'''
+        """Delete a tenant from VIM
+        tenant_id: returned VIM tenant_id on "new_tenant"
+        Returns None on success. Raises and exception of failure. If tenant is not found raises vimconnNotFoundException
+        """
         raise vimconnNotImplemented( "Should have implemented this" )
 
     def get_tenant_list(self, filter_dict={}):
         '''Obtain tenants of VIM
-        filter_dict can contain the following keys:
+        filter_dict dictionary that can contain the following keys:
             name: filter by tenant name
             id: filter by tenant uuid/id
             <other VIM specific>
-        Returns the tenant list of dictionaries: 
+        Returns the tenant list of dictionaries, and empty list if no tenant match all the filers:
             [{'name':'<name>, 'id':'<id>, ...}, ...]
         '''
         raise vimconnNotImplemented( "Should have implemented this" )
 
     def new_network(self,net_name, net_type, ip_profile=None, shared=False):
-        '''Adds a tenant network to VIM
+        """Adds a tenant network to VIM
             net_name is the name
             net_type can be 'bridge','data'.'ptp'.  TODO: this need to be revised
-            ip_profile is a dict containing the IP parameters of the network 
+            ip_profile is a dict containing the IP parameters of the network
+                "ip-version": {"type":"string", "enum":["IPv4","IPv6"]},
+                "subnet-address": ip_prefix_schema,
+                "gateway-address": ip_schema,
+                "dns-address": ip_schema,
+                "dhcp": dhcp_schema
+
             shared is a boolean
-        Returns the network identifier'''
+        Returns the network identifier on success or raises and exeption on failure
+        """
         raise vimconnNotImplemented( "Should have implemented this" )
 
     def get_network_list(self, filter_dict={}):

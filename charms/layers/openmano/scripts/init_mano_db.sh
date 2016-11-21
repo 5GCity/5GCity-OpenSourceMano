@@ -32,7 +32,8 @@ CREATEDB=""
 MYSQL=$(which mysql)
 AWK=$(which awk)
 GREP=$(which grep)
-DIRNAME=`dirname $0`
+#DIRNAME=`dirname $0`
+DIRNAME=/opt/openmano/database_utils
 
 function usage(){
     echo -e "Usage: $0 OPTIONS"
@@ -98,7 +99,7 @@ DBHOST_="-h$DBHOST"
 DBPORT_="-P$DBPORT"
 
 TEMPFILE="$(mktemp -q --tmpdir "initmanodb.XXXXXX")"
-trap 'rm -f "$TEMPFILE"' EXIT
+trap 'rm -f "$TEMPFILE"' EXIT SIGINT SIGTERM
 chmod 0600 "$TEMPFILE"
 cat >"$TEMPFILE" <<EOF
 [client]
@@ -129,7 +130,7 @@ if [ -n "${CREATEDB}" ]; then
     echo "    deleting previous database ${DBNAME}"
     echo "DROP DATABASE IF EXISTS ${DBNAME}" | mysql $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_
     echo "    creating database ${DBNAME}"
-    mysqladmin $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_ -s create ${DBNAME} || exit 1
+    mysqladmin $DEF_EXTRA_FILE_PARAM  $DBHOST_ $DBPORT_ -s create ${DBNAME} || exit 1
 fi
 
 echo "    loading ${DIRNAME}/${DBNAME}_structure.sql"

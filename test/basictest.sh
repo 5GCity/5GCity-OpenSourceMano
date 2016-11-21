@@ -72,7 +72,7 @@ action_list=""
 
 for argument in $params
 do
-    if [[ $argument == reset ]] || [[ $argument == create ]] || [[ $argument == delete ]]
+    if [[ $argument == reset ]] || [[ $argument == create ]] || [[ $argument == delete ]] || [[ -z "$argument" ]]
     then
         action_list="$action_list $argument"
         continue
@@ -167,8 +167,8 @@ then
     [[ -z $OPENVIM_HOST ]] && OPENVIM_HOST=localhost
     [[ -z $OPENVIM_PORT ]] && OPENVIM_PORT=9080
     URL_ADMIN_PARAM=""
-    [[ -n $OPENVIM_ADMIN_PORT ]] && URL_ADMIN_PARAM="--url_admin=http://${OPENVIM_HOST}:${OPENVIM_ADMIN_PORT}/openvim"
-    result=`${DIRmano}/openmano datacenter-create TEST-dc "http://${OPENVIM_HOST}:${OPENVIM_PORT}/openvim" --type=openvim $URL_ADMIN_PARAM`
+    [[ -n $OPENVIM_ADMIN_PORT ]] && URL_ADMIN_PARAM=" --url_admin=http://${OPENVIM_HOST}:${OPENVIM_ADMIN_PORT}/openvim"
+    result=`${DIRmano}/openmano datacenter-create TEST-dc "http://${OPENVIM_HOST}:${OPENVIM_PORT}/openvim" --type=openvim${URL_ADMIN_PARAM} --config="{test: no use just for test}"`
     datacenter=`echo $result |gawk '{print $1}'`
     #check a valid uuid is obtained
     ! is_valid_uuid $datacenter && echo "FAIL" && echo "    $result" && $_exit 1
@@ -177,7 +177,7 @@ then
     [[ -n "$option_insert_bashrc" ]] && echo -e "\nexport OPENMANO_DATACENTER=$datacenter"  >> ~/.bashrc
 
     printf "%-50s" "Attaching openmano tenant to the datacenter:"
-    result=`${DIRmano}/openmano datacenter-attach TEST-dc`
+    result=`${DIRmano}/openmano datacenter-attach TEST-dc --config="{test: no use just for test}"`
     [[ $? != 0 ]] && echo  "FAIL" && echo "    $result" && $_exit 1
     echo OK
 

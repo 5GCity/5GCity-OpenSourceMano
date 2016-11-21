@@ -81,7 +81,7 @@ class nfvo_db(db_base.db_base):
                         dataifacesDict[vm['name']] = {}
                         for numa in vm.get('numas', []):
                             for dataiface in numa.get('interfaces',[]):
-                                db_base._convert_bandwidth(dataiface)
+                                db_base._convert_bandwidth(dataiface, logger=self.logger)
                                 dataifacesDict[vm['name']][dataiface['name']] = {}
                                 dataifacesDict[vm['name']][dataiface['name']]['vpci'] = dataiface['vpci']
                                 dataifacesDict[vm['name']][dataiface['name']]['bw'] = dataiface['bandwidth']
@@ -93,7 +93,7 @@ class nfvo_db(db_base.db_base):
                         if 'bridge-ifaces' in  vm:
                             bridgeInterfacesDict[vm['name']] = {}
                             for bridgeiface in vm['bridge-ifaces']:
-                                db_base._convert_bandwidth(bridgeiface)
+                                db_base._convert_bandwidth(bridgeiface, logger=self.logger)
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']] = {}
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']]['vpci'] = bridgeiface.get('vpci',None)
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']]['mac'] = bridgeiface.get('mac_address',None)
@@ -209,7 +209,7 @@ class nfvo_db(db_base.db_base):
                         dataifacesDict[vm['name']] = {}
                         for numa in vm.get('numas', []):
                             for dataiface in numa.get('interfaces',[]):
-                                db_base._convert_bandwidth(dataiface)
+                                db_base._convert_bandwidth(dataiface, logger=self.logger)
                                 dataifacesDict[vm['name']][dataiface['name']] = {}
                                 dataifacesDict[vm['name']][dataiface['name']]['vpci'] = dataiface['vpci']
                                 dataifacesDict[vm['name']][dataiface['name']]['bw'] = dataiface['bandwidth']
@@ -221,7 +221,7 @@ class nfvo_db(db_base.db_base):
                         if 'bridge-ifaces' in  vm:
                             bridgeInterfacesDict[vm['name']] = {}
                             for bridgeiface in vm['bridge-ifaces']:
-                                db_base._convert_bandwidth(bridgeiface)
+                                db_base._convert_bandwidth(bridgeiface, logger=self.logger)
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']] = {}
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']]['vpci'] = bridgeiface.get('vpci',None)
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']]['mac'] = bridgeiface.get('mac_address',None)

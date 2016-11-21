@@ -108,9 +108,9 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
     if vim_tenant_name is not None:  WHERE_dict['vim_tenant_name']  = vim_tenant_name
     if nfvo_tenant or vim_tenant or vim_tenant_name or datacenter_tenant_id:
         from_= 'tenants_datacenters as td join datacenters as d on td.datacenter_id=d.uuid join datacenter_tenants as dt on td.datacenter_tenant_id=dt.uuid'
-        select_ = ('type','config','d.uuid as datacenter_id', 'vim_url', 'vim_url_admin', 'd.name as datacenter_name',
+        select_ = ('type','d.config as config','d.uuid as datacenter_id', 'vim_url', 'vim_url_admin', 'd.name as datacenter_name',
                    'dt.uuid as datacenter_tenant_id','dt.vim_tenant_name as vim_tenant_name','dt.vim_tenant_id as vim_tenant_id',
-                   'user','passwd')
+                   'user','passwd', 'dt.config as dt_config')
     else:
         from_ = 'datacenters as d'
         select_ = ('type','config','d.uuid as datacenter_id', 'vim_url', 'vim_url_admin', 'd.name as datacenter_name')
@@ -119,8 +119,10 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
         vim_dict={}
         for vim in vims:
             extra={'datacenter_tenant_id': vim.get('datacenter_tenant_id')}
-            if vim["config"] != None:
+            if vim["config"]:
                 extra.update(yaml.load(vim["config"]))
+            if vim.get('dt_config'):
+                extra.update(yaml.load(vim["dt_config"]))
             if vim["type"] not in vimconn_imported:
                 module_info=None
                 try:
@@ -2169,6 +2171,8 @@ def refresh_instance(mydb, nfvo_tenant, instanceDict, datacenter=None, vim_tenan
                     has_mgmt_iface = True
             if vm_dict[vm_id]['status'] == "ACTIVE:NoMgmtIP" and not has_mgmt_iface:
                 vm_dict[vm_id]['status'] = "ACTIVE"
+            if vm_dict[vm_id].get('error_msg') and len(vm_dict[vm_id]['error_msg']) >= 1024:
+                vm_dict[vm_id]['error_msg'] = vm_dict[vm_id]['error_msg'][:516] + " ... " + vm_dict[vm_id]['error_msg'][-500:]
             if vm['status'] != vm_dict[vm_id]['status'] or vm.get('error_msg')!=vm_dict[vm_id].get('error_msg') or vm.get('vim_info')!=vm_dict[vm_id].get('vim_info'):
                 vm['status']    = vm_dict[vm_id]['status']
                 vm['error_msg'] = vm_dict[vm_id].get('error_msg')
@@ -2221,6 +2225,8 @@ def refresh_instance(mydb, nfvo_tenant, instanceDict, datacenter=None, vim_tenan
     # TODO: update nets inside a vnf
     for net in instanceDict['nets']:
         net_id = net['vim_net_id']
+        if net_dict[net_id].get('error_msg') and len(net_dict[net_id]['error_msg']) >= 1024:
+            net_dict[net_id]['error_msg'] = net_dict[net_id]['error_msg'][:516] + " ... " + net_dict[vm_id]['error_msg'][-500:]
         if net['status'] != net_dict[net_id]['status'] or net.get('error_msg')!=net_dict[net_id].get('error_msg') or net.get('vim_info')!=net_dict[net_id].get('vim_info'):
             net['status']    = net_dict[net_id]['status']
             net['error_msg'] = net_dict[net_id].get('error_msg')
@@ -2409,7 +2415,7 @@ def delete_datacenter(mydb, datacenter):
     mydb.delete_row_by_id("datacenters", datacenter_dict['uuid'])
     return datacenter_dict['uuid'] + " " + datacenter_dict['name']
 
-def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=None, vim_tenant_name=None, vim_username=None, vim_password=None):
+def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=None, vim_tenant_name=None, vim_username=None, vim_password=None, config=None):
     #get datacenter info
     datacenter_id, myvim  = get_datacenter_by_name_uuid(mydb, None, datacenter)
     datacenter_name=myvim["name"]
@@ -2459,6 +2465,8 @@ def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=
         datacenter_tenants_dict["user"]            = vim_username
         datacenter_tenants_dict["passwd"]          = vim_password
         datacenter_tenants_dict["datacenter_id"]   = datacenter_id
+        if config:
+            datacenter_tenants_dict["config"] = yaml.safe_dump(config, default_flow_style=True, width=256)
         id_ = mydb.new_row('datacenter_tenants', datacenter_tenants_dict, add_uuid=True)
         datacenter_tenants_dict["uuid"] = id_
     

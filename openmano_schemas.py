@@ -275,10 +275,11 @@ datacenter_associate_schema={
         "datacenter":{
             "type":"object",
             "properties":{
-                "vim_tenant": id_schema,
-                "vim_tenant_name": nameshort_schema,
+                "vim_tenant": name_schema,
+                "vim_tenant_name": name_schema,
                 "vim_username": nameshort_schema,
                 "vim_password": nameshort_schema,
+                "config": {"type": "object"}
             },
 #            "required": ["vim_tenant"],
             "additionalProperties": True

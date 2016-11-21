@@ -43,7 +43,7 @@ function usage(){
     echo -e "   if openmano_version is not provided it tries to get from openmanod.py using relative path"
     echo -e "  OPTIONS"
     echo -e "     -u USER  database user. '$DBUSER' by default. Prompts if DB access fails"
-    echo -e "     -p PASS  database password. 'No password' by default. Prompts if DB access fails"
+    echo -e "     -p PASS  database password. 'No password' or 'manopw' by default. Prompts if DB access fails"
     echo -e "     -P PORT  database port. '$DBPORT' by default"
     echo -e "     -h HOST  database host. '$DBHOST' by default"
     echo -e "     -d NAME  database name. '$DBNAME' by default.  Prompts if DB access fails"
@@ -113,20 +113,23 @@ OPENMANO_VER_NUM=`printf "%d%03d%03d" ${VERSION_1} ${VERSION_2} ${VERSION_3}`
 TEMPFILE="$(mktemp -q --tmpdir "migratemanodb.XXXXXX")"
 trap 'rm -f "$TEMPFILE"' EXIT
 chmod 0600 "$TEMPFILE"
-cat >"$TEMPFILE" <<EOF
-[client]
-user="${DBUSER}"
-password="${DBPASS}"
-EOF
-DEF_EXTRA_FILE_PARAM="--defaults-extra-file=$TEMPFILE"
 
-
-#check and ask for database user password
-DBUSER_="-u$DBUSER"
-[ -n "$DBPASS" ] && DBPASS_="-p$DBPASS"
+#if password is missing, before prompting for it try without password and with "manopw"
 DBHOST_="-h$DBHOST"
 DBPORT_="-P$DBPORT"
-while ! mysql $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_ $DBNAME -e "quit" >/dev/null 2>&1
+DEF_EXTRA_FILE_PARAM="--defaults-extra-file=$TEMPFILE"
+if [ -z "${DBPASS}" ]
+then
+    password_ok=""
+    echo -e "[client]\nuser='${DBUSER}'\npassword='manopw'" > "$TEMPFILE"
+    mysql "$DEF_EXTRA_FILE_PARAM" $DBHOST_ $DBPORT_ $DBNAME -e "quit" >/dev/null 2>&1 && DBPASS="manopw"
+    echo -e "[client]\nuser='${DBUSER}'\npassword=''" > "$TEMPFILE"
+    mysql "$DEF_EXTRA_FILE_PARAM" $DBHOST_ $DBPORT_ $DBNAME -e "quit" >/dev/null 2>&1 && DBPASS=""
+fi
+echo -e "[client]\nuser='${DBUSER}'\npassword='${DBPASS}'" > "$TEMPFILE"
+
+#check and ask for database user password
+while ! mysql "$DEF_EXTRA_FILE_PARAM" $DBHOST_ $DBPORT_ $DBNAME -e "quit" >/dev/null 2>&1
 do
         [ -n "$logintry" ] &&  echo -e "\nInvalid database credentials!!!. Try again (Ctrl+c to abort)"
         [ -z "$logintry" ] &&  echo -e "\nProvide database name and credentials"
@@ -135,11 +138,7 @@ do
         read -e -p "mysql user($DBUSER): " KK
         [ -n "$KK" ] && DBUSER="$KK"
         read -e -s -p "mysql password: " DBPASS
-        cat >"$TEMPFILE" <<EOF
-[client]
-user="${DBUSER}"
-password="${DBPASS}"
-EOF
+        echo -e "[client]\nuser='${DBUSER}'\npassword='${DBPASS}'" > "$TEMPFILE"
         logintry="yes"
         echo
 done
@@ -184,6 +183,7 @@ DATABASE_TARGET_VER_NUM=0
 [ $OPENMANO_VER_NUM -ge 4047 ] && DATABASE_TARGET_VER_NUM=13  #0.4.47=>  13
 [ $OPENMANO_VER_NUM -ge 4057 ] && DATABASE_TARGET_VER_NUM=14  #0.4.57=>  14
 [ $OPENMANO_VER_NUM -ge 4059 ] && DATABASE_TARGET_VER_NUM=15  #0.4.59=>  15
+[ $OPENMANO_VER_NUM -ge 5002 ] && DATABASE_TARGET_VER_NUM=16  #0.5.2 =>  16
 #TODO ... put next versions here
 
 
@@ -663,6 +663,23 @@ function downgrade_from_15(){
     echo "ALTER TABLE vms ALTER image_path DROP DEFAULT;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "ALTER TABLE vms CHANGE COLUMN image_path image_path VARCHAR(100) NOT NULL COMMENT 'Path where the image of the VM is located' AFTER image_id;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "DELETE FROM schema_version WHERE version_int='15';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+
+function upgrade_to_16(){
+    echo "    upgrade database from version 0.15 to version 0.16"
+    echo "      add column 'config' at table 'datacenter_tenants', enlarge 'vim_tenant_name/id'"
+    echo "ALTER TABLE datacenter_tenants ADD COLUMN config VARCHAR(4000) NULL DEFAULT NULL AFTER passwd;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE datacenter_tenants CHANGE COLUMN vim_tenant_name vim_tenant_name VARCHAR(256) NULL DEFAULT NULL AFTER datacenter_id;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE datacenter_tenants CHANGE COLUMN vim_tenant_id vim_tenant_id VARCHAR(256) NULL DEFAULT NULL COMMENT 'Tenant ID at VIM' AFTER vim_tenant_name;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (16, '0.16', '0.5.2', 'enlarge vim_tenant_name and id. New config at datacenter_tenants', '2016-10-11');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+function downgrade_from_16(){
+    echo "    downgrade database from version 0.16 to version 0.15"
+    echo "      remove column 'config' at table 'datacenter_tenants', restoring lenght 'vim_tenant_name/id'"
+    echo "ALTER TABLE datacenter_tenants DROP COLUMN config" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE datacenter_tenants CHANGE COLUMN vim_tenant_name vim_tenant_name VARCHAR(64) NULL DEFAULT NULL AFTER datacenter_id;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE datacenter_tenants CHANGE COLUMN vim_tenant_id vim_tenant_id VARCHAR(36) NULL DEFAULT NULL COMMENT 'Tenant ID at VIM' AFTER vim_tenant_name;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "DELETE FROM schema_version WHERE version_int='16';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
 
 function upgrade_to_X(){
