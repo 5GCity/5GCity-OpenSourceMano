@@ -1405,7 +1405,7 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
                 i += 1
                 myVMDict = {}
                 #myVMDict['name'] = "%s-%s-%s" % (scenarioDict['name'],sce_vnf['name'], vm['name'])
-                myVMDict['name'] = "%s.%s.%d" % (instance_scenario_name,sce_vnf['name'],i)
+                myVMDict['name'] = "{}.{}.{}".format(instance_scenario_name,sce_vnf['name'],chr(96+i))
                 #myVMDict['description'] = vm['description']
                 myVMDict['description'] = myVMDict['name'][0:99]
                 if not startvms:
@@ -1907,7 +1907,7 @@ def create_instance(mydb, tenant_id, instance_dict):
             for vm in sce_vnf['vms']:
                 i += 1
                 myVMDict = {}
-                myVMDict['name'] = "%s.%s.%d" % (instance_name,sce_vnf['name'],i)
+                myVMDict['name'] = "{}.{}.{}".format(instance_name,sce_vnf['name'],chr(96+i))
                 myVMDict['description'] = myVMDict['name'][0:99]
 #                if not startvms:
 #                    myVMDict['start'] = "no"
