@@ -229,7 +229,7 @@ EOF
     cat >>$desc_file <<EOF
             -   name: eth0
                 virtual-interface:
-                    type: OM-MGMT
+                    type: VIRTIO
                     bandwidth: '0'
                     vpci: 0000:00:0a.0
                 vnfd-connection-point-ref: eth0
@@ -338,6 +338,7 @@ EOF
                 name: management
                 short-name: management
                 type: ELAN
+                mgmt-network: 'true'
                 # vim-network-name: <update>
                 # provider-network:
                 #     overlay-type: VLAN
