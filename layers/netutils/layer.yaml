@@ -1,7 +1,8 @@
 repo: git@github.com:AdamIsrael/layer-netutils.git
-includes: ['layer:basic']  # if you use any interfaces, add them here
+includes: ['layer:basic', 'layer:sshproxy']
 options:
   basic:
     packages:
       - traceroute
       - nmap
+      - iperf3
