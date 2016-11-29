@@ -22,6 +22,31 @@ def ready():
     status_set('active', 'Ready!')
     set_flag('netutils.ready')
 
+@when('actions.dig')
+def dig():
+    err = ''
+    try:
+        nsserver = action_get('nsserver')
+        host = action_get('host')
+        nstype = action_get('type')
+        cmd = "dig"
+
+        if nsserver:
+            cmd += " @{}".format(nsserver)
+        if host:
+            cmd += " {}".format(host)
+        else:
+            action_fail('Hostname required.')
+        if nstype:
+            cmd += " -t {}".format(nstype)
+
+        result, err = _run(cmd)
+    except:
+        action_fail('dig command failed:' + err)
+    else:
+        action_set({'outout': result})
+    finally:
+        remove_flag('actions.dig')
 
 @when('actions.nmap')
 def nmap():

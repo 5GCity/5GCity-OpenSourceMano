@@ -30,3 +30,18 @@ traceroute:
       type: string
   required:
     - destination
+dig:
+  description: "DNS lookup"
+  params:
+    nsserver:
+      description: "The nameserver to lookup against."
+      type: string
+    host:
+      description: "The host to lookup"
+      type: string
+    type:
+      description: "The DNS record type to lookup"
+      type: string
+  required:
+    - host
+
