@@ -1,0 +1,5 @@
+options:
+    iperf3:
+        type: boolean
+        default: false
+        description: "Enabling this option will start iperf3 in server mode."
