@@ -24,8 +24,8 @@
 '''
 osconnector implements all the methods to interact with openstack using the python-client.
 '''
-__author__="Alfonso Tierno, Gerardo Garcia"
-__date__ ="$22-jun-2014 11:19:29$"
+__author__="Alfonso Tierno, Gerardo Garcia, xFlow Research"
+__date__ ="$24-nov-2016 09:10$"
 
 import vimconn
 import json
@@ -33,14 +33,17 @@ import yaml
 import logging
 import netaddr
 
-from novaclient import client as nClient, exceptions as nvExceptions
-import keystoneclient.v2_0.client as ksClient
+from novaclient import client as nClient_v2, exceptions as nvExceptions, api_versions as APIVersion
+import keystoneclient.v2_0.client as ksClient_v2
+from novaclient.v2.client import Client as nClient
+import keystoneclient.v3.client as ksClient
 import keystoneclient.exceptions as ksExceptions
 import glanceclient.v2.client as glClient
 import glanceclient.client as gl1Client
 import glanceclient.exc as gl1Exceptions
 from httplib import HTTPException
-from neutronclient.neutron import client as neClient
+from neutronclient.neutron import client as neClient_v2
+from neutronclient.v2_0 import client as neClient
 from neutronclient.common import exceptions as neExceptions
 from requests.exceptions import ConnectionError
 
@@ -61,6 +64,9 @@ class vimconnector(vimconn.vimconnector):
         'url' is the keystone authorization url,
         'url_admin' is not use
         '''
+        self.osc_api_version = 'v2.0'
+        if config.get('APIversion') == 'v3.3':
+            self.osc_api_version = 'v3.3'
         vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level, config)
         
         self.k_creds={}
@@ -81,6 +87,9 @@ class vimconnector(vimconn.vimconnector):
         if passwd:
             self.k_creds['password'] = passwd
             self.n_creds['api_key']  = passwd
+        if self.osc_api_version == 'v3.3':
+            self.k_creds['project_name'] = tenant_name
+            self.k_creds['project_id'] = tenant_id
         self.reload_client       = True
         self.logger = logging.getLogger('openmano.vim.openstack')
         if log_level:
@@ -93,21 +102,37 @@ class vimconnector(vimconn.vimconnector):
         if index=='tenant_id':
             self.reload_client=True
             self.tenant_id = value
-            if value:
-                self.k_creds['tenant_id'] = value
-                self.n_creds['tenant_id']  = value
+            if self.osc_api_version == 'v3.3':
+                if value:
+                    self.k_creds['project_id'] = value
+                    self.n_creds['project_id']  = value
+                else:
+                    del self.k_creds['project_id']
+                    del self.n_creds['project_id']
             else:
-                del self.k_creds['tenant_name']
-                del self.n_creds['project_id']
+                if value:
+                    self.k_creds['tenant_id'] = value
+                    self.n_creds['tenant_id']  = value
+                else:
+                    del self.k_creds['tenant_id']
+                    del self.n_creds['tenant_id']
         elif index=='tenant_name':
             self.reload_client=True
             self.tenant_name = value
-            if value:
-                self.k_creds['tenant_name'] = value
-                self.n_creds['project_id']  = value
+            if self.osc_api_version == 'v3.3':
+                if value:
+                    self.k_creds['project_name'] = value
+                    self.n_creds['project_name']  = value
+                else:
+                    del self.k_creds['project_name']
+                    del self.n_creds['project_name']
             else:
-                del self.k_creds['tenant_name']
-                del self.n_creds['project_id']
+                if value:
+                    self.k_creds['tenant_name'] = value
+                    self.n_creds['project_id']  = value
+                else:
+                    del self.k_creds['tenant_name']
+                    del self.n_creds['project_id']
         elif index=='user':
             self.reload_client=True
             self.user = value
@@ -146,14 +171,20 @@ class vimconnector(vimconn.vimconnector):
             #test valid params
             if len(self.n_creds) <4:
                 raise ksExceptions.ClientException("Not enough parameters to connect to openstack")
-            self.nova = nClient.Client(2, **self.n_creds)
-            self.keystone = ksClient.Client(**self.k_creds)
+            if self.osc_api_version == 'v3.3':
+                self.nova = nClient(APIVersion(version_str='2'), **self.n_creds)
+                self.keystone = ksClient.Client(**self.k_creds)
+                self.ne_endpoint=self.keystone.service_catalog.url_for(service_type='network', endpoint_type='publicURL')
+                self.neutron = neClient.Client(APIVersion(version_str='2'), endpoint_url=self.ne_endpoint, token=self.keystone.auth_token, **self.k_creds)
+            else:
+                self.nova = nClient_v2.Client('2', **self.n_creds)
+                self.keystone = ksClient_v2.Client(**self.k_creds)
+                self.ne_endpoint=self.keystone.service_catalog.url_for(service_type='network', endpoint_type='publicURL')
+                self.neutron = neClient_v2.Client('2.0', endpoint_url=self.ne_endpoint, token=self.keystone.auth_token, **self.k_creds)
             self.glance_endpoint = self.keystone.service_catalog.url_for(service_type='image', endpoint_type='publicURL')
             self.glance = glClient.Client(self.glance_endpoint, token=self.keystone.auth_token, **self.k_creds)  #TODO check k_creds vs n_creds
-            self.ne_endpoint=self.keystone.service_catalog.url_for(service_type='network', endpoint_type='publicURL')
-            self.neutron = neClient.Client('2.0', endpoint_url=self.ne_endpoint, token=self.keystone.auth_token, **self.k_creds)
             self.reload_client = False
-        
+
     def __net_os2mano(self, net_list_dict):
         '''Transform the net openstack format to mano format
         net_list_dict can be a list of dict or a single dict'''
@@ -195,14 +226,17 @@ class vimconnector(vimconn.vimconnector):
             <other VIM specific>
         Returns the tenant list of dictionaries: [{'name':'<name>, 'id':'<id>, ...}, ...]
         '''
-        self.logger.debug("Getting tenant from VIM filter: '%s'", str(filter_dict))
+        self.logger.debug("Getting tenants from VIM filter: '%s'", str(filter_dict))
         try:
             self._reload_connection()
-            tenant_class_list=self.keystone.tenants.findall(**filter_dict)
-            tenant_list=[]
-            for tenant in tenant_class_list:
-                tenant_list.append(tenant.to_dict())
-            return tenant_list
+            if osc_api_version == 'v3.3':
+                project_class_list=self.keystone.projects.findall(**filter_dict)
+            else:
+                project_class_list=self.keystone.tenants.findall(**filter_dict)
+            project_list=[]
+            for project in project_class_list:
+                project_list.append(project.to_dict())
+            return project_list
         except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
             self._format_exception(e)
 
@@ -211,8 +245,11 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Adding a new tenant name: %s", tenant_name)
         try:
             self._reload_connection()
-            tenant=self.keystone.tenants.create(tenant_name, tenant_description)
-            return tenant.id
+            if self.osc_api_version == 'v3.3':
+                project=self.keystone.projects.create(tenant_name, tenant_description)
+            else:
+                project=self.keystone.tenants.create(tenant_name, tenant_description)
+            return project.id
         except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
             self._format_exception(e)
 
@@ -221,11 +258,14 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Deleting tenant %s from VIM", tenant_id)
         try:
             self._reload_connection()
-            self.keystone.tenants.delete(tenant_id)
+            if osc_api_version == 'v3.3':
+                self.keystone.projects.delete(tenant_id)
+            else:
+                self.keystone.tenants.delete(tenant_id)
             return tenant_id
         except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
             self._format_exception(e)
-        
+
     def new_network(self,net_name, net_type, ip_profile=None, shared=False, vlan=None):
         '''Adds a tenant network to VIM. Returns the network identifier'''
         self.logger.debug("Adding a new network to VIM name '%s', type '%s'", net_name, net_type)
@@ -298,6 +338,8 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Getting network from VIM filter: '%s'", str(filter_dict))
         try:
             self._reload_connection()
+            if osc_api_version == 'v3.3' and "tenant_id" in filter_dict:
+                filter_dict['project_id'] = filter_dict.pop('tenant_id')
             net_dict=self.neutron.list_networks(**filter_dict)
             net_list=net_dict["networks"]
             self.__net_os2mano(net_list)
