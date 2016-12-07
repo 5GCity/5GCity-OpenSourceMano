@@ -70,7 +70,7 @@ function configure(){
 
     echo -e "       Configuring SO"
     sudo route add -host $JUJU_CONTROLLER_IP gw $VCA_CONTAINER_IP
-    lxc exec SO-ub -- nohup sudo -b -H /usr/rift/rift-shell -r -i /usr/rift -a /usr/rift/.artifacts -- ./demos/launchpad.py --use-xml-mode
+    lxc exec SO-ub -- nohup sudo -b -H /usr/rift/rift-shell -r -i /usr/rift -a /usr/rift/.artifacts -- ./demos/launchpad.py --use-xml-mode &
     time=0; step=30; timelength=300; while [ $time -le $timelength ]; do sleep $step; echo -n "."; time=$((time+step)); done; echo
 
     curl -k --request POST \
