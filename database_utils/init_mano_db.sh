@@ -39,7 +39,7 @@ function usage(){
     echo -e "  Inits openmano database; deletes previous one and loads from ${DBNAME}_structure.sql"
     echo -e "  OPTIONS"
     echo -e "     -u USER  database user. '$DBUSER' by default. Prompts if DB access fails"
-    echo -e "     -p PASS  database password. 'No password' by default. Prompts if DB access fails"
+    echo -e "     -p PASS  database password. 'No password' or 'manopw' by default. Prompts if DB access fails"
     echo -e "     -P PORT  database port. '$DBPORT' by default"
     echo -e "     -h HOST  database host. '$DBHOST' by default"
     echo -e "     -d NAME  database name. '$DBNAME' by default.  Prompts if DB access fails"
@@ -100,12 +100,16 @@ DBPORT_="-P$DBPORT"
 TEMPFILE="$(mktemp -q --tmpdir "initmanodb.XXXXXX")"
 trap 'rm -f "$TEMPFILE"' EXIT
 chmod 0600 "$TEMPFILE"
-cat >"$TEMPFILE" <<EOF
-[client]
-user="${DBUSER}"
-password="${DBPASS}"
-EOF
 DEF_EXTRA_FILE_PARAM="--defaults-extra-file=$TEMPFILE"
+if [ -z "${DBPASS}" ]
+then
+    password_ok=""
+    echo -e "[client]\nuser='${DBUSER}'\npassword='manopw'" > "$TEMPFILE"
+    mysql --defaults-extra-file="$TEMPFILE" $DBHOST_ $DBPORT_ $DBNAME -e "quit" >/dev/null 2>&1 && DBPASS="manopw"
+    echo -e "[client]\nuser='${DBUSER}'\npassword=''" > "$TEMPFILE"
+    mysql --defaults-extra-file="$TEMPFILE" $DBHOST_ $DBPORT_ $DBNAME -e "quit" >/dev/null 2>&1 && DBPASS=""
+fi
+echo -e "[client]\nuser='${DBUSER}'\npassword='${DBPASS}'" > "$TEMPFILE"
 
 while !  mysql $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_ -e "quit" >/dev/null 2>&1
 do
@@ -116,14 +120,12 @@ do
         read -e -p "mysql user($DBUSER): " KK
         [ -n "$KK" ] && DBUSER="$KK"
         read -e -s -p "mysql password: " DBPASS
-        cat >"$TEMPFILE" <<EOF
-[client]
-user="${DBUSER}"
-password="${DBPASS}"
-EOF
+        echo -e "[client]\nuser='${DBUSER}'\npassword='${DBPASS}'" > "$TEMPFILE"
         logintry="yes"
         echo
 done
+[ -z "${DBPASS}" ] && DBPASS_=""
+[ -n "${DBPASS}" ] && DBPASS_="-p${DBPASS}"
 
 if [ -n "${CREATEDB}" ]; then
     echo "    deleting previous database ${DBNAME}"

@@ -26,11 +26,11 @@
 
 function usage(){
     echo -e "usage: sudo $0 [OPTIONS]"
-    echo -e "Configures openmano to run as a service"
+    echo -e "Configures openmano to run as a service at /opt"
     echo -e "  OPTIONS"
     echo -e "     -u USER_OWNER  user owner of the service, 'root' by default"
     echo -e "     -f PATH  path where openmano source is located. If missing it is downloaded from git"
-    #echo -e "     -q:  install in an unattended mode"
+    echo -e "     -d --delete:  if -f is provided, delete this path after copying to /opt"
     echo -e "     -h:  show this help"
     echo -e "     --uninstall: remove created service and files"
 }
@@ -50,7 +50,8 @@ GIT_URL=https://osm.etsi.org/gerrit/osm/RO.git
 USER_OWNER="root"
 QUIET_MODE=""
 FILE=""
-while getopts ":u:f:hq-:" o; do
+DELETE=""
+while getopts ":u:f:hdq-:" o; do
     case "${o}" in
         u)
             export USER_OWNER="$OPTARG"
@@ -64,10 +65,14 @@ while getopts ":u:f:hq-:" o; do
         h)
             usage && exit 0
             ;;
+        d)
+            DELETE=y
+            ;;
         -)
             [ "${OPTARG}" == "help" ] && usage && exit 0
             [ "${OPTARG}" == "uninstall" ] && uninstall && exit 0
-            echo -e "Invalid option: '--$OPTARG'\nTry $0 --help for more information" >&2 
+            [ "${OPTARG}" == "delete" ] && DELETE=y && continue
+            echo -e "Invalid option: '--$OPTARG'\nTry $0 --help for more information" >&2
             exit 1
             ;; 
         \?)
@@ -114,6 +119,7 @@ if [[ -z "$FILE" ]]
 then
     FILE=__temp__${RANDOM}
     git clone $GIT_URL $FILE || ! echo "Cannot get openmano source code from $GIT_URL" >&2 || exit 1
+    DELETE=y
 else
     [[ -d  "$FILE" ]] || ! echo $BAD_PATH_ERROR >&2 || exit 1
 fi
@@ -130,7 +136,7 @@ ln -s -v /opt/openmano/openmano /usr/bin/openmano
 ln -s -v /opt/openmano/scripts/service-openmano.sh /usr/sbin/service-openmano
 ln -s -v /opt/openmano/scripts/openmano-report.sh /usr/bin/openmano-report
 
-chown -R $USER_OWNER /opt/openmano
+chown -R $SUDO_USER /opt/openmano
 
 mkdir -p /etc/systemd/system/
 cat  > /etc/systemd/system/openmano.service  << EOF 
@@ -146,7 +152,7 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
-rm -rf ${FILE}
+[[ -n $DELETE ]] && rm -rf ${FILE}
 
 service openmano start
 systemctl enable openmano.service
