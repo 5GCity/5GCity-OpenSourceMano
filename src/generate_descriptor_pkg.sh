@@ -231,7 +231,7 @@ EOF
                 virtual-interface:
                     type: VIRTIO
                     bandwidth: '0'
-                    vpci: 0000:00:0a.0
+                    vpci: '0000:00:0a.0'
                 vnfd-connection-point-ref: eth0
 EOF
 
@@ -244,7 +244,7 @@ EOF
                 virtual-interface:
                     type: ${INTF_TYPE}
                     bandwidth: '0'
-                    vpci: 0000:00:${pci}.0
+                    vpci: '0000:00:${pci}.0'
                 vnfd-connection-point-ref: eth${eth}
 EOF
     done
