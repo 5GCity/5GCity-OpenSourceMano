@@ -1,0 +1,5 @@
+options:
+  mode:
+    type: string
+    default:
+    description: "The service type: [ping, pong]"

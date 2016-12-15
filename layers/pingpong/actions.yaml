@@ -1,0 +1,32 @@
+set-server:
+    description: "Set the target IP address and port"
+    params:
+        server-ip:
+            description: "IP on which the target service is listening."
+            type: string
+            default: ""
+        server-port:
+            description: "Port on which the target service is listening."
+            type: integer
+            default: 5555
+    required:
+        - server-ip
+set-rate:
+    description: "Set the rate of packet generation."
+    params:
+        rate:
+            description: "Packet rate."
+            type: integer
+            default: 5
+get-stats:
+    description: "Get the stats."
+get-state:
+    description: "Get the admin state of the target service."
+get-rate:
+    description: "Get the rate set on the target service."
+get-server:
+    description: "Get the target server and IP set"
+start-ping:
+    description: "Start the traffic generator."
+stop-ping:
+    description: "Stop the traffic generator."
