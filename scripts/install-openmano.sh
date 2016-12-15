@@ -283,7 +283,7 @@ if [[ -z $NOCLONE ]]; then
 #################################################################'
     su $SUDO_USER -c "git clone ${GIT_URL} ${OPENMANO_BASEFOLDER}"
     su $SUDO_USER -c "cp ${OPENMANO_BASEFOLDER}/.gitignore-common ${OPENMANO_BASEFOLDER}/.gitignore"
-    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C  ${OPENMANO_BASEFOLDER} checkout tags/v1.0.1"
+    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C  ${OPENMANO_BASEFOLDER} checkout tags/v1.0.2"
 fi
 
 echo '
