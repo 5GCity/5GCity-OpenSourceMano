@@ -39,6 +39,7 @@ function usage(){
     echo -e "    --screen         forces to run openmano (and openvim) service in a screen"
     echo -e "    --insert-bashrc  insert the created tenant,datacenter variables at"
     echo -e "                     ~/.bashrc to be available by openmano CLI"
+    echo -e "    --install-openvim   install openvim in test mode"
     echo -e "    --init-openvim   if openvim runs locally, an init is called to clean openvim"
     echo -e "                      database and add fake hosts"
 }
@@ -57,7 +58,7 @@ DIRscript=${DIRmano}/scripts
 
 
 #process options
-source ${DIRscript}/get-options.sh "force:f help:h insert-bashrc init-openvim screen" $* || $_exit 1
+source ${DIRscript}/get-options.sh "force:f help:h insert-bashrc init-openvim install-openvim screen" $* || $_exit 1
 
 #help
 [ -n "$option_help" ] && usage && $_exit 0
@@ -88,6 +89,19 @@ export OPENMANO_PORT=9090
 
 #by default action should be reset and create
 [[ -z $action_list ]]  && action_list="reset create delete"
+
+if [[ -n "$option_install_openvim" ]] 
+then
+    pushd ${DIRmano}/..
+    echo "installing openvim at $PWD/openvim ... "
+    wget -O install-openvim.sh "https://osm.etsi.org/gitweb/?p=osm/openvim.git;a=blob_plain;f=scripts/install-openvim.sh"
+    chmod +x install-openvim.sh
+    sudo ./install-openvim.sh --no-install-packages --force --quiet --develop
+    alias initopenvim="${PWD}/openvim/scripts/initopenvim.sh"
+    alias openvim="${PWD}/openvim/scripts/openvim"
+    option_init_openvim="-"
+    popd
+fi
 [[ -z "$option_init_openvim" ]] || initopenvim${force_param}${insert_bashrc_param}${screen_vim_param} || echo "WARNING openvim cannot be initialized. The rest of test can fail!"
 
 #check openvim client variables are set

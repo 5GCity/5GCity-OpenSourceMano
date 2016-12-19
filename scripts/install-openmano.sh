@@ -173,8 +173,12 @@ INSTALL_AS_A_SERVICE=""
 [[ "$_DISTRO" == "Ubuntu" ]] &&  [[ ${_RELEASE%%.*} == 16 ]] && [[ -z $DEVELOP ]] && INSTALL_AS_A_SERVICE="y"
 #Next operations require knowing OPENMANO_BASEFOLDER
 if [[ -z "$NOCLONE" ]]; then
-    OPENMANO_BASEFOLDER="${PWD}/openmano"
-    [[ -n "$FORCE" ]] && rm -rf $OPENMANO_BASEFOLDER #make idenpotent
+    if [[ -n "$INSTALL_AS_A_SERVICE" ]] ; then
+        OPENMANO_BASEFOLDER=__openmano__${RANDOM}
+    else
+        OPENMANO_BASEFOLDER="${PWD}/openmano"
+    fi
+    [[ -n "$FORCE" ]] && rm -rf $OPENMANO_BASEFOLDER #make idempotent
 else
     HERE=$(realpath $(dirname $0))
     OPENMANO_BASEFOLDER=$(dirname $HERE)
@@ -279,7 +283,7 @@ if [[ -z $NOCLONE ]]; then
 #################################################################'
     su $SUDO_USER -c "git clone ${GIT_URL} ${OPENMANO_BASEFOLDER}"
     su $SUDO_USER -c "cp ${OPENMANO_BASEFOLDER}/.gitignore-common ${OPENMANO_BASEFOLDER}/.gitignore"
-    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C  ${OPENMANO_BASEFOLDER} checkout tags/v1.0.1"
+    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C  ${OPENMANO_BASEFOLDER} checkout tags/v1.0.2"
 fi
 
 echo '
@@ -365,9 +369,9 @@ then
     su $SUDO_USER -c 'rm -f ${HOME}/bin/openmano'
     su $SUDO_USER -c 'rm -f ${HOME}/bin/openmano-report'
     su $SUDO_USER -c 'rm -f ${HOME}/bin/service-openmano'
-    su $SUDO_USER -c 'ln -s '${OPENMANO_BASEFOLDER}'/openmano ${HOME}/bin/openmano'
-    su $SUDO_USER -c 'ln -s '${OPENMANO_BASEFOLDER}'/scripts/openmano-report.sh   ${HOME}/bin/openmano-report'
-    su $SUDO_USER -c 'ln -s '${OPENMANO_BASEFOLDER}'/scripts/service-openmano.sh  ${HOME}/bin/service-openmano'
+    su $SUDO_USER -c "ln -s '${OPENMANO_BASEFOLDER}/openmano' "'${HOME}/bin/openmano'
+    su $SUDO_USER -c "ln -s '${OPENMANO_BASEFOLDER}/scripts/openmano-report.sh'   "'${HOME}/bin/openmano-report'
+    su $SUDO_USER -c "ln -s '${OPENMANO_BASEFOLDER}/scripts/service-openmano.sh'  "'${HOME}/bin/service-openmano'
 
     #insert /home/<user>/bin in the PATH
     #skiped because normally this is done authomatically when ~/bin exist
@@ -406,7 +410,7 @@ echo '
 #####             CONFIGURE OPENMANO SERVICE                #####
 #################################################################'
 
-    ${OPENMANO_BASEFOLDER}/scripts/install-openmano-service.sh -f ${OPENMANO_BASEFOLDER} #-u $SUDO_USER
+    ${OPENMANO_BASEFOLDER}/scripts/install-openmano-service.sh -f ${OPENMANO_BASEFOLDER} `[[ -z "$NOCLONE" ]] && echo "-d"`
 #    rm -rf ${OPENMANO_BASEFOLDER}
 #    alias service-openmano="service openmano"
 #    echo 'alias service-openmano="service openmano"' >> ${HOME}/.bashrc
