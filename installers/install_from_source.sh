@@ -18,7 +18,8 @@ function usage(){
     echo -e "Install OSM from source code"
     echo -e "  OPTIONS"
     echo -e "     --uninstall:   uninstall OSM: remove the containers and delete NAT rules"
-    echo -e "     --develop:     install OSM from source code using the master branch"
+    echo -e "     -b <branch>:   install OSM from source code using a specific branch (master, v1.0, ...)"
+    echo -e "     --develop:     (deprecated, use '-b master') install OSM from source code using the master branch"
     echo -e "     --nat:         install only NAT rules"
     echo -e "     -h / --help:   print this help"
 }
@@ -91,15 +92,31 @@ function configure(){
 
 }
 
+function install_lxd() {
+    lxd init --auto
+    lxd waitready
+    systemctl stop lxd-bridge
+    systemctl --system daemon-reload
+    systemctl enable lxd-bridge
+    systemctl start lxd-bridge
+}
+
+
 UNINSTALL=""
 DEVELOP=""
 NAT=""
 RECONFIGURE=""
 TEST_INSTALLER=""
-while getopts ":h-:" o; do
+LXD=""
+SHOWOPTS=""
+COMMIT_ID=""
+while getopts ":h-:b:" o; do
     case "${o}" in
         h)
             usage && exit 0
+            ;;
+        b)
+            COMMIT_ID=${OPTARG}
             ;;
         -)
             [ "${OPTARG}" == "help" ] && usage && exit 0
@@ -108,6 +125,8 @@ while getopts ":h-:" o; do
             [ "${OPTARG}" == "nat" ] && NAT="y" && continue
             [ "${OPTARG}" == "reconfigure" ] && RECONFIGURE="y" && continue
             [ "${OPTARG}" == "test" ] && TEST_INSTALLER="y" && continue
+            [ "${OPTARG}" == "lxd" ] && LXD="y" && continue
+            [ "${OPTARG}" == "showopts" ] && SHOWOPTS="y" && continue
             echo -e "Invalid option: '--$OPTARG'\n" >&2
             usage && exit 1
             ;;
@@ -120,6 +139,20 @@ while getopts ":h-:" o; do
             ;;
     esac
 done
+
+[ -z "$COMMIT_ID" ] && [ -n "$DEVELOP" ] && COMMIT_ID="master"
+[ -z "$COMMIT_ID" ] && COMMIT_ID="tags/v1.0.2"
+
+if [ -n "$SHOWOPTS" ]; then
+    echo "UNINSTALL=$UNINSTALL"
+    echo "DEVELOP=$DEVELOP"
+    echo "NAT=$NAT"
+    echo "RECONFIGURE=$RECONFIGURE"
+    echo "TEST_INSTALLER=$TEST_INSTALLER"
+    echo "LXD=$LXD"
+    echo "Commit: $COMMIT_ID"
+    exit 0
+fi
 
 if [ -n "$TEST_INSTALLER" ]; then
     echo -e "\nUsing local devops repo for OSM installation"
@@ -136,7 +169,7 @@ if [ -z "$TEST_INSTALLER" ]; then
     echo -e "\nCloning devops repo temporarily"
     git clone https://osm.etsi.org/gerrit/osm/devops.git $TEMPDIR
     RC_CLONE=$?
-    DEVOPS_COMMITID="tags/v1.0.1"
+    DEVOPS_COMMITID="tags/v1.0.2"
     git -C $TEMPDIR checkout $DEVOPS_COMMITID
 fi
 OSM_DEVOPS=$TEMPDIR
@@ -150,12 +183,12 @@ OSM_JENKINS="$TEMPDIR/jenkins"
 #Installation starts here
 wget -q -O- https://osm-download.etsi.org/ftp/osm-1.0-one/README.txt &> /dev/null
 
+[ -n "$LXD" ] && echo -e "\nConfiguring lxd" && install_lxd
+
 echo -e "\nChecking required packages: wget, curl, tar"
 dpkg -l wget curl tar &>/dev/null || ! echo -e "    One or several packages are not installed.\nInstalling required packages\n     Root privileges are required" || sudo apt install -y wget curl tar
 
 echo -e "\nCreating the containers and building ..."
-COMMIT_ID="tags/v1.0.1"
-[ -n "$DEVELOP" ] && COMMIT_ID="master"
 $OSM_DEVOPS/jenkins/host/start_build RO checkout $COMMIT_ID
 $OSM_DEVOPS/jenkins/host/start_build VCA
 $OSM_DEVOPS/jenkins/host/start_build SO checkout $COMMIT_ID
