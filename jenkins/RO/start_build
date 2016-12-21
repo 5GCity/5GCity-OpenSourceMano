@@ -41,7 +41,7 @@ INFO "  compiling *.py"
 #python $TEMPFILE &&
 python -m py_compile *.py   &&     #uncomment to concatenate commands
 INFO "  basic_test"         &&
-./test/basictest.sh --force --insert-bashrc --install-openvim --init-openvima  #&&
+./test/basictest.sh --force --insert-bashrc --install-openvim --init-openvim  #&&
 #basic test HERE            #&&     #uncomment to concatenate commands
 
 RC=$?
