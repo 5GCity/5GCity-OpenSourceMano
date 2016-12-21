@@ -92,14 +92,17 @@ export OPENMANO_PORT=9090
 
 if [[ -n "$option_install_openvim" ]] 
 then
-    pushd ${DIRmano}/..
-    echo "installing openvim at $PWD/openvim ... "
+    mkdir -p ${DIRNAME}/local
+    pushd ${DIRNAME}/local
+    echo "installing openvim at  ${DIRNAME}/openvim ... "
     wget -O install-openvim.sh "https://osm.etsi.org/gitweb/?p=osm/openvim.git;a=blob_plain;f=scripts/install-openvim.sh"
     chmod +x install-openvim.sh
     sudo ./install-openvim.sh --no-install-packages --force --quiet --develop
-    alias initopenvim="${PWD}/openvim/scripts/initopenvim.sh"
-    alias openvim="${PWD}/openvim/scripts/openvim"
-    option_init_openvim="-"
+    export alias initopenvim="${PWD}/openvim/scripts/initopenvim.sh"
+    export alias openvim="${PWD}/openvim/scripts/openvim"
+    option_init_openvim=""
+    ${DIRNAME}/local/openvim/scripts/initopenvim.sh${force_param}${insert_bashrc_param}${screen_vim_param} || echo "WARNING openvim cannot be initialized. The rest of test can fail!"
+
     popd
 fi
 [[ -z "$option_init_openvim" ]] || initopenvim${force_param}${insert_bashrc_param}${screen_vim_param} || echo "WARNING openvim cannot be initialized. The rest of test can fail!"
