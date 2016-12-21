@@ -33,13 +33,15 @@ INFO "starting build"
 INFO "  cleaning .pyc"
 rm -f *.pyc
 INFO "  installing openmano packages and dependencies from current repo (--noclone)"
-./scripts/install-openmano.sh --noclone -q
+./scripts/install-openmano.sh --noclone --force -q
 INFO "  compiling *.py"
 #TEMPFILE="$(mktemp -q -p . "openmanolinker.XXXXXX.py")"
 #trap 'rm -f "$TEMPFILE"' EXIT
 #for i in vimconn*.py; do echo "import $i" >> $TEMPFILE; done
 #python $TEMPFILE &&
-python -m py_compile *.py   #&&     #uncomment to concatenate commands
+python -m py_compile *.py   &&     #uncomment to concatenate commands
+INFO "  basic_test"         &&
+./test/basictest.sh --force --insert-bashrc --install-openvim --init-openvima  #&&
 #basic test HERE            #&&     #uncomment to concatenate commands
 
 RC=$?
