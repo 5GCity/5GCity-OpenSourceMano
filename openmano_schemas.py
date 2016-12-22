@@ -24,7 +24,7 @@
 '''
 JSON schemas used by openmano httpserver.py module to parse the different files and messages sent through the API 
 '''
-__author__="Alfonso Tierno, Gerardo Garcia"
+__author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$09-oct-2014 09:09:48$"
 
 #Basis schemas
@@ -55,6 +55,7 @@ schema_version_2={"type":"integer","minimum":2,"maximum":2}
 #schema_version_string={"type":"string","enum": ["0.1", "2", "0.2", "3", "0.3"]}
 log_level_schema={"type":"string", "enum":["DEBUG", "INFO", "WARNING","ERROR","CRITICAL"]}
 checksum_schema={"type":"string", "pattern":"^[0-9a-fA-F]{32}$"}
+size_schema={"type":"integer","minimum":1,"maximum":100}
 
 metadata_schema={
     "type":"object",
@@ -465,7 +466,8 @@ devices_schema={
             "image": path_schema,
             "image name": name_schema,
             "image checksum": checksum_schema,
-            "image metadata": metadata_schema, 
+            "image metadata": metadata_schema,
+            "size": size_schema,
             "vpci":pci_schema,
             "xml":xml_text_schema,
         },

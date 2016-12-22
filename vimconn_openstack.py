@@ -24,14 +24,15 @@
 '''
 osconnector implements all the methods to interact with openstack using the python-client.
 '''
-__author__="Alfonso Tierno, Gerardo Garcia, xFlow Research"
-__date__ ="$24-nov-2016 09:10$"
+__author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes, xFlow Research"
+__date__ ="$22-jun-2014 11:19:29$"
 
 import vimconn
 import json
 import yaml
 import logging
 import netaddr
+import time
 
 from novaclient import client as nClient_v2, exceptions as nvExceptions, api_versions as APIVersion
 import keystoneclient.v2_0.client as ksClient_v2
@@ -41,6 +42,7 @@ import keystoneclient.exceptions as ksExceptions
 import glanceclient.v2.client as glClient
 import glanceclient.client as gl1Client
 import glanceclient.exc as gl1Exceptions
+import cinderclient.v2.client as cClient_v2
 from httplib import HTTPException
 from neutronclient.neutron import client as neClient_v2
 from neutronclient.v2_0 import client as neClient
@@ -57,6 +59,9 @@ vmStatus2manoFormat={'ACTIVE':'ACTIVE',
                      }
 netStatus2manoFormat={'ACTIVE':'ACTIVE','PAUSED':'PAUSED','INACTIVE':'INACTIVE','BUILD':'BUILD','ERROR':'ERROR','DELETED':'DELETED'
                      }
+
+#global var to have a timeout creating and deleting volumes
+volume_timeout = 60
 
 class vimconnector(vimconn.vimconnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None, config={}):
@@ -90,6 +95,7 @@ class vimconnector(vimconn.vimconnector):
         if self.osc_api_version == 'v3.3':
             self.k_creds['project_name'] = tenant_name
             self.k_creds['project_id'] = tenant_id
+
         self.reload_client       = True
         self.logger = logging.getLogger('openmano.vim.openstack')
         if log_level:
@@ -173,11 +179,14 @@ class vimconnector(vimconn.vimconnector):
                 raise ksExceptions.ClientException("Not enough parameters to connect to openstack")
             if self.osc_api_version == 'v3.3':
                 self.nova = nClient(APIVersion(version_str='2'), **self.n_creds)
+                #TODO To be updated for v3
+                #self.cinder = cClient.Client(**self.n_creds)
                 self.keystone = ksClient.Client(**self.k_creds)
                 self.ne_endpoint=self.keystone.service_catalog.url_for(service_type='network', endpoint_type='publicURL')
                 self.neutron = neClient.Client(APIVersion(version_str='2'), endpoint_url=self.ne_endpoint, token=self.keystone.auth_token, **self.k_creds)
             else:
                 self.nova = nClient_v2.Client('2', **self.n_creds)
+                self.cinder = cClient_v2.Client(**self.n_creds)
                 self.keystone = ksClient_v2.Client(**self.k_creds)
                 self.ne_endpoint=self.keystone.service_catalog.url_for(service_type='network', endpoint_type='publicURL')
                 self.neutron = neClient_v2.Client('2.0', endpoint_url=self.ne_endpoint, token=self.keystone.auth_token, **self.k_creds)
@@ -229,7 +238,7 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Getting tenants from VIM filter: '%s'", str(filter_dict))
         try:
             self._reload_connection()
-            if osc_api_version == 'v3.3':
+            if self.osc_api_version == 'v3.3':
                 project_class_list=self.keystone.projects.findall(**filter_dict)
             else:
                 project_class_list=self.keystone.tenants.findall(**filter_dict)
@@ -258,7 +267,7 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Deleting tenant %s from VIM", tenant_id)
         try:
             self._reload_connection()
-            if osc_api_version == 'v3.3':
+            if self.osc_api_version == 'v3.3':
                 self.keystone.projects.delete(tenant_id)
             else:
                 self.keystone.tenants.delete(tenant_id)
@@ -338,7 +347,7 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Getting network from VIM filter: '%s'", str(filter_dict))
         try:
             self._reload_connection()
-            if osc_api_version == 'v3.3' and "tenant_id" in filter_dict:
+            if self.osc_api_version == 'v3.3' and "tenant_id" in filter_dict:
                 filter_dict['project_id'] = filter_dict.pop('tenant_id')
             net_dict=self.neutron.list_networks(**filter_dict)
             net_list=net_dict["networks"]
@@ -649,7 +658,7 @@ class vimconnector(vimconn.vimconnector):
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
             self._format_exception(e)
 
-    def new_vminstance(self,name,description,start,image_id,flavor_id,net_list,cloud_config=None):
+    def new_vminstance(self,name,description,start,image_id,flavor_id,net_list,cloud_config=None,disk_list=None):
         '''Adds a VM instance to VIM
         Params:
             start: indicates if VM must start or boot in pause mode. Ignored
@@ -740,16 +749,56 @@ class vimconnector(vimconn.vimconnector):
             elif isinstance(cloud_config, str):
                 userdata = cloud_config
             else:
-                userdata=None    
-            
+                userdata=None
+
+            #Create additional volumes in case these are present in disk_list
+            block_device_mapping = None
+            base_disk_index = ord('b')
+            if disk_list != None:
+                block_device_mapping = dict()
+                for disk in disk_list:
+                    if 'image_id' in disk:
+                        volume = self.cinder.volumes.create(size = disk['size'],name = name + '_vd' +
+                                    chr(base_disk_index), imageRef = disk['image_id'])
+                    else:
+                        volume = self.cinder.volumes.create(size=disk['size'], name=name + '_vd' +
+                                    chr(base_disk_index))
+                    block_device_mapping['_vd' +  chr(base_disk_index)] = volume.id
+                    base_disk_index += 1
+
+                #wait until volumes are with status available
+                keep_waiting = True
+                elapsed_time = 0
+                while keep_waiting and elapsed_time < volume_timeout:
+                    keep_waiting = False
+                    for volume_id in block_device_mapping.itervalues():
+                        if self.cinder.volumes.get(volume_id).status != 'available':
+                            keep_waiting = True
+                    if keep_waiting:
+                        time.sleep(1)
+                        elapsed_time += 1
+
+                #if we exceeded the timeout rollback
+                if elapsed_time >= volume_timeout:
+                    #delete the volumes we just created
+                    for volume_id in block_device_mapping.itervalues():
+                        self.cinder.volumes.delete(volume_id)
+
+                    #delete ports we just created
+                    for net_item  in net_list_vim:
+                        if 'port-id' in net_item:
+                            self.neutron.delete_port(net_item['port_id'])
+
+                    raise vimconn.vimconnException('Timeout creating volumes for instance ' + name,
+                                                   http_code=vimconn.HTTP_Request_Timeout)
+
             server = self.nova.servers.create(name, image_id, flavor_id, nics=net_list_vim, meta=metadata,
-                                              security_groups   = security_groups,
-                                              availability_zone = self.config.get('availability_zone'),
-                                              key_name          = self.config.get('keypair'),
-                                              userdata=userdata
-                                        ) #, description=description)
-            
-            
+                                              security_groups=security_groups,
+                                              availability_zone=self.config.get('availability_zone'),
+                                              key_name=self.config.get('keypair'),
+                                              userdata=userdata,
+                                              block_device_mapping = block_device_mapping
+                                              )  # , description=description)
             #print "DONE :-)", server
             
             pool_id = None
@@ -867,7 +916,32 @@ class vimconnector(vimconn.vimconnector):
                     self.neutron.delete_port(p["id"])
                 except Exception as e:
                     self.logger.error("Error deleting port: " + type(e).__name__ + ": "+  str(e))
+
+            #commented because detaching the volumes makes the servers.delete not work properly ?!?
+            #dettach volumes attached
+            server = self.nova.servers.get(vm_id)
+            volumes_attached_dict = server._info['os-extended-volumes:volumes_attached']
+            #for volume in volumes_attached_dict:
+            #    self.cinder.volumes.detach(volume['id'])
+
             self.nova.servers.delete(vm_id)
+
+            #delete volumes.
+            #Although having detached them should have them  in active status
+            #we ensure in this loop
+            keep_waiting = True
+            elapsed_time = 0
+            while keep_waiting and elapsed_time < volume_timeout:
+                keep_waiting = False
+                for volume in volumes_attached_dict:
+                    if self.cinder.volumes.get(volume['id']).status != 'available':
+                        keep_waiting = True
+                    else:
+                        self.cinder.volumes.delete(volume['id'])
+                if keep_waiting:
+                    time.sleep(1)
+                    elapsed_time += 1
+
             return vm_id
         except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)
