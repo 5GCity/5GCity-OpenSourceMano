@@ -663,6 +663,7 @@ class vimconnector(vimconn.vimconnector):
                 use: 'data', 'bridge',  'mgmt'
                 type: 'virtual', 'PF', 'VF', 'VFnotShared'
                 vim_id: filled/added by this function
+                floating_ip: True/False (or it can be None)
                 #TODO ip, security groups
         Returns the instance identifier
         '''
@@ -670,41 +671,42 @@ class vimconnector(vimconn.vimconnector):
         try:
             metadata={}
             net_list_vim=[]
+            external_network=[] #list of external networks to be connected to instance, later on used to create floating_ip
             self._reload_connection()
             metadata_vpci={} #For a specific neutron plugin 
             for net in net_list:
                 if not net.get("net_id"): #skip non connected iface
                     continue
-                if net["type"]=="virtual":
-                    net_list_vim.append({'net-id': net["net_id"]})
-                    if "vpci" in net:
-                        metadata_vpci[ net["net_id"] ] = [[ net["vpci"], "" ]]
-                elif net["type"]=="PF":
-                    self.logger.warn("new_vminstance: Warning, can not connect a passthrough interface ")
-                    #TODO insert this when openstack consider passthrough ports as openstack neutron ports
-                else: #VF
-                    if "vpci" in net:
-                        if "VF" not in metadata_vpci:
-                            metadata_vpci["VF"]=[]
-                        metadata_vpci["VF"].append([ net["vpci"], "" ])
+                if net["type"]=="virtual" or net["type"]=="VF":
                     port_dict={
-                         "network_id": net["net_id"],
-                         "name": net.get("name"),
-                         "binding:vnic_type": "direct", 
-                         "admin_state_up": True
-                    }
+                        "network_id": net["net_id"],
+                        "name": net.get("name"),
+                        "admin_state_up": True
+                    }    
+                    if net["type"]=="virtual":
+                        if "vpci" in net:
+                            metadata_vpci[ net["net_id"] ] = [[ net["vpci"], "" ]]
+                    else: # for VF
+                        if "vpci" in net:
+                            if "VF" not in metadata_vpci:
+                                metadata_vpci["VF"]=[]
+                            metadata_vpci["VF"].append([ net["vpci"], "" ])
+                        port_dict["binding:vnic_type"]="direct"
                     if not port_dict["name"]:
-                        port_dict["name"] = name
+                        port_dict["name"]=name
                     if net.get("mac_address"):
                         port_dict["mac_address"]=net["mac_address"]
-                    #TODO: manage having SRIOV without vlan tag
-                    #if net["type"] == "VFnotShared"
-                    #    port_dict["vlan"]=0
                     new_port = self.neutron.create_port({"port": port_dict })
                     net["mac_adress"] = new_port["port"]["mac_address"]
                     net["vim_id"] = new_port["port"]["id"]
-                    net["ip"] = new_port["port"].get("fixed_ips",[{}])[0].get("ip_address")
+                    net["ip"] = new_port["port"].get("fixed_ips", [{}])[0].get("ip_address")
                     net_list_vim.append({"port-id": new_port["port"]["id"]})
+                else:   # for PF
+                    self.logger.warn("new_vminstance: Warning, can not connect a passthrough interface ")
+                    #TODO insert this when openstack consider passthrough ports as openstack neutron ports
+                if net.get('floating_ip', False):
+                    external_network.append(net)
+                 
             if metadata_vpci:
                 metadata = {"pci_assignement": json.dumps(metadata_vpci)}
                 if len(metadata["pci_assignement"]) >255:
@@ -750,17 +752,36 @@ class vimconnector(vimconn.vimconnector):
             
             #print "DONE :-)", server
             
-#             #TODO   server.add_floating_ip("10.95.87.209")
-#             #To look for a free floating_ip
-#             free_floating_ip = None
-#             for floating_ip in self.neutron.list_floatingips().get("floatingips", () ):
-#                 if not floating_ip["port_id"]:
-#                     free_floating_ip = floating_ip["floating_ip_address"]
-#                     break
-#             if free_floating_ip:
-#                 server.add_floating_ip(free_floating_ip)
+            pool_id = None
+            floating_ips = self.neutron.list_floatingips().get("floatingips", ())
+            for floating_network in external_network:
+                assigned = False
+                while(assigned == False):
+                    if floating_ips:
+                        ip = floating_ips.pop(0)
+                        if not ip.get("port_id", False):
+                            free_floating_ip = ip.get("floating_ip_address")
+                            try:
+                                fix_ip = floating_network.get('ip')
+                                server.add_floating_ip(free_floating_ip, fix_ip)
+                                assigned = True
+                            except Exception as e:
+                                self.delete_vminstance(server.id)
+                                raise vimconn.vimconnException(type(e).__name__ + ": Cannot create floating_ip "+  str(e), http_code=vimconn.HTTP_Conflict)
+                    else:
+                        pool_id = floating_network.get('net_id')
+                        param = {'floatingip': {'floating_network_id': pool_id}}
+                        try:
+                            #self.logger.debug("Creating floating IP")
+                            new_floating_ip = self.neutron.create_floatingip(param)
+                            free_floating_ip = new_floating_ip['floatingip']['floating_ip_address']
+                            fix_ip = floating_network.get('ip')
+                            server.add_floating_ip(free_floating_ip, fix_ip)
+                            assigned=True
+                        except Exception as e:
+                            self.delete_vminstance(server.id)
+                            raise vimconn.vimconnException(type(e).__name__ + ": Cannot create floating_ip "+  str(e), http_code=vimconn.HTTP_Conflict)
                 
-            
             return server.id
 #        except nvExceptions.NotFound as e:
 #            error_value=-vimconn.HTTP_Not_Found
