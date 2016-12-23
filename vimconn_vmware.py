@@ -62,8 +62,9 @@ STANDALONE = 'standalone'
 FLAVOR_RAM_KEY = 'ram'
 FLAVOR_VCPUS_KEY = 'vcpus'
 
-# global variable for number of retry
-DELETE_INSTANCE_RETRY = 3
+# global variables for number of retry
+INTERVAL_TIME = 5
+MAX_WAIT_TIME = 1800
 
 VCAVERSION = '5.9'
 
@@ -1286,7 +1287,19 @@ class vimconnector(vimconn.vimconnector):
             vca.block_until_completed(deploytask)
 
         # check if vApp deployed and if that the case return vApp UUID otherwise -1
-        vapp_uuid = self.get_vappid(vca.get_vdc(self.tenant_name), vmname_andid)
+        wait_time = 0
+        vapp_uuid = None
+        while wait_time <= MAX_WAIT_TIME:
+            vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vmname_andid)
+            if vapp and vapp.me.deployed:
+                vapp_uuid = self.get_vappid(vca.get_vdc(self.tenant_name), vmname_andid)
+                break
+            else:
+                self.logger.debug("new_vminstance(): Wait for vApp {} to deploy".format(name))
+                time.sleep(INTERVAL_TIME)
+
+            wait_time +=INTERVAL_TIME
+
         if vapp_uuid is not None:
             return vapp_uuid
         else:
@@ -1380,47 +1393,97 @@ class vimconnector(vimconn.vimconnector):
                 self.logger.info("Deleting vApp {} and UUID {}".format(vapp_name, vm__vim_uuid))
 
             # Delete vApp and wait for status change if task executed and vApp is None.
-            # We successfully delete vApp from vCloud
             vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
-            # poweroff vapp / undeploy and delete
-            power_off_task = vapp.poweroff()
-            if type(power_off_task) is GenericTask:
-                vca.block_until_completed(power_off_task)
-            else:
-                if not power_off_task:
-                    self.logger.debug("delete_vminstance(): Failed power off VM uuid {} ".format(vm__vim_uuid))
 
-            # refresh status
-            if vapp.me.deployed:
-                undeploy_task = vapp.undeploy()
-                if type(undeploy_task) is GenericTask:
-                    retry = 0
-                    while retry <= DELETE_INSTANCE_RETRY:
-                        result = vca.block_until_completed(undeploy_task)
-                        if result:
-                            break
-                        retry += 1
-                else:
-                    return -1
+            if vapp:
+                if vapp.me.deployed:
+                    self.logger.info("Powering off vApp {}".format(vapp_name))
+                    #Power off vApp
+                    powered_off = False
+                    wait_time = 0
+                    while wait_time <= MAX_WAIT_TIME:
+                        vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
+                        if not vapp:
+                            self.logger.debug("delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
+                            return -1, "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid)
 
-            # delete vapp
-            vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
-            if vapp is not None:
-                delete_task = vapp.delete()
-                retry = 0
-                while retry <= DELETE_INSTANCE_RETRY:
-                    task = vapp.delete()
-                    if type(task) is GenericTask:
-                        vca.block_until_completed(delete_task)
-                    if not delete_task:
+                        power_off_task = vapp.poweroff()
+                        if type(power_off_task) is GenericTask:
+                            result = vca.block_until_completed(power_off_task)
+                            if result:
+                                powered_off = True
+                                break
+                        else:
+                            self.logger.info("Wait for vApp {} to power off".format(vapp_name))
+                            time.sleep(INTERVAL_TIME)
+
+                        wait_time +=INTERVAL_TIME
+                    if not powered_off:
+                        self.logger.debug("delete_vminstance(): Failed to power off VM instance {} ".format(vm__vim_uuid))
+                    else:
+                        self.logger.info("delete_vminstance(): Powered off VM instance {} ".format(vm__vim_uuid))
+
+                    #Undeploy vApp
+                    self.logger.info("Undeploy vApp {}".format(vapp_name))
+                    wait_time = 0
+                    undeployed = False
+                    while wait_time <= MAX_WAIT_TIME:
+                        vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
+                        if not vapp:
+                            self.logger.debug("delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
+                            return -1, "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid)
+                        undeploy_task = vapp.undeploy(action='powerOff')
+
+                        if type(undeploy_task) is GenericTask:
+                            result = vca.block_until_completed(undeploy_task)
+                            if result:
+                                undeployed = True
+                                break
+                        else:
+                            self.logger.debug("Wait for vApp {} to undeploy".format(vapp_name))
+                            time.sleep(INTERVAL_TIME)
+
+                        wait_time +=INTERVAL_TIME
+
+                    if not undeployed:
+                        self.logger.debug("delete_vminstance(): Failed to undeploy vApp {} ".format(vm__vim_uuid)) 
+
+                # delete vapp
+                self.logger.info("Start deletion of vApp {} ".format(vapp_name))
+                vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
+
+                if vapp is not None:
+                    wait_time = 0
+                    result = False
+
+                    while wait_time <= MAX_WAIT_TIME:
+                        vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
+                        if not vapp:
+                            self.logger.debug("delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
+                            return -1, "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid)
+
+                        delete_task = vapp.delete()
+
+                        if type(delete_task) is GenericTask:
+                            vca.block_until_completed(delete_task)
+                            result = vca.block_until_completed(delete_task)
+                            if result:
+                                break
+                        else:
+                            self.logger.debug("Wait for vApp {} to delete".format(vapp_name))
+                            time.sleep(INTERVAL_TIME)
+
+                        wait_time +=INTERVAL_TIME
+
+                    if not result:
                         self.logger.debug("delete_vminstance(): Failed delete uuid {} ".format(vm__vim_uuid))
-                    retry += 1
 
         except:
             self.logger.debug(traceback.format_exc())
             raise vimconn.vimconnException("delete_vminstance(): Failed delete vm instance {}".format(vm__vim_uuid))
 
         if vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name) is None:
+            self.logger.info("Deleted vm instance {} sccessfully".format(vm__vim_uuid))
             return vm__vim_uuid
         else:
             raise vimconn.vimconnException("delete_vminstance(): Failed delete vm instance {}".format(vm__vim_uuid))
@@ -2520,3 +2583,4 @@ class vimconnector(vimconn.vimconnector):
                 return response.content
 
         return None
+
