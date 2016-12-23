@@ -50,7 +50,6 @@ from pyvcloud.schema.vcd.v1_5.schemas.admin.vCloudEntities import TasksInProgres
 
 import logging
 import json
-import vimconn
 import time
 import uuid
 import httplib
@@ -68,8 +67,8 @@ DELETE_INSTANCE_RETRY = 3
 
 VCAVERSION = '5.9'
 
-__author__ = "Mustafa Bayramov"
-__date__ = "$26-Aug-2016 11:09:29$"
+__author__ = "Mustafa Bayramov, Arpita Kate"
+__date__ = "$23-Dec-2016 11:09:29$"
 __version__ = '0.1'
 
 #     -1: "Could not be created",
@@ -164,16 +163,13 @@ class vimconnector(vimconn.vimconnector):
         if tenant_name is not None:
             orgnameandtenant = tenant_name.split(":")
             if len(orgnameandtenant) == 2:
-                self.tenant_name = orgnameandtenant[0]
-                self.org_name = orgnameandtenant[1]
+                self.tenant_name = orgnameandtenant[1]
+                self.org_name = orgnameandtenant[0]
             else:
                 self.tenant_name = tenant_name
         elif "orgname" in config:
             self.org_name = config['orgname']
-        else:
-            raise vimconn.vimconnException(message="Please indicate valid organization name. "
-                                                   "Either pass by org config attribute "
-                                                   "or as tenant_name:tenant_id.")
+
         if log_level:
             self.logger.setLevel(getattr(logging, log_level))
 
