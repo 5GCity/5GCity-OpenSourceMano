@@ -620,7 +620,7 @@ class vimconnector(vimconn.vimconnector):
                 errormsg = ''
                 vcd_network = self.get_vcd_network(network_uuid=net)
                 if vcd_network is not None and vcd_network:
-                    if vcd_network['status'] == 1:
+                    if vcd_network['status'] == '1':
                         status = 'ACTIVE'
                     else:
                         status = 'DOWN'
@@ -629,7 +629,7 @@ class vimconnector(vimconn.vimconnector):
                     errormsg = 'Network not found.'
 
                 dict_entry[net] = {'status': status, 'error_msg': errormsg,
-                                   'vm_info': yaml.safe_dump(vcd_network)}
+                                   'vim_info': yaml.safe_dump(vcd_network)}
         except:
             self.logger.debug("Error in refresh_nets_status")
             self.logger.debug(traceback.format_exc())
