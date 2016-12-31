@@ -1482,8 +1482,8 @@ class vimconnector(vimconn.vimconnector):
                         for vm_network in vapp_network:
                             if vm_network['name'] == vmname:
                                 interface = {"mac_address": vm_network['mac'],
-                                             "vim_net_id": self.get_network_name_by_id(vm_network['network_name']),
-                                             "vim_interface_id": vm_network['network_name'],
+                                             "vim_net_id": self.get_network_id_by_name(vm_network['network_name']),
+                                             "vim_interface_id": self.get_network_id_by_name(vm_network['network_name']),
                                              'ip_address': vm_network['ip']}
                                 # interface['vim_info'] = yaml.safe_dump(vm_network)
                                 vm_dict["interfaces"].append(interface)
@@ -1640,6 +1640,37 @@ class vimconnector(vimconn.vimconnector):
         except:
             self.logger.debug("Exception in get_network_name_by_id")
             self.logger.debug(traceback.format_exc())
+
+        return None
+
+    def get_network_id_by_name(self, network_name=None):
+        """Method gets vcloud director network uuid based on supplied name.
+
+        Args:
+            network_name: network_name
+        Returns:
+            The return network uuid.
+            network_uuid: network_id
+        """
+
+        vca = self.connect()
+        if not vca:
+            raise vimconn.vimconnConnectionException("self.connect() is failed.")
+
+        if not network_name:
+            self.logger.debug("get_network_id_by_name() : Network name is empty")
+            return None
+
+        try:
+            org_dict = self.get_org(self.org_uuid)
+            if org_dict and 'networks' in org_dict:
+                org_network_dict = org_dict['networks']
+                for net_uuid,net_name in org_network_dict.iteritems():
+                    if net_name == network_name:
+                        return net_uuid
+
+        except KeyError as exp:
+            self.logger.debug("get_network_id_by_name() : KeyError- {} ".format(exp))
 
         return None
 
