@@ -42,6 +42,8 @@ from db_base import db_base_Exception
 global global_config
 global vimconn_imported
 global logger
+global default_volume_size
+default_volume_size = '5' #size in GB
 
 
 vimconn_imported={} #dictionary with VIM type as key, loaded module as value
@@ -395,9 +397,11 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
     
         #Create the flavor in VIM
         #Translate images at devices from MANO id to VIM id
+        disk_list = []
         if 'extended' in flavor_dict and flavor_dict['extended']!=None and "devices" in flavor_dict['extended']:
             #make a copy of original devices
             devices_original=[]
+
             for device in flavor_dict["extended"].get("devices",[]):
                 dev={}
                 dev.update(device)
@@ -409,7 +413,9 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
             dev_nb=0
             for index in range(0,len(devices_original)) :
                 device=devices_original[index]
-                if "image" not in device or "image name" not in device:
+                if "image" not in device and "image name" not in device:
+                    if 'size' in device:
+                        disk_list.append({'size': device.get('size', default_volume_size)})
                     continue
                 image_dict={}
                 image_dict['name']=device.get('image name',flavor_dict['name']+str(dev_nb)+"-img")
@@ -425,6 +431,10 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
                 image_mano_id=create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vim=False, return_on_error=return_on_error )
                 image_dict["uuid"]=image_mano_id
                 image_vim_id=create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vim=True, return_on_error=return_on_error)
+
+                #save disk information (image must be based on and size
+                disk_list.append({'image_id': image_vim_id, 'size': device.get('size', default_volume_size)})
+
                 flavor_dict["extended"]["devices"][index]['imageRef']=image_vim_id
                 dev_nb += 1
         if len(flavor_db)>0:
@@ -451,7 +461,14 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
         #if reach here the flavor has been create or exist
         if len(flavor_db)==0:
             #add new vim_id at datacenters_flavors
-            mydb.new_row('datacenters_flavors', {'datacenter_id':vim_id, 'flavor_id':flavor_mano_id, 'vim_id': flavor_vim_id, 'created':flavor_created})
+            extended_devices_yaml = None
+            if len(disk_list) > 0:
+                extended_devices = dict()
+                extended_devices['disks'] = disk_list
+                extended_devices_yaml = yaml.safe_dump(extended_devices,default_flow_style=True,width=256)
+            mydb.new_row('datacenters_flavors',
+                        {'datacenter_id':vim_id, 'flavor_id':flavor_mano_id, 'vim_id': flavor_vim_id,
+                        'created':flavor_created,'extended': extended_devices_yaml})
         elif flavor_db[0]["vim_id"]!=flavor_vim_id:
             #modify existing vim_id at datacenters_flavors
             mydb.update_rows('datacenters_flavors', UPDATE={'vim_id':flavor_vim_id}, WHERE={'datacenter_id':vim_id, 'flavor_id':flavor_mano_id})
@@ -1921,7 +1938,28 @@ def create_instance(mydb, tenant_id, instance_dict):
                 flavor_dict = mydb.get_table_by_uuid_name("flavors", vm['flavor_id'])
                 if flavor_dict['extended']!=None:
                     flavor_dict['extended']= yaml.load(flavor_dict['extended'])
-                flavor_id = create_or_use_flavor(mydb, {datacenter_id: vim}, flavor_dict, rollbackList, True)                
+                flavor_id = create_or_use_flavor(mydb, {datacenter_id: vim}, flavor_dict, rollbackList, True)
+
+
+
+
+                #Obtain information for additional disks
+                extended_flavor_dict = mydb.get_rows(FROM='datacenters_flavors', SELECT=('extended',), WHERE={'vim_id': flavor_id})
+                if not extended_flavor_dict:
+                    raise NfvoException("flavor '{}' not found".format(flavor_id), HTTP_Not_Found)
+                    return
+
+                #extended_flavor_dict_yaml = yaml.load(extended_flavor_dict[0])
+                myVMDict['disks'] = None
+                extended_info = extended_flavor_dict[0]['extended']
+                if extended_info != None:
+                    extended_flavor_dict_yaml = yaml.load(extended_info)
+                    if 'disks' in extended_flavor_dict_yaml:
+                        myVMDict['disks'] = extended_flavor_dict_yaml['disks']
+
+
+
+
                 vm['vim_flavor_id'] = flavor_id
                 
                 myVMDict['imageRef'] = vm['vim_image_id']
@@ -1983,7 +2021,9 @@ def create_instance(mydb, tenant_id, instance_dict):
                 #print "interfaces", yaml.safe_dump(vm['interfaces'], indent=4, default_flow_style=False)
                 #print ">>>>>>>>>>>>>>>>>>>>>>>>>>>"
                 vm_id = vim.new_vminstance(myVMDict['name'],myVMDict['description'],myVMDict.get('start', None),
-                        myVMDict['imageRef'],myVMDict['flavorRef'],myVMDict['networks'], cloud_config = cloud_config)
+                        myVMDict['imageRef'],myVMDict['flavorRef'],myVMDict['networks'], cloud_config = cloud_config,
+                        disk_list = myVMDict['disks'])
+
                 vm['vim_id'] = vm_id
                 rollbackList.append({'what':'vm','where':'vim','vim_id':datacenter_id,'uuid':vm_id})
                 #put interface uuid back to scenario[vnfs][vms[[interfaces]

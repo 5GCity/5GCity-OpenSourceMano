@@ -1113,7 +1113,7 @@ class vimconnector(vimconn.vimconnector):
         return None
 
     def new_vminstance(self, name=None, description="", start=False, image_id=None, flavor_id=None, net_list={},
-                       cloud_config=None):
+                       cloud_config=None, disk_list=None):
         """Adds a VM instance to VIM
         Params:
             start: indicates if VM must start or boot in pause mode. Ignored

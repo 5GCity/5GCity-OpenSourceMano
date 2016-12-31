@@ -184,6 +184,7 @@ DATABASE_TARGET_VER_NUM=0
 [ $OPENMANO_VER_NUM -ge 4057 ] && DATABASE_TARGET_VER_NUM=14  #0.4.57=>  14
 [ $OPENMANO_VER_NUM -ge 4059 ] && DATABASE_TARGET_VER_NUM=15  #0.4.59=>  15
 [ $OPENMANO_VER_NUM -ge 5002 ] && DATABASE_TARGET_VER_NUM=16  #0.5.2 =>  16
+[ $OPENMANO_VER_NUM -ge 5003 ] && DATABASE_TARGET_VER_NUM=17  #0.5.3 =>  17
 #TODO ... put next versions here
 
 
@@ -676,10 +677,23 @@ function upgrade_to_16(){
 function downgrade_from_16(){
     echo "    downgrade database from version 0.16 to version 0.15"
     echo "      remove column 'config' at table 'datacenter_tenants', restoring lenght 'vim_tenant_name/id'"
-    echo "ALTER TABLE datacenter_tenants DROP COLUMN config" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE datacenter_tenants DROP COLUMN config;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "ALTER TABLE datacenter_tenants CHANGE COLUMN vim_tenant_name vim_tenant_name VARCHAR(64) NULL DEFAULT NULL AFTER datacenter_id;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "ALTER TABLE datacenter_tenants CHANGE COLUMN vim_tenant_id vim_tenant_id VARCHAR(36) NULL DEFAULT NULL COMMENT 'Tenant ID at VIM' AFTER vim_tenant_name;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "DELETE FROM schema_version WHERE version_int='16';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+
+function upgrade_to_17(){
+    echo "    upgrade database from version 0.16 to version 0.17"
+    echo "      add column 'extended' at table 'datacenter_flavors'"
+    echo "ALTER TABLE datacenters_flavors ADD extended varchar(2000) NULL COMMENT 'Extra description json format of additional devices';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (17, '0.17', '0.5.3', 'Extra description json format of additional devices in datacenter_flavors', '2016-12-20');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+function downgrade_from_17(){
+    echo "    downgrade database from version 0.17 to version 0.16"
+    echo "      remove column 'extended' from table 'datacenter_flavors'"
+    echo "ALTER TABLE datacenters_flavors DROP COLUMN extended;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "DELETE FROM schema_version WHERE version_int='17';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
 
 function upgrade_to_X(){

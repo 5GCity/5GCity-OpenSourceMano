@@ -24,7 +24,7 @@
 '''
 osconnector implements all the methods to interact with openstack using the python-client.
 '''
-__author__="Alfonso Tierno, Gerardo Garcia"
+__author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes, xFlow Research"
 __date__ ="$22-jun-2014 11:19:29$"
 
 import vimconn
@@ -32,15 +32,20 @@ import json
 import yaml
 import logging
 import netaddr
+import time
 
-from novaclient import client as nClient, exceptions as nvExceptions
-import keystoneclient.v2_0.client as ksClient
+from novaclient import client as nClient_v2, exceptions as nvExceptions, api_versions as APIVersion
+import keystoneclient.v2_0.client as ksClient_v2
+from novaclient.v2.client import Client as nClient
+import keystoneclient.v3.client as ksClient
 import keystoneclient.exceptions as ksExceptions
 import glanceclient.v2.client as glClient
 import glanceclient.client as gl1Client
 import glanceclient.exc as gl1Exceptions
+import cinderclient.v2.client as cClient_v2
 from httplib import HTTPException
-from neutronclient.neutron import client as neClient
+from neutronclient.neutron import client as neClient_v2
+from neutronclient.v2_0 import client as neClient
 from neutronclient.common import exceptions as neExceptions
 from requests.exceptions import ConnectionError
 
@@ -55,12 +60,18 @@ vmStatus2manoFormat={'ACTIVE':'ACTIVE',
 netStatus2manoFormat={'ACTIVE':'ACTIVE','PAUSED':'PAUSED','INACTIVE':'INACTIVE','BUILD':'BUILD','ERROR':'ERROR','DELETED':'DELETED'
                      }
 
+#global var to have a timeout creating and deleting volumes
+volume_timeout = 60
+
 class vimconnector(vimconn.vimconnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None, config={}):
         '''using common constructor parameters. In this case 
         'url' is the keystone authorization url,
         'url_admin' is not use
         '''
+        self.osc_api_version = 'v2.0'
+        if config.get('APIversion') == 'v3.3':
+            self.osc_api_version = 'v3.3'
         vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level, config)
         
         self.k_creds={}
@@ -81,6 +92,10 @@ class vimconnector(vimconn.vimconnector):
         if passwd:
             self.k_creds['password'] = passwd
             self.n_creds['api_key']  = passwd
+        if self.osc_api_version == 'v3.3':
+            self.k_creds['project_name'] = tenant_name
+            self.k_creds['project_id'] = tenant_id
+
         self.reload_client       = True
         self.logger = logging.getLogger('openmano.vim.openstack')
         if log_level:
@@ -93,21 +108,37 @@ class vimconnector(vimconn.vimconnector):
         if index=='tenant_id':
             self.reload_client=True
             self.tenant_id = value
-            if value:
-                self.k_creds['tenant_id'] = value
-                self.n_creds['tenant_id']  = value
+            if self.osc_api_version == 'v3.3':
+                if value:
+                    self.k_creds['project_id'] = value
+                    self.n_creds['project_id']  = value
+                else:
+                    del self.k_creds['project_id']
+                    del self.n_creds['project_id']
             else:
-                del self.k_creds['tenant_name']
-                del self.n_creds['project_id']
+                if value:
+                    self.k_creds['tenant_id'] = value
+                    self.n_creds['tenant_id']  = value
+                else:
+                    del self.k_creds['tenant_id']
+                    del self.n_creds['tenant_id']
         elif index=='tenant_name':
             self.reload_client=True
             self.tenant_name = value
-            if value:
-                self.k_creds['tenant_name'] = value
-                self.n_creds['project_id']  = value
+            if self.osc_api_version == 'v3.3':
+                if value:
+                    self.k_creds['project_name'] = value
+                    self.n_creds['project_name']  = value
+                else:
+                    del self.k_creds['project_name']
+                    del self.n_creds['project_name']
             else:
-                del self.k_creds['tenant_name']
-                del self.n_creds['project_id']
+                if value:
+                    self.k_creds['tenant_name'] = value
+                    self.n_creds['project_id']  = value
+                else:
+                    del self.k_creds['tenant_name']
+                    del self.n_creds['project_id']
         elif index=='user':
             self.reload_client=True
             self.user = value
@@ -146,14 +177,23 @@ class vimconnector(vimconn.vimconnector):
             #test valid params
             if len(self.n_creds) <4:
                 raise ksExceptions.ClientException("Not enough parameters to connect to openstack")
-            self.nova = nClient.Client(2, **self.n_creds)
-            self.keystone = ksClient.Client(**self.k_creds)
+            if self.osc_api_version == 'v3.3':
+                self.nova = nClient(APIVersion(version_str='2'), **self.n_creds)
+                #TODO To be updated for v3
+                #self.cinder = cClient.Client(**self.n_creds)
+                self.keystone = ksClient.Client(**self.k_creds)
+                self.ne_endpoint=self.keystone.service_catalog.url_for(service_type='network', endpoint_type='publicURL')
+                self.neutron = neClient.Client(APIVersion(version_str='2'), endpoint_url=self.ne_endpoint, token=self.keystone.auth_token, **self.k_creds)
+            else:
+                self.nova = nClient_v2.Client('2', **self.n_creds)
+                self.cinder = cClient_v2.Client(**self.n_creds)
+                self.keystone = ksClient_v2.Client(**self.k_creds)
+                self.ne_endpoint=self.keystone.service_catalog.url_for(service_type='network', endpoint_type='publicURL')
+                self.neutron = neClient_v2.Client('2.0', endpoint_url=self.ne_endpoint, token=self.keystone.auth_token, **self.k_creds)
             self.glance_endpoint = self.keystone.service_catalog.url_for(service_type='image', endpoint_type='publicURL')
             self.glance = glClient.Client(self.glance_endpoint, token=self.keystone.auth_token, **self.k_creds)  #TODO check k_creds vs n_creds
-            self.ne_endpoint=self.keystone.service_catalog.url_for(service_type='network', endpoint_type='publicURL')
-            self.neutron = neClient.Client('2.0', endpoint_url=self.ne_endpoint, token=self.keystone.auth_token, **self.k_creds)
             self.reload_client = False
-        
+
     def __net_os2mano(self, net_list_dict):
         '''Transform the net openstack format to mano format
         net_list_dict can be a list of dict or a single dict'''
@@ -195,14 +235,17 @@ class vimconnector(vimconn.vimconnector):
             <other VIM specific>
         Returns the tenant list of dictionaries: [{'name':'<name>, 'id':'<id>, ...}, ...]
         '''
-        self.logger.debug("Getting tenant from VIM filter: '%s'", str(filter_dict))
+        self.logger.debug("Getting tenants from VIM filter: '%s'", str(filter_dict))
         try:
             self._reload_connection()
-            tenant_class_list=self.keystone.tenants.findall(**filter_dict)
-            tenant_list=[]
-            for tenant in tenant_class_list:
-                tenant_list.append(tenant.to_dict())
-            return tenant_list
+            if self.osc_api_version == 'v3.3':
+                project_class_list=self.keystone.projects.findall(**filter_dict)
+            else:
+                project_class_list=self.keystone.tenants.findall(**filter_dict)
+            project_list=[]
+            for project in project_class_list:
+                project_list.append(project.to_dict())
+            return project_list
         except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
             self._format_exception(e)
 
@@ -211,8 +254,11 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Adding a new tenant name: %s", tenant_name)
         try:
             self._reload_connection()
-            tenant=self.keystone.tenants.create(tenant_name, tenant_description)
-            return tenant.id
+            if self.osc_api_version == 'v3.3':
+                project=self.keystone.projects.create(tenant_name, tenant_description)
+            else:
+                project=self.keystone.tenants.create(tenant_name, tenant_description)
+            return project.id
         except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
             self._format_exception(e)
 
@@ -221,11 +267,14 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Deleting tenant %s from VIM", tenant_id)
         try:
             self._reload_connection()
-            self.keystone.tenants.delete(tenant_id)
+            if self.osc_api_version == 'v3.3':
+                self.keystone.projects.delete(tenant_id)
+            else:
+                self.keystone.tenants.delete(tenant_id)
             return tenant_id
         except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
             self._format_exception(e)
-        
+
     def new_network(self,net_name, net_type, ip_profile=None, shared=False, vlan=None):
         '''Adds a tenant network to VIM. Returns the network identifier'''
         self.logger.debug("Adding a new network to VIM name '%s', type '%s'", net_name, net_type)
@@ -298,6 +347,8 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Getting network from VIM filter: '%s'", str(filter_dict))
         try:
             self._reload_connection()
+            if self.osc_api_version == 'v3.3' and "tenant_id" in filter_dict:
+                filter_dict['project_id'] = filter_dict.pop('tenant_id')
             net_dict=self.neutron.list_networks(**filter_dict)
             net_list=net_dict["networks"]
             self.__net_os2mano(net_list)
@@ -607,7 +658,7 @@ class vimconnector(vimconn.vimconnector):
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
             self._format_exception(e)
 
-    def new_vminstance(self,name,description,start,image_id,flavor_id,net_list,cloud_config=None):
+    def new_vminstance(self,name,description,start,image_id,flavor_id,net_list,cloud_config=None,disk_list=None):
         '''Adds a VM instance to VIM
         Params:
             start: indicates if VM must start or boot in pause mode. Ignored
@@ -621,6 +672,7 @@ class vimconnector(vimconn.vimconnector):
                 use: 'data', 'bridge',  'mgmt'
                 type: 'virtual', 'PF', 'VF', 'VFnotShared'
                 vim_id: filled/added by this function
+                floating_ip: True/False (or it can be None)
                 #TODO ip, security groups
         Returns the instance identifier
         '''
@@ -628,41 +680,42 @@ class vimconnector(vimconn.vimconnector):
         try:
             metadata={}
             net_list_vim=[]
+            external_network=[] #list of external networks to be connected to instance, later on used to create floating_ip
             self._reload_connection()
             metadata_vpci={} #For a specific neutron plugin 
             for net in net_list:
                 if not net.get("net_id"): #skip non connected iface
                     continue
-                if net["type"]=="virtual":
-                    net_list_vim.append({'net-id': net["net_id"]})
-                    if "vpci" in net:
-                        metadata_vpci[ net["net_id"] ] = [[ net["vpci"], "" ]]
-                elif net["type"]=="PF":
-                    self.logger.warn("new_vminstance: Warning, can not connect a passthrough interface ")
-                    #TODO insert this when openstack consider passthrough ports as openstack neutron ports
-                else: #VF
-                    if "vpci" in net:
-                        if "VF" not in metadata_vpci:
-                            metadata_vpci["VF"]=[]
-                        metadata_vpci["VF"].append([ net["vpci"], "" ])
+                if net["type"]=="virtual" or net["type"]=="VF":
                     port_dict={
-                         "network_id": net["net_id"],
-                         "name": net.get("name"),
-                         "binding:vnic_type": "direct", 
-                         "admin_state_up": True
-                    }
+                        "network_id": net["net_id"],
+                        "name": net.get("name"),
+                        "admin_state_up": True
+                    }    
+                    if net["type"]=="virtual":
+                        if "vpci" in net:
+                            metadata_vpci[ net["net_id"] ] = [[ net["vpci"], "" ]]
+                    else: # for VF
+                        if "vpci" in net:
+                            if "VF" not in metadata_vpci:
+                                metadata_vpci["VF"]=[]
+                            metadata_vpci["VF"].append([ net["vpci"], "" ])
+                        port_dict["binding:vnic_type"]="direct"
                     if not port_dict["name"]:
-                        port_dict["name"] = name
+                        port_dict["name"]=name
                     if net.get("mac_address"):
                         port_dict["mac_address"]=net["mac_address"]
-                    #TODO: manage having SRIOV without vlan tag
-                    #if net["type"] == "VFnotShared"
-                    #    port_dict["vlan"]=0
                     new_port = self.neutron.create_port({"port": port_dict })
                     net["mac_adress"] = new_port["port"]["mac_address"]
                     net["vim_id"] = new_port["port"]["id"]
-                    net["ip"] = new_port["port"].get("fixed_ips",[{}])[0].get("ip_address")
+                    net["ip"] = new_port["port"].get("fixed_ips", [{}])[0].get("ip_address")
                     net_list_vim.append({"port-id": new_port["port"]["id"]})
+                else:   # for PF
+                    self.logger.warn("new_vminstance: Warning, can not connect a passthrough interface ")
+                    #TODO insert this when openstack consider passthrough ports as openstack neutron ports
+                if net.get('floating_ip', False):
+                    external_network.append(net)
+                 
             if metadata_vpci:
                 metadata = {"pci_assignement": json.dumps(metadata_vpci)}
                 if len(metadata["pci_assignement"]) >255:
@@ -696,29 +749,88 @@ class vimconnector(vimconn.vimconnector):
             elif isinstance(cloud_config, str):
                 userdata = cloud_config
             else:
-                userdata=None    
-            
+                userdata=None
+
+            #Create additional volumes in case these are present in disk_list
+            block_device_mapping = None
+            base_disk_index = ord('b')
+            if disk_list != None:
+                block_device_mapping = dict()
+                for disk in disk_list:
+                    if 'image_id' in disk:
+                        volume = self.cinder.volumes.create(size = disk['size'],name = name + '_vd' +
+                                    chr(base_disk_index), imageRef = disk['image_id'])
+                    else:
+                        volume = self.cinder.volumes.create(size=disk['size'], name=name + '_vd' +
+                                    chr(base_disk_index))
+                    block_device_mapping['_vd' +  chr(base_disk_index)] = volume.id
+                    base_disk_index += 1
+
+                #wait until volumes are with status available
+                keep_waiting = True
+                elapsed_time = 0
+                while keep_waiting and elapsed_time < volume_timeout:
+                    keep_waiting = False
+                    for volume_id in block_device_mapping.itervalues():
+                        if self.cinder.volumes.get(volume_id).status != 'available':
+                            keep_waiting = True
+                    if keep_waiting:
+                        time.sleep(1)
+                        elapsed_time += 1
+
+                #if we exceeded the timeout rollback
+                if elapsed_time >= volume_timeout:
+                    #delete the volumes we just created
+                    for volume_id in block_device_mapping.itervalues():
+                        self.cinder.volumes.delete(volume_id)
+
+                    #delete ports we just created
+                    for net_item  in net_list_vim:
+                        if 'port-id' in net_item:
+                            self.neutron.delete_port(net_item['port_id'])
+
+                    raise vimconn.vimconnException('Timeout creating volumes for instance ' + name,
+                                                   http_code=vimconn.HTTP_Request_Timeout)
+
             server = self.nova.servers.create(name, image_id, flavor_id, nics=net_list_vim, meta=metadata,
-                                              security_groups   = security_groups,
-                                              availability_zone = self.config.get('availability_zone'),
-                                              key_name          = self.config.get('keypair'),
-                                              userdata=userdata
-                                        ) #, description=description)
-            
-            
+                                              security_groups=security_groups,
+                                              availability_zone=self.config.get('availability_zone'),
+                                              key_name=self.config.get('keypair'),
+                                              userdata=userdata,
+                                              block_device_mapping = block_device_mapping
+                                              )  # , description=description)
             #print "DONE :-)", server
             
-#             #TODO   server.add_floating_ip("10.95.87.209")
-#             #To look for a free floating_ip
-#             free_floating_ip = None
-#             for floating_ip in self.neutron.list_floatingips().get("floatingips", () ):
-#                 if not floating_ip["port_id"]:
-#                     free_floating_ip = floating_ip["floating_ip_address"]
-#                     break
-#             if free_floating_ip:
-#                 server.add_floating_ip(free_floating_ip)
+            pool_id = None
+            floating_ips = self.neutron.list_floatingips().get("floatingips", ())
+            for floating_network in external_network:
+                assigned = False
+                while(assigned == False):
+                    if floating_ips:
+                        ip = floating_ips.pop(0)
+                        if not ip.get("port_id", False):
+                            free_floating_ip = ip.get("floating_ip_address")
+                            try:
+                                fix_ip = floating_network.get('ip')
+                                server.add_floating_ip(free_floating_ip, fix_ip)
+                                assigned = True
+                            except Exception as e:
+                                self.delete_vminstance(server.id)
+                                raise vimconn.vimconnException(type(e).__name__ + ": Cannot create floating_ip "+  str(e), http_code=vimconn.HTTP_Conflict)
+                    else:
+                        pool_id = floating_network.get('net_id')
+                        param = {'floatingip': {'floating_network_id': pool_id}}
+                        try:
+                            #self.logger.debug("Creating floating IP")
+                            new_floating_ip = self.neutron.create_floatingip(param)
+                            free_floating_ip = new_floating_ip['floatingip']['floating_ip_address']
+                            fix_ip = floating_network.get('ip')
+                            server.add_floating_ip(free_floating_ip, fix_ip)
+                            assigned=True
+                        except Exception as e:
+                            self.delete_vminstance(server.id)
+                            raise vimconn.vimconnException(type(e).__name__ + ": Cannot create floating_ip "+  str(e), http_code=vimconn.HTTP_Conflict)
                 
-            
             return server.id
 #        except nvExceptions.NotFound as e:
 #            error_value=-vimconn.HTTP_Not_Found
@@ -804,7 +916,32 @@ class vimconnector(vimconn.vimconnector):
                     self.neutron.delete_port(p["id"])
                 except Exception as e:
                     self.logger.error("Error deleting port: " + type(e).__name__ + ": "+  str(e))
+
+            #commented because detaching the volumes makes the servers.delete not work properly ?!?
+            #dettach volumes attached
+            server = self.nova.servers.get(vm_id)
+            volumes_attached_dict = server._info['os-extended-volumes:volumes_attached']
+            #for volume in volumes_attached_dict:
+            #    self.cinder.volumes.detach(volume['id'])
+
             self.nova.servers.delete(vm_id)
+
+            #delete volumes.
+            #Although having detached them should have them  in active status
+            #we ensure in this loop
+            keep_waiting = True
+            elapsed_time = 0
+            while keep_waiting and elapsed_time < volume_timeout:
+                keep_waiting = False
+                for volume in volumes_attached_dict:
+                    if self.cinder.volumes.get(volume['id']).status != 'available':
+                        keep_waiting = True
+                    else:
+                        self.cinder.volumes.delete(volume['id'])
+                if keep_waiting:
+                    time.sleep(1)
+                    elapsed_time += 1
+
             return vm_id
         except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)

@@ -32,17 +32,18 @@ INSTALL_PATH = '/opt/openmano'
 USER = 'openmanod'
 
 
-@when('openmano.installed')
-@when('openmano.available')
+@when('openmano.installed', 'openmano.available')
 def openmano_available(openmano):
     # TODO make this configurable via charm config
     openmano.configure(port=9090)
 
 
-@when('openmano.installed')
-@when('db.available', 'db.installed')
-@when('openvim-controller.available')
-@when('openmano.running')
+@when('openvim-controller.available',
+      'db.available',
+      'db.installed',
+      'openmano.installed',
+      'openmano.running',
+      )
 def openvim_available(openvim, db):
     for service in openvim.services():
         for endpoint in service['hosts']:
@@ -71,9 +72,9 @@ def openvim_available(openvim, db):
         break
 
 
-@when('openmano.installed')
-@when('db.available', 'db.installed')
-@when('openvim-controller.available')
+@when('openmano.installed',
+      'db.installed',
+      'openvim-controller.available')
 @when_not('openmano.running')
 def start(*args):
     # TODO: if the service fails to start, we should raise an error to the op
@@ -95,8 +96,7 @@ def start(*args):
     set_state('openmano.running')
 
 
-@when('openmano.installed')
-@when('db.available')
+@when('db.available', 'openmano.installed')
 @when_not('db.installed')
 def setup_db(db):
     """Setup the database
@@ -150,6 +150,7 @@ def setup_db(db):
 
     status_set('active', 'Database installed.')
     set_state('db.installed')
+
 
 @when_not('openvim-controller.available')
 def need_openvim():
