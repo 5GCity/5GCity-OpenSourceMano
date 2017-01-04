@@ -141,7 +141,7 @@ while getopts ":h-:b:" o; do
 done
 
 [ -z "$COMMIT_ID" ] && [ -n "$DEVELOP" ] && COMMIT_ID="master"
-[ -z "$COMMIT_ID" ] && COMMIT_ID="tags/v1.0.2"
+[ -z "$COMMIT_ID" ] && COMMIT_ID="tags/v1.0.3"
 
 if [ -n "$SHOWOPTS" ]; then
     echo "UNINSTALL=$UNINSTALL"
@@ -169,7 +169,7 @@ if [ -z "$TEST_INSTALLER" ]; then
     echo -e "\nCloning devops repo temporarily"
     git clone https://osm.etsi.org/gerrit/osm/devops.git $TEMPDIR
     RC_CLONE=$?
-    DEVOPS_COMMITID="tags/v1.0.2"
+    DEVOPS_COMMITID="tags/v1.0.3"
     git -C $TEMPDIR checkout $DEVOPS_COMMITID
 fi
 OSM_DEVOPS=$TEMPDIR
