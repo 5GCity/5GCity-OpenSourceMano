@@ -591,8 +591,10 @@ class vimconnector(vimconn.vimconnector):
         '''Adds a tenant flavor to VIM'''
         '''Returns the flavor identifier'''
         try:
+            new_flavor_dict = flavor_data.copy()
+            new_flavor_dict["name"] = flavor_data["name"][:64]
             self._get_my_tenant()
-            payload_req = json.dumps({'flavor': flavor_data})
+            payload_req = json.dumps({'flavor': new_flavor_dict})
             url = self.url+'/'+self.tenant+'/flavors'
             self.logger.info("Adding a new VIM flavor POST %s", url)
             vim_response = requests.post(url, headers = self.headers_req, data=payload_req)
@@ -647,7 +649,7 @@ class vimconnector(vimconn.vimconnector):
         ''' Adds a tenant image to VIM, returns image_id'''
         try:
             self._get_my_tenant()
-            new_image_dict={'name': image_dict['name']}
+            new_image_dict={'name': image_dict['name'][:64]}
             if image_dict.get('description'):
                 new_image_dict['description'] = image_dict['description']
             if image_dict.get('metadata'):
@@ -811,7 +813,7 @@ class vimconnector(vimconn.vimconnector):
                 if net.get("model"):       net_dict["model"] = net["model"]
                 if net.get("mac_address"): net_dict["mac_address"] = net["mac_address"]
                 virtio_net_list.append(net_dict)
-            payload_dict={  "name":        name,
+            payload_dict={  "name":        name[:64],
                             "description": description,
                             "imageRef":    image_id,
                             "flavorRef":   flavor_id,
