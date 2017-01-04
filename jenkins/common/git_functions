@@ -2,8 +2,7 @@
 
 
 GIT() {
-
-	CMD git "$@"
+    CMD git "$@"
 }
 
 
@@ -20,7 +19,7 @@ OSM_git_checkout() {
         INFO "cloning MDG $OSM_MDG from $OSM_GIT_URL/$OSM_MDG"
         GIT clone $OSM_GIT_URL/$OSM_MDG
         cd $OSM_MDG
-        for remote in `git branch -r`; do GIT branch --track ${remote#origin/} $remote; done
+        for remote in `git branch -r |grep -v /HEAD`; do GIT branch --track ${remote#origin/} $remote; done
     fi
     
     if [ $# -gt 0 ]; then
@@ -38,3 +37,4 @@ OSM_git_checkout() {
     fi
 
 }
+
