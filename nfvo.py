@@ -296,9 +296,9 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
                 #logger.debug('>>>>>>>> Filter dict: %s', str(filter_dict))
                 vim_images = vim.get_image_list(filter_dict)
                 if len(vim_images) > 1:
-                    raise NfvoException("More than one candidate VIM image found for filter: " + str(filter_dict), HTTP_Conflict)
+                    raise vimconn.vimconnException("More than one candidate VIM image found for filter: {}".format(str(filter_dict)), HTTP_Conflict)
                 elif len(vim_images) == 0:
-                    raise NfvoException("Image not found at VIM with filter: '%s'", str(filter_dict))
+                    raise vimconn.vimconnNotFoundException("Image not found at VIM with filter: '{}'".format(str(filter_dict)))
                 else:
                     image_vim_id = vim_images[0].id
 

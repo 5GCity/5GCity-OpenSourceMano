@@ -652,7 +652,7 @@ class vimconnector(vimconn.vimconnector):
             filtered_list = []
             for image in image_list:
                 image_dict=self.glance.images.get(image.id)
-                if image_dict['checksum']==filter_dict.get('checksum'):
+                if filter_dict.get('checksum') == None or image_dict['checksum']==filter_dict.get('checksum'):
                     filtered_list.append(image)
             return filtered_list
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
