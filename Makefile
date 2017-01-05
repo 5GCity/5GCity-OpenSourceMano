@@ -17,7 +17,7 @@
 
 BUILD_DIR = .
 
-CHARMS:= vpe-router vyos-proxy
+CHARMS:= vpe-router vyos-proxy pingpong
 CHARM_SRC_DIR := layers
 CHARM_BUILD_DIR := $(BUILD_DIR)/builds
 
