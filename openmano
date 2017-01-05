@@ -579,7 +579,7 @@ def instance_create(args):
     if args.scenario != None:
         scenario = args.scenario
     if not scenario:
-        print "you must provide an scenario in the file descriptor or with --scenario"
+        print "you must provide a scenario in the file descriptor or with --scenario"
         return -1
     myInstance["instance"]["scenario"] = _get_item_uuid("scenarios", scenario, tenant)
     if args.netmap_use:

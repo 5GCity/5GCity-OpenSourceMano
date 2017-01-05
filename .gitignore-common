@@ -22,7 +22,8 @@
 # This is a template with common files to be igonored, after clone make a copy to .gitignore
 # cp .gitignore-common .gitignore
 
-*.pyc         
+*.pyc
+*.pyo
 
 #auto-ignore
 .gitignore
