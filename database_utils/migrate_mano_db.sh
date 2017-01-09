@@ -185,6 +185,7 @@ DATABASE_TARGET_VER_NUM=0
 [ $OPENMANO_VER_NUM -ge 4059 ] && DATABASE_TARGET_VER_NUM=15  #0.4.59=>  15
 [ $OPENMANO_VER_NUM -ge 5002 ] && DATABASE_TARGET_VER_NUM=16  #0.5.2 =>  16
 [ $OPENMANO_VER_NUM -ge 5003 ] && DATABASE_TARGET_VER_NUM=17  #0.5.3 =>  17
+[ $OPENMANO_VER_NUM -ge 5004 ] && DATABASE_TARGET_VER_NUM=18  #0.5.4 =>  18
 #TODO ... put next versions here
 
 
@@ -694,6 +695,25 @@ function downgrade_from_17(){
     echo "      remove column 'extended' from table 'datacenter_flavors'"
     echo "ALTER TABLE datacenters_flavors DROP COLUMN extended;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "DELETE FROM schema_version WHERE version_int='17';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+
+function upgrade_to_18(){
+    echo "    upgrade database from version 0.17 to version 0.18"
+    echo "      add columns 'floating_ip' and 'port_security' at tables 'interfaces' and 'instance_interfaces'"
+    echo "ALTER TABLE interfaces ADD floating_ip BOOL DEFAULT 0 NOT NULL COMMENT 'Indicates if a floating_ip must be associated to this interface';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE interfaces ADD port_security BOOL DEFAULT 1 NOT NULL COMMENT 'Indicates if port security must be enabled or disabled. By default it is enabled';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_interfaces ADD floating_ip BOOL DEFAULT 0 NOT NULL COMMENT 'Indicates if a floating_ip must be associated to this interface';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_interfaces ADD port_security BOOL DEFAULT 1 NOT NULL COMMENT 'Indicates if port security must be enabled or disabled. By default it is enabled';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (18, '0.18', '0.5.4', 'Add columns \'floating_ip\' and \'port_security\' at tables \'interfaces\' and \'instance_interfaces\'', '2017-01-09');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+function downgrade_from_18(){
+    echo "    downgrade database from version 0.18 to version 0.17"
+    echo "      remove columns 'floating_ip' and 'port_security' from tables 'interfaces' and 'instance_interfaces'"
+    echo "ALTER TABLE interfaces DROP COLUMN floating_ip;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE interfaces DROP COLUMN port_security;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_interfaces DROP COLUMN floating_ip;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_interfaces DROP COLUMN port_security;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "DELETE FROM schema_version WHERE version_int='18';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
 
 function upgrade_to_X(){

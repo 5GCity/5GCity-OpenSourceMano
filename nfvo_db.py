@@ -93,12 +93,20 @@ class nfvo_db(db_base.db_base):
                         if 'bridge-ifaces' in  vm:
                             bridgeInterfacesDict[vm['name']] = {}
                             for bridgeiface in vm['bridge-ifaces']:
+                                if 'port-security' in bridgeiface:
+                                    bridgeiface['port_security'] = bridgeiface.pop('port-security')
+                                if 'floating-ip' in bridgeiface:
+                                    bridgeiface['floating_ip'] = bridgeiface.pop('floating-ip')
                                 db_base._convert_bandwidth(bridgeiface, logger=self.logger)
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']] = {}
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']]['vpci'] = bridgeiface.get('vpci',None)
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']]['mac'] = bridgeiface.get('mac_address',None)
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']]['bw'] = bridgeiface.get('bandwidth', None)
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']]['model'] = bridgeiface.get('model', None)
+                                bridgeInterfacesDict[vm['name']][bridgeiface['name']]['port_security'] = \
+                                    int(bridgeiface.get('port_security', True))
+                                bridgeInterfacesDict[vm['name']][bridgeiface['name']]['floating_ip'] = \
+                                    int(bridgeiface.get('floating_ip', False))
                     
                     #For each internal connection, we add it to the interfaceDict and we  create the appropriate net in the NFVO database.
                     #print "Adding new nets (VNF internal nets) to the NFVO database (if any)"
@@ -133,6 +141,10 @@ class nfvo_db(db_base.db_base):
                                     ifaceItem["mac"] =  bridgeInterfacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['mac_address']
                                     ifaceItem["bw"] =    bridgeInterfacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['bw']
                                     ifaceItem["model"] = bridgeInterfacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['model']
+                                    ifaceItem["port_security"] = \
+                                    bridgeInterfacesDict[element['VNFC']][element['local_iface_name']]['port_security']
+                                    ifaceItem["floating_ip"] = \
+                                    bridgeInterfacesDict[element['VNFC']][element['local_iface_name']]['floating_ip']
                                 internalconnList.append(ifaceItem)
                             #print "Internal net id in NFVO DB: %s" % net_id
                     
@@ -161,6 +173,10 @@ class nfvo_db(db_base.db_base):
                             myIfaceDict["bw"]    = bridgeInterfacesDict[ iface['VNFC'] ][ iface['local_iface_name'] ]['bw']
                             myIfaceDict["model"] = bridgeInterfacesDict[ iface['VNFC'] ][ iface['local_iface_name'] ]['model']
                             myIfaceDict["mac"] = bridgeInterfacesDict[ iface['VNFC'] ][ iface['local_iface_name'] ]['mac']
+                            myIfaceDict["port_security"] = \
+                                bridgeInterfacesDict[iface['VNFC']][iface['local_iface_name']]['port_security']
+                            myIfaceDict["floating_ip"] = \
+                                bridgeInterfacesDict[iface['VNFC']][iface['local_iface_name']]['floating_ip']
                         print "Iface name: %s" % iface['name']
                         created_time += 0.00001
                         iface_id = self._new_row_internal('interfaces', myIfaceDict, add_uuid=True, root_uuid=vnf_id, created_time=created_time)
@@ -222,11 +238,19 @@ class nfvo_db(db_base.db_base):
                             bridgeInterfacesDict[vm['name']] = {}
                             for bridgeiface in vm['bridge-ifaces']:
                                 db_base._convert_bandwidth(bridgeiface, logger=self.logger)
+                                if 'port-security' in bridgeiface:
+                                    bridgeiface['port_security'] = bridgeiface.pop('port-security')
+                                if 'floating-ip' in bridgeiface:
+                                    bridgeiface['floating_ip'] = bridgeiface.pop('floating-ip')
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']] = {}
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']]['vpci'] = bridgeiface.get('vpci',None)
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']]['mac'] = bridgeiface.get('mac_address',None)
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']]['bw'] = bridgeiface.get('bandwidth', None)
                                 bridgeInterfacesDict[vm['name']][bridgeiface['name']]['model'] = bridgeiface.get('model', None)
+                                bridgeInterfacesDict[vm['name']][bridgeiface['name']]['port_security'] = \
+                                    int(bridgeiface.get('port_security', True))
+                                bridgeInterfacesDict[vm['name']][bridgeiface['name']]['floating_ip'] = \
+                                    int(bridgeiface.get('floating_ip', False))
                     
                     #For each internal connection, we add it to the interfaceDict and we  create the appropriate net in the NFVO database.
                     #print "Adding new nets (VNF internal nets) to the NFVO database (if any)"
@@ -287,6 +311,10 @@ class nfvo_db(db_base.db_base):
                                     ifaceItem["mac"] =  bridgeInterfacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['mac']
                                     ifaceItem["bw"] =    bridgeInterfacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['bw']
                                     ifaceItem["model"] = bridgeInterfacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['model']
+                                    ifaceItem["port_security"] = \
+                                    bridgeInterfacesDict[element['VNFC']][element['local_iface_name']]['port_security']
+                                    ifaceItem["floating_ip"] = \
+                                    bridgeInterfacesDict[element['VNFC']][element['local_iface_name']]['floating_ip']
                                 internalconnList.append(ifaceItem)
                             #print "Internal net id in NFVO DB: %s" % net_id
                     
@@ -315,6 +343,10 @@ class nfvo_db(db_base.db_base):
                             myIfaceDict["bw"]    = bridgeInterfacesDict[ iface['VNFC'] ][ iface['local_iface_name'] ]['bw']
                             myIfaceDict["model"] = bridgeInterfacesDict[ iface['VNFC'] ][ iface['local_iface_name'] ]['model']
                             myIfaceDict["mac"] = bridgeInterfacesDict[ iface['VNFC'] ][ iface['local_iface_name'] ]['mac']
+                            myIfaceDict["port_security"] = \
+                                bridgeInterfacesDict[iface['VNFC']][iface['local_iface_name']]['port_security']
+                            myIfaceDict["floating_ip"] = \
+                                bridgeInterfacesDict[iface['VNFC']][iface['local_iface_name']]['floating_ip']
                         print "Iface name: %s" % iface['name']
                         created_time += 0.00001
                         iface_id = self._new_row_internal('interfaces', myIfaceDict, add_uuid=True, root_uuid=vnf_id, created_time=created_time)
@@ -643,13 +675,17 @@ class nfvo_db(db_base.db_base):
                                     vm['vim_flavor_id']=vim_flavor_dict['vim_id']
                                 
                             #interfaces
-                            cmd = "SELECT uuid,internal_name,external_name,net_id,type,vpci,mac,bw,model,ip_address" \
+                            cmd = "SELECT uuid,internal_name,external_name,net_id,type,vpci,mac,bw,model,ip_address," \
+                                  "floating_ip, port_security" \
                                     " FROM interfaces" \
                                     " WHERE vm_id='{}'" \
                                     " ORDER BY created_at".format(vm['uuid'])
                             self.logger.debug(cmd)
                             self.cur.execute(cmd)
                             vm['interfaces'] = self.cur.fetchall()
+                            for index in range(0,len(vm['interfaces'])):
+                                vm['interfaces'][index]['port-security'] = vm['interfaces'][index].pop("port_security")
+                                vm['interfaces'][index]['floating-ip'] = vm['interfaces'][index].pop("floating_ip")
                         #nets    every net of a vms
                         cmd = "SELECT uuid,name,type,description FROM nets WHERE vnf_id='{}'".format(vnf['vnf_id'])  
                         self.logger.debug(cmd)
@@ -700,7 +736,7 @@ class nfvo_db(db_base.db_base):
                             net['vim_id']=d_net['vim_net_id']
                     
                     db_base._convert_datetime2str(scenario_dict)
-                    db_base._convert_str2boolean(scenario_dict, ('public','shared','external') )
+                    db_base._convert_str2boolean(scenario_dict, ('public','shared','external','port-security','floating-ip') )
                     return scenario_dict
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries)
@@ -846,7 +882,8 @@ class nfvo_db(db_base.db_base):
                                 interface_type='external' if interface['external_name'] is not None else 'internal'
                                 INSERT_={'instance_vm_id': instance_vm_uuid,  'instance_net_id': net_scene2instance[net_id][datacenter_site_id],
                                     'interface_id': interface['uuid'], 'vim_interface_id': interface.get('vim_id'), 'type':  interface_type,
-                                    'ip_address': interface.get('ip_address')  }
+                                    'ip_address': interface.get('ip_address'), 'floating_ip': int(interface.get('floating-ip',False)),
+                                    'port_security': int(interface.get('port-security',True))}
                                 #created_time += 0.00001
                                 interface_uuid =  self._new_row_internal('instance_interfaces', INSERT_, True, instance_uuid) #, created_time)
                                 interface['uuid'] = interface_uuid  #overwrite scnario uuid by instance uuid

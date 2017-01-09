@@ -125,8 +125,11 @@ def _convert_str2boolean(data, items):
                 _convert_str2boolean(data[k], items)
             if k in items:
                 if type(data[k]) is str:
-                    if   data[k]=="false" or data[k]=="False": data[k]=False
-                    elif data[k]=="true"  or data[k]=="True":  data[k]=True
+                    if   data[k]=="false" or data[k]=="False" or data[k]=="0": data[k]=False
+                    elif data[k]=="true"  or data[k]=="True" or data[k]=="1":  data[k]=True
+                elif type(data[k]) is int:
+                    if   data[k]==0: data[k]=False
+                    elif  data[k]==1:  data[k]=True
     if type(data) is tuple or type(data) is list:
         for k in data:
             if type(k) is dict or type(k) is tuple or type(k) is list:

@@ -62,6 +62,7 @@ netStatus2manoFormat={'ACTIVE':'ACTIVE','PAUSED':'PAUSED','INACTIVE':'INACTIVE',
 
 #global var to have a timeout creating and deleting volumes
 volume_timeout = 60
+server_timeout = 60
 
 class vimconnector(vimconn.vimconnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None, config={}):
@@ -705,6 +706,8 @@ class vimconnector(vimconn.vimconnector):
                         port_dict["name"]=name
                     if net.get("mac_address"):
                         port_dict["mac_address"]=net["mac_address"]
+                    if "port_security" in net:
+                        port_dict["port_security_enabled"]=net["port_security"]
                     new_port = self.neutron.create_port({"port": port_dict })
                     net["mac_adress"] = new_port["port"]["mac_address"]
                     net["vim_id"] = new_port["port"]["id"]
@@ -804,11 +807,26 @@ class vimconnector(vimconn.vimconnector):
             pool_id = None
             floating_ips = self.neutron.list_floatingips().get("floatingips", ())
             for floating_network in external_network:
+                # wait until vm is active
+                elapsed_time = 0
+                while elapsed_time < server_timeout:
+                    status = self.nova.servers.get(server.id).status
+                    if status == 'ACTIVE':
+                        break
+                    time.sleep(1)
+                    elapsed_time += 1
+
+                #if we exceeded the timeout rollback
+                if elapsed_time >= server_timeout:
+                    self.delete_vminstance(server.id)
+                    raise vimconn.vimconnException('Timeout creating instance ' + name,
+                                                   http_code=vimconn.HTTP_Request_Timeout)
+
                 assigned = False
                 while(assigned == False):
                     if floating_ips:
                         ip = floating_ips.pop(0)
-                        if not ip.get("port_id", False):
+                        if not ip.get("port_id", False) and ip.get('tenant_id') == server.tenant_id:
                             free_floating_ip = ip.get("floating_ip_address")
                             try:
                                 fix_ip = floating_network.get('ip')
@@ -818,8 +836,25 @@ class vimconnector(vimconn.vimconnector):
                                 self.delete_vminstance(server.id)
                                 raise vimconn.vimconnException(type(e).__name__ + ": Cannot create floating_ip "+  str(e), http_code=vimconn.HTTP_Conflict)
                     else:
-                        pool_id = floating_network.get('net_id')
-                        param = {'floatingip': {'floating_network_id': pool_id}}
+                        #Find the external network
+                        external_nets = list()
+                        for net in self.neutron.list_networks()['networks']:
+                            if net['router:external']:
+                                    external_nets.append(net)
+
+                        if len(external_nets) == 0:
+                            self.delete_vminstance(server.id)
+                            raise vimconn.vimconnException("Cannot create floating_ip automatically since no external "
+                                                           "network is present",
+                                                            http_code=vimconn.HTTP_Conflict)
+                        if len(external_nets) > 1:
+                            self.delete_vminstance(server.id)
+                            raise vimconn.vimconnException("Cannot create floating_ip automatically since multiple "
+                                                           "external networks are present",
+                                                           http_code=vimconn.HTTP_Conflict)
+
+                        pool_id = external_nets[0].get('id')
+                        param = {'floatingip': {'floating_network_id': pool_id, 'tenant_id': server.tenant_id}}
                         try:
                             #self.logger.debug("Creating floating IP")
                             new_floating_ip = self.neutron.create_floatingip(param)
@@ -837,6 +872,15 @@ class vimconnector(vimconn.vimconnector):
 #            error_text= "vm instance %s not found" % vm_id
         except (ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError
                 ) as e:
+            # delete the volumes we just created
+            if block_device_mapping != None:
+                for volume_id in block_device_mapping.itervalues():
+                    self.cinder.volumes.delete(volume_id)
+
+            # delete ports we just created
+            for net_item in net_list_vim:
+                if 'port-id' in net_item:
+                    self.neutron.delete_port(net_item['port_id'])
             self._format_exception(e)
         except TypeError as e:
             raise vimconn.vimconnException(type(e).__name__ + ": "+  str(e), http_code=vimconn.HTTP_Bad_Request)
