@@ -290,9 +290,10 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
             if image_dict['location'] is not None:
                 image_vim_id = vim.get_image_id_from_path(image_dict['location'])
             else:
-                filter_dict={}
-                filter_dict['name']=image_dict['universal_name']
-                filter_dict['checksum']=image_dict['checksum']
+                filter_dict = {}
+                filter_dict['name'] = image_dict['universal_name']
+                if image_dict.get('checksum') != None:
+                    filter_dict['checksum'] = image_dict['checksum']
                 #logger.debug('>>>>>>>> Filter dict: %s', str(filter_dict))
                 vim_images = vim.get_image_list(filter_dict)
                 if len(vim_images) > 1:
@@ -321,7 +322,7 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
                 raise
             logger.warn("Error contacting VIM to know if the image exists at VIM: %s", str(e))
             image_vim_id = None
-            continue    
+            continue
         #if we reach here, the image has been created or existed
         if len(image_db)==0:
             #add new vim_id at datacenters_images
@@ -1761,6 +1762,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                     myvims[d] = v
                     datacenter2tenant[d] = v['config']['datacenter_tenant_id']
                 scenario_vnf["datacenter"] = vnf_instance_desc["datacenter"]
+
     #0.1 parse cloud-config parameters
         cloud_config = scenarioDict.get("cloud-config", {})
         if instance_dict.get("cloud-config"):
