@@ -16,91 +16,137 @@
 #
 
 vnfd:vnfd-catalog:
-    vnfd:   
-    -   connection-point:
-        -   name: pong_vnfd/cp0
-            type: VPORT
-        -   name: pong_vnfd/cp1
-            type: VPORT
-        description: This is an example RIFT.ware VNF
-        http-endpoint:
-        -   path: api/v1/pong/stats
-            polling_interval_secs: '2'
-            port: '18889'
-        id: 875b30d0-8b99-11e6-9664-02b76030c497
-        logo: rift_logo.png
-        mgmt-interface:
-            dashboard-params:
-                path: api/v1/pong/stats
-                port: '18889'
-            port: '18889'
-            vdu-id: iovdu_0
-        monitoring-param:
-        -   description: no of ping requests
-            group-tag: Group1
-            http-endpoint-ref: api/v1/pong/stats
-            id: '1'
-            json-query-method: NAMEKEY
-            name: ping-request-rx-count
-            units: packets
-            value-type: INT
-            widget-type: COUNTER
-        -   description: no of ping responses
-            group-tag: Group1
-            http-endpoint-ref: api/v1/pong/stats
-            id: '2'
-            json-query-method: NAMEKEY
-            name: ping-response-tx-count
-            units: packets
-            value-type: INT
-            widget-type: COUNTER
-        name: pong_vnfd
-        placement-groups:
-        -   member-vdus:
-            -   member-vdu-ref: iovdu_0
-            name: Weywot
-            requirement: Place this VM on the Kuiper belt object Weywot
-            strategy: COLOCATION
-        short-name: pong_vnfd
-        vdu:
-        -   count: '1'
-            external-interface:
-            -   name: eth0
-                virtual-interface:
-                    type: OM-MGMT
-                vnfd-connection-point-ref: pong_vnfd/cp0
-            -   name: eth1
-                virtual-interface:
-                    type: VIRTIO
-                vnfd-connection-point-ref: pong_vnfd/cp1
-            id: iovdu_0
-            image: Fedora-x86_64-20-20131211.1-sda-pong.qcow2
-            image-checksum: 977484d95575f80ef8399c9cf1d45ebd
-            name: iovdu_0
-            vm-flavor:
-                memory-mb: '512'
-                storage-gb: '4'
-                vcpu-count: '1'
-        vendor: RIFT.io
-        version: '1.0'
-        vnf-configuration:
-            config-attributes:
-                config-delay: '60'
-                config-priority: '1'
-            config-template: "\n#!/bin/bash\n\n# Rest API configuration\npong_mgmt_ip='<rw_mgmt_ip>'\n\
-                pong_mgmt_port=18889\n# username=<rw_username>\n# password=<rw_password>\n\
-                \n# VNF specific configuration\npong_server_ip='<rw_connection_point_name\
-                \ pong_vnfd/cp0>'\nserver_port=5555\n\n# Make Rest API calls to configure\
-                \ VNF\ncurl -D /dev/stdout \\\n    -H \"Accept: application/vnd.yang.data+xml\"\
-                \ \\\n    -H \"Content-Type: application/vnd.yang.data+json\" \\\n\
-                \    -X POST \\\n    -d \"{\\\"ip\\\":\\\"$pong_server_ip\\\", \\\"\
-                port\\\":$server_port}\" \\\n    http://${pong_mgmt_ip}:${pong_mgmt_port}/api/v1/pong/server\n\
-                rc=$?\nif [ $rc -ne 0 ]\nthen\n    echo \"Failed to set server(own)\
-                \ info for pong!\"\n    exit $rc\nfi\n\n\ncurl -D /dev/stdout \\\n\
-                \    -H \"Accept: application/vnd.yang.data+xml\" \\\n    -H \"Content-Type:\
-                \ application/vnd.yang.data+json\" \\\n    -X POST \\\n    -d \"{\\\
-                \"enable\\\":true}\" \\\n    http://${pong_mgmt_ip}:${pong_mgmt_port}/api/v1/pong/adminstatus/state\n\
-                rc=$?\nif [ $rc -ne 0 ]\nthen\n    echo \"Failed to enable pong service!\"\
-                \n    exit $rc\nfi\n\nexit 0\n"
-            script:
-                script-type: bash
+    vnfd:vnfd:
+     -  vnfd:id: rift_pong_vnf
+        vnfd:name: pong_vnf
+        vnfd:short-name: pong_vnf
+        vnfd:logo: rift_logo.png
+        vnfd:vendor: RIFT.io
+        vnfd:version: '1.0'
+        vnfd:description: This is an example RIFT.ware VNF
+        vnfd:config-parameter:
+            vnfd:config-parameter-source:
+            -   vnfd:attribute: ../../../mgmt-interface, ip-address
+                vnfd:description: Management IP address
+                vnfd:name: mgmt_ip
+                vnfd:parameter:
+                -   vnfd:config-primitive-name-ref: config
+                    vnfd:config-primitive-parameter-ref: ssh-hostname
+            -   vnfd:description: SSH username
+                vnfd:name: username
+                vnfd:parameter:
+                -   vnfd:config-primitive-name-ref: config
+                    vnfd:config-primitive-parameter-ref: ssh-username
+                vnfd:value: fedora
+            -   vnfd:attribute: ../../../mgmt-interface/ssh-key, private-key-file
+                vnfd:description: SSH private key file
+                vnfd:name: ssh_key
+                vnfd:parameter:
+                -   vnfd:config-primitive-name-ref: config
+                    vnfd:config-primitive-parameter-ref: ssh-private-key
+            -   vnfd:attribute: ../../../connection-point[name='pong_vnfd/cp1'], ip-address
+                vnfd:description: IP on which Pong service is listening
+                vnfd:name: service_ip
+                vnfd:parameter:
+                -   vnfd:config-primitive-name-ref: set-server
+                    vnfd:config-primitive-parameter-ref: server-ip
+            -   vnfd:description: Port on which server listens for incoming data packets
+                vnfd:name: service_port
+                vnfd:parameter:
+                -   vnfd:config-primitive-name-ref: set-server
+                    vnfd:config-primitive-parameter-ref: server-port
+                vnfd:value: '5555'
+        vnfd:connection-point:
+        -   vnfd:name: pong_vnfd/cp0
+            vnfd:type: VPORT
+        -   vnfd:name: pong_vnfd/cp1
+            vnfd:type: VPORT
+        vnfd:http-endpoint:
+        -   vnfd:path: api/v1/pong/stats
+            vnfd:polling_interval_secs: '2'
+            vnfd:port: '18889'
+        vnfd:mgmt-interface:
+            vnfd:dashboard-params:
+                vnfd:path: api/v1/pong/stats
+                vnfd:port: '18889'
+            vnfd:port: '18889'
+            vnfd:ssh-key: 'true'
+            vnfd:vdu-id: iovdu_0
+        vnfd:monitoring-param:
+        -   vnfd:description: no of ping requests
+            vnfd:group-tag: Group1
+            vnfd:http-endpoint-ref: api/v1/pong/stats
+            vnfd:id: '1'
+            vnfd:json-query-method: NAMEKEY
+            vnfd:name: ping-request-rx-count
+            vnfd:units: packets
+            vnfd:value-type: INT
+            vnfd:widget-type: COUNTER
+        -   vnfd:description: no of ping responses
+            vnfd:group-tag: Group1
+            vnfd:http-endpoint-ref: api/v1/pong/stats
+            vnfd:id: '2'
+            vnfd:json-query-method: NAMEKEY
+            vnfd:name: ping-response-tx-count
+            vnfd:units: packets
+            vnfd:value-type: INT
+            vnfd:widget-type: COUNTER
+        vnfd:placement-groups:
+        -   vnfd:member-vdus:
+            -   vnfd:member-vdu-ref: iovdu_0
+            vnfd:name: Weywot
+            vnfd:requirement: Place this VM on the Kuiper belt object Weywot
+            vnfd:strategy: COLOCATION
+        vnfd:vdu:
+        -   vnfd:count: '1'
+            vnfd:external-interface:
+            -   vnfd:name: eth0
+                vnfd:virtual-interface:
+                    vnfd:type: VIRTIO
+                vnfd:vnfd-connection-point-ref: pong_vnfd/cp0
+            -   vnfd:name: eth1
+                vnfd:virtual-interface:
+                    vnfd:type: VIRTIO
+                vnfd:vnfd-connection-point-ref: pong_vnfd/cp1
+            vnfd:id: iovdu_0
+            vnfd:image: Fedora-x86_64-20-20131211.1-sda-pong.qcow2
+            vnfd:image-checksum: 977484d95575f80ef8399c9cf1d45ebd
+            vnfd:name: iovdu_0
+            vnfd:vm-flavor:
+                vnfd:memory-mb: '512'
+                vnfd:storage-gb: '4'
+                vnfd:vcpu-count: '1'
+        vnfd:vnf-configuration:
+            vnfd:config-primitive:
+            -   vnfd:name: start
+            -   vnfd:name: stop
+            -   vnfd:name: restart
+            -   vnfd:name: config
+                vnfd:parameter:
+                -   vnfd:data-type: STRING
+                    vnfd:name: ssh-hostname
+                -   vnfd:data-type: STRING
+                    vnfd:name: ssh-username
+                -   vnfd:data-type: STRING
+                    vnfd:name: ssh-private-key
+                -   vnfd:data-type: STRING
+                    vnfd:default-value: pong
+                    vnfd:name: mode
+                    vnfd:read-only: 'true'
+            -   vnfd:name: set-server
+                vnfd:parameter:
+                -   vnfd:data-type: STRING
+                    vnfd:name: server-ip
+                -   vnfd:data-type: INTEGER
+                    vnfd:name: server-port
+            -   vnfd:name: start-traffic
+            -   vnfd:name: stop-traffic
+            vnfd:initial-config-primitive:
+            -   vnfd:config-primitive-ref: config
+                vnfd:seq: '1'
+            -   vnfd:config-primitive-ref: start
+                vnfd:seq: '2'
+            -   vnfd:config-primitive-ref: set-server
+                vnfd:seq: '3'
+            vnfd:juju:
+                vnfd:charm: pingpong

@@ -17,13 +17,37 @@
 
 nsd:nsd-catalog:
     nsd:nsd:
-    -   nsd:constituent-vnfd:
+     -  nsd:id: rift_ping_pong_ns
+        nsd:logo: rift_logo.png
+        nsd:name: ping_pong_ns
+        nsd:description: RIFT.io sample ping pong network service
+        nsd:config-parameter-map:
+        -   nsd:config-parameter-request:
+                nsd:config-parameter-request-ref: pong_ip
+                nsd:member-vnf-index-ref: '1'
+            nsd:config-parameter-source:
+                nsd:config-parameter-source-ref: service_ip
+                nsd:member-vnf-index-ref: '2'
+            nsd:id: '1'
+        -   nsd:config-parameter-request:
+                nsd:config-parameter-request-ref: pong_port
+                nsd:member-vnf-index-ref: '1'
+            nsd:config-parameter-source:
+                nsd:config-parameter-source-ref: service_port
+                nsd:member-vnf-index-ref: '2'
+            nsd:id: '2'
+        nsd:constituent-vnfd:
         -   nsd:member-vnf-index: '1'
-            nsd:vnfd-id-ref: 8759e766-8b99-11e6-9664-02b76030c497
+            nsd:vnfd-id-ref: rift_ping_vnf
         -   nsd:member-vnf-index: '2'
-            nsd:vnfd-id-ref: 875b30d0-8b99-11e6-9664-02b76030c497
-        nsd:description: Toy NS
-        nsd:id: 875b9750-8b99-11e6-9664-02b76030c497
+            nsd:vnfd-id-ref: rift_pong_vnf
+        nsd:initial-config-primitive:
+        -   nsd:name: start traffic
+            nsd:parameter:
+            -   nsd:name: userid
+                nsd:value: rift
+            nsd:seq: '1'
+            nsd:user-defined-script: start_traffic.py
         nsd:input-parameter-xpath:
         -   nsd:xpath: /nsd:nsd-catalog/nsd:nsd/nsd:vendor
         nsd:ip-profiles:
@@ -32,23 +56,24 @@ nsd:nsd-catalog:
                 nsd:gateway-address: 31.31.31.210
                 nsd:ip-version: ipv4
                 nsd:subnet-address: 31.31.31.0/24
+                nsd:dhcp-params:
+                  nsd:count: 200
+                  nsd:start-address: 31.31.31.2
             nsd:name: InterVNFLink
-        nsd:logo: rift_logo.png
-        nsd:name: ping_pong_nsd
         nsd:placement-groups:
         -   nsd:member-vnfd:
             -   nsd:member-vnf-index-ref: '1'
-                nsd:vnfd-id-ref: 8759e766-8b99-11e6-9664-02b76030c497
+                nsd:vnfd-id-ref: rift_ping_vnf
             -   nsd:member-vnf-index-ref: '2'
-                nsd:vnfd-id-ref: 875b30d0-8b99-11e6-9664-02b76030c497
+                nsd:vnfd-id-ref: rift_pong_vnf
             nsd:name: Orcus
             nsd:requirement: Place this VM on the Kuiper belt object Orcus
             nsd:strategy: COLOCATION
         -   nsd:member-vnfd:
             -   nsd:member-vnf-index-ref: '1'
-                nsd:vnfd-id-ref: 8759e766-8b99-11e6-9664-02b76030c497
+                nsd:vnfd-id-ref: rift_ping_vnf
             -   nsd:member-vnf-index-ref: '2'
-                nsd:vnfd-id-ref: 875b30d0-8b99-11e6-9664-02b76030c497
+                nsd:vnfd-id-ref: rift_pong_vnf
             nsd:name: Quaoar
             nsd:requirement: Place this VM on the Kuiper belt object Quaoar
             nsd:strategy: COLOCATION
@@ -56,31 +81,34 @@ nsd:nsd-catalog:
         nsd:vendor: RIFT.io
         nsd:version: '1.0'
         nsd:vld:
-        -   nsd:description: Toy VL
-            nsd:id: ping_pong_mgmt1
-            nsd:name: ping_pong_mgmt
-            nsd:short-name: ping_pong_mgmt
+        -   nsd:id: mgmt_vl
+            nsd:vim-network-name: mgmt
+            nsd:description: Management VL
+            nsd:name: mgmt_vl
+            nsd:short-name: mgmt_vl
             nsd:type: ELAN
             nsd:vendor: RIFT.io
             nsd:version: '1.0'
+            nsd:mgmt-network: 'true'
             nsd:vnfd-connection-point-ref:
             -   nsd:member-vnf-index-ref: '1'
                 nsd:vnfd-connection-point-ref: ping_vnfd/cp0
-                nsd:vnfd-id-ref: 8759e766-8b99-11e6-9664-02b76030c497
+                nsd:vnfd-id-ref: rift_ping_vnf
             -   nsd:member-vnf-index-ref: '2'
                 nsd:vnfd-connection-point-ref: pong_vnfd/cp0
-                nsd:vnfd-id-ref: 875b30d0-8b99-11e6-9664-02b76030c497
-        -   nsd:description: Toy VL
-            nsd:id: ping_pong_vld2
-            nsd:name: ping_pong_vld
-            nsd:short-name: ping_pong_vld
+                nsd:vnfd-id-ref: rift_pong_vnf
+        -   nsd:id: ping_pong_vl1
+            nsd:description: Data VL
+            nsd:ip-profile-ref: InterVNFLink
+            nsd:name: data_vl
+            nsd:short-name: data_vl
             nsd:type: ELAN
             nsd:vendor: RIFT.io
             nsd:version: '1.0'
             nsd:vnfd-connection-point-ref:
             -   nsd:member-vnf-index-ref: '1'
                 nsd:vnfd-connection-point-ref: ping_vnfd/cp1
-                nsd:vnfd-id-ref: 8759e766-8b99-11e6-9664-02b76030c497
+                nsd:vnfd-id-ref: rift_ping_vnf
             -   nsd:member-vnf-index-ref: '2'
                 nsd:vnfd-connection-point-ref: pong_vnfd/cp1
-                nsd:vnfd-id-ref: 875b30d0-8b99-11e6-9664-02b76030c497
+                nsd:vnfd-id-ref: rift_pong_vnf
