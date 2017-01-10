@@ -561,7 +561,7 @@ class vimconnector(vimconn.vimconnector):
                 #determine format  http://docs.openstack.org/developer/glance/formats.html
                 if "disk_format" in image_dict:
                     disk_format=image_dict["disk_format"]
-                else: #autodiscover base on extention
+                else: #autodiscover based on extension
                     if image_dict['location'][-6:]==".qcow2":
                         disk_format="qcow2"
                     elif image_dict['location'][-4:]==".vhd":
@@ -652,8 +652,8 @@ class vimconnector(vimconn.vimconnector):
             filtered_list = []
             for image in image_list:
                 image_dict=self.glance.images.get(image.id)
-                if 'checksum' in filter_dict and image_dict['checksum']==filter_dict.get('checksum'):
-                    filtered_list.append(image)
+                if 'checksum' not in filter_dict or image_dict['checksum']==filter_dict.get('checksum'):
+                    filtered_list.append(image_dict)
             return filtered_list
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
             self._format_exception(e)
