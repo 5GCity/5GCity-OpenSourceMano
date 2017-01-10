@@ -17,7 +17,7 @@
 # 23 Sept 2016 -- Gerardo Garcia -- Genesis
 
 #Get IP addresses
-DEFAULT_IF=`route -n |awk '$1~/0.0.0.0/ {print $8}'`
+DEFAULT_IF=`route -n |awk '$1~/^0.0.0.0/ {print $8}'`
 export DEFAULT_IP=`ip -o -4 a |grep ${DEFAULT_IF}|awk '{split($4,a,"/"); print a[1]}'`
 export VCA_CONTAINER_IP=`lxc list VCA -c 4|grep eth0 |awk '{print $2}'`
 export SO_CONTAINER_IP=`lxc list SO-ub -c 4|grep eth0 |awk '{print $2}'`
