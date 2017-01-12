@@ -19,8 +19,13 @@ function usage(){
     echo -e "  OPTIONS"
     echo -e "     --uninstall:   uninstall OSM: remove the containers and delete NAT rules"
     echo -e "     -b <branch>:   install OSM from source code using a specific branch (master, v1.0, ...)"
+    echo -e "                    -b master"
+    echo -e "                    -b v1.0"
+    echo -e "                    ..."
     echo -e "     --develop:     (deprecated, use '-b master') install OSM from source code using the master branch"
     echo -e "     --nat:         install only NAT rules"
+    echo -e "     --update:      update to the latest stable release or to the latest commit if using a specific branch"
+    echo -e "     --showopts:    show current options"
     echo -e "     -h / --help:   print this help"
 }
 
@@ -46,6 +51,78 @@ function nat(){
     echo -e "\nConfiguring NAT rules"
     echo -e "   Required root privileges"
     sudo $OSM_DEVOPS/installers/nat_osm
+}
+
+#Update RO, SO and UI:
+function update(){
+    echo -e "\nUpdating components"
+
+    echo -e "     Updating RO"
+    CONTAINER="RO"
+    MDG="RO"
+    INSTALL_FOLDER="/opt/openmano"
+    echo -e "     Fetching the repo"
+    lxc exec $CONTAINER -- git -C $INSTALL_FOLDER fetch --all
+    BRANCH=""
+    BRANCH=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER status -sb | head -n1 | sed -n 's/^## \(.*\).*/\1/p'|awk '{print $1}' |sed 's/\(.*\)\.\.\..*/\1/'`
+    [ -z "$BRANCH" ] && echo "        Could not find the current branch in use in the $MDG" && exit 1
+    CURRENT=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER status |head -n1`
+    CURRENT_COMMIT_ID=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER rev-parse HEAD`
+    echo "         FROM: $CURRENT ($CURRENT_COMMIT_ID)"
+    # COMMIT_ID either was  previously set with -b option, or is an empty string
+    CHECKOUT_ID=$COMMIT_ID
+    [ -z "$CHECKOUT_ID" ] && [ "$BRANCH" == "HEAD" ] && CHECKOUT_ID="tags/$LATEST_STABLE_DEVOPS"
+    [ -z "$CHECKOUT_ID" ] && [ "$BRANCH" != "HEAD" ] && CHECKOUT_ID="$BRANCH"
+    if [[ $CHECKOUT_ID == "tags/"* ]]; then
+        REMOTE_COMMIT_ID=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER rev-list -n 1 $CHECKOUT_ID`
+    else
+        REMOTE_COMMIT_ID=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER rev-parse origin/$CHECKOUT_ID`
+    fi
+    echo "         TO: $CHECKOUT_ID ($REMOTE_COMMIT_ID)"
+    if [ "$CURRENT_COMMIT_ID" == "$REMOTE_COMMIT_ID" ]; then
+        echo "         Nothing to be done."
+    else
+        echo "         Update required."
+        lxc exec $CONTAINER -- service openmano stop
+        lxc exec $CONTAINER -- git -C /opt/openmano stash
+        lxc exec $CONTAINER -- git -C /opt/openmano pull --rebase
+        lxc exec $CONTAINER -- git -C /opt/openmano checkout $CHECKOUT_ID
+        lxc exec $CONTAINER -- git -C /opt/openmano stash pop
+        lxc exec $CONTAINER -- /opt/openmano/database_utils/migrate_mano_db.sh
+        lxc exec $CONTAINER -- service openmano start
+    fi
+    echo
+
+    echo -e "     Updating SO and UI"
+    CONTAINER="SO-ub"
+    MDG="SO"
+    INSTALL_FOLDER=""   # To be filled in
+    echo -e "     Fetching the repo"
+    lxc exec $CONTAINER -- git -C $INSTALL_FOLDER fetch --all
+    BRANCH=""
+    BRANCH=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER status -sb | head -n1 | sed -n 's/^## \(.*\).*/\1/p'|awk '{print $1}' |sed 's/\(.*\)\.\.\..*/\1/'`
+    [ -z "$BRANCH" ] && echo "        Could not find the current branch in use in the $MDG" && exit 1
+    CURRENT=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER status |head -n1`
+    CURRENT_COMMIT_ID=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER rev-parse HEAD`
+    echo "         FROM: $CURRENT ($CURRENT_COMMIT_ID)"
+    # COMMIT_ID either was  previously set with -b option, or is an empty string
+    CHECKOUT_ID=$COMMIT_ID
+    [ -z "$CHECKOUT_ID" ] && [ "$BRANCH" == "HEAD" ] && CHECKOUT_ID="tags/$LATEST_STABLE_DEVOPS"
+    [ -z "$CHECKOUT_ID" ] && [ "$BRANCH" != "HEAD" ] && CHECKOUT_ID="$BRANCH"
+    if [[ $CHECKOUT_ID == "tags/"* ]]; then
+        REMOTE_COMMIT_ID=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER rev-list -n 1 $CHECKOUT_ID`
+    else
+        REMOTE_COMMIT_ID=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER rev-parse origin/$CHECKOUT_ID`
+    fi
+    echo "         TO: $CHECKOUT_ID ($REMOTE_COMMIT_ID)"
+    if [ "$CURRENT_COMMIT_ID" == "$REMOTE_COMMIT_ID" ]; then
+        echo "         Nothing to be done."
+    else
+        echo "         Update required."
+        # Instructions to be added
+        # lxc exec SO-ub -- ...
+    fi
+    echo
 }
 
 #Configure VCA, SO and RO with the initial configuration:
@@ -105,11 +182,13 @@ function install_lxd() {
 UNINSTALL=""
 DEVELOP=""
 NAT=""
+UPDATE=""
 RECONFIGURE=""
 TEST_INSTALLER=""
 LXD=""
 SHOWOPTS=""
 COMMIT_ID=""
+
 while getopts ":h-:b:" o; do
     case "${o}" in
         h)
@@ -123,6 +202,7 @@ while getopts ":h-:b:" o; do
             [ "${OPTARG}" == "develop" ] && DEVELOP="y" && continue
             [ "${OPTARG}" == "uninstall" ] && UNINSTALL="y" && continue
             [ "${OPTARG}" == "nat" ] && NAT="y" && continue
+            [ "${OPTARG}" == "update" ] && UPDATE="y" && continue
             [ "${OPTARG}" == "reconfigure" ] && RECONFIGURE="y" && continue
             [ "${OPTARG}" == "test" ] && TEST_INSTALLER="y" && continue
             [ "${OPTARG}" == "lxd" ] && LXD="y" && continue
@@ -141,18 +221,7 @@ while getopts ":h-:b:" o; do
 done
 
 [ -z "$COMMIT_ID" ] && [ -n "$DEVELOP" ] && COMMIT_ID="master"
-[ -z "$COMMIT_ID" ] && COMMIT_ID="tags/v1.0.3"
-
-if [ -n "$SHOWOPTS" ]; then
-    echo "UNINSTALL=$UNINSTALL"
-    echo "DEVELOP=$DEVELOP"
-    echo "NAT=$NAT"
-    echo "RECONFIGURE=$RECONFIGURE"
-    echo "TEST_INSTALLER=$TEST_INSTALLER"
-    echo "LXD=$LXD"
-    echo "Commit: $COMMIT_ID"
-    exit 0
-fi
+[ -n "$TEST_INSTALLER" ] && [ -z "$COMMIT_ID" ]  && echo "Use -b option to specify the branch to use for the test (e.g.: v1.0)" && exit 0
 
 if [ -n "$TEST_INSTALLER" ]; then
     echo -e "\nUsing local devops repo for OSM installation"
@@ -169,18 +238,39 @@ if [ -z "$TEST_INSTALLER" ]; then
     echo -e "\nCloning devops repo temporarily"
     git clone https://osm.etsi.org/gerrit/osm/devops.git $TEMPDIR
     RC_CLONE=$?
-    DEVOPS_COMMITID="tags/v1.0.3"
-    git -C $TEMPDIR checkout $DEVOPS_COMMITID
 fi
+
+echo -e "\nGuessing the current stable release"
+LATEST_STABLE_DEVOPS=`git -C $TEMPDIR tag -l v[0-9].* | tail -n1`
+[ -z "$COMMIT_ID" ] && [ -z "$LATEST_STABLE_DEVOPS" ] && echo "Could not find the current latest stable release" && exit 0
+
+if [ -n "$SHOWOPTS" ]; then
+    echo "DEVELOP=$DEVELOP"
+    echo "UNINSTALL=$UNINSTALL"
+    echo "NAT=$NAT"
+    echo "UPDATE=$UPDATE"
+    echo "RECONFIGURE=$RECONFIGURE"
+    echo "TEST_INSTALLER=$TEST_INSTALLER"
+    echo "LXD=$LXD"
+    echo "SHOWOPTS=$SHOWOPTS"
+    echo "Latest tag in devops repo: $LATEST_STABLE_DEVOPS"
+    echo "Commit to be installed (-b): $COMMIT_ID"
+    exit 0
+fi
+
 OSM_DEVOPS=$TEMPDIR
 OSM_JENKINS="$TEMPDIR/jenkins"
 . $OSM_JENKINS/common/all_funcs
 
 [ -n "$UNINSTALL" ] && uninstall && echo -e "\nDONE" && exit 0
 [ -n "$NAT" ] && nat && echo -e "\nDONE" && exit 0
+[ -n "$UPDATE" ] && update && echo -e "\nDONE" && exit 0
 [ -n "$RECONFIGURE" ] && configure && echo -e "\nDONE" && exit 0
 
 #Installation starts here
+[ -z "$COMMIT_ID" ] && [ -n "$LATEST_STABLE_DEVOPS" ] && COMMIT_ID="tags/$LATEST_STABLE_DEVOPS"
+echo -e "\n Installing OSM from refspec: $COMMIT_ID"
+
 wget -q -O- https://osm-download.etsi.org/ftp/osm-1.0-one/README.txt &> /dev/null
 
 [ -n "$LXD" ] && echo -e "\nConfiguring lxd" && install_lxd
