@@ -20,6 +20,9 @@ nsd:nsd-catalog:
      -  nsd:id: rift_ping_pong_ns
         nsd:logo: rift_logo.png
         nsd:name: ping_pong_ns
+        nsd:short-name: ping_pong_ns
+        nsd:vendor: RIFT.io
+        nsd:version: '1.0'
         nsd:description: RIFT.io sample ping pong network service
         nsd:config-parameter-map:
         -   nsd:config-parameter-request:
@@ -77,9 +80,6 @@ nsd:nsd-catalog:
             nsd:name: Quaoar
             nsd:requirement: Place this VM on the Kuiper belt object Quaoar
             nsd:strategy: COLOCATION
-        nsd:short-name: ping_pong_nsd
-        nsd:vendor: RIFT.io
-        nsd:version: '1.0'
         nsd:vld:
         -   nsd:id: mgmt_vl
             nsd:vim-network-name: mgmt

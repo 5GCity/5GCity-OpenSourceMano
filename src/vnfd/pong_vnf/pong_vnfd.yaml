@@ -70,7 +70,7 @@ vnfd:vnfd-catalog:
                 vnfd:path: api/v1/pong/stats
                 vnfd:port: '18889'
             vnfd:port: '18889'
-            vnfd:ssh-key: 'true'
+            rw-vnfd:ssh-key: 'true'
             vnfd:vdu-id: iovdu_0
         vnfd:monitoring-param:
         -   vnfd:description: no of ping requests
