@@ -186,6 +186,7 @@ DATABASE_TARGET_VER_NUM=0
 [ $OPENMANO_VER_NUM -ge 5002 ] && DATABASE_TARGET_VER_NUM=16  #0.5.2 =>  16
 [ $OPENMANO_VER_NUM -ge 5003 ] && DATABASE_TARGET_VER_NUM=17  #0.5.3 =>  17
 [ $OPENMANO_VER_NUM -ge 5004 ] && DATABASE_TARGET_VER_NUM=18  #0.5.4 =>  18
+[ $OPENMANO_VER_NUM -ge 5005 ] && DATABASE_TARGET_VER_NUM=19  #0.5.5 =>  19
 #TODO ... put next versions here
 
 
@@ -714,6 +715,19 @@ function downgrade_from_18(){
     echo "ALTER TABLE instance_interfaces DROP COLUMN floating_ip;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "ALTER TABLE instance_interfaces DROP COLUMN port_security;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "DELETE FROM schema_version WHERE version_int='18';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+
+function upgrade_to_19(){
+    echo "    upgrade database from version 0.18 to version 0.19"
+    echo "      add column 'boot_data' at table 'vms'"
+    echo "ALTER TABLE vms ADD COLUMN boot_data TEXT NULL DEFAULT NULL AFTER image_path;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (19, '0.19', '0.5.5', 'Extra Boot-data content at VNFC (vms)', '2017-01-11');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+function downgrade_from_19(){
+    echo "    downgrade database from version 0.19 to version 0.18"
+    echo "      remove column 'boot_data' from table 'vms'"
+    echo "ALTER TABLE vms DROP COLUMN boot_data;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "DELETE FROM schema_version WHERE version_int='19';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
 
 function upgrade_to_X(){

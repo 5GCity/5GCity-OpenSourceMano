@@ -40,4 +40,3 @@ vnf:
         -   name:      eth0
             vpci:      "0000:00:11.0"
         numas: []
-

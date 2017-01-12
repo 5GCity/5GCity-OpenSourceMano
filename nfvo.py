@@ -216,7 +216,14 @@ def check_vnf_descriptor(vnf_descriptor):
                                     HTTP_Bad_Request)
             name_list.append( interface["name"] ) 
         vnfc_interfaces[ vnfc["name"] ] = name_list
-    
+        # check bood-data info
+        if "boot-data" in vnfc:
+            # check that user-data is incompatible with users and config-files
+            if (vnfc["boot-data"].get("users") or vnfc["boot-data"].get("config-files")) and vnfc["boot-data"].get("user-data"):
+                raise NfvoException(
+                    "Error at vnf:VNFC:boot-data, fields 'users' and 'config-files' are not compatible with 'user-data'",
+                    HTTP_Bad_Request)
+
     #check if the info in external_connections matches with the one in the vnfcs
     name_list=[]
     for external_connection in vnf_descriptor["vnf"].get("external-connections",() ):
@@ -605,6 +612,8 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
             #print "Image id for VNFC %s: %s" % (vnfc['name'],image_id)
             VNFCDict[vnfc['name']]["image_id"] = image_id
             VNFCDict[vnfc['name']]["image_path"] = vnfc.get('VNFC image')
+            if vnfc.get("boot-data"):
+                VNFCDict[vnfc['name']]["boot_data"] = yaml.safe_dump(vnfc["boot-data"], default_flow_style=True, width=256)
 
             
         # Step 7. Storing the VNF descriptor in the repository
@@ -744,8 +753,9 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
             #print "Image id for VNFC %s: %s" % (vnfc['name'],image_id)
             VNFCDict[vnfc['name']]["image_id"] = image_id
             VNFCDict[vnfc['name']]["image_path"] = vnfc.get('VNFC image')
+            if vnfc.get("boot-data"):
+                VNFCDict[vnfc['name']]["boot_data"] = yaml.safe_dump(vnfc["boot-data"], default_flow_style=True, width=256)
 
-            
         # Step 7. Storing the VNF descriptor in the repository
         if "descriptor" not in vnf_descriptor["vnf"]:
             vnf_descriptor["vnf"]["descriptor"] = yaml.safe_dump(vnf_descriptor, indent=4, explicit_start=True, default_flow_style=False)
@@ -783,10 +793,15 @@ def get_vnf_id(mydb, tenant_id, vnf_id):
     data={'vnf' : filtered_content}
     #GET VM
     content = mydb.get_rows(FROM='vnfs join vms on vnfs.uuid=vms.vnf_id',
-            SELECT=('vms.uuid as uuid','vms.name as name', 'vms.description as description'), 
+            SELECT=('vms.uuid as uuid','vms.name as name', 'vms.description as description', 'boot_data'),
             WHERE={'vnfs.uuid': vnf_id} )
     if len(content)==0:
         raise NfvoException("vnf '{}' not found".format(vnf_id), HTTP_Not_Found)
+    # change boot_data into boot-data
+    for vm in content:
+        if vm.get("boot_data"):
+            vm["boot-data"] = yaml.safe_load(vm["boot_data"])
+            del vm["boot_data"]
 
     data['vnf']['VNFC'] = content
     #TODO: GET all the information from a VNFC and include it in the output.
@@ -1545,9 +1560,34 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
         #logger.error("start_scenario %s", error_text)
         raise NfvoException(error_text, e.http_code)
 
-def unify_cloud_config(cloud_config):
+def unify_cloud_config(cloud_config_preserve, cloud_config):
+    ''' join the cloud config information into cloud_config_preserve.
+    In case of conflict cloud_config_preserve preserves
+    None is admited
+    '''
+    if not cloud_config_preserve and not cloud_config:
+        return None
+
+    new_cloud_config = {"key-pairs":[], "users":[]}
+    # key-pairs
+    if cloud_config_preserve:
+        for key in cloud_config_preserve.get("key-pairs", () ):
+            if key not in new_cloud_config["key-pairs"]:
+                new_cloud_config["key-pairs"].append(key)
+    if cloud_config:
+        for key in cloud_config.get("key-pairs", () ):
+            if key not in new_cloud_config["key-pairs"]:
+                new_cloud_config["key-pairs"].append(key)
+    if not new_cloud_config["key-pairs"]:
+        del new_cloud_config["key-pairs"]
+
+    # users
+    if cloud_config:
+        new_cloud_config["users"] += cloud_config.get("users", () )
+    if cloud_config_preserve:
+        new_cloud_config["users"] += cloud_config_preserve.get("users", () )
     index_to_delete = []
-    users = cloud_config.get("users", [])
+    users = new_cloud_config.get("users", [])
     for index0 in range(0,len(users)):
         if index0 in index_to_delete:
             continue
@@ -1557,13 +1597,45 @@ def unify_cloud_config(cloud_config):
             if users[index0]["name"] == users[index1]["name"]:
                 index_to_delete.append(index1)
                 for key in users[index1].get("key-pairs",()):
-                    if "key-pairs" not in users[index0]: 
+                    if "key-pairs" not in users[index0]:
                         users[index0]["key-pairs"] = [key]
                     elif key not in users[index0]["key-pairs"]:
                         users[index0]["key-pairs"].append(key)
     index_to_delete.sort(reverse=True)
     for index in index_to_delete:
         del users[index]
+    if not new_cloud_config["users"]:
+        del new_cloud_config["users"]
+
+    #boot-data-drive
+    if cloud_config and cloud_config.get("boot-data-drive") != None:
+        new_cloud_config["boot-data-drive"] = cloud_config["boot-data-drive"]
+    if cloud_config_preserve and cloud_config_preserve.get("boot-data-drive") != None:
+        new_cloud_config["boot-data-drive"] = cloud_config_preserve["boot-data-drive"]
+
+    # user-data
+    if cloud_config and cloud_config.get("user-data") != None:
+        new_cloud_config["user-data"] = cloud_config["user-data"]
+    if cloud_config_preserve and cloud_config_preserve.get("user-data") != None:
+        new_cloud_config["user-data"] = cloud_config_preserve["user-data"]
+
+    # config files
+    new_cloud_config["config-files"] = []
+    if cloud_config and cloud_config.get("config-files") != None:
+        new_cloud_config["config-files"] += cloud_config["config-files"]
+    if cloud_config_preserve:
+        for file in cloud_config_preserve.get("config-files", ()):
+            for index in range(0, len(new_cloud_config["config-files"])):
+                if new_cloud_config["config-files"][index]["dest"] == file["dest"]:
+                    new_cloud_config["config-files"][index] = file
+                    break
+            else:
+                new_cloud_config["config-files"].append(file)
+    if not new_cloud_config["config-files"]:
+        del new_cloud_config["config-files"]
+    return new_cloud_config
+
+
 
 def get_datacenter_by_name_uuid(mydb, tenant_id, datacenter_id_name=None, **extra_filter):
     datacenter_id = None
@@ -1779,14 +1851,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                 scenario_vnf["datacenter"] = vnf_instance_desc["datacenter"]
 
     #0.1 parse cloud-config parameters
-        cloud_config = scenarioDict.get("cloud-config", {})
-        if instance_dict.get("cloud-config"):
-            cloud_config.update( instance_dict["cloud-config"])
-        if not cloud_config:
-            cloud_config = None
-        else:
-            scenarioDict["cloud-config"] = cloud_config
-            unify_cloud_config(cloud_config)
+        cloud_config = unify_cloud_config(instance_dict.get("cloud-config"), scenarioDict.get("cloud-config"))
 
     #0.2 merge instance information into scenario
         #Ideally, the operation should be as simple as: update(scenarioDict,instance_dict)
@@ -2041,8 +2106,12 @@ def create_instance(mydb, tenant_id, instance_dict):
                 #print "networks", yaml.safe_dump(myVMDict['networks'], indent=4, default_flow_style=False)
                 #print "interfaces", yaml.safe_dump(vm['interfaces'], indent=4, default_flow_style=False)
                 #print ">>>>>>>>>>>>>>>>>>>>>>>>>>>"
+                if vm.get("boot_data"):
+                    cloud_config_vm = unify_cloud_config(vm["boot_data"], cloud_config)
+                else:
+                    cloud_config_vm = cloud_config
                 vm_id = vim.new_vminstance(myVMDict['name'],myVMDict['description'],myVMDict.get('start', None),
-                        myVMDict['imageRef'],myVMDict['flavorRef'],myVMDict['networks'], cloud_config = cloud_config,
+                        myVMDict['imageRef'],myVMDict['flavorRef'],myVMDict['networks'], cloud_config = cloud_config_vm,
                         disk_list = myVMDict['disks'])
 
                 vm['vim_id'] = vm_id

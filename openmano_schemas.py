@@ -495,6 +495,37 @@ numa_schema = {
     #"required": ["memory"]
 }
 
+config_files_schema = {
+    "title": "Config files for cloud init schema",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type": "object",
+    "properties": {
+        "dest": path_schema,
+        "encoding": {"type": "string", "enum": ["b64", "base64", "gz", "gz+b64", "gz+base64", "gzip+b64", "gzip+base64"]},  #by default text
+        "content": {"type": "string"},
+        "permissions": {"type": "string"}, # tiypically octal notation '0644'
+        "owner": {"type": "string"},  # format:   owner:group
+
+    },
+    "additionalProperties": False,
+    "required": ["dest", "content"],
+}
+
+boot_data_vdu_schema  = {
+    "title": "Boot data (Cloud-init) configuration schema",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type": "object",
+    "properties":{
+        "key-pairs": {"type" : "array", "items": {"type":"string"}},
+        "users": {"type" : "array", "items": cloud_config_user_schema},
+        "user-data": {"type" : "string"},  # scrip to run
+        "config-files": {"type": "array", "items": config_files_schema},
+        # NOTE: “user-data” are mutually exclusive with users and config-files because user/files are injected using user-data
+        "boot-data-drive": {"type": "boolean"},
+    },
+    "additionalProperties": False,
+}
+
 vnfc_schema = {
     "type":"object",
     "properties":{
@@ -529,7 +560,8 @@ vnfc_schema = {
             "items": numa_schema
         },
         "bridge-ifaces": bridge_interfaces_schema,
-        "devices": devices_schema
+        "devices": devices_schema,
+        "boot-data" : boot_data_vdu_schema
         
     },
     "required": ["name"],
