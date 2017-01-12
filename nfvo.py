@@ -2005,7 +2005,6 @@ def create_instance(mydb, tenant_id, instance_dict):
                         netDict['vpci'] = iface['vpci']
                     if "mac" in iface and iface["mac"] is not None:
                         netDict['mac_address'] = iface['mac']
-                    logger.debug("Pablo iface %s", str(iface))
                     if "port-security" in iface and iface["port-security"] is not None:
                         netDict['port_security'] = iface['port-security']
                     if "floating-ip" in iface and iface["floating-ip"] is not None:

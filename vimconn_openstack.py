@@ -96,6 +96,9 @@ class vimconnector(vimconn.vimconnector):
         if self.osc_api_version == 'v3.3':
             self.k_creds['project_name'] = tenant_name
             self.k_creds['project_id'] = tenant_id
+        if config.get('region_name'):
+            self.k_creds['region_name'] = config.get('region_name')
+            self.n_creds['region_name'] = config.get('region_name')
 
         self.reload_client       = True
         self.logger = logging.getLogger('openmano.vim.openstack')
@@ -706,7 +709,7 @@ class vimconnector(vimconn.vimconnector):
                         port_dict["name"]=name
                     if net.get("mac_address"):
                         port_dict["mac_address"]=net["mac_address"]
-                    if "port_security" in net:
+                    if net.get("port_security") == False:
                         port_dict["port_security_enabled"]=net["port_security"]
                     new_port = self.neutron.create_port({"port": port_dict })
                     net["mac_adress"] = new_port["port"]["mac_address"]
@@ -790,7 +793,7 @@ class vimconnector(vimconn.vimconnector):
                     #delete ports we just created
                     for net_item  in net_list_vim:
                         if 'port-id' in net_item:
-                            self.neutron.delete_port(net_item['port_id'])
+                            self.neutron.delete_port(net_item['port-id'])
 
                     raise vimconn.vimconnException('Timeout creating volumes for instance ' + name,
                                                    http_code=vimconn.HTTP_Request_Timeout)
@@ -803,7 +806,6 @@ class vimconnector(vimconn.vimconnector):
                                               block_device_mapping = block_device_mapping
                                               )  # , description=description)
             #print "DONE :-)", server
-            
             pool_id = None
             floating_ips = self.neutron.list_floatingips().get("floatingips", ())
             for floating_network in external_network:
@@ -880,7 +882,7 @@ class vimconnector(vimconn.vimconnector):
             # delete ports we just created
             for net_item in net_list_vim:
                 if 'port-id' in net_item:
-                    self.neutron.delete_port(net_item['port_id'])
+                    self.neutron.delete_port(net_item['port-id'])
             self._format_exception(e)
         except TypeError as e:
             raise vimconn.vimconnException(type(e).__name__ + ": "+  str(e), http_code=vimconn.HTTP_Bad_Request)
