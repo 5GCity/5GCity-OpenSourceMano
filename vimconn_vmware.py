@@ -54,6 +54,9 @@ import time
 import uuid
 import httplib
 import hashlib
+import socket
+import struct
+import netaddr
 
 # global variable for vcd connector type
 STANDALONE = 'standalone'
@@ -62,13 +65,21 @@ STANDALONE = 'standalone'
 FLAVOR_RAM_KEY = 'ram'
 FLAVOR_VCPUS_KEY = 'vcpus'
 
-# global variables for number of retry
+DEFAULT_IP_PROFILE = {'gateway_address':"192.168.1.1",
+                      'dhcp_count':50,
+                      'subnet_address':"192.168.1.0/24",
+                      'dhcp_enabled':True,
+                      'dhcp_start_address':"192.168.1.3",
+                      'ip_version':"IPv4",
+                      'dns_address':"192.168.1.2"
+                      }
+# global variable for wait time
 INTERVAL_TIME = 5
 MAX_WAIT_TIME = 1800
 
 VCAVERSION = '5.9'
 
-__author__ = "Mustafa Bayramov, Arpita Kate"
+__author__ = "Mustafa Bayramov, Arpita Kate, Sachin Bhangare"
 __date__ = "$23-Dec-2016 11:09:29$"
 __version__ = '0.1'
 
@@ -424,19 +435,20 @@ class vimconnector(vimconn.vimconnector):
     def new_network(self, net_name, net_type, ip_profile=None, shared=False):
         """Adds a tenant network to VIM
             net_name is the name
-            net_type can be 'bridge','data'.'ptp'.  TODO: this need to be revised
+            net_type can be 'bridge','data'.'ptp'.
             ip_profile is a dict containing the IP parameters of the network
             shared is a boolean
         Returns the network identifier"""
 
-        self.logger.debug(
-            "new_network tenant {} net_type {} ip_profile {} shared {}".format(net_name, net_type, ip_profile, shared))
+        self.logger.debug("new_network tenant {} net_type {} ip_profile {} shared {}"
+                          .format(net_name, net_type, ip_profile, shared))
 
         isshared = 'false'
         if shared:
             isshared = 'true'
 
-        network_uuid = self.create_network(network_name=net_name, isshared=isshared)
+        network_uuid = self.create_network(network_name=net_name, net_type=net_type,
+                                           ip_profile=ip_profile, isshared=isshared)
         if network_uuid is not None:
             return network_uuid
         else:
@@ -1191,32 +1203,34 @@ class vimconnector(vimconn.vimconnector):
             power_on = 'true'
 
         # client must provide at least one entry in net_list if not we report error
-        #
+        #If net type is mgmt, then configure it as primary net & use its NIC index as primary NIC
+        #If no mgmt, then the 1st NN in netlist is considered as primary net. 
+        primary_net = None
         primary_netname = None
         network_mode = 'bridged'
         if net_list is not None and len(net_list) > 0:
-            primary_net = net_list[0]
+            for net in net_list:
+                if 'use' in net and net['use'] == 'mgmt':
+                    primary_net = net
             if primary_net is None:
-                raise vimconn.vimconnUnexpectedResponse("new_vminstance(): Failed network list is empty.".format(name))
-            else:
-                try:
-                    primary_net_id = primary_net['net_id']
-                    network_dict = self.get_vcd_network(network_uuid=primary_net_id)
-                    if 'name' in network_dict:
-                        primary_netname = network_dict['name']
-                    self.logger.info("Connecting VM to a network name {} "
-                                     " network id {}".format(primary_netname, primary_net_id))
-                    if 'use' in primary_net:
-                        if primary_net['use'] == 'bridge':
-                            network_mode = 'bridged'
-                except KeyError:
-                    raise vimconn.vimconnException("Corrupted flavor. {}".format(primary_net))
+                primary_net = net_list[0]
+
+            try:
+                primary_net_id = primary_net['net_id']
+                network_dict = self.get_vcd_network(network_uuid=primary_net_id)
+                if 'name' in network_dict:
+                    primary_netname = network_dict['name']
+
+            except KeyError:
+                raise vimconn.vimconnException("Corrupted flavor. {}".format(primary_net))
+        else:
+            raise vimconn.vimconnUnexpectedResponse("new_vminstance(): Failed network list is empty.".format(name))
 
         # use: 'data', 'bridge', 'mgmt'
         # create vApp.  Set vcpu and ram based on flavor id.
         vapptask = vca.create_vapp(self.tenant_name, vmname_andid, templateName,
                                    self.get_catalogbyid(image_id, catalogs),
-                                   network_name=primary_netname,  # can be None if net_list None
+                                   network_name=None,  # None while creating vapp
                                    network_mode=network_mode,
                                    vm_name=vmname_andid,
                                    vm_cpus=vm_cpus,  # can be None if flavor is None
@@ -1233,10 +1247,11 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnUnexpectedResponse(
                 "new_vminstance(): Failed failed retrieve vApp {} after we deployed".format(vmname_andid))
 
-        # add first NIC
+        # add NICs & connect to networks in netlist
         try:
             self.logger.info("Request to connect VM to a network: {}".format(net_list))
             nicIndex = 0
+            primary_nic_index = 0
             for net in net_list:
                 # openmano uses network id in UUID format.
                 # vCloud Director need a name so we do reverse operation from provided UUID we lookup a name
@@ -1250,6 +1265,9 @@ class vimconnector(vimconn.vimconnector):
                 interface_net_name = self.get_network_name_by_id(network_uuid=interface_net_id)
                 interface_network_mode = net['use']
 
+                if interface_network_mode == 'mgmt':
+                    primary_nic_index = nicIndex
+
                 """- POOL (A static IP address is allocated automatically from a pool of addresses.)
                                   - DHCP (The IP address is obtained from a DHCP service.)
                                   - MANUAL (The IP address is assigned manually in the IpAddress element.)
@@ -1258,21 +1276,19 @@ class vimconnector(vimconn.vimconnector):
                 if primary_netname is not None:
                     nets = filter(lambda n: n.name == interface_net_name, vca.get_networks(self.tenant_name))
                     if len(nets) == 1:
-                        self.logger.info("Found requested network: {}".format(nets[0].name))
+                        self.logger.info("new_vminstance(): Found requested network: {}".format(nets[0].name))
                         task = vapp.connect_to_network(nets[0].name, nets[0].href)
                         if type(task) is GenericTask:
                             vca.block_until_completed(task)
-                        # connect network to VM
-                        # TODO figure out mapping between openmano representation to vCloud director.
-                        # one idea use first nic as management DHCP all remaining in bridge mode
-                        self.logger.info("Connecting VM to a network network {}".format(nets[0].name))
+                        # connect network to VM - with all DHCP by default
+                        self.logger.info("new_vminstance(): Connecting VM to a network {}".format(nets[0].name))
                         task = vapp.connect_vms(nets[0].name,
                                                 connection_index=nicIndex,
-                                                connections_primary_index=nicIndex,
+                                                connections_primary_index=primary_nic_index,
                                                 ip_allocation_mode='DHCP')
                         if type(task) is GenericTask:
                             vca.block_until_completed(task)
-            nicIndex += 1
+                nicIndex += 1
         except KeyError:
             # it might be a case if specific mandatory entry in dict is empty
             self.logger.debug("Key error {}".format(KeyError.message))
@@ -2134,12 +2150,16 @@ class vimconnector(vimconn.vimconnector):
 
         return False
 
-    def create_network(self, network_name=None, parent_network_uuid=None, isshared='true'):
+    def create_network(self, network_name=None, net_type='bridge', parent_network_uuid=None,
+                       ip_profile=None, isshared='true'):
         """
         Method create network in vCloud director
 
         Args:
             network_name - is network name to be created.
+            net_type - can be 'bridge','data','ptp','mgmt'.
+            ip_profile is a dict containing the IP parameters of the network
+            isshared - is a boolean
             parent_network_uuid - is parent provider vdc network that will be used for mapping.
             It optional attribute. by default if no parent network indicate the first available will be used.
 
@@ -2149,6 +2169,8 @@ class vimconnector(vimconn.vimconnector):
 
         new_network_name = [network_name, '-', str(uuid.uuid4())]
         content = self.create_network_rest(network_name=''.join(new_network_name),
+                                           ip_profile=ip_profile,
+                                           net_type=net_type,
                                            parent_network_uuid=parent_network_uuid,
                                            isshared=isshared)
         if content is None:
@@ -2165,12 +2187,16 @@ class vimconnector(vimconn.vimconnector):
             self.logger.debug("Failed create network {}".format(network_name))
             return None
 
-    def create_network_rest(self, network_name=None, parent_network_uuid=None, isshared='true'):
+    def create_network_rest(self, network_name=None, net_type='bridge', parent_network_uuid=None,
+                            ip_profile=None, isshared='true'):
         """
         Method create network in vCloud director
 
         Args:
             network_name - is network name to be created.
+            net_type - can be 'bridge','data','ptp','mgmt'.
+            ip_profile is a dict containing the IP parameters of the network
+            isshared - is a boolean
             parent_network_uuid - is parent provider vdc network that will be used for mapping.
             It optional attribute. by default if no parent network indicate the first available will be used.
 
@@ -2241,29 +2267,138 @@ class vimconnector(vimconn.vimconnector):
                 except:
                     return None
 
+            #Configure IP profile of the network
+            ip_profile = ip_profile if ip_profile is not None else DEFAULT_IP_PROFILE
+
+            gateway_address=ip_profile['gateway_address']
+            dhcp_count=int(ip_profile['dhcp_count'])
+            subnet_address=self.convert_cidr_to_netmask(ip_profile['subnet_address'])
+
+            if ip_profile['dhcp_enabled']==True:
+                dhcp_enabled='true'
+            else:
+                dhcp_enabled='false'
+            dhcp_start_address=ip_profile['dhcp_start_address']
+
+            #derive dhcp_end_address from dhcp_start_address & dhcp_count
+            end_ip_int = int(netaddr.IPAddress(dhcp_start_address))
+            end_ip_int += dhcp_count - 1
+            dhcp_end_address = str(netaddr.IPAddress(end_ip_int))
+
+            ip_version=ip_profile['ip_version']
+            dns_address=ip_profile['dns_address']
+
             # either use client provided UUID or search for a first available
             #  if both are not defined we return none
             if parent_network_uuid is not None:
                 url_list = [vca.host, '/api/admin/network/', parent_network_uuid]
                 add_vdc_rest_url = ''.join(url_list)
 
-            # return response.content
-            data = """ <OrgVdcNetwork name="{0:s}" xmlns="http://www.vmware.com/vcloud/v1.5">
-                            <Description>Openmano created</Description>
-                                    <Configuration>
-                                        <ParentNetwork href="{1:s}"/>
-                                        <FenceMode>{2:s}</FenceMode>
-                                    </Configuration>
-                                    <IsShared>{3:s}</IsShared>
-                        </OrgVdcNetwork> """.format(escape(network_name), available_networks, "bridged", isshared)
+            if net_type=='ptp':
+                fence_mode="isolated"
+                isshared='false'
+                is_inherited='false'
+                data = """ <OrgVdcNetwork name="{0:s}" xmlns="http://www.vmware.com/vcloud/v1.5">
+                                <Description>Openmano created</Description>
+                                        <Configuration>
+                                            <IpScopes>
+                                                <IpScope>
+                                                    <IsInherited>{1:s}</IsInherited>
+                                                    <Gateway>{2:s}</Gateway>
+                                                    <Netmask>{3:s}</Netmask>
+                                                    <Dns1>{4:s}</Dns1>
+                                                    <IsEnabled>{5:s}</IsEnabled>
+                                                    <IpRanges>
+                                                        <IpRange>
+                                                            <StartAddress>{6:s}</StartAddress>
+                                                            <EndAddress>{7:s}</EndAddress>
+                                                        </IpRange>
+                                                    </IpRanges>
+                                                </IpScope>
+                                            </IpScopes>
+                                            <FenceMode>{8:s}</FenceMode>
+                                        </Configuration>
+                                        <IsShared>{9:s}</IsShared>
+                            </OrgVdcNetwork> """.format(escape(network_name), is_inherited, gateway_address,
+                                                        subnet_address, dns_address, dhcp_enabled,
+                                                        dhcp_start_address, dhcp_end_address, fence_mode, isshared)
+
+            else:
+                fence_mode="bridged"
+                is_inherited='false'
+                data = """ <OrgVdcNetwork name="{0:s}" xmlns="http://www.vmware.com/vcloud/v1.5">
+                                <Description>Openmano created</Description>
+                                        <Configuration>
+                                            <IpScopes>
+                                                <IpScope>
+                                                    <IsInherited>{1:s}</IsInherited>
+                                                    <Gateway>{2:s}</Gateway>
+                                                    <Netmask>{3:s}</Netmask>
+                                                    <Dns1>{4:s}</Dns1>
+                                                    <IsEnabled>{5:s}</IsEnabled>
+                                                    <IpRanges>
+                                                        <IpRange>
+                                                            <StartAddress>{6:s}</StartAddress>
+                                                            <EndAddress>{7:s}</EndAddress>
+                                                        </IpRange>
+                                                    </IpRanges>
+                                                </IpScope>
+                                            </IpScopes>
+                                            <ParentNetwork href="{8:s}"/>
+                                            <FenceMode>{9:s}</FenceMode>
+                                        </Configuration>
+                                        <IsShared>{10:s}</IsShared>
+                            </OrgVdcNetwork> """.format(escape(network_name), is_inherited, gateway_address,
+                                                        subnet_address, dns_address, dhcp_enabled,
+                                                        dhcp_start_address, dhcp_end_address, available_networks,
+                                                        fence_mode, isshared)
 
             headers = vca.vcloud_session.get_vcloud_headers()
             headers['Content-Type'] = 'application/vnd.vmware.vcloud.orgVdcNetwork+xml'
-            response = Http.post(url=add_vdc_rest_url, headers=headers, data=data, verify=vca.verify, logger=vca.logger)
+            try:
+                response = Http.post(url=add_vdc_rest_url,
+                                     headers=headers,
+                                     data=data,
+                                     verify=vca.verify,
+                                     logger=vca.logger)
 
-            # if we all ok we respond with content otherwise by default None
-            if response.status_code == 201:
-                return response.content
+                if response.status_code != 201:
+                    self.logger.debug("Create Network POST REST API call failed. Return status code {}"
+                                      .format(response.status_code))
+                else:
+                    network = networkType.parseString(response.content, True)
+                    create_nw_task = network.get_Tasks().get_Task()[0]
+
+                    # if we all ok we respond with content after network creation completes
+                    # otherwise by default return None
+                    if create_nw_task is not None:
+                        self.logger.debug("Create Network REST : Waiting for Nw creation complete")
+                        status = vca.block_until_completed(create_nw_task)
+                        if status:
+                            return response.content
+                        else:
+                            self.logger.debug("create_network_rest task failed. Network Create response : {}"
+                                              .format(response.content))
+            except Exception as exp:
+                self.logger.debug("create_network_rest : Exception : {} ".format(exp))
+
+        return None
+
+    def convert_cidr_to_netmask(self, cidr_ip=None):
+        """
+        Method sets convert CIDR netmask address to normal IP format
+        Args:
+            cidr_ip : CIDR IP address
+            Returns:
+                netmask : Converted netmask
+        """
+        if cidr_ip is not None:
+            if '/' in cidr_ip:
+                network, net_bits = cidr_ip.split('/')
+                netmask = socket.inet_ntoa(struct.pack(">I", (0xffffffff << (32 - int(net_bits))) & 0xffffffff))
+            else:
+                netmask = cidr_ip
+            return netmask
         return None
 
     def get_provider_rest(self, vca=None):
@@ -2583,4 +2718,5 @@ class vimconnector(vimconn.vimconnector):
                 return response.content
 
         return None
+
 
