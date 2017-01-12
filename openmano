@@ -28,8 +28,8 @@ openmano client used to interact with openmano-server (openmanod)
 '''
 __author__="Alfonso Tierno, Gerardo Garcia"
 __date__ ="$09-oct-2014 09:09:48$"
-__version__="0.4.8-r512"
-version_date="Oct 2016"
+__version__="0.4.9-r515"
+version_date="Jan 2017"
 
 from argcomplete.completers import FilesCompleter
 import os
@@ -263,11 +263,17 @@ def vnf_create(args):
                 for image_path_ in args.image_path.split(","):
                     #print "image-path", image_path_
                     myvnf['vnf']['VNFC'][index]['VNFC image']=image_path_
+                    if "image name" in myvnf['vnf']['VNFC'][index]:
+                        del myvnf['vnf']['VNFC'][index]["image name"]
+                    if "image checksum" in myvnf['vnf']['VNFC'][index]:
+                        del myvnf['vnf']['VNFC'][index]["image checksum"]
                     index=index+1
-            if args.image_name:
+            if args.image_name: #image name precedes if both are supplied
                 index=0
                 for image_name_ in args.image_name.split(","):
                     myvnf['vnf']['VNFC'][index]['image name']=image_name_
+                    if "VNFC image" in myvnf['vnf']['VNFC'][index]:
+                        del myvnf['vnf']['VNFC'][index]["VNFC image"]
                     index=index+1
             if args.image_checksum:
                 index=0
