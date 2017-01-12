@@ -32,8 +32,14 @@ import os
 import traceback
 import itertools
 import requests
+import ssl
+import atexit
+
+from pyVmomi import vim, vmodl
+from pyVim.connect import SmartConnect, Disconnect
 
 from xml.etree import ElementTree as XmlElementTree
+from lxml import etree as lxmlElementTree
 
 import yaml
 from pyvcloud import Http
@@ -50,21 +56,37 @@ from pyvcloud.schema.vcd.v1_5.schemas.admin.vCloudEntities import TasksInProgres
 
 import logging
 import json
-import vimconn
 import time
 import uuid
 import httplib
+import hashlib
+import socket
+import struct
+import netaddr
 
 # global variable for vcd connector type
 STANDALONE = 'standalone'
 
-# global variable for number of retry
-DELETE_INSTANCE_RETRY = 3
+# key for flavor dicts
+FLAVOR_RAM_KEY = 'ram'
+FLAVOR_VCPUS_KEY = 'vcpus'
+FLAVOR_DISK_KEY = 'disk'
+DEFAULT_IP_PROFILE = {'gateway_address':"192.168.1.1",
+                      'dhcp_count':50,
+                      'subnet_address':"192.168.1.0/24",
+                      'dhcp_enabled':True,
+                      'dhcp_start_address':"192.168.1.3",
+                      'ip_version':"IPv4",
+                      'dns_address':"192.168.1.2"
+                      }
+# global variable for wait time
+INTERVAL_TIME = 5
+MAX_WAIT_TIME = 1800
 
 VCAVERSION = '5.9'
 
-__author__ = "Mustafa Bayramov"
-__date__ = "$26-Aug-2016 11:09:29$"
+__author__ = "Mustafa Bayramov, Arpita Kate, Sachin Bhangare"
+__date__ = "$12-Jan-2017 11:09:29$"
 __version__ = '0.1'
 
 #     -1: "Could not be created",
@@ -139,9 +161,12 @@ class vimconnector(vimconn.vimconnector):
 
         vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url,
                                       url_admin, user, passwd, log_level, config)
-        self.id = uuid
+
+        self.logger = logging.getLogger('openmano.vim.vmware')
+        self.logger.setLevel(10)
+
         self.name = name
-        self.org_name = name
+        self.id = uuid
         self.url = url
         self.url_admin = url_admin
         self.tenant_id = tenant_id
@@ -151,9 +176,17 @@ class vimconnector(vimconn.vimconnector):
         self.config = config
         self.admin_password = None
         self.admin_user = None
+        self.org_name = ""
 
-        self.logger = logging.getLogger('openmano.vim.vmware')
-        self.logger.setLevel(10)
+        if tenant_name is not None:
+            orgnameandtenant = tenant_name.split(":")
+            if len(orgnameandtenant) == 2:
+                self.tenant_name = orgnameandtenant[1]
+                self.org_name = orgnameandtenant[0]
+            else:
+                self.tenant_name = tenant_name
+        if "orgname" in config:
+            self.org_name = config['orgname']
 
         if log_level:
             self.logger.setLevel(getattr(logging, log_level))
@@ -173,8 +206,7 @@ class vimconnector(vimconn.vimconnector):
         if not self.url_admin:  # try to use normal url
             self.url_admin = self.url
 
-        logging.debug("Calling constructor with following paramters")
-        logging.debug("UUID: {} name: {} tenant_id: {} tenant name {}".format(self.id, self.name,
+        logging.debug("UUID: {} name: {} tenant_id: {} tenant name {}".format(self.id, self.org_name,
                                                                               self.tenant_id, self.tenant_name))
         logging.debug("vcd url {} vcd username: {} vcd password: {}".format(self.url, self.user, self.passwd))
         logging.debug("vcd admin username {} vcd admin passowrd {}".format(self.admin_user, self.admin_password))
@@ -184,14 +216,14 @@ class vimconnector(vimconn.vimconnector):
             self.init_organization()
 
     def __getitem__(self, index):
+        if index == 'name':
+            return self.name
         if index == 'tenant_id':
             return self.tenant_id
         if index == 'tenant_name':
             return self.tenant_name
         elif index == 'id':
             return self.id
-        elif index == 'name':
-            return self.name
         elif index == 'org_name':
             return self.org_name
         elif index == 'org_uuid':
@@ -210,21 +242,18 @@ class vimconnector(vimconn.vimconnector):
             raise KeyError("Invalid key '%s'" % str(index))
 
     def __setitem__(self, index, value):
+        if index == 'name':
+            self.name = value
         if index == 'tenant_id':
             self.tenant_id = value
         if index == 'tenant_name':
             self.tenant_name = value
         elif index == 'id':
             self.id = value
-        # we use name  = org #TODO later refactor
-        elif index == 'name':
-            self.name = value
-            self.org = value
         elif index == 'org_name':
             self.org_name = value
-            self.name = value
         elif index == 'org_uuid':
-            self.org_name = value
+            self.org_uuid = value
         elif index == 'user':
             self.user = value
         elif index == 'passwd':
@@ -245,7 +274,7 @@ class vimconnector(vimconn.vimconnector):
                 The return vca object that letter can be used to connect to vcloud direct as admin for provider vdc
         """
 
-        self.logger.debug("Logging in to a vca {} as admin.".format(self.name))
+        self.logger.debug("Logging in to a vca {} as admin.".format(self.org_name))
 
         vca_admin = VCA(host=self.url,
                         username=self.admin_user,
@@ -272,7 +301,9 @@ class vimconnector(vimconn.vimconnector):
         """
 
         try:
-            self.logger.debug("Logging in to a vca {} as {} to datacenter {}.".format(self.name, self.user, self.name))
+            self.logger.debug("Logging in to a vca {} as {} to datacenter {}.".format(self.org_name,
+                                                                                      self.user,
+                                                                                      self.org_name))
             vca = VCA(host=self.url,
                       username=self.user,
                       service_type=STANDALONE,
@@ -280,16 +311,17 @@ class vimconnector(vimconn.vimconnector):
                       verify=False,
                       log=False)
 
-            result = vca.login(password=self.passwd, org=self.name)
+            result = vca.login(password=self.passwd, org=self.org_name)
             if not result:
                 raise vimconn.vimconnConnectionException("Can't connect to a vCloud director as: {}".format(self.user))
-            result = vca.login(token=vca.token, org=self.name, org_url=vca.vcloud_session.org_url)
+            result = vca.login(token=vca.token, org=self.org_name, org_url=vca.vcloud_session.org_url)
             if result is True:
                 self.logger.info(
-                    "Successfully logged to a vcloud direct org: {} as user: {}".format(self.name, self.user))
+                    "Successfully logged to a vcloud direct org: {} as user: {}".format(self.org_name, self.user))
 
         except:
-            raise vimconn.vimconnConnectionException("Can't connect to a vCloud director as: {}".format(self.user))
+            raise vimconn.vimconnConnectionException("Can't connect to a vCloud director org: "
+                                                     "{} as user: {}".format(self.org_name, self.user))
 
         return vca
 
@@ -313,7 +345,6 @@ class vimconnector(vimconn.vimconnector):
                         self.org_uuid = org
                         self.logger.debug("Setting organization UUID {}".format(self.org_uuid))
                         break
-
                 else:
                     raise vimconn.vimconnException("Vcloud director organization {} not found".format(self.org_name))
 
@@ -328,7 +359,7 @@ class vimconnector(vimconn.vimconnector):
                         if vdcs_dict[vdc] == self.tenant_name:
                             self.tenant_id = vdc
                             self.logger.debug("Setting vdc uuid {} for organization UUID {}".format(self.tenant_id,
-                                                                                                    self.name))
+                                                                                                    self.org_name))
                             break
                     else:
                         raise vimconn.vimconnException("Tenant name indicated but not present in vcloud director.")
@@ -339,7 +370,7 @@ class vimconnector(vimconn.vimconnector):
                             if vdc == self.tenant_id:
                                 self.tenant_name = vdcs_dict[vdc]
                                 self.logger.debug("Setting vdc uuid {} for organization UUID {}".format(self.tenant_id,
-                                                                                                        self.name))
+                                                                                                        self.org_name))
                                 break
                         else:
                             raise vimconn.vimconnException("Tenant id indicated but not present in vcloud director")
@@ -410,19 +441,20 @@ class vimconnector(vimconn.vimconnector):
     def new_network(self, net_name, net_type, ip_profile=None, shared=False):
         """Adds a tenant network to VIM
             net_name is the name
-            net_type can be 'bridge','data'.'ptp'.  TODO: this need to be revised
+            net_type can be 'bridge','data'.'ptp'.
             ip_profile is a dict containing the IP parameters of the network
             shared is a boolean
         Returns the network identifier"""
 
-        self.logger.debug(
-            "new_network tenant {} net_type {} ip_profile {} shared {}".format(net_name, net_type, ip_profile, shared))
+        self.logger.debug("new_network tenant {} net_type {} ip_profile {} shared {}"
+                          .format(net_name, net_type, ip_profile, shared))
 
         isshared = 'false'
         if shared:
             isshared = 'true'
 
-        network_uuid = self.create_network(network_name=net_name, isshared=isshared)
+        network_uuid = self.create_network(network_name=net_name, net_type=net_type,
+                                           ip_profile=ip_profile, isshared=isshared)
         if network_uuid is not None:
             return network_uuid
         else:
@@ -435,12 +467,18 @@ class vimconnector(vimconn.vimconnector):
                 The return vca object that letter can be used to connect to vcloud direct as admin
         """
 
-        self.logger.debug("get_vcd_network_list(): retrieving network list for vcd")
+        self.logger.debug("get_vcd_network_list(): retrieving network list for vcd {}".format(self.tenant_name))
         vca = self.connect()
         if not vca:
             raise vimconn.vimconnConnectionException("self.connect() is failed.")
 
+        if not self.tenant_name:
+            raise vimconn.vimconnConnectionException("Tenant name is empty.")
+
         vdc = vca.get_vdc(self.tenant_name)
+        if vdc is None:
+            raise vimconn.vimconnConnectionException("Can't retrieve information for a VDC {}".format(self.tenant_name))
+
         vdc_uuid = vdc.get_id().split(":")[3]
         networks = vca.get_networks(vdc.get_name())
         network_list = []
@@ -488,13 +526,19 @@ class vimconnector(vimconn.vimconnector):
             List can be empty
         """
 
+        self.logger.debug("get_vcd_network_list(): retrieving network list for vcd {}".format(self.tenant_name))
         vca = self.connect()
         if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed")
+            raise vimconn.vimconnConnectionException("self.connect() is failed.")
+
+        if not self.tenant_name:
+            raise vimconn.vimconnConnectionException("Tenant name is empty.")
 
         vdc = vca.get_vdc(self.tenant_name)
-        vdcid = vdc.get_id().split(":")[3]
+        if vdc is None:
+            raise vimconn.vimconnConnectionException("Can't retrieve information for a VDC {}.".format(self.tenant_name))
 
+        vdcid = vdc.get_id().split(":")[3]
         networks = vca.get_networks(vdc.get_name())
         network_list = []
 
@@ -620,7 +664,7 @@ class vimconnector(vimconn.vimconnector):
                 errormsg = ''
                 vcd_network = self.get_vcd_network(network_uuid=net)
                 if vcd_network is not None and vcd_network:
-                    if vcd_network['status'] == 1:
+                    if vcd_network['status'] == '1':
                         status = 'ACTIVE'
                     else:
                         status = 'DOWN'
@@ -629,7 +673,7 @@ class vimconnector(vimconn.vimconnector):
                     errormsg = 'Network not found.'
 
                 dict_entry[net] = {'status': status, 'error_msg': errormsg,
-                                   'vm_info': yaml.safe_dump(vcd_network)}
+                                   'vim_info': yaml.safe_dump(vcd_network)}
         except:
             self.logger.debug("Error in refresh_nets_status")
             self.logger.debug(traceback.format_exc())
@@ -661,15 +705,37 @@ class vimconnector(vimconn.vimconnector):
                             vpci: requested virtual PCI address
                 disk: disk size
                 is_public:
-
-
-
                  #TODO to concrete
         Returns the flavor identifier"""
 
         # generate a new uuid put to internal dict and return it.
+        self.logger.debug("Creating new flavor - flavor_data: {}".format(flavor_data))
+        new_flavor=flavor_data
+        ram = flavor_data.get(FLAVOR_RAM_KEY, 1024)
+        cpu = flavor_data.get(FLAVOR_VCPUS_KEY, 1)
+        disk = flavor_data.get(FLAVOR_DISK_KEY, 1)
+
+        extended_flv = flavor_data.get("extended")
+        if extended_flv:
+            numas=extended_flv.get("numas")
+            if numas:
+                for numa in numas:
+                    #overwrite ram and vcpus
+                    ram = numa['memory']*1024
+                    if 'paired-threads' in numa:
+                        cpu = numa['paired-threads']*2
+                    elif 'cores' in numa:
+                        cpu = numa['cores']
+                    elif 'threads' in numa:
+                        cpu = numa['threads']
+
+        new_flavor[FLAVOR_RAM_KEY] = ram
+        new_flavor[FLAVOR_VCPUS_KEY] = cpu
+        new_flavor[FLAVOR_DISK_KEY] = disk
+        # generate a new uuid put to internal dict and return it.
         flavor_id = uuid.uuid4()
-        flavorlist[str(flavor_id)] = flavor_data
+        flavorlist[str(flavor_id)] = new_flavor
+        self.logger.debug("Created flavor - {} : {}".format(flavor_id, new_flavor))
 
         return str(flavor_id)
 
@@ -765,8 +831,8 @@ class vimconnector(vimconn.vimconnector):
                                        link.get_rel() == 'add', catalog.get_Link())
             assert len(link) == 1
             data = """
-            <UploadVAppTemplateParams name="%s Template" xmlns="http://www.vmware.com/vcloud/v1.5" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"><Description>%s vApp Template</Description></UploadVAppTemplateParams>
-            """ % (escape(image_name), escape(description))
+            <UploadVAppTemplateParams name="%s" xmlns="http://www.vmware.com/vcloud/v1.5" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"><Description>%s vApp Template</Description></UploadVAppTemplateParams>
+            """ % (escape(catalog_name), escape(description))
             headers = vca.vcloud_session.get_vcloud_headers()
             headers['Content-Type'] = 'application/vnd.vmware.vcloud.uploadVAppTemplateParams+xml'
             response = Http.post(link[0].get_href(), headers=headers, data=data, verify=vca.verify, logger=self.logger)
@@ -798,8 +864,7 @@ class vimconnector(vimconn.vimconnector):
                 # TODO fix this with aync block
                 time.sleep(5)
 
-                self.logger.debug("Failed create vApp template for catalog name {} and image {}".
-                                  format(catalog_name, media_file_name))
+                self.logger.debug("vApp template for catalog name {} and image {}".format(catalog_name, media_file_name))
 
                 # uploading VMDK file
                 # check status of OVF upload and upload remaining files.
@@ -864,6 +929,7 @@ class vimconnector(vimconn.vimconnector):
                             f.close()
                             if progress:
                                 progress_bar.finish()
+                            time.sleep(10)
                     return True
                 else:
                     self.logger.debug("Failed retrieve vApp template for catalog name {} for OVF {}".
@@ -950,7 +1016,7 @@ class vimconnector(vimconn.vimconnector):
         if not vca:
             raise vimconn.vimconnConnectionException("self.connect() is failed.")
 
-        if path is None:
+        if not path:
             raise vimconn.vimconnException("Image path can't be None.")
 
         if not os.path.isfile(path):
@@ -966,16 +1032,19 @@ class vimconnector(vimconn.vimconnector):
         if file_extension != '.ovf':
             self.logger.debug("Wrong file extension {} connector support only OVF container.".format(file_extension))
             raise vimconn.vimconnException("Wrong container.  vCloud director supports only OVF.")
+
         catalog_name = os.path.splitext(filename)[0]
-        self.logger.debug("File name {} Catalog Name {} file path {}".format(filename, catalog_name, path))
+        catalog_md5_name = hashlib.md5(path).hexdigest()
+        self.logger.debug("File name {} Catalog Name {} file path {} "
+                          "vdc catalog name {}".format(filename, catalog_name, path, catalog_md5_name))
 
         catalogs = vca.get_catalogs()
         if len(catalogs) == 0:
             self.logger.info("Creating a new catalog entry {} in vcloud director".format(catalog_name))
-            result = self.create_vimcatalog(vca, catalog_name)
+            result = self.create_vimcatalog(vca, catalog_md5_name)
             if not result:
-                raise vimconn.vimconnException("Failed create new catalog {} ".format(catalog_name))
-            result = self.upload_vimimage(vca=vca, catalog_name=catalog_name,
+                raise vimconn.vimconnException("Failed create new catalog {} ".format(catalog_md5_name))
+            result = self.upload_vimimage(vca=vca, catalog_name=catalog_md5_name,
                                           media_name=filename, medial_file_name=path, progress=progress)
             if not result:
                 raise vimconn.vimconnException("Failed create vApp template for catalog {} ".format(catalog_name))
@@ -984,25 +1053,24 @@ class vimconnector(vimconn.vimconnector):
             for catalog in catalogs:
                 # search for existing catalog if we find same name we return ID
                 # TODO optimize this
-                if catalog.name == catalog_name:
-                    self.logger.debug("Found existing catalog entry for {} catalog id {}".format(catalog_name,
-                                                                                                 self.get_catalogid(
-                                                                                                     catalog_name,
-                                                                                                     catalogs)))
-                    return self.get_catalogid(catalog_name, vca.get_catalogs())
+                if catalog.name == catalog_md5_name:
+                    self.logger.debug("Found existing catalog entry for {} "
+                                      "catalog id {}".format(catalog_name,
+                                                             self.get_catalogid(catalog_md5_name, catalogs)))
+                    return self.get_catalogid(catalog_md5_name, vca.get_catalogs())
 
         # if we didn't find existing catalog we create a new one and upload image.
-        self.logger.debug("Creating new catalog entry".format(catalog_name))
-        result = self.create_vimcatalog(vca, catalog_name)
+        self.logger.debug("Creating new catalog entry {} - {}".format(catalog_name, catalog_md5_name))
+        result = self.create_vimcatalog(vca, catalog_md5_name)
         if not result:
-            raise vimconn.vimconnException("Failed create new catalog {} ".format(catalog_name))
+            raise vimconn.vimconnException("Failed create new catalog {} ".format(catalog_md5_name))
 
-        result = self.upload_vimimage(vca=vca, catalog_name=catalog_name,
+        result = self.upload_vimimage(vca=vca, catalog_name=catalog_md5_name,
                                       media_name=filename, medial_file_name=path, progress=progress)
         if not result:
-            raise vimconn.vimconnException("Failed create vApp template for catalog {} ".format(catalog_name))
+            raise vimconn.vimconnException("Failed create vApp template for catalog {} ".format(catalog_md5_name))
 
-        return self.get_catalogid(catalog_name, vca.get_catalogs())
+        return self.get_catalogid(catalog_md5_name, vca.get_catalogs())
 
     def get_vappid(self, vdc=None, vapp_name=None):
         """ Method takes vdc object and vApp name and returns vapp uuid or None
@@ -1106,7 +1174,7 @@ class vimconnector(vimconn.vimconnector):
                 <0, error_text
         """
 
-        self.logger.info("Creating new instance for entry".format(name))
+        self.logger.info("Creating new instance for entry {}".format(name))
         self.logger.debug("desc {} boot {} image_id: {} flavor_id: {} net_list: {} cloud_config {}".
                           format(description, start, image_id, flavor_id, net_list, cloud_config))
         vca = self.connect()
@@ -1115,7 +1183,7 @@ class vimconnector(vimconn.vimconnector):
 
         #new vm name = vmname + tenant_id + uuid
         new_vm_name = [name, '-', str(uuid.uuid4())]
-        full_name = ''.join(new_vm_name)
+        vmname_andid = ''.join(new_vm_name)
 
         # if vm already deployed we return existing uuid
         # vapp_uuid = self.get_vappid(vca.get_vdc(self.tenant_name), name)
@@ -1130,103 +1198,210 @@ class vimconnector(vimconn.vimconnector):
         catalogs = vca.get_catalogs()
         if catalogs is None:
             raise vimconn.vimconnNotFoundException(
-                "new_vminstance(): Failed create vApp {}:  ""(Failed retrieve catalog information)".format(name))
+                "new_vminstance(): Failed create vApp {}: (Failed retrieve catalogs list)".format(name))
 
+        catalog_hash_name = self.get_catalogbyid(catalog_uuid=image_id, catalogs=catalogs)
+        if catalog_hash_name:
+            self.logger.info("Found catalog entry {} for image id {}".format(catalog_hash_name, image_id))
+        else:
+            raise vimconn.vimconnNotFoundException("new_vminstance(): Failed create vApp {}: "
+                                                   "(Failed retrieve catalog information {})".format(name, image_id))
+
+
+        # Set vCPU and Memory based on flavor.
+        #
         vm_cpus = None
         vm_memory = None
+        vm_disk = None
+        pci_devices_info = []
         if flavor_id is not None:
-            flavor = flavorlist[flavor_id]
-            if flavor is None:
-                raise vimconn.vimconnNotFoundException(
-                    "new_vminstance(): Failed create vApp {}: (Failed retrieve flavor information)".format(name))
+            if flavor_id not in flavorlist:
+                raise vimconn.vimconnNotFoundException("new_vminstance(): Failed create vApp {}: "
+                                                       "Failed retrieve flavor information "
+                                                       "flavor id {}".format(name, flavor_id))
             else:
                 try:
-                    vm_cpus = flavor['vcpus']
-                    vm_memory = flavor['ram']
+                    flavor = flavorlist[flavor_id]
+                    vm_cpus = flavor[FLAVOR_VCPUS_KEY]
+                    vm_memory = flavor[FLAVOR_RAM_KEY]
+                    vm_disk = flavor[FLAVOR_DISK_KEY]
+                    extended = flavor.get("extended", None)
+                    if extended:
+                        numas=extended.get("numas", None)
+                        if numas:
+                            for numa in numas:
+                                for interface in numa.get("interfaces",() ):
+                                    if interface["dedicated"].strip()=="yes":
+                                        pci_devices_info.append(interface)
                 except KeyError:
                     raise vimconn.vimconnException("Corrupted flavor. {}".format(flavor_id))
 
         # image upload creates template name as catalog name space Template.
-        templateName = self.get_catalogbyid(catalog_uuid=image_id, catalogs=catalogs) + ' Template'
+        templateName = self.get_catalogbyid(catalog_uuid=image_id, catalogs=catalogs)
         power_on = 'false'
         if start:
             power_on = 'true'
 
         # client must provide at least one entry in net_list if not we report error
-        primary_net_name = None
+        #If net type is mgmt, then configure it as primary net & use its NIC index as primary NIC
+        #If no mgmt, then the 1st NN in netlist is considered as primary net. 
+        primary_net = None
+        primary_netname = None
+        network_mode = 'bridged'
         if net_list is not None and len(net_list) > 0:
-            primary_net = net_list[0]
+            for net in net_list:
+                if 'use' in net and net['use'] == 'mgmt':
+                    primary_net = net
             if primary_net is None:
-                raise vimconn.vimconnUnexpectedResponse("new_vminstance(): Failed network list is empty.".format(name))
-            else:
-                try:
-                    primary_net_id = primary_net['net_id']
-                    primary_net_name = self.get_network_name_by_id(primary_net_id)
-                    network_mode = primary_net['use']
-                except KeyError:
-                    raise vimconn.vimconnException("Corrupted flavor. {}".format(primary_net))
+                primary_net = net_list[0]
+
+            try:
+                primary_net_id = primary_net['net_id']
+                network_dict = self.get_vcd_network(network_uuid=primary_net_id)
+                if 'name' in network_dict:
+                    primary_netname = network_dict['name']
+
+            except KeyError:
+                raise vimconn.vimconnException("Corrupted flavor. {}".format(primary_net))
+        else:
+            raise vimconn.vimconnUnexpectedResponse("new_vminstance(): Failed network list is empty.".format(name))
 
         # use: 'data', 'bridge', 'mgmt'
         # create vApp.  Set vcpu and ram based on flavor id.
-        vapptask = vca.create_vapp(self.tenant_name, full_name, templateName,
+        vapptask = vca.create_vapp(self.tenant_name, vmname_andid, templateName,
                                    self.get_catalogbyid(image_id, catalogs),
-                                   network_name=primary_net_name,  # can be None if net_list None
-                                   network_mode='bridged',
-                                   vm_name=full_name,
+                                   network_name=None,  # None while creating vapp
+                                   network_mode=network_mode,
+                                   vm_name=vmname_andid,
                                    vm_cpus=vm_cpus,  # can be None if flavor is None
                                    vm_memory=vm_memory)  # can be None if flavor is None
 
         if vapptask is None or vapptask is False:
-            raise vimconn.vimconnUnexpectedResponse("new_vminstance(): failed deploy vApp {}".format(full_name))
+            raise vimconn.vimconnUnexpectedResponse("new_vminstance(): failed deploy vApp {}".format(vmname_andid))
         if type(vapptask) is VappTask:
             vca.block_until_completed(vapptask)
 
         # we should have now vapp in undeployed state.
-        vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), full_name)
+        vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vmname_andid)
+        vapp_uuid = self.get_vappid(vca.get_vdc(self.tenant_name), vmname_andid)
         if vapp is None:
             raise vimconn.vimconnUnexpectedResponse(
-                "new_vminstance(): Failed failed retrieve vApp {} after we deployed".format(full_name))
+                "new_vminstance(): Failed failed retrieve vApp {} after we deployed".format(
+                                                                            vmname_andid))
 
-        # add first NIC
+        #Add PCI passthrough configrations
+        PCI_devices_status = False
+        vm_obj = None
+        si = None
+        if len(pci_devices_info) > 0:
+            self.logger.info("Need to add PCI devices {} into VM {}".format(pci_devices_info,
+                                                                        vmname_andid ))
+            PCI_devices_status, vm_obj, vcenter_conect = self.add_pci_devices(vapp_uuid,
+                                                                            pci_devices_info,
+                                                                            vmname_andid)
+            if PCI_devices_status:
+                self.logger.info("Added PCI devives {} to VM {}".format(
+                                                            pci_devices_info,
+                                                            vmname_andid)
+                                 )
+            else:
+                self.logger.info("Fail to add PCI devives {} to VM {}".format(
+                                                            pci_devices_info,
+                                                            vmname_andid)
+                                 )
+        # add vm disk
+        if vm_disk:
+            #Assuming there is only one disk in ovf and fast provisioning in organization vDC is disabled
+            result = self.modify_vm_disk(vapp_uuid, vm_disk)
+            if result :
+                self.logger.debug("Modified Disk size of VM {} ".format(vmname_andid))
+
+        # add NICs & connect to networks in netlist
         try:
+            self.logger.info("Request to connect VM to a network: {}".format(net_list))
             nicIndex = 0
+            primary_nic_index = 0
             for net in net_list:
                 # openmano uses network id in UUID format.
                 # vCloud Director need a name so we do reverse operation from provided UUID we lookup a name
+                # [{'use': 'bridge', 'net_id': '527d4bf7-566a-41e7-a9e7-ca3cdd9cef4f', 'type': 'virtual',
+                #   'vpci': '0000:00:11.0', 'name': 'eth0'}]
+
+                if 'net_id' not in net:
+                    continue
+
                 interface_net_id = net['net_id']
-                interface_net_name = self.get_network_name_by_id(interface_net_id)
+                interface_net_name = self.get_network_name_by_id(network_uuid=interface_net_id)
                 interface_network_mode = net['use']
 
-                if primary_net_name is not None:
+                if interface_network_mode == 'mgmt':
+                    primary_nic_index = nicIndex
+
+                """- POOL (A static IP address is allocated automatically from a pool of addresses.)
+                                  - DHCP (The IP address is obtained from a DHCP service.)
+                                  - MANUAL (The IP address is assigned manually in the IpAddress element.)
+                                  - NONE (No IP addressing mode specified.)"""
+
+                if primary_netname is not None:
                     nets = filter(lambda n: n.name == interface_net_name, vca.get_networks(self.tenant_name))
                     if len(nets) == 1:
+                        self.logger.info("new_vminstance(): Found requested network: {}".format(nets[0].name))
                         task = vapp.connect_to_network(nets[0].name, nets[0].href)
                         if type(task) is GenericTask:
                             vca.block_until_completed(task)
-                        # connect network to VM
-                        # TODO figure out mapping between openmano representation to vCloud director.
-                        # one idea use first nic as management DHCP all remaining in bridge mode
-                        task = vapp.connect_vms(nets[0].name, connection_index=nicIndex,
-                                                connections_primary_index=nicIndex,
+                        # connect network to VM - with all DHCP by default
+                        self.logger.info("new_vminstance(): Connecting VM to a network {}".format(nets[0].name))
+                        task = vapp.connect_vms(nets[0].name,
+                                                connection_index=nicIndex,
+                                                connections_primary_index=primary_nic_index,
                                                 ip_allocation_mode='DHCP')
                         if type(task) is GenericTask:
                             vca.block_until_completed(task)
-            nicIndex += 1
+                nicIndex += 1
         except KeyError:
             # it might be a case if specific mandatory entry in dict is empty
             self.logger.debug("Key error {}".format(KeyError.message))
             raise vimconn.vimconnUnexpectedResponse("new_vminstance(): Failed create new vm instance {}".format(name))
 
         # deploy and power on vm
-        task = vapp.poweron()
-        if type(task) is TaskType:
-            vca.block_until_completed(task)
-        deploytask = vapp.deploy(powerOn='True')
-        if type(task) is TaskType:
+        self.logger.debug("new_vminstance(): Deploying vApp {} ".format(name))
+        deploytask = vapp.deploy(powerOn=False)
+        if type(deploytask) is GenericTask:
             vca.block_until_completed(deploytask)
 
+        # If VM has PCI devices reserve memory for VM
+        if PCI_devices_status and vm_obj and vcenter_conect:
+            memReserve = vm_obj.config.hardware.memoryMB
+            spec = vim.vm.ConfigSpec()
+            spec.memoryAllocation = vim.ResourceAllocationInfo(reservation=memReserve)
+            task = vm_obj.ReconfigVM_Task(spec=spec)
+            if task:
+                result = self.wait_for_vcenter_task(task, vcenter_conect)
+                self.logger.info("Reserved memmoery {} MB for "\
+                                 "VM VM status: {}".format(str(memReserve),result))
+            else:
+                self.logger.info("Fail to reserved memmoery {} to VM {}".format(
+                                                            str(memReserve),str(vm_obj)))
+
+        self.logger.debug("new_vminstance(): power on vApp {} ".format(name))
+        poweron_task = vapp.poweron()
+        if type(poweron_task) is GenericTask:
+            vca.block_until_completed(poweron_task)
+
         # check if vApp deployed and if that the case return vApp UUID otherwise -1
-        vapp_uuid = self.get_vappid(vca.get_vdc(self.tenant_name), full_name)
+        wait_time = 0
+        vapp_uuid = None
+        while wait_time <= MAX_WAIT_TIME:
+            vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vmname_andid)
+            if vapp and vapp.me.deployed:
+                vapp_uuid = self.get_vappid(vca.get_vdc(self.tenant_name), vmname_andid)
+                break
+            else:
+                self.logger.debug("new_vminstance(): Wait for vApp {} to deploy".format(name))
+                time.sleep(INTERVAL_TIME)
+
+            wait_time +=INTERVAL_TIME
+
         if vapp_uuid is not None:
             return vapp_uuid
         else:
@@ -1320,47 +1495,97 @@ class vimconnector(vimconn.vimconnector):
                 self.logger.info("Deleting vApp {} and UUID {}".format(vapp_name, vm__vim_uuid))
 
             # Delete vApp and wait for status change if task executed and vApp is None.
-            # We successfully delete vApp from vCloud
             vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
-            # poweroff vapp / undeploy and delete
-            power_off_task = vapp.poweroff()
-            if type(power_off_task) is GenericTask:
-                vca.block_until_completed(power_off_task)
-            else:
-                if not power_off_task:
-                    self.logger.debug("delete_vminstance(): Failed power off VM uuid {} ".format(vm__vim_uuid))
 
-            # refresh status
-            if vapp.me.deployed:
-                undeploy_task = vapp.undeploy()
-                if type(undeploy_task) is GenericTask:
-                    retry = 0
-                    while retry <= DELETE_INSTANCE_RETRY:
-                        result = vca.block_until_completed(undeploy_task)
-                        if result:
-                            break
-                        retry += 1
-                else:
-                    return -1
+            if vapp:
+                if vapp.me.deployed:
+                    self.logger.info("Powering off vApp {}".format(vapp_name))
+                    #Power off vApp
+                    powered_off = False
+                    wait_time = 0
+                    while wait_time <= MAX_WAIT_TIME:
+                        vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
+                        if not vapp:
+                            self.logger.debug("delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
+                            return -1, "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid)
 
-            # delete vapp
-            vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
-            if vapp is not None:
-                delete_task = vapp.delete()
-                retry = 0
-                while retry <= DELETE_INSTANCE_RETRY:
-                    task = vapp.delete()
-                    if type(task) is GenericTask:
-                        vca.block_until_completed(delete_task)
-                    if not delete_task:
+                        power_off_task = vapp.poweroff()
+                        if type(power_off_task) is GenericTask:
+                            result = vca.block_until_completed(power_off_task)
+                            if result:
+                                powered_off = True
+                                break
+                        else:
+                            self.logger.info("Wait for vApp {} to power off".format(vapp_name))
+                            time.sleep(INTERVAL_TIME)
+
+                        wait_time +=INTERVAL_TIME
+                    if not powered_off:
+                        self.logger.debug("delete_vminstance(): Failed to power off VM instance {} ".format(vm__vim_uuid))
+                    else:
+                        self.logger.info("delete_vminstance(): Powered off VM instance {} ".format(vm__vim_uuid))
+
+                    #Undeploy vApp
+                    self.logger.info("Undeploy vApp {}".format(vapp_name))
+                    wait_time = 0
+                    undeployed = False
+                    while wait_time <= MAX_WAIT_TIME:
+                        vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
+                        if not vapp:
+                            self.logger.debug("delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
+                            return -1, "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid)
+                        undeploy_task = vapp.undeploy(action='powerOff')
+
+                        if type(undeploy_task) is GenericTask:
+                            result = vca.block_until_completed(undeploy_task)
+                            if result:
+                                undeployed = True
+                                break
+                        else:
+                            self.logger.debug("Wait for vApp {} to undeploy".format(vapp_name))
+                            time.sleep(INTERVAL_TIME)
+
+                        wait_time +=INTERVAL_TIME
+
+                    if not undeployed:
+                        self.logger.debug("delete_vminstance(): Failed to undeploy vApp {} ".format(vm__vim_uuid)) 
+
+                # delete vapp
+                self.logger.info("Start deletion of vApp {} ".format(vapp_name))
+                vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
+
+                if vapp is not None:
+                    wait_time = 0
+                    result = False
+
+                    while wait_time <= MAX_WAIT_TIME:
+                        vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
+                        if not vapp:
+                            self.logger.debug("delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
+                            return -1, "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid)
+
+                        delete_task = vapp.delete()
+
+                        if type(delete_task) is GenericTask:
+                            vca.block_until_completed(delete_task)
+                            result = vca.block_until_completed(delete_task)
+                            if result:
+                                break
+                        else:
+                            self.logger.debug("Wait for vApp {} to delete".format(vapp_name))
+                            time.sleep(INTERVAL_TIME)
+
+                        wait_time +=INTERVAL_TIME
+
+                    if not result:
                         self.logger.debug("delete_vminstance(): Failed delete uuid {} ".format(vm__vim_uuid))
-                    retry += 1
 
         except:
             self.logger.debug(traceback.format_exc())
             raise vimconn.vimconnException("delete_vminstance(): Failed delete vm instance {}".format(vm__vim_uuid))
 
         if vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name) is None:
+            self.logger.info("Deleted vm instance {} sccessfully".format(vm__vim_uuid))
             return vm__vim_uuid
         else:
             raise vimconn.vimconnException("delete_vminstance(): Failed delete vm instance {}".format(vm__vim_uuid))
@@ -1406,10 +1631,12 @@ class vimconnector(vimconn.vimconnector):
                 the_vapp = vca.get_vapp(vdc, vmname)
                 vm_info = the_vapp.get_vms_details()
                 vm_status = vm_info[0]['status']
+                vm_pci_details = self.get_vm_pci_details(vmuuid)
+                vm_info[0].update(vm_pci_details)
 
                 vm_dict = {'status': vcdStatusCode2manoFormat[the_vapp.me.get_status()],
                            'error_msg': vcdStatusCode2manoFormat[the_vapp.me.get_status()],
-                           'vim_info': yaml.safe_dump(the_vapp.get_vms_details()), 'interfaces': []}
+                           'vim_info': yaml.safe_dump(vm_info), 'interfaces': []}
 
                 # get networks
                 try:
@@ -1418,8 +1645,8 @@ class vimconnector(vimconn.vimconnector):
                         for vm_network in vapp_network:
                             if vm_network['name'] == vmname:
                                 interface = {"mac_address": vm_network['mac'],
-                                             "vim_net_id": self.get_network_name_by_id(vm_network['network_name']),
-                                             "vim_interface_id": vm_network['network_name'],
+                                             "vim_net_id": self.get_network_id_by_name(vm_network['network_name']),
+                                             "vim_interface_id": self.get_network_id_by_name(vm_network['network_name']),
                                              'ip_address': vm_network['ip']}
                                 # interface['vim_info'] = yaml.safe_dump(vm_network)
                                 vm_dict["interfaces"].append(interface)
@@ -1549,11 +1776,11 @@ class vimconnector(vimconn.vimconnector):
         '''Returns the instance identifier'''
         raise vimconn.vimconnNotImplemented("Should have implemented this")
 
-    def get_network_name_by_id(self, network_name=None):
+    def get_network_name_by_id(self, network_uuid=None):
         """Method gets vcloud director network named based on supplied uuid.
 
         Args:
-            network_name: network_id
+            network_uuid: network_id
 
         Returns:
             The return network name.
@@ -1561,19 +1788,52 @@ class vimconnector(vimconn.vimconnector):
 
         vca = self.connect()
         if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed")
+            raise vimconn.vimconnConnectionException("self.connect() is failed.")
 
-        if network_name is None:
+        if not network_uuid:
             return None
 
         try:
-            org_network_dict = self.get_org(self.org_uuid)['networks']
-            for net_uuid in org_network_dict:
-                if org_network_dict[net_uuid] == network_name:
-                    return net_uuid
+            org_dict = self.get_org(self.org_uuid)
+            if 'networks' in org_dict:
+                org_network_dict = org_dict['networks']
+                for net_uuid in org_network_dict:
+                    if net_uuid == network_uuid:
+                        return org_network_dict[net_uuid]
         except:
             self.logger.debug("Exception in get_network_name_by_id")
             self.logger.debug(traceback.format_exc())
+
+        return None
+
+    def get_network_id_by_name(self, network_name=None):
+        """Method gets vcloud director network uuid based on supplied name.
+
+        Args:
+            network_name: network_name
+        Returns:
+            The return network uuid.
+            network_uuid: network_id
+        """
+
+        vca = self.connect()
+        if not vca:
+            raise vimconn.vimconnConnectionException("self.connect() is failed.")
+
+        if not network_name:
+            self.logger.debug("get_network_id_by_name() : Network name is empty")
+            return None
+
+        try:
+            org_dict = self.get_org(self.org_uuid)
+            if org_dict and 'networks' in org_dict:
+                org_network_dict = org_dict['networks']
+                for net_uuid,net_name in org_network_dict.iteritems():
+                    if net_name == network_name:
+                        return net_uuid
+
+        except KeyError as exp:
+            self.logger.debug("get_network_id_by_name() : KeyError- {} ".format(exp))
 
         return None
 
@@ -1978,12 +2238,16 @@ class vimconnector(vimconn.vimconnector):
 
         return False
 
-    def create_network(self, network_name=None, parent_network_uuid=None, isshared='true'):
+    def create_network(self, network_name=None, net_type='bridge', parent_network_uuid=None,
+                       ip_profile=None, isshared='true'):
         """
         Method create network in vCloud director
 
         Args:
             network_name - is network name to be created.
+            net_type - can be 'bridge','data','ptp','mgmt'.
+            ip_profile is a dict containing the IP parameters of the network
+            isshared - is a boolean
             parent_network_uuid - is parent provider vdc network that will be used for mapping.
             It optional attribute. by default if no parent network indicate the first available will be used.
 
@@ -1993,6 +2257,8 @@ class vimconnector(vimconn.vimconnector):
 
         new_network_name = [network_name, '-', str(uuid.uuid4())]
         content = self.create_network_rest(network_name=''.join(new_network_name),
+                                           ip_profile=ip_profile,
+                                           net_type=net_type,
                                            parent_network_uuid=parent_network_uuid,
                                            isshared=isshared)
         if content is None:
@@ -2009,12 +2275,16 @@ class vimconnector(vimconn.vimconnector):
             self.logger.debug("Failed create network {}".format(network_name))
             return None
 
-    def create_network_rest(self, network_name=None, parent_network_uuid=None, isshared='true'):
+    def create_network_rest(self, network_name=None, net_type='bridge', parent_network_uuid=None,
+                            ip_profile=None, isshared='true'):
         """
         Method create network in vCloud director
 
         Args:
             network_name - is network name to be created.
+            net_type - can be 'bridge','data','ptp','mgmt'.
+            ip_profile is a dict containing the IP parameters of the network
+            isshared - is a boolean
             parent_network_uuid - is parent provider vdc network that will be used for mapping.
             It optional attribute. by default if no parent network indicate the first available will be used.
 
@@ -2085,29 +2355,138 @@ class vimconnector(vimconn.vimconnector):
                 except:
                     return None
 
+            #Configure IP profile of the network
+            ip_profile = ip_profile if ip_profile is not None else DEFAULT_IP_PROFILE
+
+            gateway_address=ip_profile['gateway_address']
+            dhcp_count=int(ip_profile['dhcp_count'])
+            subnet_address=self.convert_cidr_to_netmask(ip_profile['subnet_address'])
+
+            if ip_profile['dhcp_enabled']==True:
+                dhcp_enabled='true'
+            else:
+                dhcp_enabled='false'
+            dhcp_start_address=ip_profile['dhcp_start_address']
+
+            #derive dhcp_end_address from dhcp_start_address & dhcp_count
+            end_ip_int = int(netaddr.IPAddress(dhcp_start_address))
+            end_ip_int += dhcp_count - 1
+            dhcp_end_address = str(netaddr.IPAddress(end_ip_int))
+
+            ip_version=ip_profile['ip_version']
+            dns_address=ip_profile['dns_address']
+
             # either use client provided UUID or search for a first available
             #  if both are not defined we return none
             if parent_network_uuid is not None:
                 url_list = [vca.host, '/api/admin/network/', parent_network_uuid]
                 add_vdc_rest_url = ''.join(url_list)
 
-            # return response.content
-            data = """ <OrgVdcNetwork name="{0:s}" xmlns="http://www.vmware.com/vcloud/v1.5">
-                            <Description>Openmano created</Description>
-                                    <Configuration>
-                                        <ParentNetwork href="{1:s}"/>
-                                        <FenceMode>{2:s}</FenceMode>
-                                    </Configuration>
-                                    <IsShared>{3:s}</IsShared>
-                        </OrgVdcNetwork> """.format(escape(network_name), available_networks, "bridged", isshared)
+            if net_type=='ptp':
+                fence_mode="isolated"
+                isshared='false'
+                is_inherited='false'
+                data = """ <OrgVdcNetwork name="{0:s}" xmlns="http://www.vmware.com/vcloud/v1.5">
+                                <Description>Openmano created</Description>
+                                        <Configuration>
+                                            <IpScopes>
+                                                <IpScope>
+                                                    <IsInherited>{1:s}</IsInherited>
+                                                    <Gateway>{2:s}</Gateway>
+                                                    <Netmask>{3:s}</Netmask>
+                                                    <Dns1>{4:s}</Dns1>
+                                                    <IsEnabled>{5:s}</IsEnabled>
+                                                    <IpRanges>
+                                                        <IpRange>
+                                                            <StartAddress>{6:s}</StartAddress>
+                                                            <EndAddress>{7:s}</EndAddress>
+                                                        </IpRange>
+                                                    </IpRanges>
+                                                </IpScope>
+                                            </IpScopes>
+                                            <FenceMode>{8:s}</FenceMode>
+                                        </Configuration>
+                                        <IsShared>{9:s}</IsShared>
+                            </OrgVdcNetwork> """.format(escape(network_name), is_inherited, gateway_address,
+                                                        subnet_address, dns_address, dhcp_enabled,
+                                                        dhcp_start_address, dhcp_end_address, fence_mode, isshared)
+
+            else:
+                fence_mode="bridged"
+                is_inherited='false'
+                data = """ <OrgVdcNetwork name="{0:s}" xmlns="http://www.vmware.com/vcloud/v1.5">
+                                <Description>Openmano created</Description>
+                                        <Configuration>
+                                            <IpScopes>
+                                                <IpScope>
+                                                    <IsInherited>{1:s}</IsInherited>
+                                                    <Gateway>{2:s}</Gateway>
+                                                    <Netmask>{3:s}</Netmask>
+                                                    <Dns1>{4:s}</Dns1>
+                                                    <IsEnabled>{5:s}</IsEnabled>
+                                                    <IpRanges>
+                                                        <IpRange>
+                                                            <StartAddress>{6:s}</StartAddress>
+                                                            <EndAddress>{7:s}</EndAddress>
+                                                        </IpRange>
+                                                    </IpRanges>
+                                                </IpScope>
+                                            </IpScopes>
+                                            <ParentNetwork href="{8:s}"/>
+                                            <FenceMode>{9:s}</FenceMode>
+                                        </Configuration>
+                                        <IsShared>{10:s}</IsShared>
+                            </OrgVdcNetwork> """.format(escape(network_name), is_inherited, gateway_address,
+                                                        subnet_address, dns_address, dhcp_enabled,
+                                                        dhcp_start_address, dhcp_end_address, available_networks,
+                                                        fence_mode, isshared)
 
             headers = vca.vcloud_session.get_vcloud_headers()
             headers['Content-Type'] = 'application/vnd.vmware.vcloud.orgVdcNetwork+xml'
-            response = Http.post(url=add_vdc_rest_url, headers=headers, data=data, verify=vca.verify, logger=vca.logger)
+            try:
+                response = Http.post(url=add_vdc_rest_url,
+                                     headers=headers,
+                                     data=data,
+                                     verify=vca.verify,
+                                     logger=vca.logger)
 
-            # if we all ok we respond with content otherwise by default None
-            if response.status_code == 201:
-                return response.content
+                if response.status_code != 201:
+                    self.logger.debug("Create Network POST REST API call failed. Return status code {}"
+                                      .format(response.status_code))
+                else:
+                    network = networkType.parseString(response.content, True)
+                    create_nw_task = network.get_Tasks().get_Task()[0]
+
+                    # if we all ok we respond with content after network creation completes
+                    # otherwise by default return None
+                    if create_nw_task is not None:
+                        self.logger.debug("Create Network REST : Waiting for Nw creation complete")
+                        status = vca.block_until_completed(create_nw_task)
+                        if status:
+                            return response.content
+                        else:
+                            self.logger.debug("create_network_rest task failed. Network Create response : {}"
+                                              .format(response.content))
+            except Exception as exp:
+                self.logger.debug("create_network_rest : Exception : {} ".format(exp))
+
+        return None
+
+    def convert_cidr_to_netmask(self, cidr_ip=None):
+        """
+        Method sets convert CIDR netmask address to normal IP format
+        Args:
+            cidr_ip : CIDR IP address
+            Returns:
+                netmask : Converted netmask
+        """
+        if cidr_ip is not None:
+            if '/' in cidr_ip:
+                network, net_bits = cidr_ip.split('/')
+                netmask = socket.inet_ntoa(struct.pack(">I", (0xffffffff << (32 - int(net_bits))) & 0xffffffff))
+            else:
+                netmask = cidr_ip
+            return netmask
         return None
 
     def get_provider_rest(self, vca=None):
@@ -2306,7 +2685,7 @@ class vimconnector(vimconn.vimconnector):
                         return response.content
         return None
 
-    def get_vapp_details_rest(self, vapp_uuid=None):
+    def get_vapp_details_rest(self, vapp_uuid=None, need_admin_access=False):
         """
         Method retrieve vapp detail from vCloud director
 
@@ -2318,8 +2697,13 @@ class vimconnector(vimconn.vimconnector):
         """
 
         parsed_respond = {}
+        vca = None
 
-        vca = self.connect()
+        if need_admin_access:
+            vca = self.connect_as_admin()
+        else:
+            vca = self.connect()
+
         if not vca:
             raise vimconn.vimconnConnectionException("self.connect() is failed")
         if vapp_uuid is None:
@@ -2327,7 +2711,8 @@ class vimconnector(vimconn.vimconnector):
 
         url_list = [vca.host, '/api/vApp/vapp-', vapp_uuid]
         get_vapp_restcall = ''.join(url_list)
-        if not (not vca.vcloud_session or not vca.vcloud_session.organization):
+
+        if vca.vcloud_session and vca.vcloud_session.organization:
             response = Http.get(url=get_vapp_restcall,
                                 headers=vca.vcloud_session.get_vcloud_headers(),
                                 verify=vca.verify,
@@ -2342,21 +2727,26 @@ class vimconnector(vimconn.vimconnector):
                 xmlroot_respond = XmlElementTree.fromstring(response.content)
                 parsed_respond['ovfDescriptorUploaded'] = xmlroot_respond.attrib['ovfDescriptorUploaded']
 
-                namespaces_ovf = {'ovf': 'http://schemas.dmtf.org/ovf/envelope/1'}
-                namespace_vmm = {'vmw': 'http://www.vmware.com/schema/ovf'}
-                namespace_vm = {'vm': 'http://www.vmware.com/vcloud/v1.5'}
+                namespaces = {"vssd":"http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData" ,
+                              'ovf': 'http://schemas.dmtf.org/ovf/envelope/1',
+                              'vmw': 'http://www.vmware.com/schema/ovf',
+                              'vm': 'http://www.vmware.com/vcloud/v1.5',
+                              'rasd':"http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData",
+                              "vmext":"http://www.vmware.com/vcloud/extension/v1.5",
+                              "xmlns":"http://www.vmware.com/vcloud/v1.5"
+                             }
 
-                created_section = xmlroot_respond.find('vm:DateCreated', namespace_vm)
+                created_section = xmlroot_respond.find('vm:DateCreated', namespaces)
                 if created_section is not None:
                     parsed_respond['created'] = created_section.text
 
-                network_section = xmlroot_respond.find('vm:NetworkConfigSection/vm:NetworkConfig', namespace_vm)
+                network_section = xmlroot_respond.find('vm:NetworkConfigSection/vm:NetworkConfig', namespaces)
                 if network_section is not None and 'networkName' in network_section.attrib:
                     parsed_respond['networkname'] = network_section.attrib['networkName']
 
                 ipscopes_section = \
                     xmlroot_respond.find('vm:NetworkConfigSection/vm:NetworkConfig/vm:Configuration/vm:IpScopes',
-                                         namespace_vm)
+                                         namespaces)
                 if ipscopes_section is not None:
                     for ipscope in ipscopes_section:
                         for scope in ipscope:
@@ -2370,14 +2760,15 @@ class vimconnector(vimconn.vimconnector):
                                 parsed_respond[tag_key] = scope.text
 
                 # parse children section for other attrib
-                children_section = xmlroot_respond.find('vm:Children/', namespace_vm)
+                children_section = xmlroot_respond.find('vm:Children/', namespaces)
                 if children_section is not None:
                     parsed_respond['name'] = children_section.attrib['name']
-                    parsed_respond['nestedHypervisorEnabled'] = children_section.attrib['nestedHypervisorEnabled']
+                    parsed_respond['nestedHypervisorEnabled'] = children_section.attrib['nestedHypervisorEnabled'] \
+                     if  "nestedHypervisorEnabled" in children_section.attrib else None
                     parsed_respond['deployed'] = children_section.attrib['deployed']
                     parsed_respond['status'] = children_section.attrib['status']
                     parsed_respond['vmuuid'] = children_section.attrib['id'].split(":")[-1]
-                    network_adapter = children_section.find('vm:NetworkConnectionSection', namespace_vm)
+                    network_adapter = children_section.find('vm:NetworkConnectionSection', namespaces)
                     nic_list = []
                     for adapters in network_adapter:
                         adapter_key = adapters.tag.split("}")[1]
@@ -2400,9 +2791,36 @@ class vimconnector(vimconn.vimconnector):
                                 parsed_respond['acquireMksTicket'] = link.attrib
 
                     parsed_respond['interfaces'] = nic_list
-            except:
-                pass
+                    vCloud_extension_section = children_section.find('xmlns:VCloudExtension', namespaces)
+                    if vCloud_extension_section is not None:
+                        vm_vcenter_info = {}
+                        vim_info = vCloud_extension_section.find('vmext:VmVimInfo', namespaces)
+                        vmext = vim_info.find('vmext:VmVimObjectRef', namespaces)
+                        if vmext is not None:
+                            vm_vcenter_info["vm_moref_id"] = vmext.find('vmext:MoRef', namespaces).text
+                            vm_vcenter_info["vim_server_href"] = vmext.find('vmext:VimServerRef', namespaces).attrib['href']
+                        parsed_respond["vm_vcenter_info"]= vm_vcenter_info
 
+                    virtual_hardware_section = children_section.find('ovf:VirtualHardwareSection', namespaces)
+                    vm_virtual_hardware_info = {}
+                    if virtual_hardware_section is not None:
+                        for item in virtual_hardware_section.iterfind('ovf:Item',namespaces):
+                            if item.find("rasd:Description",namespaces).text == "Hard disk":
+                                disk_size = item.find("rasd:HostResource" ,namespaces
+                                                ).attrib["{"+namespaces['vm']+"}capacity"]
+
+                                vm_virtual_hardware_info["disk_size"]= disk_size
+                                break
+
+                        for link in virtual_hardware_section:
+                            if link.tag.split("}")[1] == 'Link' and 'rel' in link.attrib:
+                                if link.attrib['rel'] == 'edit' and link.attrib['href'].endswith("/disks"):
+                                    vm_virtual_hardware_info["disk_edit_href"] = link.attrib['href']
+                                    break
+
+                    parsed_respond["vm_virtual_hardware"]= vm_virtual_hardware_info
+            except Exception as exp :
+                self.logger.info("Error occurred calling rest api for getting vApp details {}".format(exp))
         return parsed_respond
 
     def acuire_console(self, vm_uuid=None):
@@ -2427,3 +2845,504 @@ class vimconnector(vimconn.vimconnector):
                 return response.content
 
         return None
+
+    def modify_vm_disk(self, vapp_uuid, flavor_disk):
+        """
+        Method retrieve vm disk details
+
+        Args:
+            vapp_uuid - is vapp identifier.
+            flavor_disk - disk size as specified in VNFD (flavor)
+
+            Returns:
+                The return network uuid or return None
+        """
+        status = None
+        try:
+            #Flavor disk is in GB convert it into MB
+            flavor_disk = int(flavor_disk) * 1024
+            vm_details = self.get_vapp_details_rest(vapp_uuid)
+            if vm_details:
+                vm_name = vm_details["name"]
+                self.logger.info("VM: {} flavor_disk :{}".format(vm_name , flavor_disk))
+
+            if vm_details and "vm_virtual_hardware" in vm_details:
+                vm_disk = int(vm_details["vm_virtual_hardware"]["disk_size"])
+                disk_edit_href = vm_details["vm_virtual_hardware"]["disk_edit_href"]
+
+                self.logger.info("VM: {} VM_disk :{}".format(vm_name , vm_disk))
+
+                if flavor_disk > vm_disk:
+                    status = self.modify_vm_disk_rest(disk_edit_href ,flavor_disk)
+                    self.logger.info("Modify disk of VM {} from {} to {} MB".format(vm_name,
+                                                         vm_disk,  flavor_disk ))
+                else:
+                    status = True
+                    self.logger.info("No need to modify disk of VM {}".format(vm_name))
+
+            return status
+        except Exception as exp:
+            self.logger.info("Error occurred while modifing disk size {}".format(exp))
+
+
+    def modify_vm_disk_rest(self, disk_href , disk_size):
+        """
+        Method retrieve modify vm disk size
+
+        Args:
+            disk_href - vCD API URL to GET and PUT disk data
+            disk_size - disk size as specified in VNFD (flavor)
+
+            Returns:
+                The return network uuid or return None
+        """
+        vca = self.connect()
+        if not vca:
+            raise vimconn.vimconnConnectionException("self.connect() is failed")
+        if disk_href is None or disk_size is None:
+            return None
+
+        if vca.vcloud_session and vca.vcloud_session.organization:
+            response = Http.get(url=disk_href,
+                                headers=vca.vcloud_session.get_vcloud_headers(),
+                                verify=vca.verify,
+                                logger=vca.logger)
+
+        if response.status_code != requests.codes.ok:
+            self.logger.debug("GET REST API call {} failed. Return status code {}".format(disk_href,
+                                                                            response.status_code))
+            return None
+        try:
+            lxmlroot_respond = lxmlElementTree.fromstring(response.content)
+            namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.iteritems() if prefix}
+            namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
+
+            for item in lxmlroot_respond.iterfind('xmlns:Item',namespaces):
+                if item.find("rasd:Description",namespaces).text == "Hard disk":
+                    disk_item = item.find("rasd:HostResource" ,namespaces )
+                    if disk_item is not None:
+                        disk_item.attrib["{"+namespaces['xmlns']+"}capacity"] = str(disk_size)
+                        break
+
+            data = lxmlElementTree.tostring(lxmlroot_respond, encoding='utf8', method='xml',
+                                             xml_declaration=True)
+
+            #Send PUT request to modify disk size
+            headers = vca.vcloud_session.get_vcloud_headers()
+            headers['Content-Type'] = 'application/vnd.vmware.vcloud.rasdItemsList+xml; charset=ISO-8859-1'
+
+            response = Http.put(url=disk_href,
+                                data=data,
+                                headers=headers,
+                                verify=vca.verify, logger=self.logger)
+
+            if response.status_code != 202:
+                self.logger.debug("PUT REST API call {} failed. Return status code {}".format(disk_href,
+                                                                            response.status_code))
+            else:
+                modify_disk_task = taskType.parseString(response.content, True)
+                if type(modify_disk_task) is GenericTask:
+                    status = vca.block_until_completed(modify_disk_task)
+                    return status
+
+            return None
+
+        except Exception as exp :
+                self.logger.info("Error occurred calling rest api for modifing disk size {}".format(exp))
+                return None
+
+    def add_pci_devices(self, vapp_uuid , pci_devices , vmname_andid):
+        """
+            Method to attach pci devices to VM
+
+             Args:
+                vapp_uuid - uuid of vApp/VM
+                pci_devices - pci devices infromation as specified in VNFD (flavor)
+
+            Returns:
+                The status of add pci device task , vm object and
+                vcenter_conect object
+        """
+        vm_obj = None
+        vcenter_conect = None
+        self.logger.info("Add pci devices {} into vApp {}".format(pci_devices , vapp_uuid))
+        #Assuming password of vCenter user is same as password of vCloud user
+        vm_moref_id , vm_vcenter_host , vm_vcenter_username, vm_vcenter_port = self.get_vcenter_info_rest(vapp_uuid)
+        self.logger.info("vm_moref_id,  {} vm_vcenter_host {} vm_vcenter_username{} "\
+                         "vm_vcenter_port{}".format(
+                                            vm_moref_id, vm_vcenter_host,
+                                            vm_vcenter_username, vm_vcenter_port))
+        if vm_moref_id and vm_vcenter_host and vm_vcenter_username:
+            context = None
+            if hasattr(ssl, '_create_unverified_context'):
+                context = ssl._create_unverified_context()
+            try:
+                no_of_pci_devices = len(pci_devices)
+                if no_of_pci_devices > 0:
+                    vcenter_conect = SmartConnect(host=vm_vcenter_host, user=vm_vcenter_username,
+                                      pwd=self.passwd, port=int(vm_vcenter_port) ,
+                                      sslContext=context)
+                    atexit.register(Disconnect, vcenter_conect)
+                    content = vcenter_conect.RetrieveContent()
+
+                    #Get VM and its host
+                    host_obj, vm_obj = self.get_vm_obj(content ,vm_moref_id)
+                    self.logger.info("VM {} is currently on host {}".format(vm_obj, host_obj))
+                    if host_obj and vm_obj:
+                        #get PCI devies from host on which vapp is currently installed
+                        avilable_pci_devices = self.get_pci_devices(host_obj, no_of_pci_devices)
+
+                        if avilable_pci_devices is None:
+                            #find other hosts with active pci devices
+                            new_host_obj , avilable_pci_devices = self.get_host_and_PCIdevices(
+                                                                content,
+                                                                no_of_pci_devices
+                                                                )
+
+                            if new_host_obj is not None and avilable_pci_devices is not None and len(avilable_pci_devices)> 0:
+                                #Migrate vm to the host where PCI devices are availble
+                                self.logger.info("Relocate VM {} on new host {}".format(vm_obj, new_host_obj))
+                                task = self.relocate_vm(new_host_obj, vm_obj)
+                                if task is not None:
+                                    result = self.wait_for_vcenter_task(task, vcenter_conect)
+                                    self.logger.info("Migrate VM status: {}".format(result))
+                                    host_obj = new_host_obj
+                                else:
+                                    self.logger.info("Fail to migrate VM : {}".format(result))
+                                    raise vimconn.vimconnNotFoundException(
+                                    "Fail to migrate VM : {} to host {}".format(
+                                                    vmname_andid,
+                                                    new_host_obj)
+                                        )
+
+                        if host_obj is not None and avilable_pci_devices is not None and len(avilable_pci_devices)> 0:
+                            #Add PCI devices one by one
+                            for pci_device in avilable_pci_devices:
+                                task = self.add_pci_to_vm(host_obj, vm_obj, pci_device)
+                                if task:
+                                    status= self.wait_for_vcenter_task(task, vcenter_conect)
+                                    if status:
+                                        self.logger.info("Added PCI device {} to VM {}".format(pci_device,str(vm_obj)))
+                                else:
+                                    self.logger.info("Fail to add PCI device {} to VM {}".format(pci_device,str(vm_obj)))
+                            return True, vm_obj, vcenter_conect
+                        else:
+                            self.logger.error("Currently there is no host with"\
+                                              " {} number of avaialble PCI devices required for VM {}".format(
+                                                                            no_of_pci_devices,
+                                                                            vmname_andid)
+                                              )
+                            raise vimconn.vimconnNotFoundException(
+                                    "Currently there is no host with {} "\
+                                    "number of avaialble PCI devices required for VM {}".format(
+                                                                            no_of_pci_devices,
+                                                                            vmname_andid))
+                else:
+                    self.logger.debug("No infromation about PCI devices {} ",pci_devices)
+
+            except vmodl.MethodFault as error:
+                self.logger.error("Error occurred while adding PCI devices {} ",error)
+        return None, vm_obj, vcenter_conect
+
+    def get_vm_obj(self, content, mob_id):
+        """
+            Method to get the vsphere VM object associated with a given morf ID
+             Args:
+                vapp_uuid - uuid of vApp/VM
+                content - vCenter content object
+                mob_id - mob_id of VM
+
+            Returns:
+                    VM and host object
+        """
+        vm_obj = None
+        host_obj = None
+        try :
+            container = content.viewManager.CreateContainerView(content.rootFolder,
+                                                        [vim.VirtualMachine], True
+                                                        )
+            for vm in container.view:
+                mobID = vm._GetMoId()
+                if mobID == mob_id:
+                    vm_obj = vm
+                    host_obj = vm_obj.runtime.host
+                    break
+        except Exception as exp:
+            self.logger.error("Error occurred while finding VM object : {}".format(exp))
+        return host_obj, vm_obj
+
+    def get_pci_devices(self, host, need_devices):
+        """
+            Method to get the details of pci devices on given host
+             Args:
+                host - vSphere host object
+                need_devices - number of pci devices needed on host
+
+             Returns:
+                array of pci devices
+        """
+        all_devices = []
+        all_device_ids = []
+        used_devices_ids = []
+
+        try:
+            if host:
+                pciPassthruInfo = host.config.pciPassthruInfo
+                pciDevies = host.hardware.pciDevice
+
+            for pci_status in pciPassthruInfo:
+                if pci_status.passthruActive:
+                    for device in pciDevies:
+                        if device.id == pci_status.id:
+                            all_device_ids.append(device.id)
+                            all_devices.append(device)
+
+            #check if devices are in use
+            avalible_devices = all_devices
+            for vm in host.vm:
+                if vm.runtime.powerState == vim.VirtualMachinePowerState.poweredOn:
+                    vm_devices = vm.config.hardware.device
+                    for device in vm_devices:
+                        if type(device) is vim.vm.device.VirtualPCIPassthrough:
+                            if device.backing.id in all_device_ids:
+                                for use_device in avalible_devices:
+                                    if use_device.id == device.backing.id:
+                                        avalible_devices.remove(use_device)
+                                used_devices_ids.append(device.backing.id)
+                                self.logger.debug("Device {} from devices {}"\
+                                        "is in use".format(device.backing.id,
+                                                           device)
+                                            )
+            if len(avalible_devices) < need_devices:
+                self.logger.debug("Host {} don't have {} number of active devices".format(host,
+                                                                            need_devices))
+                self.logger.debug("found only {} devives {}".format(len(avalible_devices),
+                                                                    avalible_devices))
+                return None
+            else:
+                required_devices = avalible_devices[:need_devices]
+                self.logger.info("Found {} PCI devivces on host {} but required only {}".format(
+                                                            len(avalible_devices),
+                                                            host,
+                                                            need_devices))
+                self.logger.info("Retruning {} devices as {}".format(need_devices,
+                                                                required_devices ))
+                return required_devices
+
+        except Exception as exp:
+            self.logger.error("Error {} occurred while finding pci devices on host: {}".format(exp, host))
+
+        return None
+
+    def get_host_and_PCIdevices(self, content, need_devices):
+        """
+         Method to get the details of pci devices infromation on all hosts
+
+            Args:
+                content - vSphere host object
+                need_devices - number of pci devices needed on host
+
+            Returns:
+                 array of pci devices and host object
+        """
+        host_obj = None
+        pci_device_objs = None
+        try:
+            if content:
+                container = content.viewManager.CreateContainerView(content.rootFolder,
+                                                            [vim.HostSystem], True)
+                for host in container.view:
+                    devices = self.get_pci_devices(host, need_devices)
+                    if devices:
+                        host_obj = host
+                        pci_device_objs = devices
+                        break
+        except Exception as exp:
+            self.logger.error("Error {} occurred while finding pci devices on host: {}".format(exp, host_obj))
+
+        return host_obj,pci_device_objs
+
+    def relocate_vm(self, dest_host, vm) :
+        """
+         Method to get the relocate VM to new host
+
+            Args:
+                dest_host - vSphere host object
+                vm - vSphere VM object
+
+            Returns:
+                task object
+        """
+        task = None
+        try:
+            relocate_spec = vim.vm.RelocateSpec(host=dest_host)
+            task = vm.Relocate(relocate_spec)
+            self.logger.info("Migrating {} to destination host {}".format(vm, dest_host))
+        except Exception as exp:
+            self.logger.error("Error occurred while relocate VM {} to new host {}: {}".format(
+                                                                            dest_host, vm, exp))
+        return task
+
+    def wait_for_vcenter_task(self, task, actionName='job', hideResult=False):
+        """
+        Waits and provides updates on a vSphere task
+        """
+        while task.info.state == vim.TaskInfo.State.running:
+            time.sleep(2)
+
+        if task.info.state == vim.TaskInfo.State.success:
+            if task.info.result is not None and not hideResult:
+                self.logger.info('{} completed successfully, result: {}'.format(
+                                                            actionName,
+                                                            task.info.result))
+            else:
+                self.logger.info('Task {} completed successfully.'.format(actionName))
+        else:
+            self.logger.error('{} did not complete successfully: {} '.format(
+                                                            actionName,
+                                                            task.info.error)
+                              )
+
+        return task.info.result
+
+    def add_pci_to_vm(self,host_object, vm_object, host_pci_dev):
+        """
+         Method to add pci device in given VM
+
+            Args:
+                host_object - vSphere host object
+                vm_object - vSphere VM object
+                host_pci_dev -  host_pci_dev must be one of the devices from the
+                                host_object.hardware.pciDevice list
+                                which is configured as a PCI passthrough device
+
+            Returns:
+                task object
+        """
+        task = None
+        if vm_object and host_object and host_pci_dev:
+            try :
+                #Add PCI device to VM
+                pci_passthroughs = vm_object.environmentBrowser.QueryConfigTarget(host=None).pciPassthrough
+                systemid_by_pciid = {item.pciDevice.id: item.systemId for item in pci_passthroughs}
+
+                if host_pci_dev.id not in systemid_by_pciid:
+                    self.logger.error("Device {} is not a passthrough device ".format(host_pci_dev))
+                    return None
+
+                deviceId = hex(host_pci_dev.deviceId % 2**16).lstrip('0x')
+                backing = vim.VirtualPCIPassthroughDeviceBackingInfo(deviceId=deviceId,
+                                            id=host_pci_dev.id,
+                                            systemId=systemid_by_pciid[host_pci_dev.id],
+                                            vendorId=host_pci_dev.vendorId,
+                                            deviceName=host_pci_dev.deviceName)
+
+                hba_object = vim.VirtualPCIPassthrough(key=-100, backing=backing)
+
+                new_device_config = vim.VirtualDeviceConfigSpec(device=hba_object)
+                new_device_config.operation = "add"
+                vmConfigSpec = vim.vm.ConfigSpec()
+                vmConfigSpec.deviceChange = [new_device_config]
+
+                task = vm_object.ReconfigVM_Task(spec=vmConfigSpec)
+                self.logger.info("Adding PCI device {} into VM {} from host {} ".format(
+                                                            host_pci_dev, vm_object, host_object)
+                                )
+            except Exception as exp:
+                self.logger.error("Error occurred while adding pci devive {} to VM {}: {}".format(
+                                                                            host_pci_dev,
+                                                                            vm_object,
+                                                                             exp))
+        return task
+
+    def get_vcenter_info_rest(self , vapp_uuid):
+        """
+        https://192.169.241.105/api/admin/extension/vimServer/cc82baf9-9f80-4468-bfe9-ce42b3f9dde5
+        Method to get details of vCenter
+
+            Args:
+                vapp_uuid - uuid of vApp or VM
+
+            Returns:
+                Moref Id of VM and deails of vCenter
+        """
+        vm_moref_id = None
+        vm_vcenter = None
+        vm_vcenter_username = None
+        vm_vcenter_port = None
+
+        vm_details = self.get_vapp_details_rest(vapp_uuid, need_admin_access=True)
+        if vm_details and "vm_vcenter_info" in vm_details:
+            vm_moref_id = vm_details["vm_vcenter_info"]["vm_moref_id"]
+            vim_server_href = vm_details["vm_vcenter_info"]["vim_server_href"]
+
+            if vim_server_href:
+                vca = self.connect_as_admin()
+                if not vca:
+                    raise vimconn.vimconnConnectionException("self.connect() is failed")
+                if vim_server_href is None:
+                    self.logger.error("No url to get vcenter details")
+
+                if vca.vcloud_session and vca.vcloud_session.organization:
+                    response = Http.get(url=vim_server_href,
+                                        headers=vca.vcloud_session.get_vcloud_headers(),
+                                        verify=vca.verify,
+                                        logger=vca.logger)
+
+                if response.status_code != requests.codes.ok:
+                    self.logger.debug("GET REST API call {} failed. Return status code {}".format(vim_server_href,
+                                                                                    response.status_code))
+                try:
+                    namespaces={"vmext":"http://www.vmware.com/vcloud/extension/v1.5",
+                                "vcloud":"http://www.vmware.com/vcloud/v1.5"
+                                }
+                    xmlroot_respond = XmlElementTree.fromstring(response.content)
+                    vm_vcenter_username =  xmlroot_respond.find('vmext:Username', namespaces).text
+                    vcenter_url = xmlroot_respond.find('vmext:Url', namespaces).text
+                    vm_vcenter_port = vcenter_url.split(":")[2]
+                    vm_vcenter =  vcenter_url.split(":")[1].split("//")[1]
+
+                except Exception as exp :
+                    self.logger.info("Error occurred calling rest api for vcenter information {}".format(exp))
+
+        return vm_moref_id , vm_vcenter , vm_vcenter_username, vm_vcenter_port
+
+
+    def get_vm_pci_details(self, vmuuid):
+        """
+            Method to get VM PCI device details from vCenter
+
+            Args:
+                vm_obj - vSphere VM object
+
+            Returns:
+                dict of PCI devives attached to VM
+
+        """
+        vm_pci_devices_info = {}
+        try:
+            vm_moref_id , vm_vcenter_host , vm_vcenter_username, vm_vcenter_port = self.get_vcenter_info_rest(vmuuid)
+            if vm_moref_id and vm_vcenter_host and vm_vcenter_username:
+                context = None
+                if hasattr(ssl, '_create_unverified_context'):
+                    context = ssl._create_unverified_context()
+                vcenter_conect = SmartConnect(host=vm_vcenter_host, user=vm_vcenter_username,
+                                  pwd=self.passwd, port=int(vm_vcenter_port),
+                                  sslContext=context)
+                atexit.register(Disconnect, vcenter_conect)
+                content = vcenter_conect.RetrieveContent()
+
+                #Get VM and its host
+                host_obj, vm_obj = self.get_vm_obj(content ,vm_moref_id)
+                for device in vm_obj.config.hardware.device:
+                    if type(device) == vim.vm.device.VirtualPCIPassthrough:
+                        device_details={'devide_id':device.backing.id,
+                                        'pciSlotNumber':device.slotInfo.pciSlotNumber
+                                     }
+                        vm_pci_devices_info[device.deviceInfo.label] = device_details
+        except Exception as exp:
+            self.logger.info("Error occurred while getting PCI devices infromationn"\
+                             " for VM {} : {}".format(vm_obj,exp))
+        return vm_pci_devices_info
+
+

@@ -266,18 +266,19 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
         if return_on_error == None:
             return_on_error = True
     else:
-        if image_dict['location'] is not None:
+        if image_dict['location']:
             images = mydb.get_rows(FROM="images", WHERE={'location':image_dict['location'], 'metadata':image_dict['metadata']})
         else:
             images = mydb.get_rows(FROM="images", WHERE={'universal_name':image_dict['universal_name'], 'checksum':image_dict['checksum']})
         if len(images)>=1:
             image_mano_id = images[0]['uuid']
         else:
-            #create image
+            #create image in MANO DB
             temp_image_dict={'name':image_dict['name'],         'description':image_dict.get('description',None),
                             'location':image_dict['location'],  'metadata':image_dict.get('metadata',None),
                             'universal_name':image_dict['universal_name'] , 'checksum':image_dict['checksum']
                             }
+            #temp_image_dict['location'] = image_dict.get('new_location') if image_dict['location'] is None
             image_mano_id = mydb.new_row('images', temp_image_dict, add_uuid=True)
             rollback_list.append({"where":"mano", "what":"image","uuid":image_mano_id})
     #create image at every vim
@@ -290,30 +291,37 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
             if image_dict['location'] is not None:
                 image_vim_id = vim.get_image_id_from_path(image_dict['location'])
             else:
-                filter_dict={}
-                filter_dict['name']=image_dict['universal_name']
-                filter_dict['checksum']=image_dict['checksum']
+                filter_dict = {}
+                filter_dict['name'] = image_dict['universal_name']
+                if image_dict.get('checksum') != None:
+                    filter_dict['checksum'] = image_dict['checksum']
                 #logger.debug('>>>>>>>> Filter dict: %s', str(filter_dict))
                 vim_images = vim.get_image_list(filter_dict)
+                #logger.debug('>>>>>>>> VIM images: %s', str(vim_images))
                 if len(vim_images) > 1:
-                    raise NfvoException("More than one candidate VIM image found for filter: " + str(filter_dict), HTTP_Conflict)
+                    raise vimconn.vimconnException("More than one candidate VIM image found for filter: {}".format(str(filter_dict)), HTTP_Conflict)
                 elif len(vim_images) == 0:
-                    raise NfvoException("Image not found at VIM with filter: '%s'", str(filter_dict))
+                    raise vimconn.vimconnNotFoundException("Image not found at VIM with filter: '{}'".format(str(filter_dict)))
                 else:
-                    image_vim_id = vim_images[0].id
+                    #logger.debug('>>>>>>>> VIM image 0: %s', str(vim_images[0]))
+                    image_vim_id = vim_images[0]['id']
 
         except vimconn.vimconnNotFoundException as e:
-            #Create the image in VIM
+            #Create the image in VIM only if image_dict['location'] or image_dict['new_location'] is not None
             try: 
-                image_vim_id = vim.new_image(image_dict)
-                rollback_list.append({"where":"vim", "vim_id": vim_id, "what":"image","uuid":image_vim_id})
-                image_created="true"
+                #image_dict['location']=image_dict.get('new_location') if image_dict['location'] is None
+                if image_dict['location']:
+                    image_vim_id = vim.new_image(image_dict)
+                    rollback_list.append({"where":"vim", "vim_id": vim_id, "what":"image","uuid":image_vim_id})
+                    image_created="true"
+                else:
+                    raise vimconn.vimconnException("Cannot create image without location")
             except vimconn.vimconnException as e:
                 if return_on_error:
-                    logger.error("Error creating image at VIM: %s", str(e))
+                    logger.error("Error creating image at VIM '%s': %s", vim["name"], str(e))
                     raise
                 image_vim_id = None
-                logger.warn("Error creating image at VIM: %s", str(e))
+                logger.warn("Error creating image at VIM '%s': %s", vim["name"], str(e))
                 continue
         except vimconn.vimconnException as e:
             if return_on_error:
@@ -321,7 +329,7 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
                 raise
             logger.warn("Error contacting VIM to know if the image exists at VIM: %s", str(e))
             image_vim_id = None
-            continue    
+            continue
         #if we reach here, the image has been created or existed
         if len(image_db)==0:
             #add new vim_id at datacenters_images
@@ -365,6 +373,7 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
                     image_dict['universal_name']=device.get('image name')
                     image_dict['description']=flavor_dict['name']+str(dev_nb)+"-img"
                     image_dict['location']=device.get('image')
+                    #image_dict['new_location']=vnfc.get('image location')
                     image_dict['checksum']=device.get('image checksum')
                     image_metadata_dict = device.get('image metadata', None)
                     image_metadata_str = None
@@ -422,6 +431,7 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
                 image_dict['universal_name']=device.get('image name')
                 image_dict['description']=flavor_dict['name']+str(dev_nb)+"-img"
                 image_dict['location']=device.get('image')
+                #image_dict['new_location']=device.get('image location')
                 image_dict['checksum']=device.get('image checksum')
                 image_metadata_dict = device.get('image metadata', None)
                 image_metadata_str = None
@@ -583,6 +593,7 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
             image_dict['universal_name']=vnfc.get('image name')
             image_dict['description']=vnfc.get('image name', VNFCDict[vnfc['name']]['description'])
             image_dict['location']=vnfc.get('VNFC image')
+            #image_dict['new_location']=vnfc.get('image location')
             image_dict['checksum']=vnfc.get('image checksum')
             image_metadata_dict = vnfc.get('image metadata', None)
             image_metadata_str = None
@@ -721,6 +732,7 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
             image_dict['universal_name']=vnfc.get('image name')
             image_dict['description']=vnfc.get('image name', VNFCDict[vnfc['name']]['description'])
             image_dict['location']=vnfc.get('VNFC image')
+            #image_dict['new_location']=vnfc.get('image location')
             image_dict['checksum']=vnfc.get('image checksum')
             image_metadata_dict = vnfc.get('image metadata', None)
             image_metadata_str = None
@@ -1765,6 +1777,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                     myvims[d] = v
                     datacenter2tenant[d] = v['config']['datacenter_tenant_id']
                 scenario_vnf["datacenter"] = vnf_instance_desc["datacenter"]
+
     #0.1 parse cloud-config parameters
         cloud_config = scenarioDict.get("cloud-config", {})
         if instance_dict.get("cloud-config"):

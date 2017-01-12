@@ -69,7 +69,7 @@ vnf:
     VNFC:
     -   name:        VNF_2VMs-VM1
         description: "Dataplane VM1 with 4 threads, 2 GB hugepages, 2 SR-IOV interface"
-        image name: dataplaneVNF_2VMs-image
+        image name: linux-linux-VM-img
         disk: 10
         numas: 
         -   paired-threads: 2         # "cores", "paired-threads", "threads"
@@ -90,7 +90,7 @@ vnf:
 
     -   name:        VNF_2VMs-VM2
         description: "Dataplane VM1 with 2 threads, 2 GB hugepages, 2 SR-IOV interface"
-        image name: dataplaneVNF_2VMs-image
+        image name: linux-linux-VM-img
         disk: 10
         numas: 
         -   paired-threads: 1         # "cores", "paired-threads", "threads"

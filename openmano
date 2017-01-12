@@ -28,7 +28,7 @@ openmano client used to interact with openmano-server (openmanod)
 '''
 __author__="Alfonso Tierno, Gerardo Garcia"
 __date__ ="$09-oct-2014 09:09:48$"
-__version__="0.4.7-r511"
+__version__="0.4.8-r512"
 version_date="Oct 2016"
 
 from argcomplete.completers import FilesCompleter
@@ -251,7 +251,7 @@ def vnf_create(args):
     tenant = _get_tenant()
     myvnf = _load_file_or_yaml(args.file)
 
-    if args.name or args.description or args.image_path:
+    if args.name or args.description or args.image_path or args.image_name or args.image_checksum:
         #print args.name
         try:
             if args.name:
@@ -264,6 +264,16 @@ def vnf_create(args):
                     #print "image-path", image_path_
                     myvnf['vnf']['VNFC'][index]['VNFC image']=image_path_
                     index=index+1
+            if args.image_name:
+                index=0
+                for image_name_ in args.image_name.split(","):
+                    myvnf['vnf']['VNFC'][index]['image name']=image_name_
+                    index=index+1
+            if args.image_checksum:
+                index=0
+                for image_checksum_ in args.image_checksum.split(","):
+                    myvnf['vnf']['VNFC'][index]['image checksum']=image_checksum_
+                    index=index+1
         except (KeyError, TypeError), e:
             if str(e)=='vnf':           error_pos= "missing field 'vnf'"
             elif str(e)=='name':        error_pos= "missing field  'vnf':'name'"
@@ -271,6 +281,8 @@ def vnf_create(args):
             elif str(e)=='VNFC':        error_pos= "missing field  'vnf':'VNFC'"
             elif str(e)==str(index):    error_pos= "field  'vnf':'VNFC' must be an array"
             elif str(e)=='VNFC image':  error_pos= "missing field 'vnf':'VNFC'['VNFC image']"
+            elif str(e)=='image name':  error_pos= "missing field 'vnf':'VNFC'['image name']"
+            elif str(e)=='image checksum':  error_pos= "missing field 'vnf':'VNFC'['image checksum']"
             else:                       error_pos="wrong format"
             print "Wrong VNF descriptor: " + error_pos
             return -1 
@@ -1207,6 +1219,8 @@ if __name__=="__main__":
     vnf_create_parser.add_argument("--name", action="store", help="name of the VNF (if it exists in the VNF descriptor, it is overwritten)")
     vnf_create_parser.add_argument("--description", action="store", help="description of the VNF (if it exists in the VNF descriptor, it is overwritten)")
     vnf_create_parser.add_argument("--image-path", action="store",  help="change image path locations (overwritten)")
+    vnf_create_parser.add_argument("--image-name", action="store",  help="change image name (overwritten)")
+    vnf_create_parser.add_argument("--image-checksum", action="store",  help="change image checksum (overwritten)")
     vnf_create_parser.set_defaults(func=vnf_create)
 
     vnf_list_parser = subparsers.add_parser('vnf-list', parents=[parent_parser], help="lists information about a vnf")
