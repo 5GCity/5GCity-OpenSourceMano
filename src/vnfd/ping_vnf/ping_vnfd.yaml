@@ -17,148 +17,104 @@
 
 vnfd:vnfd-catalog:
     vnfd:vnfd:
-     -  vnfd:id: rift_ping_vnf
-        vnfd:name: ping_vnf
-        vnfd:short-name: ping_vnf
-        vnfd:logo: rift_logo.png
-        vnfd:vendor: RIFT.io
-        vnfd:version: '1.0'
-        vnfd:description: This is an example RIFT.ware VNF
-        vnfd:config-parameter:
-            vnfd:config-parameter-request:
-            -   vnfd:description: IP on which Pong service is listening
-                vnfd:name: pong_ip
-                vnfd:parameter:
-                -   vnfd:config-primitive-name-ref: set-server
-                    vnfd:config-primitive-parameter-ref: server-ip
-            -   vnfd:description: Port on which Pong service is listening
-                vnfd:name: pong_port
-                vnfd:parameter:
-                -   vnfd:config-primitive-name-ref: set-server
-                    vnfd:config-primitive-parameter-ref: server-port
-            vnfd:config-parameter-source:
-            -   vnfd:attribute: ../../../mgmt-interface, ip-address
-                vnfd:description: Management IP address
-                vnfd:name: mgmt_ip
-                vnfd:parameter:
-                -   vnfd:config-primitive-name-ref: config
-                    vnfd:config-primitive-parameter-ref: ssh-hostname
-            -   vnfd:description: SSH username
-                vnfd:name: username
-                vnfd:parameter:
-                -   vnfd:config-primitive-name-ref: config
-                    vnfd:config-primitive-parameter-ref: ssh-username
-                vnfd:value: fedora
-            -   vnfd:attribute: ../../../mgmt-interface/ssh-key, private-key-file
-                vnfd:description: SSH private key file
-                vnfd:name: ssh_key
-                vnfd:parameter:
-                -   vnfd:config-primitive-name-ref: config
-                    vnfd:config-primitive-parameter-ref: ssh-private-key
-            -   vnfd:description: Rate of packet generation
-                vnfd:name: rate
-                vnfd:parameter:
-                -   vnfd:config-primitive-name-ref: set-rate
-                    vnfd:config-primitive-parameter-ref: rate
-                vnfd:value: '5'
-        vnfd:connection-point:
-        -   vnfd:name: ping_vnfd/cp0
-            vnfd:type: VPORT
-        -   vnfd:name: ping_vnfd/cp1
-            vnfd:type: VPORT
-        vnfd:http-endpoint:
-        -   vnfd:path: api/v1/ping/stats
-            vnfd:polling_interval_secs: '2'
-            vnfd:port: '18888'
-        vnfd:mgmt-interface:
-            vnfd:dashboard-params:
-                vnfd:path: api/v1/ping/stats
-                vnfd:port: '18888'
-            vnfd:port: '18888'
-            rw-vnfd:ssh-key: 'true'
-            vnfd:vdu-id: iovdu_0
-        vnfd:monitoring-param:
-        -   vnfd:description: no of ping requests
-            vnfd:group-tag: Group1
-            vnfd:http-endpoint-ref: api/v1/ping/stats
-            vnfd:id: '1'
-            vnfd:json-query-method: NAMEKEY
-            vnfd:name: ping-request-tx-count
-            vnfd:units: packets
-            vnfd:value-type: INT
-            vnfd:widget-type: COUNTER
-        -   vnfd:description: no of ping responses
-            vnfd:group-tag: Group1
-            vnfd:http-endpoint-ref: api/v1/ping/stats
-            vnfd:id: '2'
-            vnfd:json-query-method: NAMEKEY
-            vnfd:name: ping-response-rx-count
-            vnfd:units: packets
-            vnfd:value-type: INT
-            vnfd:widget-type: COUNTER
-        vnfd:placement-groups:
-        -   vnfd:member-vdus:
-            -   vnfd:member-vdu-ref: iovdu_0
-            vnfd:name: Eris
-            vnfd:requirement: Place this VM on the Kuiper belt object Eris
-            vnfd:strategy: COLOCATION
-        vnfd:vdu:
-        -   vnfd:count: '1'
-            vnfd:external-interface:
-            -   vnfd:name: eth0
-                vnfd:virtual-interface:
-                    vnfd:type: VIRTIO
-                vnfd:vnfd-connection-point-ref: ping_vnfd/cp0
-            -   vnfd:name: eth1
-                vnfd:virtual-interface:
-                    vnfd:type: VIRTIO
-                vnfd:vnfd-connection-point-ref: ping_vnfd/cp1
-            vnfd:id: iovdu_0
-            vnfd:image: Fedora-x86_64-20-20131211.1-sda-ping.qcow2
-            vnfd:image-checksum: a6ffaa77f949a9e4ebb082c6147187cf
-            vnfd:name: iovdu_0
-            vnfd:vm-flavor:
-                vnfd:memory-mb: '512'
-                vnfd:storage-gb: '4'
-                vnfd:vcpu-count: '1'
-        vnfd:vnf-configuration:
-            vnfd:config-primitive:
-            -   vnfd:name: start
-            -   vnfd:name: stop
-            -   vnfd:name: restart
-            -   vnfd:name: config
-                vnfd:parameter:
-                -   vnfd:data-type: STRING
-                    vnfd:name: ssh-hostname
-                -   vnfd:data-type: STRING
-                    vnfd:name: ssh-username
-                -   vnfd:data-type: STRING
-                    vnfd:name: ssh-private-key
-                -   vnfd:data-type: STRING
-                    vnfd:default-value: ping
-                    vnfd:name: mode
-                    vnfd:read-only: 'true'
-            -   vnfd:name: set-server
-                vnfd:parameter:
-                -   vnfd:data-type: STRING
-                    vnfd:name: server-ip
-                -   vnfd:data-type: INTEGER
-                    vnfd:name: server-port
-            -   vnfd:name: set-rate
-                vnfd:parameter:
-                -   vnfd:data-type: INTEGER
-                    vnfd:default-value: '5'
-                    vnfd:name: rate
-            -   vnfd:name: start-traffic
-            -   vnfd:name: stop-traffic
-            vnfd:initial-config-primitive:
-            -   vnfd:config-primitive-ref: config
-                vnfd:seq: '1'
-            -   vnfd:config-primitive-ref: start
-                vnfd:seq: '2'
-            -   vnfd:config-primitive-ref: set-server
-                vnfd:seq: '3'
-            -   vnfd:config-primitive-ref: set-rate
-                vnfd:seq: '4'
-            vnfd:juju:
-                vnfd:charm: pingpong
+     -  id: rift_ping_vnf
+        name: ping_vnf
+        short-name: ping_vnf
+        logo: rift_logo.png
+        vendor: RIFT.io
+        version: '1.0'
+        description: This is an example RIFT.ware VNF
+        connection-point:
+        -   name: ping_vnfd/cp0
+            type: VPORT
+        -   name: ping_vnfd/cp1
+            type: VPORT
+        http-endpoint:
+        -   path: api/v1/ping/stats
+            polling_interval_secs: '2'
+            port: '18888'
+        mgmt-interface:
+            dashboard-params:
+                path: api/v1/ping/stats
+                port: '18888'
+            port: '18888'
+            vdu-id: iovdu_0
+        placement-groups:
+        -   member-vdus:
+            -   member-vdu-ref: iovdu_0
+            name: Eris
+            requirement: Place this VM on the Kuiper belt object Eris
+            strategy: COLOCATION
+        vdu:
+        -   cloud-init-file: ping_cloud_init.cfg
+            count: '1'
+            external-interface:
+            -   name: eth0
+                virtual-interface:
+                    type: VIRTIO
+                vnfd-connection-point-ref: ping_vnfd/cp0
+            -   name: eth1
+                virtual-interface:
+                    type: VIRTIO
+                vnfd-connection-point-ref: ping_vnfd/cp1
+            id: iovdu_0
+            image: Fedora-x86_64-20-20131211.1-sda-ping.qcow2
+            image-checksum: a6ffaa77f949a9e4ebb082c6147187cf
+            name: iovdu_0
+            vm-flavor:
+                memory-mb: '512'
+                storage-gb: '4'
+                vcpu-count: '1'
+        vnf-configuration:
+            config-attributes:
+                config-delay: 10
+            service-primitive:
+            -   name: start
+            -   name: stop
+            -   name: restart
+            -   name: config
+                parameter:
+                -   data-type: STRING
+                    default-value: <rw_mgmt_ip>
+                    name: ssh-hostname
+                -   data-type: STRING
+                    default-value: fedora
+                    name: ssh-username
+                -   data-type: STRING
+                    default-value: fedora
+                    name: ssh-password
+                -   data-type: STRING
+                    name: ssh-private-key
+                -   data-type: STRING
+                    default-value: ping
+                    name: mode
+                    read-only: 'true'
+            -   name: set-server
+                parameter:
+                -   data-type: STRING
+                    name: server-ip
+                -   data-type: INTEGER
+                    name: server-port
+            -   name: set-rate
+                parameter:
+                -   data-type: INTEGER
+                    default-value: '5'
+                    name: rate
+            -   name: start-traffic
+            -   name: stop-traffic
+            initial-config-primitive:
+            -   name: config
+                parameter:
+                -   name: ssh-hostname
+                    value: <rw_mgmt_ip>
+                -   name: ssh-username
+                    value: fedora
+                -   name: ssh-password
+                    value: fedora
+                -   name: mode
+                    value: ping
+                seq: '1'
+            -   name: start
+                seq: '2'
+            juju:
+                charm: pingpong

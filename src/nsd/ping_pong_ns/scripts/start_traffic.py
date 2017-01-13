@@ -30,15 +30,20 @@ import yaml
 def start_traffic(yaml_cfg, logger):
     '''Use curl and set admin status to enable on pong and ping vnfs'''
 
-    def enable_service(mgmt_ip, port, vnf_type):
-        curl_cmd = 'curl -D /dev/stdout -H "Accept: application/vnd.yang.data' \
+    curl_fmt = 'curl -D /dev/stdout -H "Accept: application/vnd.yang.data' \
                    '+xml" -H "Content-Type: application/vnd.yang.data+json" ' \
-                   '-X POST -d "{{\\"enable\\":true}}" http://{mgmt_ip}:' \
-                   '{mgmt_port}/api/v1/{vnf_type}/adminstatus/state'. \
-                   format(
-                       mgmt_ip=mgmt_ip,
-                       mgmt_port=port,
-                       vnf_type=vnf_type)
+                   '-X POST -d "{{ {data} }}" http://{mgmt_ip}:' \
+                   '{mgmt_port}/api/v1/{vnf_type}/{url}'
+
+    def setup_service(mgmt_ip, port, vnf_type, service_ip, service_port):
+        data = '\\"ip\\":\\"{}\\", \\"port\\":5555'.format(service_ip)
+        curl_cmd = curl_fmt.format(
+            mgmt_ip=mgmt_ip,
+            mgmt_port=port,
+            vnf_type=vnf_type,
+            data=data,
+            url='server'
+        )
 
         logger.debug("Executing cmd: %s", curl_cmd)
         proc = subprocess.run(curl_cmd, shell=True,
@@ -49,15 +54,58 @@ def start_traffic(yaml_cfg, logger):
 
         return proc.returncode
 
+    def enable_service(mgmt_ip, port, vnf_type):
+        curl_cmd = curl_fmt.format(
+            mgmt_ip=mgmt_ip,
+            mgmt_port=port,
+            vnf_type=vnf_type,
+            data='\\"enable\\":true',
+            url='adminstatus/state'
+        )
+
+        logger.debug("Executing cmd: %s", curl_cmd)
+        proc = subprocess.run(curl_cmd, shell=True,
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE)
+
+        logger.debug("Process: {}".format(proc))
+
+        return proc.returncode
+
+    # Get port from user parameter
+    service_port = yaml_cfg['parameter']['port']
+
+    service_ip = None
     # Enable pong service first
     for index, vnfr in yaml_cfg['vnfr'].items():
         logger.debug("VNFR {}: {}".format(index, vnfr))
 
+        def get_cp_ip(cp_name):
+            for cp in vnfr['connection_point']:
+                if cp['name'].endswith(cp_name):
+                    return cp['ip_address']
+
         # Check if it is pong vnf
         if 'pong_vnf' in vnfr['name']:
             vnf_type = 'pong'
-            port = 18889
-            rc = enable_service(vnfr['mgmt_ip_address'], port, vnf_type)
+            mgmt_ip = vnfr['mgmt_ip_address']
+            port = vnfr['mgmt_port']
+            service_ip = get_cp_ip('cp1')
+
+            max_tries = 60
+            tries = 0
+            while tries < max_tries:
+                rc = setup_service(mgmt_ip, port, vnf_type, service_ip, service_port)
+                tries += 1
+                if rc != 0:
+                    logger.error("Setup service for pong failed ({}): {}".
+                                 format(tries, rc))
+                    if rc != 7:
+                        return rc
+                    else:
+                        time.sleep(1) # Sleep for 1 seconds
+
+            rc = enable_service(mgmt_ip, port, vnf_type)
             if rc != 0:
                 logger.error("Enable service for pong failed: {}".
                              format(rc))
@@ -74,8 +122,29 @@ def start_traffic(yaml_cfg, logger):
         # Check if it is pong vnf
         if 'ping_vnf' in vnfr['name']:
             vnf_type = 'ping'
-            port = 18888
-            rc = enable_service(vnfr['mgmt_ip_address'], port, vnf_type)
+            mgmt_ip = vnfr['mgmt_ip_address']
+            port = vnfr['mgmt_port']
+            if service_ip is None:
+                logger.error("Did not find pong ip!!")
+                return 1
+
+            max_tries = 30
+            tries = 0
+            while tries < max_tries:
+                rc = setup_service(mgmt_ip, port, vnf_type, service_ip, service_port)
+                tries += 1
+                if rc != 0:
+                    logger.error("Setup service for ping failed ({}): {}".
+                                 format(tries, rc))
+                    if rc != 7:
+                        return rc
+                    else:
+                        time.sleep(1) # Sleep for 1 seconds
+
+            rc = enable_service(mgmt_ip, port, vnf_type)
+            if rc != 0:
+                logger.error("Enable service for ping failed: {}".
+                             format(rc))
             break
 
     return rc

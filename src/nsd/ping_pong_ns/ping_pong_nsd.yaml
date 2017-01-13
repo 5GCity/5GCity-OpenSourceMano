@@ -24,21 +24,6 @@ nsd:nsd-catalog:
         nsd:vendor: RIFT.io
         nsd:version: '1.0'
         nsd:description: RIFT.io sample ping pong network service
-        nsd:config-parameter-map:
-        -   nsd:config-parameter-request:
-                nsd:config-parameter-request-ref: pong_ip
-                nsd:member-vnf-index-ref: '1'
-            nsd:config-parameter-source:
-                nsd:config-parameter-source-ref: service_ip
-                nsd:member-vnf-index-ref: '2'
-            nsd:id: '1'
-        -   nsd:config-parameter-request:
-                nsd:config-parameter-request-ref: pong_port
-                nsd:member-vnf-index-ref: '1'
-            nsd:config-parameter-source:
-                nsd:config-parameter-source-ref: service_port
-                nsd:member-vnf-index-ref: '2'
-            nsd:id: '2'
         nsd:constituent-vnfd:
         -   nsd:member-vnf-index: '1'
             nsd:vnfd-id-ref: rift_ping_vnf
@@ -47,8 +32,8 @@ nsd:nsd-catalog:
         nsd:initial-config-primitive:
         -   nsd:name: start traffic
             nsd:parameter:
-            -   nsd:name: userid
-                nsd:value: rift
+            -   nsd:name: port
+                nsd:value: 5555
             nsd:seq: '1'
             nsd:user-defined-script: start_traffic.py
         nsd:input-parameter-xpath:
