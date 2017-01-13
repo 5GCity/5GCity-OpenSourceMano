@@ -267,6 +267,7 @@ sudo pip install --upgrade pip
 sudo pip install pyvcloud
 sudo pip install progressbar
 sudo pip install prettytable
+sudo pip install pyvmomi
 
 #The only way to install python-bottle on Centos7 is with easy_install or pip
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && easy_install -U bottle

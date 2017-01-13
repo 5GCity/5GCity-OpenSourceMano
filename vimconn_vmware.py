@@ -32,6 +32,11 @@ import os
 import traceback
 import itertools
 import requests
+import ssl
+import atexit
+
+from pyVmomi import vim, vmodl
+from pyVim.connect import SmartConnect, Disconnect
 
 from xml.etree import ElementTree as XmlElementTree
 from lxml import etree as lxmlElementTree
@@ -1208,7 +1213,7 @@ class vimconnector(vimconn.vimconnector):
         vm_cpus = None
         vm_memory = None
         vm_disk = None
-
+        pci_devices_info = []
         if flavor_id is not None:
             if flavor_id not in flavorlist:
                 raise vimconn.vimconnNotFoundException("new_vminstance(): Failed create vApp {}: "
@@ -1220,7 +1225,14 @@ class vimconnector(vimconn.vimconnector):
                     vm_cpus = flavor[FLAVOR_VCPUS_KEY]
                     vm_memory = flavor[FLAVOR_RAM_KEY]
                     vm_disk = flavor[FLAVOR_DISK_KEY]
-
+                    extended = flavor.get("extended", None)
+                    if extended:
+                        numas=extended.get("numas", None)
+                        if numas:
+                            for numa in numas:
+                                for interface in numa.get("interfaces",() ):
+                                    if interface["dedicated"].strip()=="yes":
+                                        pci_devices_info.append(interface)
                 except KeyError:
                     raise vimconn.vimconnException("Corrupted flavor. {}".format(flavor_id))
 
@@ -1277,6 +1289,26 @@ class vimconnector(vimconn.vimconnector):
                 "new_vminstance(): Failed failed retrieve vApp {} after we deployed".format(
                                                                             vmname_andid))
 
+        #Add PCI passthrough configrations
+        PCI_devices_status = False
+        vm_obj = None
+        si = None
+        if len(pci_devices_info) > 0:
+            self.logger.info("Need to add PCI devices {} into VM {}".format(pci_devices_info,
+                                                                        vmname_andid ))
+            PCI_devices_status, vm_obj, vcenter_conect = self.add_pci_devices(vapp_uuid,
+                                                                            pci_devices_info,
+                                                                            vmname_andid)
+            if PCI_devices_status:
+                self.logger.info("Added PCI devives {} to VM {}".format(
+                                                            pci_devices_info,
+                                                            vmname_andid)
+                                 )
+            else:
+                self.logger.info("Fail to add PCI devives {} to VM {}".format(
+                                                            pci_devices_info,
+                                                            vmname_andid)
+                                 )
         # add vm disk
         if vm_disk:
             #Assuming there is only one disk in ovf and fast provisioning in organization vDC is disabled
@@ -1332,12 +1364,29 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnUnexpectedResponse("new_vminstance(): Failed create new vm instance {}".format(name))
 
         # deploy and power on vm
-        task = vapp.poweron()
-        if type(task) is TaskType:
-            vca.block_until_completed(task)
-        deploytask = vapp.deploy(powerOn='True')
-        if type(task) is TaskType:
+        self.logger.debug("new_vminstance(): Deploying vApp {} ".format(name))
+        deploytask = vapp.deploy(powerOn=False)
+        if type(deploytask) is GenericTask:
             vca.block_until_completed(deploytask)
+
+        # If VM has PCI devices reserve memory for VM
+        if PCI_devices_status and vm_obj and vcenter_conect:
+            memReserve = vm_obj.config.hardware.memoryMB
+            spec = vim.vm.ConfigSpec()
+            spec.memoryAllocation = vim.ResourceAllocationInfo(reservation=memReserve)
+            task = vm_obj.ReconfigVM_Task(spec=spec)
+            if task:
+                result = self.wait_for_vcenter_task(task, vcenter_conect)
+                self.logger.info("Reserved memmoery {} MB for "\
+                                 "VM VM status: {}".format(str(memReserve),result))
+            else:
+                self.logger.info("Fail to reserved memmoery {} to VM {}".format(
+                                                            str(memReserve),str(vm_obj)))
+
+        self.logger.debug("new_vminstance(): power on vApp {} ".format(name))
+        poweron_task = vapp.poweron()
+        if type(poweron_task) is GenericTask:
+            vca.block_until_completed(poweron_task)
 
         # check if vApp deployed and if that the case return vApp UUID otherwise -1
         wait_time = 0
@@ -1582,10 +1631,12 @@ class vimconnector(vimconn.vimconnector):
                 the_vapp = vca.get_vapp(vdc, vmname)
                 vm_info = the_vapp.get_vms_details()
                 vm_status = vm_info[0]['status']
+                vm_pci_details = self.get_vm_pci_details(vmuuid)
+                vm_info[0].update(vm_pci_details)
 
                 vm_dict = {'status': vcdStatusCode2manoFormat[the_vapp.me.get_status()],
                            'error_msg': vcdStatusCode2manoFormat[the_vapp.me.get_status()],
-                           'vim_info': yaml.safe_dump(the_vapp.get_vms_details()), 'interfaces': []}
+                           'vim_info': yaml.safe_dump(vm_info), 'interfaces': []}
 
                 # get networks
                 try:
@@ -2634,7 +2685,7 @@ class vimconnector(vimconn.vimconnector):
                         return response.content
         return None
 
-    def get_vapp_details_rest(self, vapp_uuid=None):
+    def get_vapp_details_rest(self, vapp_uuid=None, need_admin_access=False):
         """
         Method retrieve vapp detail from vCloud director
 
@@ -2646,8 +2697,13 @@ class vimconnector(vimconn.vimconnector):
         """
 
         parsed_respond = {}
+        vca = None
 
-        vca = self.connect()
+        if need_admin_access:
+            vca = self.connect_as_admin()
+        else:
+            vca = self.connect()
+
         if not vca:
             raise vimconn.vimconnConnectionException("self.connect() is failed")
         if vapp_uuid is None:
@@ -2655,7 +2711,8 @@ class vimconnector(vimconn.vimconnector):
 
         url_list = [vca.host, '/api/vApp/vapp-', vapp_uuid]
         get_vapp_restcall = ''.join(url_list)
-        if not (not vca.vcloud_session or not vca.vcloud_session.organization):
+
+        if vca.vcloud_session and vca.vcloud_session.organization:
             response = Http.get(url=get_vapp_restcall,
                                 headers=vca.vcloud_session.get_vcloud_headers(),
                                 verify=vca.verify,
@@ -2734,6 +2791,15 @@ class vimconnector(vimconn.vimconnector):
                                 parsed_respond['acquireMksTicket'] = link.attrib
 
                     parsed_respond['interfaces'] = nic_list
+                    vCloud_extension_section = children_section.find('xmlns:VCloudExtension', namespaces)
+                    if vCloud_extension_section is not None:
+                        vm_vcenter_info = {}
+                        vim_info = vCloud_extension_section.find('vmext:VmVimInfo', namespaces)
+                        vmext = vim_info.find('vmext:VmVimObjectRef', namespaces)
+                        if vmext is not None:
+                            vm_vcenter_info["vm_moref_id"] = vmext.find('vmext:MoRef', namespaces).text
+                            vm_vcenter_info["vim_server_href"] = vmext.find('vmext:VimServerRef', namespaces).attrib['href']
+                        parsed_respond["vm_vcenter_info"]= vm_vcenter_info
 
                     virtual_hardware_section = children_section.find('ovf:VirtualHardwareSection', namespaces)
                     vm_virtual_hardware_info = {}
@@ -2884,5 +2950,399 @@ class vimconnector(vimconn.vimconnector):
         except Exception as exp :
                 self.logger.info("Error occurred calling rest api for modifing disk size {}".format(exp))
                 return None
+
+    def add_pci_devices(self, vapp_uuid , pci_devices , vmname_andid):
+        """
+            Method to attach pci devices to VM
+
+             Args:
+                vapp_uuid - uuid of vApp/VM
+                pci_devices - pci devices infromation as specified in VNFD (flavor)
+
+            Returns:
+                The status of add pci device task , vm object and
+                vcenter_conect object
+        """
+        vm_obj = None
+        vcenter_conect = None
+        self.logger.info("Add pci devices {} into vApp {}".format(pci_devices , vapp_uuid))
+        #Assuming password of vCenter user is same as password of vCloud user
+        vm_moref_id , vm_vcenter_host , vm_vcenter_username, vm_vcenter_port = self.get_vcenter_info_rest(vapp_uuid)
+        self.logger.info("vm_moref_id,  {} vm_vcenter_host {} vm_vcenter_username{} "\
+                         "vm_vcenter_port{}".format(
+                                            vm_moref_id, vm_vcenter_host,
+                                            vm_vcenter_username, vm_vcenter_port))
+        if vm_moref_id and vm_vcenter_host and vm_vcenter_username:
+            context = None
+            if hasattr(ssl, '_create_unverified_context'):
+                context = ssl._create_unverified_context()
+            try:
+                no_of_pci_devices = len(pci_devices)
+                if no_of_pci_devices > 0:
+                    vcenter_conect = SmartConnect(host=vm_vcenter_host, user=vm_vcenter_username,
+                                      pwd=self.passwd, port=int(vm_vcenter_port) ,
+                                      sslContext=context)
+                    atexit.register(Disconnect, vcenter_conect)
+                    content = vcenter_conect.RetrieveContent()
+
+                    #Get VM and its host
+                    host_obj, vm_obj = self.get_vm_obj(content ,vm_moref_id)
+                    self.logger.info("VM {} is currently on host {}".format(vm_obj, host_obj))
+                    if host_obj and vm_obj:
+                        #get PCI devies from host on which vapp is currently installed
+                        avilable_pci_devices = self.get_pci_devices(host_obj, no_of_pci_devices)
+
+                        if avilable_pci_devices is None:
+                            #find other hosts with active pci devices
+                            new_host_obj , avilable_pci_devices = self.get_host_and_PCIdevices(
+                                                                content,
+                                                                no_of_pci_devices
+                                                                )
+
+                            if new_host_obj is not None and avilable_pci_devices is not None and len(avilable_pci_devices)> 0:
+                                #Migrate vm to the host where PCI devices are availble
+                                self.logger.info("Relocate VM {} on new host {}".format(vm_obj, new_host_obj))
+                                task = self.relocate_vm(new_host_obj, vm_obj)
+                                if task is not None:
+                                    result = self.wait_for_vcenter_task(task, vcenter_conect)
+                                    self.logger.info("Migrate VM status: {}".format(result))
+                                    host_obj = new_host_obj
+                                else:
+                                    self.logger.info("Fail to migrate VM : {}".format(result))
+                                    raise vimconn.vimconnNotFoundException(
+                                    "Fail to migrate VM : {} to host {}".format(
+                                                    vmname_andid,
+                                                    new_host_obj)
+                                        )
+
+                        if host_obj is not None and avilable_pci_devices is not None and len(avilable_pci_devices)> 0:
+                            #Add PCI devices one by one
+                            for pci_device in avilable_pci_devices:
+                                task = self.add_pci_to_vm(host_obj, vm_obj, pci_device)
+                                if task:
+                                    status= self.wait_for_vcenter_task(task, vcenter_conect)
+                                    if status:
+                                        self.logger.info("Added PCI device {} to VM {}".format(pci_device,str(vm_obj)))
+                                else:
+                                    self.logger.info("Fail to add PCI device {} to VM {}".format(pci_device,str(vm_obj)))
+                            return True, vm_obj, vcenter_conect
+                        else:
+                            self.logger.error("Currently there is no host with"\
+                                              " {} number of avaialble PCI devices required for VM {}".format(
+                                                                            no_of_pci_devices,
+                                                                            vmname_andid)
+                                              )
+                            raise vimconn.vimconnNotFoundException(
+                                    "Currently there is no host with {} "\
+                                    "number of avaialble PCI devices required for VM {}".format(
+                                                                            no_of_pci_devices,
+                                                                            vmname_andid))
+                else:
+                    self.logger.debug("No infromation about PCI devices {} ",pci_devices)
+
+            except vmodl.MethodFault as error:
+                self.logger.error("Error occurred while adding PCI devices {} ",error)
+        return None, vm_obj, vcenter_conect
+
+    def get_vm_obj(self, content, mob_id):
+        """
+            Method to get the vsphere VM object associated with a given morf ID
+             Args:
+                vapp_uuid - uuid of vApp/VM
+                content - vCenter content object
+                mob_id - mob_id of VM
+
+            Returns:
+                    VM and host object
+        """
+        vm_obj = None
+        host_obj = None
+        try :
+            container = content.viewManager.CreateContainerView(content.rootFolder,
+                                                        [vim.VirtualMachine], True
+                                                        )
+            for vm in container.view:
+                mobID = vm._GetMoId()
+                if mobID == mob_id:
+                    vm_obj = vm
+                    host_obj = vm_obj.runtime.host
+                    break
+        except Exception as exp:
+            self.logger.error("Error occurred while finding VM object : {}".format(exp))
+        return host_obj, vm_obj
+
+    def get_pci_devices(self, host, need_devices):
+        """
+            Method to get the details of pci devices on given host
+             Args:
+                host - vSphere host object
+                need_devices - number of pci devices needed on host
+
+             Returns:
+                array of pci devices
+        """
+        all_devices = []
+        all_device_ids = []
+        used_devices_ids = []
+
+        try:
+            if host:
+                pciPassthruInfo = host.config.pciPassthruInfo
+                pciDevies = host.hardware.pciDevice
+
+            for pci_status in pciPassthruInfo:
+                if pci_status.passthruActive:
+                    for device in pciDevies:
+                        if device.id == pci_status.id:
+                            all_device_ids.append(device.id)
+                            all_devices.append(device)
+
+            #check if devices are in use
+            avalible_devices = all_devices
+            for vm in host.vm:
+                if vm.runtime.powerState == vim.VirtualMachinePowerState.poweredOn:
+                    vm_devices = vm.config.hardware.device
+                    for device in vm_devices:
+                        if type(device) is vim.vm.device.VirtualPCIPassthrough:
+                            if device.backing.id in all_device_ids:
+                                for use_device in avalible_devices:
+                                    if use_device.id == device.backing.id:
+                                        avalible_devices.remove(use_device)
+                                used_devices_ids.append(device.backing.id)
+                                self.logger.debug("Device {} from devices {}"\
+                                        "is in use".format(device.backing.id,
+                                                           device)
+                                            )
+            if len(avalible_devices) < need_devices:
+                self.logger.debug("Host {} don't have {} number of active devices".format(host,
+                                                                            need_devices))
+                self.logger.debug("found only {} devives {}".format(len(avalible_devices),
+                                                                    avalible_devices))
+                return None
+            else:
+                required_devices = avalible_devices[:need_devices]
+                self.logger.info("Found {} PCI devivces on host {} but required only {}".format(
+                                                            len(avalible_devices),
+                                                            host,
+                                                            need_devices))
+                self.logger.info("Retruning {} devices as {}".format(need_devices,
+                                                                required_devices ))
+                return required_devices
+
+        except Exception as exp:
+            self.logger.error("Error {} occurred while finding pci devices on host: {}".format(exp, host))
+
+        return None
+
+    def get_host_and_PCIdevices(self, content, need_devices):
+        """
+         Method to get the details of pci devices infromation on all hosts
+
+            Args:
+                content - vSphere host object
+                need_devices - number of pci devices needed on host
+
+            Returns:
+                 array of pci devices and host object
+        """
+        host_obj = None
+        pci_device_objs = None
+        try:
+            if content:
+                container = content.viewManager.CreateContainerView(content.rootFolder,
+                                                            [vim.HostSystem], True)
+                for host in container.view:
+                    devices = self.get_pci_devices(host, need_devices)
+                    if devices:
+                        host_obj = host
+                        pci_device_objs = devices
+                        break
+        except Exception as exp:
+            self.logger.error("Error {} occurred while finding pci devices on host: {}".format(exp, host_obj))
+
+        return host_obj,pci_device_objs
+
+    def relocate_vm(self, dest_host, vm) :
+        """
+         Method to get the relocate VM to new host
+
+            Args:
+                dest_host - vSphere host object
+                vm - vSphere VM object
+
+            Returns:
+                task object
+        """
+        task = None
+        try:
+            relocate_spec = vim.vm.RelocateSpec(host=dest_host)
+            task = vm.Relocate(relocate_spec)
+            self.logger.info("Migrating {} to destination host {}".format(vm, dest_host))
+        except Exception as exp:
+            self.logger.error("Error occurred while relocate VM {} to new host {}: {}".format(
+                                                                            dest_host, vm, exp))
+        return task
+
+    def wait_for_vcenter_task(self, task, actionName='job', hideResult=False):
+        """
+        Waits and provides updates on a vSphere task
+        """
+        while task.info.state == vim.TaskInfo.State.running:
+            time.sleep(2)
+
+        if task.info.state == vim.TaskInfo.State.success:
+            if task.info.result is not None and not hideResult:
+                self.logger.info('{} completed successfully, result: {}'.format(
+                                                            actionName,
+                                                            task.info.result))
+            else:
+                self.logger.info('Task {} completed successfully.'.format(actionName))
+        else:
+            self.logger.error('{} did not complete successfully: {} '.format(
+                                                            actionName,
+                                                            task.info.error)
+                              )
+
+        return task.info.result
+
+    def add_pci_to_vm(self,host_object, vm_object, host_pci_dev):
+        """
+         Method to add pci device in given VM
+
+            Args:
+                host_object - vSphere host object
+                vm_object - vSphere VM object
+                host_pci_dev -  host_pci_dev must be one of the devices from the
+                                host_object.hardware.pciDevice list
+                                which is configured as a PCI passthrough device
+
+            Returns:
+                task object
+        """
+        task = None
+        if vm_object and host_object and host_pci_dev:
+            try :
+                #Add PCI device to VM
+                pci_passthroughs = vm_object.environmentBrowser.QueryConfigTarget(host=None).pciPassthrough
+                systemid_by_pciid = {item.pciDevice.id: item.systemId for item in pci_passthroughs}
+
+                if host_pci_dev.id not in systemid_by_pciid:
+                    self.logger.error("Device {} is not a passthrough device ".format(host_pci_dev))
+                    return None
+
+                deviceId = hex(host_pci_dev.deviceId % 2**16).lstrip('0x')
+                backing = vim.VirtualPCIPassthroughDeviceBackingInfo(deviceId=deviceId,
+                                            id=host_pci_dev.id,
+                                            systemId=systemid_by_pciid[host_pci_dev.id],
+                                            vendorId=host_pci_dev.vendorId,
+                                            deviceName=host_pci_dev.deviceName)
+
+                hba_object = vim.VirtualPCIPassthrough(key=-100, backing=backing)
+
+                new_device_config = vim.VirtualDeviceConfigSpec(device=hba_object)
+                new_device_config.operation = "add"
+                vmConfigSpec = vim.vm.ConfigSpec()
+                vmConfigSpec.deviceChange = [new_device_config]
+
+                task = vm_object.ReconfigVM_Task(spec=vmConfigSpec)
+                self.logger.info("Adding PCI device {} into VM {} from host {} ".format(
+                                                            host_pci_dev, vm_object, host_object)
+                                )
+            except Exception as exp:
+                self.logger.error("Error occurred while adding pci devive {} to VM {}: {}".format(
+                                                                            host_pci_dev,
+                                                                            vm_object,
+                                                                             exp))
+        return task
+
+    def get_vcenter_info_rest(self , vapp_uuid):
+        """
+        https://192.169.241.105/api/admin/extension/vimServer/cc82baf9-9f80-4468-bfe9-ce42b3f9dde5
+        Method to get details of vCenter
+
+            Args:
+                vapp_uuid - uuid of vApp or VM
+
+            Returns:
+                Moref Id of VM and deails of vCenter
+        """
+        vm_moref_id = None
+        vm_vcenter = None
+        vm_vcenter_username = None
+        vm_vcenter_port = None
+
+        vm_details = self.get_vapp_details_rest(vapp_uuid, need_admin_access=True)
+        if vm_details and "vm_vcenter_info" in vm_details:
+            vm_moref_id = vm_details["vm_vcenter_info"]["vm_moref_id"]
+            vim_server_href = vm_details["vm_vcenter_info"]["vim_server_href"]
+
+            if vim_server_href:
+                vca = self.connect_as_admin()
+                if not vca:
+                    raise vimconn.vimconnConnectionException("self.connect() is failed")
+                if vim_server_href is None:
+                    self.logger.error("No url to get vcenter details")
+
+                if vca.vcloud_session and vca.vcloud_session.organization:
+                    response = Http.get(url=vim_server_href,
+                                        headers=vca.vcloud_session.get_vcloud_headers(),
+                                        verify=vca.verify,
+                                        logger=vca.logger)
+
+                if response.status_code != requests.codes.ok:
+                    self.logger.debug("GET REST API call {} failed. Return status code {}".format(vim_server_href,
+                                                                                    response.status_code))
+                try:
+                    namespaces={"vmext":"http://www.vmware.com/vcloud/extension/v1.5",
+                                "vcloud":"http://www.vmware.com/vcloud/v1.5"
+                                }
+                    xmlroot_respond = XmlElementTree.fromstring(response.content)
+                    vm_vcenter_username =  xmlroot_respond.find('vmext:Username', namespaces).text
+                    vcenter_url = xmlroot_respond.find('vmext:Url', namespaces).text
+                    vm_vcenter_port = vcenter_url.split(":")[2]
+                    vm_vcenter =  vcenter_url.split(":")[1].split("//")[1]
+
+                except Exception as exp :
+                    self.logger.info("Error occurred calling rest api for vcenter information {}".format(exp))
+
+        return vm_moref_id , vm_vcenter , vm_vcenter_username, vm_vcenter_port
+
+
+    def get_vm_pci_details(self, vmuuid):
+        """
+            Method to get VM PCI device details from vCenter
+
+            Args:
+                vm_obj - vSphere VM object
+
+            Returns:
+                dict of PCI devives attached to VM
+
+        """
+        vm_pci_devices_info = {}
+        try:
+            vm_moref_id , vm_vcenter_host , vm_vcenter_username, vm_vcenter_port = self.get_vcenter_info_rest(vmuuid)
+            if vm_moref_id and vm_vcenter_host and vm_vcenter_username:
+                context = None
+                if hasattr(ssl, '_create_unverified_context'):
+                    context = ssl._create_unverified_context()
+                vcenter_conect = SmartConnect(host=vm_vcenter_host, user=vm_vcenter_username,
+                                  pwd=self.passwd, port=int(vm_vcenter_port),
+                                  sslContext=context)
+                atexit.register(Disconnect, vcenter_conect)
+                content = vcenter_conect.RetrieveContent()
+
+                #Get VM and its host
+                host_obj, vm_obj = self.get_vm_obj(content ,vm_moref_id)
+                for device in vm_obj.config.hardware.device:
+                    if type(device) == vim.vm.device.VirtualPCIPassthrough:
+                        device_details={'devide_id':device.backing.id,
+                                        'pciSlotNumber':device.slotInfo.pciSlotNumber
+                                     }
+                        vm_pci_devices_info[device.deviceInfo.label] = device_details
+        except Exception as exp:
+            self.logger.info("Error occurred while getting PCI devices infromationn"\
+                             " for VM {} : {}".format(vm_obj,exp))
+        return vm_pci_devices_info
 
 
