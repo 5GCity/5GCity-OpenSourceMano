@@ -34,6 +34,7 @@ import itertools
 import requests
 
 from xml.etree import ElementTree as XmlElementTree
+from lxml import etree as lxmlElementTree
 
 import yaml
 from pyvcloud import Http
@@ -64,7 +65,7 @@ STANDALONE = 'standalone'
 # key for flavor dicts
 FLAVOR_RAM_KEY = 'ram'
 FLAVOR_VCPUS_KEY = 'vcpus'
-
+FLAVOR_DISK_KEY = 'disk'
 DEFAULT_IP_PROFILE = {'gateway_address':"192.168.1.1",
                       'dhcp_count':50,
                       'subnet_address':"192.168.1.0/24",
@@ -80,7 +81,7 @@ MAX_WAIT_TIME = 1800
 VCAVERSION = '5.9'
 
 __author__ = "Mustafa Bayramov, Arpita Kate, Sachin Bhangare"
-__date__ = "$23-Dec-2016 11:09:29$"
+__date__ = "$12-Jan-2017 11:09:29$"
 __version__ = '0.1'
 
 #     -1: "Could not be created",
@@ -179,7 +180,7 @@ class vimconnector(vimconn.vimconnector):
                 self.org_name = orgnameandtenant[0]
             else:
                 self.tenant_name = tenant_name
-        elif "orgname" in config:
+        if "orgname" in config:
             self.org_name = config['orgname']
 
         if log_level:
@@ -699,15 +700,37 @@ class vimconnector(vimconn.vimconnector):
                             vpci: requested virtual PCI address
                 disk: disk size
                 is_public:
-
-
-
                  #TODO to concrete
         Returns the flavor identifier"""
 
         # generate a new uuid put to internal dict and return it.
+        self.logger.debug("Creating new flavor - flavor_data: {}".format(flavor_data))
+        new_flavor=flavor_data
+        ram = flavor_data.get(FLAVOR_RAM_KEY, 1024)
+        cpu = flavor_data.get(FLAVOR_VCPUS_KEY, 1)
+        disk = flavor_data.get(FLAVOR_DISK_KEY, 1)
+
+        extended_flv = flavor_data.get("extended")
+        if extended_flv:
+            numas=extended_flv.get("numas")
+            if numas:
+                for numa in numas:
+                    #overwrite ram and vcpus
+                    ram = numa['memory']*1024
+                    if 'paired-threads' in numa:
+                        cpu = numa['paired-threads']*2
+                    elif 'cores' in numa:
+                        cpu = numa['cores']
+                    elif 'threads' in numa:
+                        cpu = numa['threads']
+
+        new_flavor[FLAVOR_RAM_KEY] = ram
+        new_flavor[FLAVOR_VCPUS_KEY] = cpu
+        new_flavor[FLAVOR_DISK_KEY] = disk
+        # generate a new uuid put to internal dict and return it.
         flavor_id = uuid.uuid4()
-        flavorlist[str(flavor_id)] = flavor_data
+        flavorlist[str(flavor_id)] = new_flavor
+        self.logger.debug("Created flavor - {} : {}".format(flavor_id, new_flavor))
 
         return str(flavor_id)
 
@@ -901,6 +924,7 @@ class vimconnector(vimconn.vimconnector):
                             f.close()
                             if progress:
                                 progress_bar.finish()
+                            time.sleep(10)
                     return True
                 else:
                     self.logger.debug("Failed retrieve vApp template for catalog name {} for OVF {}".
@@ -1183,6 +1207,8 @@ class vimconnector(vimconn.vimconnector):
         #
         vm_cpus = None
         vm_memory = None
+        vm_disk = None
+
         if flavor_id is not None:
             if flavor_id not in flavorlist:
                 raise vimconn.vimconnNotFoundException("new_vminstance(): Failed create vApp {}: "
@@ -1193,6 +1219,8 @@ class vimconnector(vimconn.vimconnector):
                     flavor = flavorlist[flavor_id]
                     vm_cpus = flavor[FLAVOR_VCPUS_KEY]
                     vm_memory = flavor[FLAVOR_RAM_KEY]
+                    vm_disk = flavor[FLAVOR_DISK_KEY]
+
                 except KeyError:
                     raise vimconn.vimconnException("Corrupted flavor. {}".format(flavor_id))
 
@@ -1243,9 +1271,18 @@ class vimconnector(vimconn.vimconnector):
 
         # we should have now vapp in undeployed state.
         vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vmname_andid)
+        vapp_uuid = self.get_vappid(vca.get_vdc(self.tenant_name), vmname_andid)
         if vapp is None:
             raise vimconn.vimconnUnexpectedResponse(
-                "new_vminstance(): Failed failed retrieve vApp {} after we deployed".format(vmname_andid))
+                "new_vminstance(): Failed failed retrieve vApp {} after we deployed".format(
+                                                                            vmname_andid))
+
+        # add vm disk
+        if vm_disk:
+            #Assuming there is only one disk in ovf and fast provisioning in organization vDC is disabled
+            result = self.modify_vm_disk(vapp_uuid, vm_disk)
+            if result :
+                self.logger.debug("Modified Disk size of VM {} ".format(vmname_andid))
 
         # add NICs & connect to networks in netlist
         try:
@@ -2633,21 +2670,26 @@ class vimconnector(vimconn.vimconnector):
                 xmlroot_respond = XmlElementTree.fromstring(response.content)
                 parsed_respond['ovfDescriptorUploaded'] = xmlroot_respond.attrib['ovfDescriptorUploaded']
 
-                namespaces_ovf = {'ovf': 'http://schemas.dmtf.org/ovf/envelope/1'}
-                namespace_vmm = {'vmw': 'http://www.vmware.com/schema/ovf'}
-                namespace_vm = {'vm': 'http://www.vmware.com/vcloud/v1.5'}
+                namespaces = {"vssd":"http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData" ,
+                              'ovf': 'http://schemas.dmtf.org/ovf/envelope/1',
+                              'vmw': 'http://www.vmware.com/schema/ovf',
+                              'vm': 'http://www.vmware.com/vcloud/v1.5',
+                              'rasd':"http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData",
+                              "vmext":"http://www.vmware.com/vcloud/extension/v1.5",
+                              "xmlns":"http://www.vmware.com/vcloud/v1.5"
+                             }
 
-                created_section = xmlroot_respond.find('vm:DateCreated', namespace_vm)
+                created_section = xmlroot_respond.find('vm:DateCreated', namespaces)
                 if created_section is not None:
                     parsed_respond['created'] = created_section.text
 
-                network_section = xmlroot_respond.find('vm:NetworkConfigSection/vm:NetworkConfig', namespace_vm)
+                network_section = xmlroot_respond.find('vm:NetworkConfigSection/vm:NetworkConfig', namespaces)
                 if network_section is not None and 'networkName' in network_section.attrib:
                     parsed_respond['networkname'] = network_section.attrib['networkName']
 
                 ipscopes_section = \
                     xmlroot_respond.find('vm:NetworkConfigSection/vm:NetworkConfig/vm:Configuration/vm:IpScopes',
-                                         namespace_vm)
+                                         namespaces)
                 if ipscopes_section is not None:
                     for ipscope in ipscopes_section:
                         for scope in ipscope:
@@ -2661,14 +2703,15 @@ class vimconnector(vimconn.vimconnector):
                                 parsed_respond[tag_key] = scope.text
 
                 # parse children section for other attrib
-                children_section = xmlroot_respond.find('vm:Children/', namespace_vm)
+                children_section = xmlroot_respond.find('vm:Children/', namespaces)
                 if children_section is not None:
                     parsed_respond['name'] = children_section.attrib['name']
-                    parsed_respond['nestedHypervisorEnabled'] = children_section.attrib['nestedHypervisorEnabled']
+                    parsed_respond['nestedHypervisorEnabled'] = children_section.attrib['nestedHypervisorEnabled'] \
+                     if  "nestedHypervisorEnabled" in children_section.attrib else None
                     parsed_respond['deployed'] = children_section.attrib['deployed']
                     parsed_respond['status'] = children_section.attrib['status']
                     parsed_respond['vmuuid'] = children_section.attrib['id'].split(":")[-1]
-                    network_adapter = children_section.find('vm:NetworkConnectionSection', namespace_vm)
+                    network_adapter = children_section.find('vm:NetworkConnectionSection', namespaces)
                     nic_list = []
                     for adapters in network_adapter:
                         adapter_key = adapters.tag.split("}")[1]
@@ -2691,9 +2734,27 @@ class vimconnector(vimconn.vimconnector):
                                 parsed_respond['acquireMksTicket'] = link.attrib
 
                     parsed_respond['interfaces'] = nic_list
-            except:
-                pass
 
+                    virtual_hardware_section = children_section.find('ovf:VirtualHardwareSection', namespaces)
+                    vm_virtual_hardware_info = {}
+                    if virtual_hardware_section is not None:
+                        for item in virtual_hardware_section.iterfind('ovf:Item',namespaces):
+                            if item.find("rasd:Description",namespaces).text == "Hard disk":
+                                disk_size = item.find("rasd:HostResource" ,namespaces
+                                                ).attrib["{"+namespaces['vm']+"}capacity"]
+
+                                vm_virtual_hardware_info["disk_size"]= disk_size
+                                break
+
+                        for link in virtual_hardware_section:
+                            if link.tag.split("}")[1] == 'Link' and 'rel' in link.attrib:
+                                if link.attrib['rel'] == 'edit' and link.attrib['href'].endswith("/disks"):
+                                    vm_virtual_hardware_info["disk_edit_href"] = link.attrib['href']
+                                    break
+
+                    parsed_respond["vm_virtual_hardware"]= vm_virtual_hardware_info
+            except Exception as exp :
+                self.logger.info("Error occurred calling rest api for getting vApp details {}".format(exp))
         return parsed_respond
 
     def acuire_console(self, vm_uuid=None):
@@ -2718,5 +2779,110 @@ class vimconnector(vimconn.vimconnector):
                 return response.content
 
         return None
+
+    def modify_vm_disk(self, vapp_uuid, flavor_disk):
+        """
+        Method retrieve vm disk details
+
+        Args:
+            vapp_uuid - is vapp identifier.
+            flavor_disk - disk size as specified in VNFD (flavor)
+
+            Returns:
+                The return network uuid or return None
+        """
+        status = None
+        try:
+            #Flavor disk is in GB convert it into MB
+            flavor_disk = int(flavor_disk) * 1024
+            vm_details = self.get_vapp_details_rest(vapp_uuid)
+            if vm_details:
+                vm_name = vm_details["name"]
+                self.logger.info("VM: {} flavor_disk :{}".format(vm_name , flavor_disk))
+
+            if vm_details and "vm_virtual_hardware" in vm_details:
+                vm_disk = int(vm_details["vm_virtual_hardware"]["disk_size"])
+                disk_edit_href = vm_details["vm_virtual_hardware"]["disk_edit_href"]
+
+                self.logger.info("VM: {} VM_disk :{}".format(vm_name , vm_disk))
+
+                if flavor_disk > vm_disk:
+                    status = self.modify_vm_disk_rest(disk_edit_href ,flavor_disk)
+                    self.logger.info("Modify disk of VM {} from {} to {} MB".format(vm_name,
+                                                         vm_disk,  flavor_disk ))
+                else:
+                    status = True
+                    self.logger.info("No need to modify disk of VM {}".format(vm_name))
+
+            return status
+        except Exception as exp:
+            self.logger.info("Error occurred while modifing disk size {}".format(exp))
+
+
+    def modify_vm_disk_rest(self, disk_href , disk_size):
+        """
+        Method retrieve modify vm disk size
+
+        Args:
+            disk_href - vCD API URL to GET and PUT disk data
+            disk_size - disk size as specified in VNFD (flavor)
+
+            Returns:
+                The return network uuid or return None
+        """
+        vca = self.connect()
+        if not vca:
+            raise vimconn.vimconnConnectionException("self.connect() is failed")
+        if disk_href is None or disk_size is None:
+            return None
+
+        if vca.vcloud_session and vca.vcloud_session.organization:
+            response = Http.get(url=disk_href,
+                                headers=vca.vcloud_session.get_vcloud_headers(),
+                                verify=vca.verify,
+                                logger=vca.logger)
+
+        if response.status_code != requests.codes.ok:
+            self.logger.debug("GET REST API call {} failed. Return status code {}".format(disk_href,
+                                                                            response.status_code))
+            return None
+        try:
+            lxmlroot_respond = lxmlElementTree.fromstring(response.content)
+            namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.iteritems() if prefix}
+            namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
+
+            for item in lxmlroot_respond.iterfind('xmlns:Item',namespaces):
+                if item.find("rasd:Description",namespaces).text == "Hard disk":
+                    disk_item = item.find("rasd:HostResource" ,namespaces )
+                    if disk_item is not None:
+                        disk_item.attrib["{"+namespaces['xmlns']+"}capacity"] = str(disk_size)
+                        break
+
+            data = lxmlElementTree.tostring(lxmlroot_respond, encoding='utf8', method='xml',
+                                             xml_declaration=True)
+
+            #Send PUT request to modify disk size
+            headers = vca.vcloud_session.get_vcloud_headers()
+            headers['Content-Type'] = 'application/vnd.vmware.vcloud.rasdItemsList+xml; charset=ISO-8859-1'
+
+            response = Http.put(url=disk_href,
+                                data=data,
+                                headers=headers,
+                                verify=vca.verify, logger=self.logger)
+
+            if response.status_code != 202:
+                self.logger.debug("PUT REST API call {} failed. Return status code {}".format(disk_href,
+                                                                            response.status_code))
+            else:
+                modify_disk_task = taskType.parseString(response.content, True)
+                if type(modify_disk_task) is GenericTask:
+                    status = vca.block_until_completed(modify_disk_task)
+                    return status
+
+            return None
+
+        except Exception as exp :
+                self.logger.info("Error occurred calling rest api for modifing disk size {}".format(exp))
+                return None
 
 
