@@ -12,13 +12,11 @@ from charms.reactive import (
     when,
 )
 import charms.sshproxy
-import json
 from subprocess import (
     Popen,
     CalledProcessError,
     PIPE,
 )
-import time
 
 
 cfg = config()
@@ -50,6 +48,7 @@ def get_port():
         port = 18889
     return port
 
+
 def run(cmd):
     """ Run a command on the local machine. """
     if isinstance(cmd, str):
@@ -64,6 +63,7 @@ def run(cmd):
                                  cmd=cmd,
                                  output=stderr.decode("utf-8").strip())
     return (stdout.decode('utf-8').strip(), stderr.decode('utf-8').strip())
+
 
 @when('pingpong.configured')
 @when('actions.start')
