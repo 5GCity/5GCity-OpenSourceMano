@@ -39,6 +39,7 @@ __date__ ="$19-nov-2015 09:07:15$"
 import socket
 import select
 import threading
+import logging
 
 
 class ConsoleProxyException(Exception):
@@ -50,7 +51,7 @@ class ConsoleProxyThread(threading.Thread):
     buffer_size = 4096
     check_finish = 1 #frequency to check if requested to end in seconds
 
-    def __init__(self, host, port, console_host, console_port):
+    def __init__(self, host, port, console_host, console_port, log_level=None):
         try:
             threading.Thread.__init__(self)
             self.console_host = console_host
@@ -69,6 +70,10 @@ class ConsoleProxyThread(threading.Thread):
             self.input_list = [self.server]
             self.channel = {}
             self.terminate = False #put at True from outside to force termination
+            self.logger = logging.getLogger('openmano.console')
+            if log_level:
+                self.logger.setLevel( getattr(logging, log_level) )
+
         except (socket.error, socket.herror, socket.gaierror, socket.timeout) as e:
             if e is socket.error and e.errno==98:
                 raise ConsoleProxyExceptionPortUsed("socket.error " + str(e))
@@ -79,12 +84,12 @@ class ConsoleProxyThread(threading.Thread):
             try:
                 inputready, _, _ = select.select(self.input_list, [], [], self.check_finish)
             except select.error as e:
-                print self.name, ": Exception on select %s: %s" % (type(e).__name__, str(e) )
+                self.logger.error("Exception on select %s: %s", type(e).__name__, str(e) )
                 self.on_terminate()
 
             if self.terminate:
                 self.on_terminate()
-                print self.name, ": Terminate because commanded"
+                self.logger.debug("Terminate because commanded")
                 break
             
             for sock in inputready:
@@ -106,7 +111,7 @@ class ConsoleProxyThread(threading.Thread):
         try:
             clientsock, clientaddr = self.server.accept()
         except (socket.error, socket.herror, socket.gaierror, socket.timeout) as e:
-            print self.name, ": Exception on_accept %s: %s" % (type(e).__name__, str(e) )
+            self.logger.error("Exception on_accept %s: %s", type(e).__name__, str(e) )
             return False
         #print self.name, ": Accept new client ", clientaddr
 
@@ -116,7 +121,7 @@ class ConsoleProxyThread(threading.Thread):
             forward.connect((self.console_host, self.console_port))
             name = "%s:%d => (%s:%d => %s:%d) => %s:%d" %\
                 (clientsock.getpeername() + clientsock.getsockname()  + forward.getsockname() + forward.getpeername() )
-            print self.name, ": new connection " + name
+            self.logger.warn("new connection " + name)
                 
             self.input_list.append(clientsock)
             self.input_list.append(forward)
@@ -128,8 +133,8 @@ class ConsoleProxyThread(threading.Thread):
             self.channel[forward] = info
             return True
         except (socket.error, socket.herror, socket.gaierror, socket.timeout) as e:
-            print self.name, ": Exception on_connect to server %s:%d; %s: %s" % (self.console_host, self.console_port, type(e).__name__, str(e) )
-            print self.name, ": Close client side ", clientaddr
+            self.logger.error("Exception on_connect to server %s:%d; %s: %s  Close client side %s",
+                self.console_host, self.console_port, type(e).__name__, str(e), str(clientaddr) )
             clientsock.close()
             return False
 
@@ -139,18 +144,18 @@ class ConsoleProxyThread(threading.Thread):
         info = self.channel[sock]
         #debug info
         sockname = "client" if sock is info["clientsock"] else "server"
-        print self.name, ": del connection %s %s at %s side" % (info["name"], cause, sockname)
+        self.logger.warn("del connection %s %s at %s side", info["name"], str(cause), str(sockname) )
         #close sockets
         try:
             # close the connection with client
             info["clientsock"].close()  # equivalent to do self.s.close()
         except (socket.error, socket.herror, socket.gaierror, socket.timeout) as e:
-            print self.name, ": Exception on_close client socket %s: %s" % (type(e).__name__, str(e) )
+            self.logger.error("Exception on_close client socket %s: %s", type(e).__name__, str(e) )
         try:
             # close the connection with remote server
             info["serversock"].close()
         except (socket.error, socket.herror, socket.gaierror, socket.timeout) as e:
-            print self.name, ": Exception on_close server socket %s: %s" % (type(e).__name__, str(e) )
+            self.logger.error("Exception on_close server socket %s: %s", type(e).__name__, str(e) )
         
         #remove objects from input_list
         self.input_list.remove(info["clientsock"])

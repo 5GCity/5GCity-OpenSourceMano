@@ -240,7 +240,7 @@ if __name__=="__main__":
         logger.critical("Starting openmano server version: '%s %s' command: '%s'",  
                          __version__, version_date, " ".join(sys.argv))
         
-        for log_module in ("nfvo", "http", "vim", "db"):
+        for log_module in ("nfvo", "http", "vim", "db", "console"):
             log_level_module = "log_level_" + log_module
             log_file_module = "log_file_" + log_module
             logger_module = logging.getLogger('openmano.' + log_module)
