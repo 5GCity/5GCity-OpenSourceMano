@@ -30,6 +30,9 @@ vnfd:vnfd-catalog:
             # Image including the full path
             image: '/mnt/powervault/virtualization/vnfs/demos/ubuntu/ubuntu-16.04.img'
 
+            # User-data injection
+            cloud-init-file: cloud_init.cfg
+
             external-interface:
             # Specify the external interfaces
             # There can be multiple interfaces defined
