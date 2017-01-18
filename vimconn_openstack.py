@@ -721,8 +721,12 @@ class vimconnector(vimconn.vimconnector):
                     self.logger.warn("new_vminstance: Warning, can not connect a passthrough interface ")
                     #TODO insert this when openstack consider passthrough ports as openstack neutron ports
                 if net.get('floating_ip', False):
+                    net['exit_on_floating_ip_error'] = True
                     external_network.append(net)
-                 
+                elif net['use'] == 'mgmt' and self.config.get('use_floating_ip'):
+                    net['exit_on_floating_ip_error'] = False
+                    external_network.append(net)
+
             if metadata_vpci:
                 metadata = {"pci_assignement": json.dumps(metadata_vpci)}
                 if len(metadata["pci_assignement"]) >255:
@@ -840,71 +844,72 @@ class vimconnector(vimconn.vimconnector):
             pool_id = None
             floating_ips = self.neutron.list_floatingips().get("floatingips", ())
             for floating_network in external_network:
-                # wait until vm is active
-                elapsed_time = 0
-                while elapsed_time < server_timeout:
-                    status = self.nova.servers.get(server.id).status
-                    if status == 'ACTIVE':
-                        break
-                    time.sleep(1)
-                    elapsed_time += 1
+                try:
+                    # wait until vm is active
+                    elapsed_time = 0
+                    while elapsed_time < server_timeout:
+                        status = self.nova.servers.get(server.id).status
+                        if status == 'ACTIVE':
+                            break
+                        time.sleep(1)
+                        elapsed_time += 1
 
-                #if we exceeded the timeout rollback
-                if elapsed_time >= server_timeout:
-                    self.delete_vminstance(server.id)
-                    raise vimconn.vimconnException('Timeout creating instance ' + name,
-                                                   http_code=vimconn.HTTP_Request_Timeout)
+                    #if we exceeded the timeout rollback
+                    if elapsed_time >= server_timeout:
+                        raise vimconn.vimconnException('Timeout creating instance ' + name,
+                                                       http_code=vimconn.HTTP_Request_Timeout)
 
-                assigned = False
-                while(assigned == False):
-                    if floating_ips:
-                        ip = floating_ips.pop(0)
-                        if not ip.get("port_id", False) and ip.get('tenant_id') == server.tenant_id:
-                            free_floating_ip = ip.get("floating_ip_address")
+                    assigned = False
+                    while(assigned == False):
+                        if floating_ips:
+                            ip = floating_ips.pop(0)
+                            if not ip.get("port_id", False) and ip.get('tenant_id') == server.tenant_id:
+                                free_floating_ip = ip.get("floating_ip_address")
+                                try:
+                                    fix_ip = floating_network.get('ip')
+                                    server.add_floating_ip(free_floating_ip, fix_ip)
+                                    assigned = True
+                                except Exception as e:
+                                    raise vimconn.vimconnException(type(e).__name__ + ": Cannot create floating_ip "+  str(e), http_code=vimconn.HTTP_Conflict)
+                        else:
+                            #Find the external network
+                            external_nets = list()
+                            for net in self.neutron.list_networks()['networks']:
+                                if net['router:external']:
+                                        external_nets.append(net)
+
+                            if len(external_nets) == 0:
+                                raise vimconn.vimconnException("Cannot create floating_ip automatically since no external "
+                                                               "network is present",
+                                                                http_code=vimconn.HTTP_Conflict)
+                            if len(external_nets) > 1:
+                                raise vimconn.vimconnException("Cannot create floating_ip automatically since multiple "
+                                                               "external networks are present",
+                                                               http_code=vimconn.HTTP_Conflict)
+
+                            pool_id = external_nets[0].get('id')
+                            param = {'floatingip': {'floating_network_id': pool_id, 'tenant_id': server.tenant_id}}
                             try:
+                                #self.logger.debug("Creating floating IP")
+                                new_floating_ip = self.neutron.create_floatingip(param)
+                                free_floating_ip = new_floating_ip['floatingip']['floating_ip_address']
                                 fix_ip = floating_network.get('ip')
                                 server.add_floating_ip(free_floating_ip, fix_ip)
-                                assigned = True
+                                assigned=True
                             except Exception as e:
-                                self.delete_vminstance(server.id)
-                                raise vimconn.vimconnException(type(e).__name__ + ": Cannot create floating_ip "+  str(e), http_code=vimconn.HTTP_Conflict)
-                    else:
-                        #Find the external network
-                        external_nets = list()
-                        for net in self.neutron.list_networks()['networks']:
-                            if net['router:external']:
-                                    external_nets.append(net)
+                                raise vimconn.vimconnException(type(e).__name__ + ": Cannot assign floating_ip "+  str(e), http_code=vimconn.HTTP_Conflict)
+                except Exception as e:
+                    if not floating_network['exit_on_floating_ip_error']:
+                        self.logger.warn("Cannot create floating_ip. %s", str(e))
+                        continue
+                    self.delete_vminstance(server.id)
+                    raise
 
-                        if len(external_nets) == 0:
-                            self.delete_vminstance(server.id)
-                            raise vimconn.vimconnException("Cannot create floating_ip automatically since no external "
-                                                           "network is present",
-                                                            http_code=vimconn.HTTP_Conflict)
-                        if len(external_nets) > 1:
-                            self.delete_vminstance(server.id)
-                            raise vimconn.vimconnException("Cannot create floating_ip automatically since multiple "
-                                                           "external networks are present",
-                                                           http_code=vimconn.HTTP_Conflict)
-
-                        pool_id = external_nets[0].get('id')
-                        param = {'floatingip': {'floating_network_id': pool_id, 'tenant_id': server.tenant_id}}
-                        try:
-                            #self.logger.debug("Creating floating IP")
-                            new_floating_ip = self.neutron.create_floatingip(param)
-                            free_floating_ip = new_floating_ip['floatingip']['floating_ip_address']
-                            fix_ip = floating_network.get('ip')
-                            server.add_floating_ip(free_floating_ip, fix_ip)
-                            assigned=True
-                        except Exception as e:
-                            self.delete_vminstance(server.id)
-                            raise vimconn.vimconnException(type(e).__name__ + ": Cannot create floating_ip "+  str(e), http_code=vimconn.HTTP_Conflict)
-                
             return server.id
 #        except nvExceptions.NotFound as e:
 #            error_value=-vimconn.HTTP_Not_Found
 #            error_text= "vm instance %s not found" % vm_id
-        except (ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError
-                ) as e:
+        except (ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError) as e:
             # delete the volumes we just created
             if block_device_mapping != None:
                 for volume_id in block_device_mapping.itervalues():
