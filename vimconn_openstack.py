@@ -78,6 +78,9 @@ class vimconnector(vimconn.vimconnector):
         
         self.k_creds={}
         self.n_creds={}
+        if self.config.get("insecure"):
+            self.k_creds["insecure"] = True
+            self.n_creds["insecure"] = True
         if not url:
             raise TypeError, 'url param can not be NoneType'
         self.k_creds['auth_url'] = url
