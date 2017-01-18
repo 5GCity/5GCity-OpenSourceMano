@@ -2759,6 +2759,8 @@ def vim_action_get(mydb, tenant_id, datacenter, item, name):
             content = myvim.get_network_list(filter_dict=filter_dict)
         elif item=="tenants":
             content = myvim.get_tenant_list(filter_dict=filter_dict)
+        elif item == "images":
+            content = myvim.get_image_list(filter_dict=filter_dict)
         else:
             raise NfvoException(item + "?", HTTP_Method_Not_Allowed)
         logger.debug("vim_action response %s", content) #update nets Change from VIM format to NFVO format
@@ -2796,6 +2798,8 @@ def vim_action_delete(mydb, tenant_id, datacenter, item, name):
             content = myvim.delete_network(item_id)
         elif item=="tenants":
             content = myvim.delete_tenant(item_id)
+        elif item == "images":
+            content = myvim.delete_image(item_id)
         else:
             raise NfvoException(item + "?", HTTP_Method_Not_Allowed)    
     except vimconn.vimconnException as e:

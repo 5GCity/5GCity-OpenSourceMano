@@ -28,7 +28,7 @@ openmano client used to interact with openmano-server (openmanod)
 '''
 __author__="Alfonso Tierno, Gerardo Garcia"
 __date__ ="$09-oct-2014 09:09:48$"
-__version__="0.4.9-r515"
+__version__="0.4.10-r516"
 version_date="Jan 2017"
 
 from argcomplete.completers import FilesCompleter
@@ -1415,7 +1415,7 @@ if __name__=="__main__":
             datacenter_action_parser.add_argument("-f","--force", action="store_true", help="do not prompt for confirmation")
         datacenter_action_parser.set_defaults(func=datacenter_netmap_action, action=item)
     
-    for item in ("network", "tenant"):
+    for item in ("network", "tenant", "image"):
         if item=="network":
             commnad_name = 'vim-net'
         else:
@@ -1430,17 +1430,18 @@ if __name__=="__main__":
         vim_item_del_parser.add_argument("--datacenter", action="store", help="specifies the datacenter")
         vim_item_del_parser.set_defaults(func=vim_action, item=item, action="delete")
 
-        vim_item_create_parser = subparsers.add_parser(commnad_name + '-create', parents=[parent_parser], help="create a "+item+" at vim")
-        vim_item_create_parser.add_argument("file", nargs='?', help="descriptor of the %s. Must be a file or yaml/json text" % item).completer = FilesCompleter
-        vim_item_create_parser.add_argument("--name", action="store", help="name of the %s" % item  )
-        vim_item_create_parser.add_argument("--datacenter", action="store", help="specifies the datacenter")
-        if item=="network":
-            vim_item_create_parser.add_argument("--type", action="store", help="type of network, data, ptp, bridge")
-            vim_item_create_parser.add_argument("--shared", action="store_true", help="Private or shared")
-            vim_item_create_parser.add_argument("--bind-net", action="store", help="For openvim datacenter type, net to be bind to, for vlan type, use sufix ':<vlan_tag>'")
-        else:
-            vim_item_create_parser.add_argument("--description", action="store", help="description of the %s" % item)
-        vim_item_create_parser.set_defaults(func=vim_action, item=item, action="create")
+        if item == "network" or item == "tenant":
+            vim_item_create_parser = subparsers.add_parser(commnad_name + '-create', parents=[parent_parser], help="create a "+item+" at vim")
+            vim_item_create_parser.add_argument("file", nargs='?', help="descriptor of the %s. Must be a file or yaml/json text" % item).completer = FilesCompleter
+            vim_item_create_parser.add_argument("--name", action="store", help="name of the %s" % item  )
+            vim_item_create_parser.add_argument("--datacenter", action="store", help="specifies the datacenter")
+            if item=="network":
+                vim_item_create_parser.add_argument("--type", action="store", help="type of network, data, ptp, bridge")
+                vim_item_create_parser.add_argument("--shared", action="store_true", help="Private or shared")
+                vim_item_create_parser.add_argument("--bind-net", action="store", help="For openvim datacenter type, net to be bind to, for vlan type, use sufix ':<vlan_tag>'")
+            else:
+                vim_item_create_parser.add_argument("--description", action="store", help="description of the %s" % item)
+            vim_item_create_parser.set_defaults(func=vim_action, item=item, action="create")
 
     argcomplete.autocomplete(main_parser)
     
