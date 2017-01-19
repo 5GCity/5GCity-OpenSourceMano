@@ -19,6 +19,7 @@
 
 import argparse
 import logging
+import paramiko
 import os
 import subprocess
 import sys
@@ -27,55 +28,71 @@ import time
 import yaml
 
 
+def ssh(cmd, host, user, password):
+    """ Run an arbitrary command over SSH. """
+
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+    client.connect(host, port=22, username=user, password=password)
+
+    stdin, stdout, stderr = client.exec_command(cmd, get_pty=True)
+    retcode = stdout.channel.recv_exit_status()
+    client.close()
+
+    return (
+        retcode,
+        stdout.read().decode('utf-8').strip(),
+        stderr.read().decode('utf-8').strip()
+    )
+
+
 def start_traffic(yaml_cfg, logger):
     '''Use curl and set admin status to enable on pong and ping vnfs'''
 
     curl_fmt = 'curl -D /dev/stdout -H "Accept: application/vnd.yang.data' \
                    '+xml" -H "Content-Type: application/vnd.yang.data+json" ' \
-                   '-X POST -d "{{ {data} }}" http://{mgmt_ip}:' \
+                   '-X POST -d "{{ {data} }}" http://127.0.0.1:' \
                    '{mgmt_port}/api/v1/{vnf_type}/{url}'
 
-    def setup_service(mgmt_ip, port, vnf_type, service_ip, service_port):
-        data = '\\"ip\\":\\"{}\\", \\"port\\":5555'.format(service_ip)
-        curl_cmd = curl_fmt.format(
-            mgmt_ip=mgmt_ip,
-            mgmt_port=port,
-            vnf_type=vnf_type,
-            data=data,
-            url='server'
-        )
-
-        logger.debug("Executing cmd: %s", curl_cmd)
-        proc = subprocess.run(curl_cmd, shell=True,
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE)
-
-        logger.debug("Process: {}".format(proc))
-
-        return proc.returncode
-
-    def enable_service(mgmt_ip, port, vnf_type):
-        curl_cmd = curl_fmt.format(
-            mgmt_ip=mgmt_ip,
-            mgmt_port=port,
-            vnf_type=vnf_type,
-            data='\\"enable\\":true',
-            url='adminstatus/state'
-        )
-
-        logger.debug("Executing cmd: %s", curl_cmd)
-        proc = subprocess.run(curl_cmd, shell=True,
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE)
-
-        logger.debug("Process: {}".format(proc))
-
-        return proc.returncode
+    # Get userid and password for the VNF
+    user = yaml_cfg['parameter']['ssh-username']
+    passwd = yaml_cfg['parameter']['ssh-password']
 
     # Get port from user parameter
     service_port = yaml_cfg['parameter']['port']
 
     service_ip = None
+
+    def exec_cmd(vnf_type, mgmt_ip, port, url, data):
+        curl_cmd = curl_fmt.format(
+            mgmt_port=port,
+            vnf_type=vnf_type,
+            data=data,
+            url=url
+        )
+
+        logger.debug("Executing cmd: %s", curl_cmd)
+        rc, out, err = ssh(curl_cmd, mgmt_ip, user, passwd)
+
+        if rc != 0:
+            logger.error("cmd={}, rc={}, stderr={}, stdout={}".
+                         format(curl_cmd, rc, err, out))
+        else:
+            logger.debug("cmd={}, rc={}, stderr={}, stdout={}".
+                         format(curl_cmd, rc, err, out))
+
+        return rc
+
+    def setup_service(mgmt_ip, port, vnf_type):
+        data = '\\"ip\\":\\"{}\\", \\"port\\":5555'.format(service_ip)
+        return exec_cmd(vnf_type, mgmt_ip, port, 'server', data)
+
+    def enable_service(mgmt_ip, port, vnf_type):
+        data='\\"enable\\":true'
+        url='adminstatus/state'
+        return exec_cmd(vnf_type, mgmt_ip, port, url, data)
+
     # Enable pong service first
     for index, vnfr in yaml_cfg['vnfr'].items():
         logger.debug("VNFR {}: {}".format(index, vnfr))
@@ -95,7 +112,7 @@ def start_traffic(yaml_cfg, logger):
             max_tries = 60
             tries = 0
             while tries < max_tries:
-                rc = setup_service(mgmt_ip, port, vnf_type, service_ip, service_port)
+                rc = setup_service(mgmt_ip, port, vnf_type)
                 tries += 1
                 if rc != 0:
                     logger.error("Setup service for pong failed ({}): {}".
@@ -104,13 +121,14 @@ def start_traffic(yaml_cfg, logger):
                         return rc
                     else:
                         time.sleep(1) # Sleep for 1 seconds
+                else:
+                    break
 
             rc = enable_service(mgmt_ip, port, vnf_type)
             if rc != 0:
                 logger.error("Enable service for pong failed: {}".
                              format(rc))
                 return rc
-            break
 
     # Add a delay to provide pong port to come up
     time.sleep(1)
@@ -131,7 +149,7 @@ def start_traffic(yaml_cfg, logger):
             max_tries = 30
             tries = 0
             while tries < max_tries:
-                rc = setup_service(mgmt_ip, port, vnf_type, service_ip, service_port)
+                rc = setup_service(mgmt_ip, port, vnf_type)
                 tries += 1
                 if rc != 0:
                     logger.error("Setup service for ping failed ({}): {}".
@@ -140,12 +158,13 @@ def start_traffic(yaml_cfg, logger):
                         return rc
                     else:
                         time.sleep(1) # Sleep for 1 seconds
+                else:
+                    break
 
             rc = enable_service(mgmt_ip, port, vnf_type)
             if rc != 0:
                 logger.error("Enable service for ping failed: {}".
                              format(rc))
-            break
 
     return rc
 

@@ -22,7 +22,7 @@ vnfd:vnfd-catalog:
         short-name: pong_vnf
         logo: rift_logo.png
         vendor: RIFT.io
-        version: '1.0'
+        version: '1.1'
         description: This is an example RIFT.ware VNF
         connection-point:
         -   name: pong_vnfd/cp0
