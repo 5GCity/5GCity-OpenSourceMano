@@ -49,22 +49,6 @@ def get_port():
     return port
 
 
-def run(cmd):
-    """ Run a command on the local machine. """
-    if isinstance(cmd, str):
-        cmd = cmd.split() if ' ' in cmd else [cmd]
-    p = Popen(cmd,
-              stdout=PIPE,
-              stderr=PIPE)
-    stdout, stderr = p.communicate()
-    retcode = p.poll()
-    if retcode > 0:
-        raise CalledProcessError(returncode=retcode,
-                                 cmd=cmd,
-                                 output=stderr.decode("utf-8").strip())
-    return (stdout.decode('utf-8').strip(), stderr.decode('utf-8').strip())
-
-
 @when('pingpong.configured')
 @when('actions.start')
 def start():
@@ -149,7 +133,7 @@ def set_server():
             data,
         )
 
-        result, err = run(cmd)
+        result, err = charms.sshproxy._run(cmd)
     except Exception as e:
         action_fail('command failed: {}, errors: {}'.format(e, e.output))
     else:
@@ -167,7 +151,7 @@ def set_rate():
             rate = action_get('rate')
             cmd = format_curl('POST', '/rate', '{{"rate" : {}}}'.format(rate))
 
-            result, err = run(cmd)
+            result, err = charms.sshproxy._run(cmd)
     except Exception as e:
         err = "{}".format(e)
         action_fail('command failed: {}, errors: {}'.format(err, e.output))
@@ -185,7 +169,7 @@ def get_rate():
         if is_ping():
             cmd = format_curl('GET', '/rate')
 
-            result, err = run(cmd)
+            result, err = charms.sshproxy._run(cmd)
     except Exception as e:
         action_fail('command failed: {}, errors: {}'.format(e, e.output))
     else:
@@ -201,7 +185,7 @@ def get_state():
     try:
         cmd = format_curl('GET', '/state')
 
-        result, err = run(cmd)
+        result, err = charms.sshproxy._run(cmd)
     except Exception as e:
         action_fail('command failed: {}, errors: {}'.format(e, e.output))
     else:
@@ -217,7 +201,7 @@ def get_stats():
     try:
         cmd = format_curl('GET', '/stats')
 
-        result, err = run(cmd)
+        result, err = charms.sshproxy._run(cmd)
     except Exception as e:
         action_fail('command failed: {}, errors: {}'.format(e, e.output))
     else:
@@ -233,7 +217,7 @@ def start_traffic():
     try:
         cmd = format_curl('POST', '/adminstatus/state', '{"enable" : true}')
 
-        result, err = run(cmd)
+        result, err = charms.sshproxy._run(cmd)
     except Exception as e:
         action_fail('command failed: {}, errors: {}'.format(e, e.output))
     else:
@@ -249,7 +233,7 @@ def stop_traffic():
     try:
         cmd = format_curl('POST', '/adminstatus/state', '{"enable" : false}')
 
-        result, err = run(cmd)
+        result, err = charms.sshproxy._run(cmd)
     except Exception as e:
         action_fail('command failed: {}, errors: {}'.format(e, e.output))
     else:
@@ -268,7 +252,7 @@ def format_curl(method, path, data=None):
         return None
 
     # Get our service info
-    host = cfg['ssh-hostname']
+    host = '127.0.0.1'
     port = get_port()
     mode = cfg['mode']
 
