@@ -996,14 +996,14 @@ def http_post_scenarios(tenant_id):
 def http_post_scenario_action(tenant_id, scenario_id):
     '''take an action over a scenario'''
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
-    #check valid tenant_id
+    # parse input data
+    http_content, _ = format_in(scenario_action_schema)
+    r = utils.remove_extra_items(http_content, scenario_action_schema)
+    if r:
+        logger.debug("Remove received extra items %s", str(r))
     try:
-        nfvo.check_tenant(mydb, tenant_id) 
-        #parse input data
-        http_content,_ = format_in( scenario_action_schema )
-        r = utils.remove_extra_items(http_content, scenario_action_schema)
-        if r:
-            logger.debug("Remove received extra items %s", str(r))
+        # check valid tenant_id
+        nfvo.check_tenant(mydb, tenant_id)
         if "start" in http_content:
             data = nfvo.start_scenario(mydb, tenant_id, scenario_id, http_content['start']['instance_name'], \
                         http_content['start'].get('description',http_content['start']['instance_name']),
@@ -1126,15 +1126,15 @@ def http_put_scenario_id(tenant_id, scenario_id):
 def http_post_instances(tenant_id):
     '''create an instance-scenario'''
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    # parse input data
+    http_content, used_schema = format_in(instance_scenario_create_schema_v01)
+    r = utils.remove_extra_items(http_content, used_schema)
+    if r is not None:
+        logger.warning("http_post_instances: Warning: remove extra items %s", str(r))
     try:
         #check valid tenant_id
         if tenant_id != "any":
             nfvo.check_tenant(mydb, tenant_id) 
-        #parse input data
-        http_content,used_schema = format_in( instance_scenario_create_schema_v01)
-        r = utils.remove_extra_items(http_content, used_schema)
-        if r is not None:
-            logger.warning("http_post_instances: Warning: remove extra items %s", str(r))
         data = nfvo.create_instance(mydb, tenant_id, http_content["instance"])
         return format_out(data)
     except (nfvo.NfvoException, db_base_Exception) as e:
@@ -1225,16 +1225,16 @@ def http_delete_instance_id(tenant_id, instance_id):
 def http_post_instance_scenario_action(tenant_id, instance_id):
     '''take an action over a scenario instance'''
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    # parse input data
+    http_content, _ = format_in(instance_scenario_action_schema)
+    r = utils.remove_extra_items(http_content, instance_scenario_action_schema)
+    if r:
+        logger.debug("Remove received extra items %s", str(r))
     try:
         #check valid tenant_id
         if tenant_id != "any":
             nfvo.check_tenant(mydb, tenant_id) 
 
-        #parse input data
-        http_content,_ = format_in( instance_scenario_action_schema )
-        r = utils.remove_extra_items(http_content, instance_scenario_action_schema)
-        if r:
-            logger.debug("Remove received extra items %s", str(r))
         #print "http_post_instance_scenario_action input: ", http_content
         #obtain data
         instance = mydb.get_instance_scenario(instance_id, tenant_id)
