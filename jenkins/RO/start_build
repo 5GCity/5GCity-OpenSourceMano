@@ -25,16 +25,28 @@ OSM_JENKINS=$(dirname $HERE)
 # SET YOU MDG repository name here
 export OSM_MDG=RO
 OSM_load_config
+
+NOTEST=""
+if [ $1 = "--notest" ]; then
+    shift
+    NOTEST="y"
+fi
+
 OSM_git_checkout "$@"
 
+INFO "installing RO packages and dependencies from current repo (--noclone)"
+./scripts/install-openmano.sh --noclone --force -q
+RC=$?
+
+if [ -n "$NOTEST" ]; then
+    INFO "done, RC=$RC"
+    exit $RC
+fi
 
 INFO "starting build"
 
 INFO "  cleaning .pyc"
 rm -f *.pyc
-
-INFO "  installing openmano packages and dependencies from current repo (--noclone)"
-./scripts/install-openmano.sh --noclone --force -q
 
 INFO "  compiling *.py"
 TEMPFILE="$(mktemp -q -p . "openmanolinker.XXXXXX.py")"

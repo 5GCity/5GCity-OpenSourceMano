@@ -279,7 +279,7 @@ echo -e "\nChecking required packages: wget, curl, tar"
 dpkg -l wget curl tar &>/dev/null || ! echo -e "    One or several packages are not installed.\nInstalling required packages\n     Root privileges are required" || sudo apt install -y wget curl tar
 
 echo -e "\nCreating the containers and building ..."
-$OSM_DEVOPS/jenkins/host/start_build RO checkout $COMMIT_ID
+$OSM_DEVOPS/jenkins/host/start_build RO --notest checkout $COMMIT_ID
 $OSM_DEVOPS/jenkins/host/start_build VCA
 $OSM_DEVOPS/jenkins/host/start_build SO checkout $COMMIT_ID
 $OSM_DEVOPS/jenkins/host/start_build UI checkout $COMMIT_ID
