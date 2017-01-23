@@ -28,7 +28,7 @@ openmano client used to interact with openmano-server (openmanod)
 '''
 __author__="Alfonso Tierno, Gerardo Garcia"
 __date__ ="$09-oct-2014 09:09:48$"
-__version__="0.4.10-r516"
+__version__="0.4.11-r517"
 version_date="Jan 2017"
 
 from argcomplete.completers import FilesCompleter
@@ -357,7 +357,7 @@ def vnf_list(args):
                 print "    External interfaces:"
                 for interface in vnf['external-connections']:
                     print "        %s %s %s %s" %(interface['external_name'].ljust(20), interface['vm_name'].ljust(20), interface['internal_name'].ljust(20), \
-                                                  interface['vpci'].ljust(14))
+                                                  interface.get('vpci',"").ljust(14))
     else:
         print content['error']['description']
         if args.verbose:
