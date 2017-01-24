@@ -1107,7 +1107,7 @@ class vimconnector(vimconn.vimconnector):
                 self.logger.debug("List of already created catalog items: {}".format(image_list))
                 return image_list
         except Exception as exp:
-            vimconn.vimconnException("Exception occured while retriving catalog items {}".format(exp))
+            raise vimconn.vimconnException("Exception occured while retriving catalog items {}".format(exp))
 
     def get_vappid(self, vdc=None, vapp_name=None):
         """ Method takes vdc object and vApp name and returns vapp uuid or None
