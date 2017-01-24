@@ -1096,17 +1096,18 @@ class vimconnector(vimconn.vimconnector):
                     catalog_uuid = catalog.get_id().split(":")[3]
                     name = catalog.name
                     filtered_dict = {}
-
-                    if ("name" not in filter_dict and "id" not in filter_dict) or \
-                       (filter_dict.get('id') == catalog_uuid or filter_dict.get('name') == name):
-                        filtered_dict ["name"] = name
-                        filtered_dict ["id"] = catalog_uuid
-                        image_list.append(filtered_dict)
+                    if filter_dict.get("name") and filter_dict["name"] != name:
+                        continue
+                    if filter_dict.get("id") and filter_dict["id"] != catalog_uuid:
+                        continue
+                    filtered_dict ["name"] = name
+                    filtered_dict ["id"] = catalog_uuid
+                    image_list.append(filtered_dict)
 
                 self.logger.debug("List of already created catalog items: {}".format(image_list))
                 return image_list
         except Exception as exp:
-            self.logger.error("Exception occured while retriving catalog items {}".format(exp))
+            vimconn.vimconnException("Exception occured while retriving catalog items {}".format(exp))
 
     def get_vappid(self, vdc=None, vapp_name=None):
         """ Method takes vdc object and vApp name and returns vapp uuid or None
