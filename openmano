@@ -127,14 +127,14 @@ def _print_verbose(mano_response, verbose_level=0):
                 uuid = content['id']
             elif "vim_id" in content:
                 uuid = content['vim_id']
-            myoutput = "%s %s" %(uuid.ljust(38),content['name'].ljust(20))
+            myoutput = "%s %s" %(uuid.ljust(38),content.get('name',"").ljust(20))
             if "status" in content:
                 myoutput += " " + content['status'].ljust(20)
             elif "enabled" in content and not content["enabled"]:
                 myoutput += " enabled=False".ljust(20)
             if verbose_level >=1:
                 if 'created_at' in content:
-                    myoutput += " " + content['created_at'].ljust(20)
+                    myoutput += " " + content.get('created_at',"").ljust(20)
                 if verbose_level >=2:
                     new_line='\n'
                     if 'type' in content and content['type']!=None:
