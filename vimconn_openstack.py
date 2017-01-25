@@ -761,7 +761,7 @@ class vimconnector(vimconn.vimconnector):
                         userdata_dict["ssh-authorized-keys"] = cloud_config["key-pairs"]
                         userdata_dict["users"] = [{"default": None, "ssh-authorized-keys": cloud_config["key-pairs"] }]
                     if cloud_config.get("users"):
-                        if "users" not in cloud_config:
+                        if "users" not in userdata_dict:
                             userdata_dict["users"] = [ "default" ]
                         for user in cloud_config["users"]:
                             user_info = {
