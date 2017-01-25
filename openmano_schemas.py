@@ -80,6 +80,7 @@ config_schema = {
         "http_port": port_schema,
         "http_admin_port": port_schema,
         "http_host": nameshort_schema,
+        "auto_push_VNF_to_VIMs": {"type":"boolean"},
         "vnf_repository": path_schema,
         "db_host": nameshort_schema,
         "db_user": nameshort_schema,

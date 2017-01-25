@@ -547,6 +547,7 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
     # Step 1. Check the VNF descriptor
     check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=1)
     # Step 2. Check tenant exist
+    vims = {}
     if tenant_id != "any":
         check_tenant(mydb, tenant_id) 
         if "tenant_id" in vnf_descriptor["vnf"]:
@@ -556,9 +557,8 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
         else:
             vnf_descriptor['vnf']['tenant_id'] = tenant_id
         # Step 3. Get the URL of the VIM from the nfvo_tenant and the datacenter
-        vims = get_vim(mydb, tenant_id)
-    else:
-        vims={}
+        if global_config["auto_push_VNF_to_VIMs"]:
+            vims = get_vim(mydb, tenant_id)
 
     # Step 4. Review the descriptor and add missing  fields
     #print vnf_descriptor
@@ -681,6 +681,7 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
     # Step 1. Check the VNF descriptor
     check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=2)
     # Step 2. Check tenant exist
+    vims = {}
     if tenant_id != "any":
         check_tenant(mydb, tenant_id) 
         if "tenant_id" in vnf_descriptor["vnf"]:
@@ -690,9 +691,8 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
         else:
             vnf_descriptor['vnf']['tenant_id'] = tenant_id
         # Step 3. Get the URL of the VIM from the nfvo_tenant and the datacenter
-        vims = get_vim(mydb, tenant_id)
-    else:
-        vims={}
+        if global_config["auto_push_VNF_to_VIMs"]:
+            vims = get_vim(mydb, tenant_id)
 
     # Step 4. Review the descriptor and add missing  fields
     #print vnf_descriptor

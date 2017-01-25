@@ -33,7 +33,7 @@ It loads the configuration file and launches the http_server thread that will li
 '''
 __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$26-aug-2014 11:09:29$"
-__version__="0.5.7-r517"
+__version__="0.5.8-r518"
 version_date="Jan 2017"
 database_version="0.19"      #expected database schema version
 
@@ -64,6 +64,7 @@ def load_configuration(configuration_file):
                      'http_console_host': None,
                      'log_level': 'DEBUG',
                      'log_socket_port': 9022,
+                     'auto_push_VNF_to_VIMs': True
                     }
     try:
         #Check config file exists
