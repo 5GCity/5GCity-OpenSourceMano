@@ -138,7 +138,7 @@ class nfvo_db(db_base.db_base):
                                     ifaceItem["model"] = dataifacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['model']
                                 else:
                                     ifaceItem["vpci"] =  bridgeInterfacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['vpci']
-                                    ifaceItem["mac"] =  bridgeInterfacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['mac_address']
+                                    ifaceItem["mac"] =  bridgeInterfacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['mac']
                                     ifaceItem["bw"] =    bridgeInterfacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['bw']
                                     ifaceItem["model"] = bridgeInterfacesDict[ element['VNFC'] ][ element['local_iface_name'] ]['model']
                                     ifaceItem["port_security"] = \
