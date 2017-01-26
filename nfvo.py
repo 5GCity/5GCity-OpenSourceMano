@@ -194,28 +194,30 @@ def rollback(mydb,  vims, rollback_list):
     else:
         return False," Rollback fails to delete: " + str(undeleted_items)
   
-def check_vnf_descriptor(vnf_descriptor):
+def check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=1):
     global global_config
     #create a dictionary with vnfc-name: vnfc:interface-list  key:values pairs 
     vnfc_interfaces={}
     for vnfc in vnf_descriptor["vnf"]["VNFC"]:
-        name_list = []
+        name_dict = {}
         #dataplane interfaces
         for numa in vnfc.get("numas",() ):
             for interface in numa.get("interfaces",()):
-                if interface["name"] in name_list:
-                    raise NfvoException("Error at vnf:VNFC[name:'{}']:numas:interfaces:name, interface name '{}' already used in this VNFC"\
-                                        .format(vnfc["name"], interface["name"]), 
-                                        HTTP_Bad_Request) 
-                name_list.append( interface["name"] )
+                if interface["name"] in name_dict:
+                    raise NfvoException(
+                        "Error at vnf:VNFC[name:'{}']:numas:interfaces:name, interface name '{}' already used in this VNFC".format(
+                            vnfc["name"], interface["name"]),
+                        HTTP_Bad_Request)
+                name_dict[ interface["name"] ] = "underlay"
         #bridge interfaces
         for interface in vnfc.get("bridge-ifaces",() ):
-            if interface["name"] in name_list:
-                raise NfvoException("Error at vnf:VNFC[name:'{}']:bridge-ifaces:name, interface name '{}' already used in this VNFC"\
-                                    .format(vnfc["name"], interface["name"]),
-                                    HTTP_Bad_Request)
-            name_list.append( interface["name"] ) 
-        vnfc_interfaces[ vnfc["name"] ] = name_list
+            if interface["name"] in name_dict:
+                raise NfvoException(
+                    "Error at vnf:VNFC[name:'{}']:bridge-ifaces:name, interface name '{}' already used in this VNFC".format(
+                        vnfc["name"], interface["name"]),
+                    HTTP_Bad_Request)
+            name_dict[ interface["name"] ] = "overlay"
+        vnfc_interfaces[ vnfc["name"] ] = name_dict
         # check bood-data info
         if "boot-data" in vnfc:
             # check that user-data is incompatible with users and config-files
@@ -228,43 +230,83 @@ def check_vnf_descriptor(vnf_descriptor):
     name_list=[]
     for external_connection in vnf_descriptor["vnf"].get("external-connections",() ):
         if external_connection["name"] in name_list:
-            raise NfvoException("Error at vnf:external-connections:name, value '{}' already used as an external-connection"\
-                                .format(external_connection["name"]),
-                                HTTP_Bad_Request)
+            raise NfvoException(
+                "Error at vnf:external-connections:name, value '{}' already used as an external-connection".format(
+                    external_connection["name"]),
+                HTTP_Bad_Request)
         name_list.append(external_connection["name"])
         if external_connection["VNFC"] not in vnfc_interfaces:
-            raise NfvoException("Error at vnf:external-connections[name:'{}']:VNFC, value '{}' does not match any VNFC"\
-                                .format(external_connection["name"], external_connection["VNFC"]),
-                                HTTP_Bad_Request)
+            raise NfvoException(
+                "Error at vnf:external-connections[name:'{}']:VNFC, value '{}' does not match any VNFC".format(
+                    external_connection["name"], external_connection["VNFC"]),
+                HTTP_Bad_Request)
             
         if external_connection["local_iface_name"] not in vnfc_interfaces[ external_connection["VNFC"] ]:
-            raise NfvoException("Error at vnf:external-connections[name:'{}']:local_iface_name, value '{}' does not match any interface of this VNFC"\
-                                .format(external_connection["name"], external_connection["local_iface_name"]),
-                                HTTP_Bad_Request )
+            raise NfvoException(
+                "Error at vnf:external-connections[name:'{}']:local_iface_name, value '{}' does not match any interface of this VNFC".format(
+                    external_connection["name"],
+                    external_connection["local_iface_name"]),
+                HTTP_Bad_Request )
     
     #check if the info in internal_connections matches with the one in the vnfcs
     name_list=[]
     for internal_connection in vnf_descriptor["vnf"].get("internal-connections",() ):
         if internal_connection["name"] in name_list:
-            raise NfvoException("Error at vnf:internal-connections:name, value '%s' already used as an internal-connection"\
-                                .format(internal_connection["name"]),
-                                HTTP_Bad_Request)
+            raise NfvoException(
+                "Error at vnf:internal-connections:name, value '%s' already used as an internal-connection".format(
+                    internal_connection["name"]),
+                HTTP_Bad_Request)
         name_list.append(internal_connection["name"])
         #We should check that internal-connections of type "ptp" have only 2 elements
-        if len(internal_connection["elements"])>2 and internal_connection["type"] == "ptp":
-            raise NfvoException("Error at vnf:internal-connections[name:'{}']:elements, size must be 2 for a type:'ptp'"\
-                                .format(internal_connection["name"]),
-                                HTTP_Bad_Request)
+
+        if len(internal_connection["elements"])>2 and (internal_connection.get("type") == "ptp" or internal_connection.get("type") == "e-line"):
+            raise NfvoException(
+                "Error at 'vnf:internal-connections[name:'{}']:elements', size must be 2 for a '{}' type. Consider change it to '{}' type".format(
+                    internal_connection["name"],
+                    'ptp' if vnf_descriptor_version==1 else 'e-line',
+                    'data' if vnf_descriptor_version==1 else "e-lan"),
+                HTTP_Bad_Request)
         for port in internal_connection["elements"]:
-            if port["VNFC"] not in vnfc_interfaces:
-                raise NfvoException("Error at vnf:internal-connections[name:'{}']:elements[]:VNFC, value '{}' does not match any VNFC"\
-                                    .format(internal_connection["name"], port["VNFC"]),
-                                    HTTP_Bad_Request)
-            if port["local_iface_name"] not in vnfc_interfaces[ port["VNFC"] ]:
-                raise NfvoException("Error at vnf:internal-connections[name:'{}']:elements[]:local_iface_name, value '{}' does not match any interface of this VNFC"\
-                                    .format(internal_connection["name"], port["local_iface_name"]),
-                                    HTTP_Bad_Request)
-                return -HTTP_Bad_Request, 
+            vnf = port["VNFC"]
+            iface = port["local_iface_name"]
+            if vnf not in vnfc_interfaces:
+                raise NfvoException(
+                    "Error at vnf:internal-connections[name:'{}']:elements[]:VNFC, value '{}' does not match any VNFC".format(
+                        internal_connection["name"], vnf),
+                    HTTP_Bad_Request)
+            if iface not in vnfc_interfaces[ vnf ]:
+                raise NfvoException(
+                    "Error at vnf:internal-connections[name:'{}']:elements[]:local_iface_name, value '{}' does not match any interface of this VNFC".format(
+                        internal_connection["name"], iface),
+                    HTTP_Bad_Request)
+                return -HTTP_Bad_Request,
+            if vnf_descriptor_version==1 and "type" not in internal_connection:
+                if vnfc_interfaces[vnf][iface] == "overlay":
+                    internal_connection["type"] = "bridge"
+                else:
+                    internal_connection["type"] = "data"
+            if vnf_descriptor_version==2 and "implementation" not in internal_connection:
+                if vnfc_interfaces[vnf][iface] == "overlay":
+                    internal_connection["implementation"] = "overlay"
+                else:
+                    internal_connection["implementation"] = "underlay"
+            if (internal_connection.get("type") == "data" or internal_connection.get("type") == "ptp" or \
+                internal_connection.get("implementation") == "underlay") and vnfc_interfaces[vnf][iface] == "overlay":
+                raise NfvoException(
+                    "Error at vnf:internal-connections[name:'{}']:elements[]:{}, interface of type {} connected to an {} network".format(
+                        internal_connection["name"],
+                        iface, 'bridge' if vnf_descriptor_version==1 else 'overlay',
+                        'data' if vnf_descriptor_version==1 else 'underlay'),
+                    HTTP_Bad_Request)
+            if (internal_connection.get("type") == "bridge" or internal_connection.get("implementation") == "overlay") and \
+                vnfc_interfaces[vnf][iface] == "underlay":
+                raise NfvoException(
+                    "Error at vnf:internal-connections[name:'{}']:elements[]:{}, interface of type {} connected to an {} network".format(
+                        internal_connection["name"], iface,
+                        'data' if vnf_descriptor_version==1 else 'underlay',
+                        'bridge' if vnf_descriptor_version==1 else 'overlay'),
+                    HTTP_Bad_Request)
+
 
 def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vim=False, return_on_error = None):
     #look if image exist
@@ -503,7 +545,7 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
     global global_config
     
     # Step 1. Check the VNF descriptor
-    check_vnf_descriptor(vnf_descriptor)
+    check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=1)
     # Step 2. Check tenant exist
     if tenant_id != "any":
         check_tenant(mydb, tenant_id) 
@@ -526,17 +568,7 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
     if "physical" in vnf_descriptor['vnf']:
         del vnf_descriptor['vnf']['physical']
     #print vnf_descriptor
-    # Step 5. Check internal connections
-    # TODO: to be moved to step 1????
-    internal_connections=vnf_descriptor['vnf'].get('internal_connections',[])
-    for ic in internal_connections:
-        if len(ic['elements'])>2 and ic['type']=='ptp':
-            raise NfvoException("Mismatch 'type':'ptp' with {} elements at 'vnf':'internal-conections'['name':'{}']. Change 'type' to 'data'".format(len(ic), ic['name']), 
-                                HTTP_Bad_Request)
-        elif len(ic['elements'])==2 and ic['type']=='data':
-            raise NfvoException("Mismatch 'type':'data' with 2 elements at 'vnf':'internal-conections'['name':'{}']. Change 'type' to 'ptp'".format(ic['name']),
-                                 HTTP_Bad_Request)
-        
+
     # Step 6. For each VNFC in the descriptor, flavors and images are created in the VIM 
     logger.debug('BEGIN creation of VNF "%s"' % vnf_name)
     logger.debug("VNF %s: consisting of %d VNFC(s)" % (vnf_name,len(vnf_descriptor['vnf']['VNFC'])))
@@ -647,7 +679,7 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
     global global_config
     
     # Step 1. Check the VNF descriptor
-    check_vnf_descriptor(vnf_descriptor)
+    check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=2)
     # Step 2. Check tenant exist
     if tenant_id != "any":
         check_tenant(mydb, tenant_id) 
@@ -670,14 +702,7 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
     if "physical" in vnf_descriptor['vnf']:
         del vnf_descriptor['vnf']['physical']
     #print vnf_descriptor
-    # Step 5. Check internal connections
-    # TODO: to be moved to step 1????
-    internal_connections=vnf_descriptor['vnf'].get('internal_connections',[])
-    for ic in internal_connections:
-        if len(ic['elements'])>2 and ic['type']=='e-line':
-            raise NfvoException("Mismatch 'type':'e-line' with {} elements at 'vnf':'internal-conections'['name':'{}']. Change 'type' to 'e-lan'".format(len(ic), ic['name']), 
-                                HTTP_Bad_Request)
-        
+
     # Step 6. For each VNFC in the descriptor, flavors and images are created in the VIM 
     logger.debug('BEGIN creation of VNF "%s"' % vnf_name)
     logger.debug("VNF %s: consisting of %d VNFC(s)" % (vnf_name,len(vnf_descriptor['vnf']['VNFC'])))
