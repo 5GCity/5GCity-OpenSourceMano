@@ -34,6 +34,7 @@ import logging
 import netaddr
 import time
 import yaml
+import random
 
 from novaclient import client as nClient_v2, exceptions as nvExceptions, api_versions as APIVersion
 import keystoneclient.v2_0.client as ksClient_v2
@@ -305,8 +306,9 @@ class vimconnector(vimconn.vimconnector):
             if not ip_profile:
                 ip_profile = {}
             if 'subnet_address' not in ip_profile:
-                #Fake subnet is required 
-                ip_profile['subnet_address'] = "192.168.111.0/24"
+                #Fake subnet is required
+                subnet_rand = random.randint(0, 255)
+                ip_profile['subnet_address'] = "192.168.{}.0/24".format(subnet_rand)
             if 'ip_version' not in ip_profile: 
                 ip_profile['ip_version'] = "IPv4"
             subnet={"name":net_name+"-subnet",
