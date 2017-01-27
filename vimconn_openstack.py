@@ -686,7 +686,7 @@ class vimconnector(vimconn.vimconnector):
                 #TODO ip, security groups
         Returns the instance identifier
         '''
-        self.logger.debug("Creating VM image '%s' flavor '%s' nics='%s'",image_id, flavor_id,str(net_list))
+        self.logger.debug("new_vminstance input: image='%s' flavor='%s' nics='%s'",image_id, flavor_id,str(net_list))
         try:
             metadata={}
             net_list_vim=[]
