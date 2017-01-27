@@ -39,7 +39,7 @@ def read_file(file_to_read):
         f = open(file_to_read, 'r')
         read_data = f.read()
         f.close()
-    except Exception,e:
+    except Exception as e:
         return (False, str(e))
       
     return (True, read_data)
@@ -50,7 +50,7 @@ def write_file(file_to_write, text):
         f = open(file_to_write, 'w')
         f.write(text)
         f.close()
-    except Exception,e:
+    except Exception as e:
         return (False, str(e))
       
     return (True, None)
@@ -61,7 +61,7 @@ def format_in(http_response, schema):
         js_v(client_data, schema)
         #print "Input data: ", str(client_data)
         return True, client_data
-    except js_e.ValidationError, exc:
+    except js_e.ValidationError as exc:
         print "validate_in error, jsonschema exception ", exc.message, "at", exc.path
         return False, ("validate_in error, jsonschema exception ", exc.message, "at", exc.path)
 

@@ -377,7 +377,7 @@ class vimconnector(vimconn.vimconnector):
             js_v(client_data, schema)
             #print "Input data: ", str(client_data)
             return True, client_data
-        except js_e.ValidationError, exc:
+        except js_e.ValidationError as exc:
             print "validate_in error, jsonschema exception ", exc.message, "at", exc.path
             return False, ("validate_in error, jsonschema exception ", exc.message, "at", exc.path)
     
@@ -753,7 +753,7 @@ class vimconnector(vimconn.vimconnector):
         payload_req = vm_data
         try:
             vim_response = requests.post(self.url+'/'+self.tenant+'/servers', headers = self.headers_req, data=payload_req)
-        except requests.exceptions.RequestException, e:
+        except requests.exceptions.RequestException as e:
             print "new_vminstancefromJSON Exception: ", e.args
             return -vimconn.HTTP_Not_Found, str(e.args[0])
         print vim_response
@@ -1079,7 +1079,7 @@ class vimconnector(vimconn.vimconnector):
         url=self.url+'/hosts'
         try:
             vim_response = requests.get(url)
-        except requests.exceptions.RequestException, e:
+        except requests.exceptions.RequestException as e:
             print "get_hosts_info Exception: ", e.args
             return -vimconn.HTTP_Not_Found, str(e.args[0])
         print "vim get", url, "response:",  vim_response.status_code, vim_response.json()
@@ -1101,7 +1101,7 @@ class vimconnector(vimconn.vimconnector):
             url=self.url+'/hosts/'+host['id']
             try:
                 vim_response = requests.get(url)
-            except requests.exceptions.RequestException, e:
+            except requests.exceptions.RequestException as e:
                 print "get_hosts_info Exception: ", e.args
                 return -vimconn.HTTP_Not_Found, str(e.args[0])
             print "vim get", url, "response:",  vim_response.status_code, vim_response.json()
@@ -1123,7 +1123,7 @@ class vimconnector(vimconn.vimconnector):
         url=self.url+'/hosts'
         try:
             vim_response = requests.get(url)
-        except requests.exceptions.RequestException, e:
+        except requests.exceptions.RequestException as e:
             print "get_hosts Exception: ", e.args
             return -vimconn.HTTP_Not_Found, str(e.args[0])
         print "vim get", url, "response:",  vim_response.status_code, vim_response.json()
@@ -1144,7 +1144,7 @@ class vimconnector(vimconn.vimconnector):
             url=self.url+'/' + vim_tenant + '/servers?hostId='+host['id']
             try:
                 vim_response = requests.get(url)
-            except requests.exceptions.RequestException, e:
+            except requests.exceptions.RequestException as e:
                 print "get_hosts Exception: ", e.args
                 return -vimconn.HTTP_Not_Found, str(e.args[0])
             print "vim get", url, "response:",  vim_response.status_code, vim_response.json()
@@ -1164,7 +1164,7 @@ class vimconnector(vimconn.vimconnector):
         url=self.url+'/processor_ranking'
         try:
             vim_response = requests.get(url)
-        except requests.exceptions.RequestException, e:
+        except requests.exceptions.RequestException as e:
             print "get_processor_rankings Exception: ", e.args
             return -vimconn.HTTP_Not_Found, str(e.args[0])
         print "vim get", url, "response:", vim_response.status_code, vim_response.json()
@@ -1207,7 +1207,7 @@ class vimconnector(vimconn.vimconnector):
         payload_req = port_data
         try:
             vim_response = requests.post(self.url_admin+'/ports', headers = self.headers_req, data=payload_req)
-        except requests.exceptions.RequestException, e:
+        except requests.exceptions.RequestException as e:
             self.logger.error("new_external_port Exception: ", str(e))
             return -vimconn.HTTP_Not_Found, str(e.args[0])
         print vim_response
@@ -1241,7 +1241,7 @@ class vimconnector(vimconn.vimconnector):
         payload_req = '{"network":{"name": "' + net_name + '","shared":true,"type": "' + net_type + '"}}'
         try:
             vim_response = requests.post(self.url+'/networks', headers = self.headers_req, data=payload_req)
-        except requests.exceptions.RequestException, e:
+        except requests.exceptions.RequestException as e:
             self.logger.error( "new_external_network Exception: ", e.args)
             return -vimconn.HTTP_Not_Found, str(e.args[0])
         print vim_response
@@ -1281,7 +1281,7 @@ class vimconnector(vimconn.vimconnector):
             url= self.url
         try:
             vim_response = requests.put(url +'/ports/'+port_id, headers = self.headers_req, data=payload_req)
-        except requests.exceptions.RequestException, e:
+        except requests.exceptions.RequestException as e:
             print "connect_port_network Exception: ", e.args
             return -vimconn.HTTP_Not_Found, str(e.args[0])
         print vim_response

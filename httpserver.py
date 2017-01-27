@@ -483,14 +483,14 @@ def http_get_datacenter_id(tenant_id, datacenter_id):
                     try:
                         config_dict = yaml.load(vim_tenant['config'])
                         vim_tenant['config'] = config_dict
-                    except Exception, e:
+                    except Exception as e:
                         logger.error("Exception '%s' while trying to load config information", str(e))
 
         if datacenter['config'] != None:
             try:
                 config_dict = yaml.load(datacenter['config'])
                 datacenter['config'] = config_dict
-            except Exception, e:
+            except Exception as e:
                 logger.error("Exception '%s' while trying to load config information", str(e))
         #change_keys_http2db(content, http2db_datacenter, reverse=True)
         convert_datetime2str(datacenter)

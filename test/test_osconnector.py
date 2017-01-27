@@ -87,7 +87,7 @@ def delete_items():
             try:
                 myvim[name]=id_
                 result=1
-            except Exception, e:
+            except Exception as e:
                 result=-1
                 message= "  " + str(type(e))[6:-1] + ": "+  str(e)
         else:
@@ -108,7 +108,7 @@ if __name__=="__main__":
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hv:u:U:p:t:i:",
                  ["username=", "help", "version=", "password=", "tenant=", "url=","skip-admin-tests",'image='])
-    except getopt.GetoptError, err:
+    except getopt.GetoptError as err:
         # print help information and exit:
         print "Error:", err # will print something like "option -a not recognized"
         usage()
@@ -158,7 +158,7 @@ if __name__=="__main__":
                 user=creds['username'], passwd=creds['password'],
                 debug = False, config={'network_vlan_ranges':'physnet_sriov'} )
             print " Ok"
-        except Exception, e:
+        except Exception as e:
             print " Fail"
             print str(type(e))[6:-1] + ": "+  str(e) 
             exit(-1)
@@ -229,7 +229,7 @@ if __name__=="__main__":
                 rollback_list.append(("creds", "tenant", creds["tenant_name"]))
                 rollback_list.append(("creds", "user",   creds["username"]))
                 rollback_list.append(("creds", "passwd", creds["password"]))
-            except Exception, e:
+            except Exception as e:
                 print " Fail"
                 print " Error setting osconnector to new tenant:", str(type(e))[6:-1] + ": "+  str(e)
                 exit(-1)
