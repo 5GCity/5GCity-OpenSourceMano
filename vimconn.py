@@ -242,7 +242,13 @@ class vimconnector():
             Returns the flavor dict details {'id':<>, 'name':<>, other vim specific } #TODO to concrete
         '''
         raise vimconnNotImplemented( "Should have implemented this" )
-        
+
+    def get_flavor_id_from_data(self, flavor_dict):
+        """Obtain flavor id that match the flavor description
+           Returns the flavor_id or raises a vimconnNotFoundException
+        """
+        raise vimconnNotImplemented( "Should have implemented this" )
+
     def new_flavor(self, flavor_data):
         '''Adds a tenant flavor to VIM
             flavor_data contains a dictionary with information, keys:
@@ -287,7 +293,9 @@ class vimconnector():
         raise vimconnNotImplemented( "Should have implemented this" )
 
     def get_image_id_from_path(self, path):
-        '''Get the image id from image path in the VIM database. Returns the image_id'''
+        """Get the image id from image path in the VIM database.
+           Returns the image_id or raises a vimconnNotFoundException
+        """
         raise vimconnNotImplemented( "Should have implemented this" )
         
     def get_image_list(self, filter_dict={}):

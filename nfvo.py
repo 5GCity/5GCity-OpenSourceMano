@@ -465,9 +465,16 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
         #create flavor at vim
         logger.debug("nfvo.create_or_use_flavor() adding flavor to VIM %s", vim["name"])
         try:
-            flavor_vim_id = vim.new_flavor(flavor_dict)
-            rollback_list.append({"where":"vim", "vim_id": vim_id, "what":"flavor","uuid":flavor_vim_id})
-            flavor_created="true"
+            flavor_vim_id = None
+            flavor_vim_id=vim.get_flavor_id_from_data(flavor_dict)
+            flavor_create="false"
+        except vimconn.vimconnException as e:
+            pass
+        try:
+            if not flavor_vim_id:
+                flavor_vim_id = vim.new_flavor(flavor_dict)
+                rollback_list.append({"where":"vim", "vim_id": vim_id, "what":"flavor","uuid":flavor_vim_id})
+                flavor_created="true"
         except vimconn.vimconnException as e:
             if return_on_error:
                 logger.error("Error creating flavor at VIM %s: %s.", vim["name"], str(e))

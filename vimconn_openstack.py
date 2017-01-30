@@ -464,6 +464,38 @@ class vimconnector(vimconn.vimconnector):
         except (nvExceptions.NotFound, nvExceptions.ClientException, ksExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)
 
+    def get_flavor_id_from_data(self, flavor_dict):
+        """Obtain flavor id that match the flavor description
+           Returns the flavor_id or raises a vimconnNotFoundException
+        """
+        try:
+            self._reload_connection()
+            numa=None
+            numas = flavor_dict.get("extended",{}).get("numas")
+            if numas:
+                #TODO
+                raise vimconn.vimconnNotFoundException("Flavor with EPA still not implemted")
+                # if len(numas) > 1:
+                #     raise vimconn.vimconnNotFoundException("Cannot find any flavor with more than one numa")
+                # numa=numas[0]
+                # numas = extended.get("numas")
+            for flavor in self.nova.flavors.list():
+                epa = flavor.get_keys()
+                if epa:
+                    continue
+                    #TODO 
+                if flavor.ram != flavor_dict["ram"]:
+                    continue
+                if flavor.vcpus != flavor_dict["vcpus"]:
+                    continue
+                if flavor.disk != flavor_dict["disk"]:
+                    continue
+                return flavor.id
+            raise vimconn.vimconnNotFoundException("Cannot find any flavor matching '{}'".format(str(flavor_dict)))
+        except (nvExceptions.NotFound, nvExceptions.ClientException, ksExceptions.ClientException, ConnectionError) as e:
+            self._format_exception(e)
+
+
     def new_flavor(self, flavor_data, change_name_if_used=True):
         '''Adds a tenant flavor to openstack VIM
         if change_name_if_used is True, it will change name in case of conflict, because it is not supported name repetition
