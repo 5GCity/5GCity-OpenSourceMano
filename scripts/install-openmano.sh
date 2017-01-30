@@ -261,6 +261,8 @@ echo '
 #################################################################'
 [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-yaml python-bottle python-mysqldb python-jsonschema python-paramiko python-argcomplete python-requests python-logutils libxml2-dev libxslt-dev python-dev python-pip"
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "PyYAML MySQL-python python-jsonschema python-paramiko python-argcomplete python-requests python-logutils libxslt-devel libxml2-devel python-devel python-pip"
+#The only way to install python-bottle on Centos7 is with easy_install or pip
+[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && easy_install -U bottle
 
 #required for vmware connector TODO move that to separete opt in install script
 sudo pip install --upgrade pip
@@ -269,8 +271,9 @@ sudo pip install progressbar
 sudo pip install prettytable
 sudo pip install pyvmomi
 
-#The only way to install python-bottle on Centos7 is with easy_install or pip
-[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && easy_install -U bottle
+#requiered for AWS connector
+[ "$_DISTRO" == "Ubuntu" ] && install_packages "python-boto"
+[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-boto"  #TODO check if at Centos it exist with this name, or PIP should be used
 
 #install openstack client needed for using openstack as a VIM
 [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-novaclient python-keystoneclient python-glanceclient python-neutronclient python-cinderclient"
