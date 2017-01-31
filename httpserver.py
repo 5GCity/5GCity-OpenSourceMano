@@ -1086,10 +1086,11 @@ def http_get_scenario_id(tenant_id, scenario_id):
 @bottle.route(url_base + '/<tenant_id>/scenarios/<scenario_id>', method='DELETE')
 def http_delete_scenario_id(tenant_id, scenario_id):
     '''delete a scenario from database, can use both uuid or name'''
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     try:
         #check valid tenant_id
         if tenant_id != "any":
-            nfvo.check_tenant(mydb, tenant_id) 
+            nfvo.check_tenant(mydb, tenant_id)
         #obtain data
         data = mydb.delete_scenario(scenario_id, tenant_id)
         #print json.dumps(data, indent=4)
