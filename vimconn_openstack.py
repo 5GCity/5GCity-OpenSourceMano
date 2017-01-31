@@ -35,7 +35,8 @@ import netaddr
 import time
 import yaml
 
-from novaclient import client as nClient_v2, exceptions as nvExceptions, api_versions as APIVersion
+from novaclient import client as nClient_v2, exceptions as nvExceptions
+from novaclient import api_versions
 import keystoneclient.v2_0.client as ksClient_v2
 from novaclient.v2.client import Client as nClient
 import keystoneclient.v3.client as ksClient
@@ -67,7 +68,7 @@ server_timeout = 60
 
 class vimconnector(vimconn.vimconnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None, config={}):
-        '''using common constructor parameters. In this case 
+        '''using common constructor parameters. In this case
         'url' is the keystone authorization url,
         'url_admin' is not use
         '''
@@ -183,14 +184,14 @@ class vimconnector(vimconn.vimconnector):
             if len(self.n_creds) <4:
                 raise ksExceptions.ClientException("Not enough parameters to connect to openstack")
             if self.osc_api_version == 'v3.3':
-                self.nova = nClient(APIVersion(version_str='2'), **self.n_creds)
+                self.nova = nClient(api_version=api_versions.APIVersion(version_str='2.0'), **self.n_creds)
                 #TODO To be updated for v3
                 #self.cinder = cClient.Client(**self.n_creds)
                 self.keystone = ksClient.Client(**self.k_creds)
                 self.ne_endpoint=self.keystone.service_catalog.url_for(service_type='network', endpoint_type='publicURL')
-                self.neutron = neClient.Client(APIVersion(version_str='2'), endpoint_url=self.ne_endpoint, token=self.keystone.auth_token, **self.k_creds)
+                self.neutron = neClient.Client(api_version=api_versions.APIVersion(version_str='2.0'), endpoint_url=self.ne_endpoint, token=self.keystone.auth_token, **self.k_creds)
             else:
-                self.nova = nClient_v2.Client('2', **self.n_creds)
+                self.nova = nClient_v2.Client(version='2', **self.n_creds)
                 self.cinder = cClient_v2.Client(**self.n_creds)
                 self.keystone = ksClient_v2.Client(**self.k_creds)
                 self.ne_endpoint=self.keystone.service_catalog.url_for(service_type='network', endpoint_type='publicURL')
