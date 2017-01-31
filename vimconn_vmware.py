@@ -177,6 +177,9 @@ class vimconnector(vimconn.vimconnector):
         self.admin_password = None
         self.admin_user = None
         self.org_name = ""
+        self.nsx_manager = None
+        self.nsx_user = None
+        self.nsx_password = None
 
         if tenant_name is not None:
             orgnameandtenant = tenant_name.split(":")
@@ -196,6 +199,13 @@ class vimconnector(vimconn.vimconnector):
             self.admin_password = config['admin_password']
         except KeyError:
             raise vimconn.vimconnException(message="Error admin username or admin password is empty.")
+
+        try:
+            self.nsx_manager = config['nsx_manager']
+            self.nsx_user = config['nsx_user']
+            self.nsx_password = config['nsx_password']
+        except KeyError:
+            raise vimconn.vimconnException(message="Error: nsx manager or nsx user or nsx password is empty in Config")
 
         self.org_uuid = None
         self.vca = None
@@ -1652,6 +1662,35 @@ class vimconnector(vimconn.vimconnector):
         """
 
         self.logger.debug("Client requesting refresh vm status for {} ".format(vm_list))
+
+        mac_ip_addr={}
+        rheaders = {'Content-Type': 'application/xml'}
+
+        try:
+            resp = requests.get(self.nsx_manager + '/api/4.0/edges/edge-2/dhcp/leaseInfo', 
+                                auth = (self.nsx_user, self.nsx_password),
+                                verify = False, headers = rheaders)
+
+            if resp.status_code == requests.codes.ok:
+                dhcp_leases = XmlElementTree.fromstring(resp.text)
+                for child in dhcp_leases:
+                    if child.tag == 'dhcpLeaseInfo':
+                        dhcpLeaseInfo = child
+                        for leaseInfo in dhcpLeaseInfo:
+                            for elem in leaseInfo:
+                                if (elem.tag)=='macAddress':
+                                    mac_addr = elem.text
+                                if (elem.tag)=='ipAddress':
+                                    ip_addr = elem.text
+                            if (mac_addr) is not None:
+                                mac_ip_addr[mac_addr]= ip_addr
+                self.logger.debug("NSX Manager DHCP Lease info: mac_ip_addr : {}".format(mac_ip_addr))
+            else:
+                self.logger.debug("Error occurred while getting DHCP lease info from NSX Manager: {}".format(resp.content))
+        except KeyError:
+            self.logger.debug("Error in response from NSX Manager {}".format(KeyError.message))
+            self.logger.debug(traceback.format_exc())
+
         vca = self.connect()
         if not vca:
             raise vimconn.vimconnConnectionException("self.connect() is failed.")
@@ -1681,6 +1720,10 @@ class vimconnector(vimconn.vimconnector):
                     for vapp_network in vm_app_networks:
                         for vm_network in vapp_network:
                             if vm_network['name'] == vmname:
+                                #Assign IP Address based on MAC Address in NSX DHCP lease info
+                                for mac_adres,ip_adres in mac_ip_addr.iteritems():
+                                    if mac_adres == vm_network['mac']:
+                                        vm_network['ip']=ip_adres
                                 interface = {"mac_address": vm_network['mac'],
                                              "vim_net_id": self.get_network_id_by_name(vm_network['network_name']),
                                              "vim_interface_id": self.get_network_id_by_name(vm_network['network_name']),
@@ -1722,15 +1765,30 @@ class vimconnector(vimconn.vimconnector):
             the_vapp = vca.get_vapp(vdc, vapp_name)
             # TODO fix all status
             if "start" in action_dict:
-                if action_dict["start"] == "rebuild":
-                    the_vapp.deploy(powerOn=True)
+                vm_info = the_vapp.get_vms_details()
+                vm_status = vm_info[0]['status']
+                self.logger.info("Power on vApp: vm_status:{} {}".format(type(vm_status),vm_status))
+                if vm_status == "Suspended" or vm_status == "Powered off":
+                    power_on_task = the_vapp.poweron()
+                    if power_on_task is not None and type(power_on_task) is GenericTask:
+                        result = vca.block_until_completed(power_on_task)
+                        if result:
+                            self.logger.info("action_vminstance: Powered on vApp: {}".format(vapp_name))
+                        else:
+                            self.logger.info("action_vminstance: Failed to power on vApp: {}".format(vapp_name))
+                    else:
+                        self.logger.info("action_vminstance: Wait for vApp {} to power on".format(vapp_name))
+            elif "rebuild" in action_dict:
+                self.logger.info("action_vminstance: Rebuilding vApp: {}".format(vapp_name))
+                power_on_task = the_vapp.deploy(powerOn=True)
+                if type(power_on_task) is GenericTask:
+                    result = vca.block_until_completed(power_on_task)
+                    if result:
+                        self.logger.info("action_vminstance: Rebuilt vApp: {}".format(vapp_name))
+                    else:
+                        self.logger.info("action_vminstance: Failed to rebuild vApp: {}".format(vapp_name))
                 else:
-                    vm_info = the_vapp.get_vms_details()
-                    vm_status = vm_info[0]['status']
-                    if vm_status == "Suspended":
-                        the_vapp.poweron()
-                    elif vm_status.status == "Powered off":
-                        the_vapp.poweron()
+                    self.logger.info("action_vminstance: Wait for vApp rebuild {} to power on".format(vapp_name))
             elif "pause" in action_dict:
                 pass
                 ## server.pause()
@@ -1738,7 +1796,15 @@ class vimconnector(vimconn.vimconnector):
                 pass
                 ## server.resume()
             elif "shutoff" in action_dict or "shutdown" in action_dict:
-                the_vapp.shutdown()
+                power_off_task = the_vapp.undeploy(action='powerOff')
+                if type(power_off_task) is GenericTask:
+                    result = vca.block_until_completed(power_off_task)
+                    if result:
+                        self.logger.info("action_vminstance: Powered off vApp: {}".format(vapp_name))
+                    else:
+                        self.logger.info("action_vminstance: Failed to power off vApp: {}".format(vapp_name))
+                else:
+                    self.logger.info("action_vminstance: Wait for vApp {} to power off".format(vapp_name))
             elif "forceOff" in action_dict:
                 the_vapp.reset()
             elif "terminate" in action_dict:
