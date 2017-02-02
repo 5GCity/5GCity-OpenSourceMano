@@ -17,7 +17,7 @@
 
 BUILD_DIR = .
 
-CHARMS:= vpe-router vyos-proxy pingpong
+CHARMS:= vpe-router vyos-proxy pingpong flownac
 CHARM_SRC_DIR := layers
 CHARM_BUILD_DIR := $(BUILD_DIR)/builds
 
@@ -31,4 +31,3 @@ clean:
 
 $(CHARM_BUILD_DIR)/%: $(CHARM_SRC_DIR)/%
 	charm-build -o $(BUILD_DIR) $<
-
