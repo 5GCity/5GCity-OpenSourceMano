@@ -60,21 +60,21 @@ container_exec_stderr() {
 }
 
 wait_container_up() {
-	[ $# -eq 1 ] || FATAL "arg is container name got $# args - $*"
-	ct=0
-	RE="1 received"
-	while [ $ct -lt 60 ]; do
-		let ct=ct+1
-		output=$(container_exec_stderr "$1" ping -c 1 google.com)
-		if [[ $output =~ $RE ]]; then	
-			DEBUG "$1 is up"
-			return
-		fi
-		INFO "waiting for container $1 to start"
-		DEBUG "expected '$RE' in $output"
-		sleep 1
-	done
-	FATAL "container $1 did not start"
+    [ $# -eq 1 ] || FATAL "arg is container name got $# args - $*"
+    RE="200"
+    ct=0
+    while [ $ct -lt 10 ]; do
+        let ct=ct+1
+        output=$(container_exec_stderr "$1" curl -sL -w "%{http_code}\\n" "http://www.google.com/" -o /dev/null)
+        if [[ $output =~ $RE ]]; then
+            DEBUG "$1 is up"
+            return
+        fi
+        INFO "waiting for container $1 to start"
+        DEBUG "expected '$RE' in $output"
+        sleep 5
+    done
+    FATAL "container $1 did not start"
 }
 container_push_tree() { 
     # create a tarball locally, pipe it into the container and unpack it there
