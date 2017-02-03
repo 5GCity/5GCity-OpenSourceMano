@@ -1665,28 +1665,33 @@ class vimconnector(vimconn.vimconnector):
 
         mac_ip_addr={}
         rheaders = {'Content-Type': 'application/xml'}
+        iso_edges = ['edge-2','edge-3','edge-6','edge-7','edge-8','edge-9','edge-10']
 
         try:
-            resp = requests.get(self.nsx_manager + '/api/4.0/edges/edge-2/dhcp/leaseInfo', 
-                                auth = (self.nsx_user, self.nsx_password),
-                                verify = False, headers = rheaders)
+            for edge in iso_edges:
+                nsx_api_url = '/api/4.0/edges/'+ edge +'/dhcp/leaseInfo'
+                self.logger.debug("refresh_vms_status: NSX Manager url: {}".format(nsx_api_url))
 
-            if resp.status_code == requests.codes.ok:
-                dhcp_leases = XmlElementTree.fromstring(resp.text)
-                for child in dhcp_leases:
-                    if child.tag == 'dhcpLeaseInfo':
-                        dhcpLeaseInfo = child
-                        for leaseInfo in dhcpLeaseInfo:
-                            for elem in leaseInfo:
-                                if (elem.tag)=='macAddress':
-                                    mac_addr = elem.text
-                                if (elem.tag)=='ipAddress':
-                                    ip_addr = elem.text
-                            if (mac_addr) is not None:
-                                mac_ip_addr[mac_addr]= ip_addr
-                self.logger.debug("NSX Manager DHCP Lease info: mac_ip_addr : {}".format(mac_ip_addr))
-            else:
-                self.logger.debug("Error occurred while getting DHCP lease info from NSX Manager: {}".format(resp.content))
+                resp = requests.get(self.nsx_manager + nsx_api_url,
+                                    auth = (self.nsx_user, self.nsx_password),
+                                    verify = False, headers = rheaders)
+
+                if resp.status_code == requests.codes.ok:
+                    dhcp_leases = XmlElementTree.fromstring(resp.text)
+                    for child in dhcp_leases:
+                        if child.tag == 'dhcpLeaseInfo':
+                            dhcpLeaseInfo = child
+                            for leaseInfo in dhcpLeaseInfo:
+                                for elem in leaseInfo:
+                                    if (elem.tag)=='macAddress':
+                                        mac_addr = elem.text
+                                    if (elem.tag)=='ipAddress':
+                                        ip_addr = elem.text
+                                if (mac_addr) is not None:
+                                    mac_ip_addr[mac_addr]= ip_addr
+                    self.logger.debug("NSX Manager DHCP Lease info: mac_ip_addr : {}".format(mac_ip_addr))
+                else:
+                    self.logger.debug("Error occurred while getting DHCP lease info from NSX Manager: {}".format(resp.content))
         except KeyError:
             self.logger.debug("Error in response from NSX Manager {}".format(KeyError.message))
             self.logger.debug(traceback.format_exc())
