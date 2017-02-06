@@ -364,7 +364,8 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
                     rollback_list.append({"where":"vim", "vim_id": vim_id, "what":"image","uuid":image_vim_id})
                     image_created="true"
                 else:
-                    raise vimconn.vimconnException("Cannot create image without location")
+                    #If we reach this point, then the image has image name, and optionally checksum, and could not be found
+                    raise vimconn.vimconnException(str(e))
             except vimconn.vimconnException as e:
                 if return_on_error:
                     logger.error("Error creating image at VIM '%s': %s", vim["name"], str(e))
