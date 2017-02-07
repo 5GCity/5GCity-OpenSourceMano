@@ -34,6 +34,7 @@ import logging
 import netaddr
 import time
 import yaml
+import random
 
 from novaclient import client as nClient_v2, exceptions as nvExceptions
 from novaclient import api_versions
@@ -79,6 +80,9 @@ class vimconnector(vimconn.vimconnector):
         
         self.k_creds={}
         self.n_creds={}
+        if self.config.get("insecure"):
+            self.k_creds["insecure"] = True
+            self.n_creds["insecure"] = True
         if not url:
             raise TypeError, 'url param can not be NoneType'
         self.k_creds['auth_url'] = url
@@ -303,8 +307,9 @@ class vimconnector(vimconn.vimconnector):
             if not ip_profile:
                 ip_profile = {}
             if 'subnet_address' not in ip_profile:
-                #Fake subnet is required 
-                ip_profile['subnet_address'] = "192.168.111.0/24"
+                #Fake subnet is required
+                subnet_rand = random.randint(0, 255)
+                ip_profile['subnet_address'] = "192.168.{}.0/24".format(subnet_rand)
             if 'ip_version' not in ip_profile: 
                 ip_profile['ip_version'] = "IPv4"
             subnet={"name":net_name+"-subnet",
@@ -459,6 +464,38 @@ class vimconnector(vimconn.vimconnector):
             return flavor.to_dict()
         except (nvExceptions.NotFound, nvExceptions.ClientException, ksExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)
+
+    def get_flavor_id_from_data(self, flavor_dict):
+        """Obtain flavor id that match the flavor description
+           Returns the flavor_id or raises a vimconnNotFoundException
+        """
+        try:
+            self._reload_connection()
+            numa=None
+            numas = flavor_dict.get("extended",{}).get("numas")
+            if numas:
+                #TODO
+                raise vimconn.vimconnNotFoundException("Flavor with EPA still not implemted")
+                # if len(numas) > 1:
+                #     raise vimconn.vimconnNotFoundException("Cannot find any flavor with more than one numa")
+                # numa=numas[0]
+                # numas = extended.get("numas")
+            for flavor in self.nova.flavors.list():
+                epa = flavor.get_keys()
+                if epa:
+                    continue
+                    #TODO 
+                if flavor.ram != flavor_dict["ram"]:
+                    continue
+                if flavor.vcpus != flavor_dict["vcpus"]:
+                    continue
+                if flavor.disk != flavor_dict["disk"]:
+                    continue
+                return flavor.id
+            raise vimconn.vimconnNotFoundException("Cannot find any flavor matching '{}'".format(str(flavor_dict)))
+        except (nvExceptions.NotFound, nvExceptions.ClientException, ksExceptions.ClientException, ConnectionError) as e:
+            self._format_exception(e)
+
 
     def new_flavor(self, flavor_data, change_name_if_used=True):
         '''Adds a tenant flavor to openstack VIM
@@ -657,9 +694,9 @@ class vimconnector(vimconn.vimconnector):
             #Then we filter by the rest of filter fields: checksum
             filtered_list = []
             for image in image_list:
-                image_dict=self.glance.images.get(image.id)
-                if 'checksum' not in filter_dict or image_dict['checksum']==filter_dict.get('checksum'):
-                    filtered_list.append(image_dict)
+                image_class=self.glance.images.get(image.id)
+                if 'checksum' not in filter_dict or image_class['checksum']==filter_dict.get('checksum'):
+                    filtered_list.append(image_class.copy())
             return filtered_list
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
             self._format_exception(e)
@@ -682,7 +719,7 @@ class vimconnector(vimconn.vimconnector):
                 #TODO ip, security groups
         Returns the instance identifier
         '''
-        self.logger.debug("Creating VM image '%s' flavor '%s' nics='%s'",image_id, flavor_id,str(net_list))
+        self.logger.debug("new_vminstance input: image='%s' flavor='%s' nics='%s'",image_id, flavor_id,str(net_list))
         try:
             metadata={}
             net_list_vim=[]
@@ -722,8 +759,12 @@ class vimconnector(vimconn.vimconnector):
                     self.logger.warn("new_vminstance: Warning, can not connect a passthrough interface ")
                     #TODO insert this when openstack consider passthrough ports as openstack neutron ports
                 if net.get('floating_ip', False):
+                    net['exit_on_floating_ip_error'] = True
                     external_network.append(net)
-                 
+                elif net['use'] == 'mgmt' and self.config.get('use_floating_ip'):
+                    net['exit_on_floating_ip_error'] = False
+                    external_network.append(net)
+
             if metadata_vpci:
                 metadata = {"pci_assignement": json.dumps(metadata_vpci)}
                 if len(metadata["pci_assignement"]) >255:
@@ -755,7 +796,7 @@ class vimconnector(vimconn.vimconnector):
                         userdata_dict["ssh-authorized-keys"] = cloud_config["key-pairs"]
                         userdata_dict["users"] = [{"default": None, "ssh-authorized-keys": cloud_config["key-pairs"] }]
                     if cloud_config.get("users"):
-                        if "users" not in cloud_config:
+                        if "users" not in userdata_dict:
                             userdata_dict["users"] = [ "default" ]
                         for user in cloud_config["users"]:
                             user_info = {
@@ -841,71 +882,72 @@ class vimconnector(vimconn.vimconnector):
             pool_id = None
             floating_ips = self.neutron.list_floatingips().get("floatingips", ())
             for floating_network in external_network:
-                # wait until vm is active
-                elapsed_time = 0
-                while elapsed_time < server_timeout:
-                    status = self.nova.servers.get(server.id).status
-                    if status == 'ACTIVE':
-                        break
-                    time.sleep(1)
-                    elapsed_time += 1
+                try:
+                    # wait until vm is active
+                    elapsed_time = 0
+                    while elapsed_time < server_timeout:
+                        status = self.nova.servers.get(server.id).status
+                        if status == 'ACTIVE':
+                            break
+                        time.sleep(1)
+                        elapsed_time += 1
 
-                #if we exceeded the timeout rollback
-                if elapsed_time >= server_timeout:
-                    self.delete_vminstance(server.id)
-                    raise vimconn.vimconnException('Timeout creating instance ' + name,
-                                                   http_code=vimconn.HTTP_Request_Timeout)
+                    #if we exceeded the timeout rollback
+                    if elapsed_time >= server_timeout:
+                        raise vimconn.vimconnException('Timeout creating instance ' + name,
+                                                       http_code=vimconn.HTTP_Request_Timeout)
 
-                assigned = False
-                while(assigned == False):
-                    if floating_ips:
-                        ip = floating_ips.pop(0)
-                        if not ip.get("port_id", False) and ip.get('tenant_id') == server.tenant_id:
-                            free_floating_ip = ip.get("floating_ip_address")
+                    assigned = False
+                    while(assigned == False):
+                        if floating_ips:
+                            ip = floating_ips.pop(0)
+                            if not ip.get("port_id", False) and ip.get('tenant_id') == server.tenant_id:
+                                free_floating_ip = ip.get("floating_ip_address")
+                                try:
+                                    fix_ip = floating_network.get('ip')
+                                    server.add_floating_ip(free_floating_ip, fix_ip)
+                                    assigned = True
+                                except Exception as e:
+                                    raise vimconn.vimconnException(type(e).__name__ + ": Cannot create floating_ip "+  str(e), http_code=vimconn.HTTP_Conflict)
+                        else:
+                            #Find the external network
+                            external_nets = list()
+                            for net in self.neutron.list_networks()['networks']:
+                                if net['router:external']:
+                                        external_nets.append(net)
+
+                            if len(external_nets) == 0:
+                                raise vimconn.vimconnException("Cannot create floating_ip automatically since no external "
+                                                               "network is present",
+                                                                http_code=vimconn.HTTP_Conflict)
+                            if len(external_nets) > 1:
+                                raise vimconn.vimconnException("Cannot create floating_ip automatically since multiple "
+                                                               "external networks are present",
+                                                               http_code=vimconn.HTTP_Conflict)
+
+                            pool_id = external_nets[0].get('id')
+                            param = {'floatingip': {'floating_network_id': pool_id, 'tenant_id': server.tenant_id}}
                             try:
+                                #self.logger.debug("Creating floating IP")
+                                new_floating_ip = self.neutron.create_floatingip(param)
+                                free_floating_ip = new_floating_ip['floatingip']['floating_ip_address']
                                 fix_ip = floating_network.get('ip')
                                 server.add_floating_ip(free_floating_ip, fix_ip)
-                                assigned = True
+                                assigned=True
                             except Exception as e:
-                                self.delete_vminstance(server.id)
-                                raise vimconn.vimconnException(type(e).__name__ + ": Cannot create floating_ip "+  str(e), http_code=vimconn.HTTP_Conflict)
-                    else:
-                        #Find the external network
-                        external_nets = list()
-                        for net in self.neutron.list_networks()['networks']:
-                            if net['router:external']:
-                                    external_nets.append(net)
+                                raise vimconn.vimconnException(type(e).__name__ + ": Cannot assign floating_ip "+  str(e), http_code=vimconn.HTTP_Conflict)
+                except Exception as e:
+                    if not floating_network['exit_on_floating_ip_error']:
+                        self.logger.warn("Cannot create floating_ip. %s", str(e))
+                        continue
+                    self.delete_vminstance(server.id)
+                    raise
 
-                        if len(external_nets) == 0:
-                            self.delete_vminstance(server.id)
-                            raise vimconn.vimconnException("Cannot create floating_ip automatically since no external "
-                                                           "network is present",
-                                                            http_code=vimconn.HTTP_Conflict)
-                        if len(external_nets) > 1:
-                            self.delete_vminstance(server.id)
-                            raise vimconn.vimconnException("Cannot create floating_ip automatically since multiple "
-                                                           "external networks are present",
-                                                           http_code=vimconn.HTTP_Conflict)
-
-                        pool_id = external_nets[0].get('id')
-                        param = {'floatingip': {'floating_network_id': pool_id, 'tenant_id': server.tenant_id}}
-                        try:
-                            #self.logger.debug("Creating floating IP")
-                            new_floating_ip = self.neutron.create_floatingip(param)
-                            free_floating_ip = new_floating_ip['floatingip']['floating_ip_address']
-                            fix_ip = floating_network.get('ip')
-                            server.add_floating_ip(free_floating_ip, fix_ip)
-                            assigned=True
-                        except Exception as e:
-                            self.delete_vminstance(server.id)
-                            raise vimconn.vimconnException(type(e).__name__ + ": Cannot create floating_ip "+  str(e), http_code=vimconn.HTTP_Conflict)
-                
             return server.id
 #        except nvExceptions.NotFound as e:
 #            error_value=-vimconn.HTTP_Not_Found
 #            error_text= "vm instance %s not found" % vm_id
-        except (ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError
-                ) as e:
+        except (ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError) as e:
             # delete the volumes we just created
             if block_device_mapping != None:
                 for volume_id in block_device_mapping.itervalues():
