@@ -795,6 +795,7 @@ class vimconnector(vimconn.vimconnector):
                 #TODO ip, security groups
         Returns the instance identifier
         '''
+        self.logger.debug("new_vminstance input: image='%s' flavor='%s' nics='%s'", image_id, flavor_id, str(net_list))
         try:
             self._get_my_tenant()
 #            net_list = []
