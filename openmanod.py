@@ -145,7 +145,8 @@ if __name__=="__main__":
     logger.setLevel(logging.DEBUG)
     socket_handler = None
     file_handler = None
-    # Read parameters and configuration file 
+    # Read parameters and configuration file
+    httpthread = None
     try:
         #load parameters and configuration
         opts, args = getopt.getopt(sys.argv[1:], "hvc:V:p:P:", ["config=", "help", "version", "port=", "vnf-repository=", "adminport=", "log-socket-host=", "log-socket-port=", "log-file="])
@@ -274,6 +275,7 @@ if __name__=="__main__":
             exit(-1)
 
         nfvo.global_config=global_config
+        nfvo.start_service(mydb)
         
         httpthread = httpserver.httpserver(mydb, False, global_config['http_host'], global_config['http_port'])
         
@@ -292,12 +294,10 @@ if __name__=="__main__":
         #TODO: Interactive console must be implemented here instead of join or sleep
 
         #httpthread.join()
-        #if 'http_admin_port' in global_config: 
+        #if 'http_admin_port' in global_config:
         #    httpthreadadmin.join()
         while True:
             time.sleep(86400)
-        for thread in global_config["console_thread"]:
-            thread.terminate = True
 
     except KeyboardInterrupt as e:
         logger.info(str(e))
@@ -313,4 +313,9 @@ if __name__=="__main__":
     except db_base_Exception as e:
         logger.critical(str(e))
         exit(-1)
+    nfvo.stop_service()
+    if httpthread:
+        httpthread.join(1)
+    for thread in global_config["console_thread"]:
+        thread.terminate = True
 
