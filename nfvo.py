@@ -1365,92 +1365,127 @@ def new_scenario(mydb, tenant_id, topo):
 
     return c
 
-def new_scenario_v02(mydb, tenant_id, scenario_dict):
+def new_scenario_v02(mydb, tenant_id, scenario_dict, version):
+    """ This creates a new scenario for version 0.2 and 0.3"""
     scenario = scenario_dict["scenario"]
     if tenant_id != "any":
         check_tenant(mydb, tenant_id)
         if "tenant_id" in scenario:
             if scenario["tenant_id"] != tenant_id:
-                print "nfvo.new_scenario_v02() tenant '%s' not found" % tenant_id
+                # print "nfvo.new_scenario_v02() tenant '%s' not found" % tenant_id
                 raise NfvoException("VNF can not have a different tenant owner '{}', must be '{}'".format(
                                                     scenario["tenant_id"], tenant_id), HTTP_Unauthorized)
     else:
         tenant_id=None
 
-#1: Check that VNF are present at database table vnfs and update content into scenario dict
+    # 1: Check that VNF are present at database table vnfs and update content into scenario dict
     for name,vnf in scenario["vnfs"].iteritems():
         where={}
         where_or={"tenant_id": tenant_id, 'public': "true"}
         error_text = ""
         error_pos = "'scenario':'vnfs':'" + name + "'"
         if 'vnf_id' in vnf:
-            error_text += " 'vnf_id' " +  vnf['vnf_id']
+            error_text += " 'vnf_id' " + vnf['vnf_id']
             where['uuid'] = vnf['vnf_id']
         if 'vnf_name' in vnf:
-            error_text += " 'vnf_name' " +  vnf['vnf_name']
+            error_text += " 'vnf_name' " + vnf['vnf_name']
             where['name'] = vnf['vnf_name']
         if len(where) == 0:
             raise NfvoException("Needed a 'vnf_id' or 'vnf_name' at " + error_pos, HTTP_Bad_Request)
-        vnf_db = mydb.get_rows(SELECT=('uuid','name','description'),
+        vnf_db = mydb.get_rows(SELECT=('uuid', 'name', 'description'),
                                FROM='vnfs',
                                WHERE=where,
                                WHERE_OR=where_or,
                                WHERE_AND_OR="AND")
-        if len(vnf_db)==0:
+        if len(vnf_db) == 0:
             raise NfvoException("Unknown" + error_text + " at " + error_pos, HTTP_Not_Found)
-        elif len(vnf_db)>1:
+        elif len(vnf_db) > 1:
             raise NfvoException("More than one" + error_text + " at " + error_pos + " Concrete with 'vnf_id'", HTTP_Conflict)
-        vnf['uuid']=vnf_db[0]['uuid']
-        vnf['description']=vnf_db[0]['description']
+        vnf['uuid'] = vnf_db[0]['uuid']
+        vnf['description'] = vnf_db[0]['description']
         vnf['ifaces'] = {}
-        #get external interfaces
-        ext_ifaces = mydb.get_rows(SELECT=('external_name as name','i.uuid as iface_uuid', 'i.type as type'),
-            FROM='vnfs join vms on vnfs.uuid=vms.vnf_id join interfaces as i on vms.uuid=i.vm_id',
-            WHERE={'vnfs.uuid':vnf['uuid']}, WHERE_NOT={'external_name':None} )
+        # get external interfaces
+        ext_ifaces = mydb.get_rows(SELECT=('external_name as name', 'i.uuid as iface_uuid', 'i.type as type'),
+                                   FROM='vnfs join vms on vnfs.uuid=vms.vnf_id join interfaces as i on vms.uuid=i.vm_id',
+                                   WHERE={'vnfs.uuid':vnf['uuid']}, WHERE_NOT={'external_name': None} )
         for ext_iface in ext_ifaces:
-            vnf['ifaces'][ ext_iface['name'] ] = {'uuid':ext_iface['iface_uuid'], 'type':ext_iface['type']}
+            vnf['ifaces'][ ext_iface['name'] ] = {'uuid':ext_iface['iface_uuid'], 'type': ext_iface['type']}
+        # TODO? get internal-connections from db.nets and their profiles, and update scenario[vnfs][internal-connections] accordingly
 
-#2: Insert net_key at every vnf interface
-    for net_name,net in scenario["networks"].iteritems():
-        net_type_bridge=False
-        net_type_data=False
+    # 2: Insert net_key and ip_address at every vnf interface
+    for net_name, net in scenario["networks"].items():
+        net_type_bridge = False
+        net_type_data = False
         for iface_dict in net["interfaces"]:
-            for vnf,iface in iface_dict.iteritems():
+            if version == "0.2":
+                temp_dict = iface_dict
+                ip_address = None
+            elif version == "0.3":
+                temp_dict = {iface_dict["vnf"] : iface_dict["vnf_interface"]}
+                ip_address = iface_dict.get('ip_address', None)
+            for vnf, iface in temp_dict.items():
                 if vnf not in scenario["vnfs"]:
-                    error_text = "Error at 'networks':'%s':'interfaces' VNF '%s' not match any VNF at 'vnfs'" % (net_name, vnf)
-                    #print "nfvo.new_scenario_v02 " + error_text
+                    error_text = "Error at 'networks':'{}':'interfaces' VNF '{}' not match any VNF at 'vnfs'".format(
+                        net_name, vnf)
+                    # logger.debug("nfvo.new_scenario_v02 " + error_text)
                     raise NfvoException(error_text, HTTP_Not_Found)
                 if iface not in scenario["vnfs"][vnf]['ifaces']:
-                    error_text = "Error at 'networks':'%s':'interfaces':'%s' interface not match any VNF interface" % (net_name, iface)
-                    #print "nfvo.new_scenario_v02 " + error_text
+                    error_text = "Error at 'networks':'{}':'interfaces':'{}' interface not match any VNF interface"\
+                        .format(net_name, iface)
+                    # logger.debug("nfvo.new_scenario_v02 " + error_text)
                     raise NfvoException(error_text, HTTP_Bad_Request)
                 if "net_key" in scenario["vnfs"][vnf]['ifaces'][iface]:
-                    error_text = "Error at 'networks':'%s':'interfaces':'%s' interface already connected at network '%s'" \
-                                    % (net_name, iface,scenario["vnfs"][vnf]['ifaces'][iface]['net_key'])
-                    #print "nfvo.new_scenario_v02 " + error_text
+                    error_text = "Error at 'networks':'{}':'interfaces':'{}' interface already connected at network"\
+                                 "'{}'".format(net_name, iface,scenario["vnfs"][vnf]['ifaces'][iface]['net_key'])
+                    # logger.debug("nfvo.new_scenario_v02 " + error_text)
                     raise NfvoException(error_text, HTTP_Bad_Request)
                 scenario["vnfs"][vnf]['ifaces'][ iface ]['net_key'] = net_name
+                scenario["vnfs"][vnf]['ifaces'][iface]['ip_address'] = ip_address
                 iface_type = scenario["vnfs"][vnf]['ifaces'][iface]['type']
-                if iface_type=='mgmt' or iface_type=='bridge':
+                if iface_type == 'mgmt' or iface_type == 'bridge':
                     net_type_bridge = True
                 else:
                     net_type_data = True
+
         if net_type_bridge and net_type_data:
-            error_text = "Error connection interfaces of bridge type and data type at 'networks':'%s':'interfaces'" % (net_name)
-            #print "nfvo.new_scenario " + error_text
+            error_text = "Error connection interfaces of 'bridge' type and 'data' type at 'networks':'{}':'interfaces'"\
+                .format(net_name)
+            # logger.debug("nfvo.new_scenario " + error_text)
             raise NfvoException(error_text, HTTP_Bad_Request)
         elif net_type_bridge:
-            type_='bridge'
+            type_ = 'bridge'
         else:
-            type_='data' if len(net["interfaces"])>2 else 'ptp'
+            type_ = 'data' if len(net["interfaces"]) > 2 else 'ptp'
+
+        if net.get("implementation"):     # for v0.3
+            if type_ == "bridge" and net["implementation"] == "underlay":
+                error_text = "Error connecting interfaces of data type to a network declared as 'underlay' at "\
+                             "'network':'{}'".format(net_name)
+                # logger.debug(error_text)
+                raise NfvoException(error_text, HTTP_Bad_Request)
+            elif type_ != "bridge" and net["implementation"] == "overlay":
+                error_text = "Error connecting interfaces of data type to a network declared as 'overlay' at "\
+                             "'network':'{}'".format(net_name)
+                # logger.debug(error_text)
+                raise NfvoException(error_text, HTTP_Bad_Request)
+            net.pop("implementation")
+        if "type" in net and version == "0.3":   # for v0.3
+            if type_ == "data" and net["type"] == "e-line":
+                error_text = "Error connecting more than 2 interfaces of data type to a network declared as type "\
+                             "'e-line' at 'network':'{}'".format(net_name)
+                # logger.debug(error_text)
+                raise NfvoException(error_text, HTTP_Bad_Request)
+            elif type_ == "ptp" and net["type"] == "e-lan":
+                type_ = "data"
+
         net['type'] = type_
         net['name'] = net_name
         net['external'] = net.get('external', False)
 
-#3: insert at database
+    # 3: insert at database
     scenario["nets"] = scenario["networks"]
     scenario['tenant_id'] = tenant_id
-    scenario_id = mydb.new_scenario( scenario)
+    scenario_id = mydb.new_scenario(scenario)
     return scenario_id
 
 def edit_scenario(mydb, tenant_id, scenario_id, data):
@@ -1753,118 +1788,6 @@ def get_datacenter_by_name_uuid(mydb, tenant_id, datacenter_id_name=None, **extr
         #print "nfvo.datacenter_action() error. Several datacenters found"
         raise NfvoException("More than one datacenters found, try to identify with uuid", HTTP_Conflict)
     return vims.keys()[0], vims.values()[0]
-
-def new_scenario_v03(mydb, tenant_id, scenario_dict):
-    scenario = scenario_dict["scenario"]
-    if tenant_id != "any":
-        check_tenant(mydb, tenant_id)
-        if "tenant_id" in scenario:
-            if scenario["tenant_id"] != tenant_id:
-                logger("Tenant '%s' not found", tenant_id)
-                raise NfvoException("VNF can not have a different tenant owner '{}', must be '{}'".format(
-                                                    scenario["tenant_id"], tenant_id), HTTP_Unauthorized)
-    else:
-        tenant_id=None
-
-#1: Check that VNF are present at database table vnfs and update content into scenario dict
-    for name,vnf in scenario["vnfs"].iteritems():
-        where={}
-        where_or={"tenant_id": tenant_id, 'public': "true"}
-        error_text = ""
-        error_pos = "'scenario':'vnfs':'" + name + "'"
-        if 'vnf_id' in vnf:
-            error_text += " 'vnf_id' " +  vnf['vnf_id']
-            where['uuid'] = vnf['vnf_id']
-        if 'vnf_name' in vnf:
-            error_text += " 'vnf_name' " +  vnf['vnf_name']
-            where['name'] = vnf['vnf_name']
-        if len(where) == 0:
-            raise NfvoException("Needed a 'vnf_id' or 'vnf_name' at " + error_pos, HTTP_Bad_Request)
-        vnf_db = mydb.get_rows(SELECT=('uuid','name','description'),
-                               FROM='vnfs',
-                               WHERE=where,
-                               WHERE_OR=where_or,
-                               WHERE_AND_OR="AND")
-        if len(vnf_db)==0:
-            raise NfvoException("Unknown" + error_text + " at " + error_pos, HTTP_Not_Found)
-        elif len(vnf_db)>1:
-            raise NfvoException("More than one" + error_text + " at " + error_pos + " Concrete with 'vnf_id'", HTTP_Conflict)
-        vnf['uuid']=vnf_db[0]['uuid']
-        vnf['description']=vnf_db[0]['description']
-        vnf['ifaces'] = {}
-        # get external interfaces
-        ext_ifaces = mydb.get_rows(SELECT=('external_name as name','i.uuid as iface_uuid', 'i.type as type'),
-            FROM='vnfs join vms on vnfs.uuid=vms.vnf_id join interfaces as i on vms.uuid=i.vm_id',
-            WHERE={'vnfs.uuid':vnf['uuid']}, WHERE_NOT={'external_name':None} )
-        for ext_iface in ext_ifaces:
-            vnf['ifaces'][ ext_iface['name'] ] = {'uuid':ext_iface['iface_uuid'], 'type':ext_iface['type']}
-
-        # TODO? get internal-connections from db.nets and their profiles, and update scenario[vnfs][internal-connections] accordingly
-
-#2: Insert net_key and ip_address at every vnf interface
-    for net_name,net in scenario["networks"].iteritems():
-        net_type_bridge=False
-        net_type_data=False
-        for iface_dict in net["interfaces"]:
-            logger.debug("Iface_dict %s", iface_dict)
-            vnf = iface_dict["vnf"]
-            iface = iface_dict["vnf_interface"]
-            if vnf not in scenario["vnfs"]:
-                error_text = "Error at 'networks':'%s':'interfaces' VNF '%s' not match any VNF at 'vnfs'" % (net_name, vnf)
-                #logger.debug(error_text)
-                raise NfvoException(error_text, HTTP_Not_Found)
-            if iface not in scenario["vnfs"][vnf]['ifaces']:
-                error_text = "Error at 'networks':'%s':'interfaces':'%s' interface not match any VNF interface" % (net_name, iface)
-                #logger.debug(error_text)
-                raise NfvoException(error_text, HTTP_Bad_Request)
-            if "net_key" in scenario["vnfs"][vnf]['ifaces'][iface]:
-                error_text = "Error at 'networks':'%s':'interfaces':'%s' interface already connected at network '%s'" \
-                                % (net_name, iface,scenario["vnfs"][vnf]['ifaces'][iface]['net_key'])
-                #logger.debug(error_text)
-                raise NfvoException(error_text, HTTP_Bad_Request)
-            scenario["vnfs"][vnf]['ifaces'][ iface ]['net_key'] = net_name
-            scenario["vnfs"][vnf]['ifaces'][ iface ]['ip_address'] = iface_dict.get('ip_address',None)
-            iface_type = scenario["vnfs"][vnf]['ifaces'][iface]['type']
-            if iface_type=='mgmt' or iface_type=='bridge':
-                net_type_bridge = True
-            else:
-                net_type_data = True
-        if net_type_bridge and net_type_data:
-            error_text = "Error connection interfaces of bridge type and data type at 'networks':'%s':'interfaces'" % (net_name)
-            #logger.debug(error_text)
-            raise NfvoException(error_text, HTTP_Bad_Request)
-        elif net_type_bridge:
-            type_='bridge'
-        else:
-            type_='data' if len(net["interfaces"])>2 else 'ptp'
-
-        if ("implementation" in net):
-            if (type_ == "bridge" and net["implementation"] == "underlay"):
-                error_text = "Error connecting interfaces of data type to a network declared as 'underlay' at 'network':'%s'" % (net_name)
-                #logger.debug(error_text)
-                raise NfvoException(error_text, HTTP_Bad_Request)
-            elif (type_ <> "bridge" and net["implementation"] == "overlay"):
-                error_text = "Error connecting interfaces of data type to a network declared as 'overlay' at 'network':'%s'" % (net_name)
-                #logger.debug(error_text)
-                raise NfvoException(error_text, HTTP_Bad_Request)
-            net.pop("implementation")
-        if ("type" in net):
-            if (type_ == "data" and net["type"] == "e-line"):
-                error_text = "Error connecting more than 2 interfaces of data type to a network declared as type 'e-line' at 'network':'%s'" % (net_name)
-                #logger.debug(error_text)
-                raise NfvoException(error_text, HTTP_Bad_Request)
-            elif (type_ == "ptp" and net["type"] == "e-lan"):
-                type_ = "data"
-
-        net['type'] = type_
-        net['name'] = net_name
-        net['external'] = net.get('external', False)
-
-#3: insert at database
-    scenario["nets"] = scenario["networks"]
-    scenario['tenant_id'] = tenant_id
-    scenario_id = mydb.new_scenario2(scenario)
-    return scenario_id
 
 def update(d, u):
     '''Takes dict d and updates it with the values in dict u.'''
