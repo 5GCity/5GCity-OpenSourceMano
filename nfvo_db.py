@@ -400,124 +400,54 @@ class nfvo_db(db_base.db_base):
                         created_time += 0.00001
                         net_uuid =  self._new_row_internal('sce_nets', net_dict, add_uuid=True, root_uuid=scenario_uuid, created_time=created_time)
                         net['uuid']=net_uuid
-                    #sce_vnfs
-                    for k,vnf in scenario_dict['vnfs'].items():
-                        INSERT_={'scenario_id': scenario_uuid,
-                                'name': k,
-                                'vnf_id': vnf['uuid'],
-                                #'description': scenario_dict['name']
-                                'description': vnf['description']
-                            }
-                        if "graph" in vnf:
-                            #INSERT_["graph"]=yaml.safe_dump(vnf["graph"],default_flow_style=True,width=256)
-                            #TODO, must be json because of the GUI, change to yaml
-                            INSERT_["graph"]=json.dumps(vnf["graph"])
-                        created_time += 0.00001
-                        scn_vnf_uuid =  self._new_row_internal('sce_vnfs', INSERT_, add_uuid=True, root_uuid=scenario_uuid, created_time=created_time)
-                        vnf['scn_vnf_uuid']=scn_vnf_uuid
-                        #sce_interfaces
-                        for iface in vnf['ifaces'].values():
-                            #print 'iface', iface
-                            if 'net_key' not in iface:
-                                continue
-                            iface['net_id'] = scenario_dict['nets'][ iface['net_key'] ]['uuid']
-                            INSERT_={'sce_vnf_id': scn_vnf_uuid,
-                                'sce_net_id': iface['net_id'],
-                                'interface_id':  iface[ 'uuid' ]
-                            }
-                            created_time += 0.00001
-                            iface_uuid =  self._new_row_internal('sce_interfaces', INSERT_, add_uuid=True, root_uuid=scenario_uuid, created_time=created_time)
-                            
-                    return scenario_uuid
-                    
-            except (mdb.Error, AttributeError) as e:
-                self._format_error(e, tries)
-            tries -= 1
 
-    def new_scenario2(self, scenario_dict):
-        tries = 2
-        while tries:
-            created_time = time.time()
-            try:
-                with self.con:
-                    self.cur = self.con.cursor()
-                    tenant_id = scenario_dict.get('tenant_id')
-                    #scenario
-                    INSERT_={'tenant_id': tenant_id,
-                             'name': scenario_dict['name'],
-                             'description': scenario_dict['description'],
-                             'public': scenario_dict.get('public', "false")}
-                    
-                    scenario_uuid =  self._new_row_internal('scenarios', INSERT_, add_uuid=True, root_uuid=None, created_time=created_time)
-                    #sce_nets
-                    for net in scenario_dict['nets'].values():
-                        net_dict={'scenario_id': scenario_uuid}
-                        net_dict["name"] = net["name"]
-                        net_dict["type"] = net["type"]
-                        net_dict["description"] = net.get("description")
-                        net_dict["external"] = net.get("external", False)
-                        if "graph" in net:
-                            #net["graph"]=yaml.safe_dump(net["graph"],default_flow_style=True,width=256)
-                            #TODO, must be json because of the GUI, change to yaml
-                            net_dict["graph"]=json.dumps(net["graph"])
-                        created_time += 0.00001
-                        net_uuid =  self._new_row_internal('sce_nets', net_dict, add_uuid=True, root_uuid=scenario_uuid, created_time=created_time)
-                        net['uuid']=net_uuid
-                        
-                        if "ip-profile" in net:
+                        if net.get("ip-profile"):
                             ip_profile = net["ip-profile"]
-                            myIPProfileDict = {}
-                            myIPProfileDict["sce_net_id"] = net_uuid
-                            myIPProfileDict["ip_version"] = ip_profile.get('ip-version',"IPv4")
-                            myIPProfileDict["subnet_address"] = ip_profile.get('subnet-address',None)
-                            myIPProfileDict["gateway_address"] = ip_profile.get('gateway-address',None)
-                            myIPProfileDict["dns_address"] = ip_profile.get('dns-address',None)
-                            if ("dhcp" in ip_profile):
-                                myIPProfileDict["dhcp_enabled"] = ip_profile["dhcp"].get('enabled',"true")
-                                myIPProfileDict["dhcp_start_address"] = ip_profile["dhcp"].get('start-address',None)
-                                myIPProfileDict["dhcp_count"] = ip_profile["dhcp"].get('count',None)
-                            
-                            created_time += 0.00001
-                            ip_profile_id = self._new_row_internal('ip_profiles', myIPProfileDict)
+                            myIPProfileDict = {
+                                "sce_net_id": net_uuid,
+                                "ip_version": ip_profile.get('ip-version', "IPv4"),
+                                "subnet_address": ip_profile.get('subnet-address'),
+                                "gateway_address": ip_profile.get('gateway-address'),
+                                "dns_address": ip_profile.get('dns-address')}
+                            if "dhcp" in ip_profile:
+                                myIPProfileDict["dhcp_enabled"] = ip_profile["dhcp"].get('enabled', "true")
+                                myIPProfileDict["dhcp_start_address"] = ip_profile["dhcp"].get('start-address')
+                                myIPProfileDict["dhcp_count"] = ip_profile["dhcp"].get('count')
+                            self._new_row_internal('ip_profiles', myIPProfileDict)
 
-                    #sce_vnfs
-                    for k,vnf in scenario_dict['vnfs'].items():
-                        INSERT_={'scenario_id': scenario_uuid,
-                                'name': k,
-                                'vnf_id': vnf['uuid'],
-                                #'description': scenario_dict['name']
-                                'description': vnf['description']
-                            }
+                    # sce_vnfs
+                    for k, vnf in scenario_dict['vnfs'].items():
+                        INSERT_ = {'scenario_id': scenario_uuid,
+                                   'name': k,
+                                   'vnf_id': vnf['uuid'],
+                                   # 'description': scenario_dict['name']
+                                   'description': vnf['description']}
                         if "graph" in vnf:
-                            #INSERT_["graph"]=yaml.safe_dump(vnf["graph"],default_flow_style=True,width=256)
-                            #TODO, must be json because of the GUI, change to yaml
-                            INSERT_["graph"]=json.dumps(vnf["graph"])
+                            #I NSERT_["graph"]=yaml.safe_dump(vnf["graph"],default_flow_style=True,width=256)
+                            # TODO, must be json because of the GUI, change to yaml
+                            INSERT_["graph"] = json.dumps(vnf["graph"])
                         created_time += 0.00001
-                        scn_vnf_uuid =  self._new_row_internal('sce_vnfs', INSERT_, add_uuid=True, root_uuid=scenario_uuid, created_time=created_time)
+                        scn_vnf_uuid = self._new_row_internal('sce_vnfs', INSERT_, add_uuid=True,
+                                                              root_uuid=scenario_uuid, created_time=created_time)
                         vnf['scn_vnf_uuid']=scn_vnf_uuid
-                        #sce_interfaces
+                        # sce_interfaces
                         for iface in vnf['ifaces'].values():
-                            #print 'iface', iface
+                            # print 'iface', iface
                             if 'net_key' not in iface:
                                 continue
                             iface['net_id'] = scenario_dict['nets'][ iface['net_key'] ]['uuid']
                             INSERT_={'sce_vnf_id': scn_vnf_uuid,
-                                'sce_net_id': iface['net_id'],
-                                'interface_id': iface['uuid'],
-                                'ip_address': iface['ip_address']
-                            }
+                                     'sce_net_id': iface['net_id'],
+                                     'interface_id':  iface['uuid'],
+                                     'ip_address': iface.get('ip_address')}
                             created_time += 0.00001
-                            iface_uuid =  self._new_row_internal('sce_interfaces', INSERT_, add_uuid=True, root_uuid=scenario_uuid, created_time=created_time)
+                            iface_uuid = self._new_row_internal('sce_interfaces', INSERT_, add_uuid=True,
+                                                                 root_uuid=scenario_uuid, created_time=created_time)
                             
                     return scenario_uuid
                     
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries)
-#             except KeyError as e2:
-#                 exc_type, exc_obj, exc_tb = sys.exc_info()
-#                 fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-#                 self.logger.debug("Exception type: %s; Filename: %s; Line number: %s", exc_type, fname, exc_tb.tb_lineno)
-#                 raise KeyError
             tries -= 1
 
     def edit_scenario(self, scenario_dict):

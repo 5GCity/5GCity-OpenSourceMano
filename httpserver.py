@@ -975,9 +975,9 @@ def http_post_scenarios(tenant_id):
         if used_schema == nsd_schema_v01:
             scenario_id = nfvo.new_scenario(mydb, tenant_id, http_content)
         elif used_schema == nsd_schema_v02:
-            scenario_id = nfvo.new_scenario_v02(mydb, tenant_id, http_content)
+            scenario_id = nfvo.new_scenario_v02(mydb, tenant_id, http_content, "0.2")
         elif used_schema == nsd_schema_v03:
-            scenario_id = nfvo.new_scenario_v03(mydb, tenant_id, http_content)
+            scenario_id = nfvo.new_scenario_v02(mydb, tenant_id, http_content, "0.3")
         else:
             logger.warning('Unexpected schema_version: %s', http_content.get("schema_version"))
             bottle.abort(HTTP_Bad_Request, "Invalid schema version")
