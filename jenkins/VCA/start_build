@@ -12,16 +12,23 @@
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
-# 
+#
 # 20 Sep 2016 -- Gerardo Garcia -- adapted from template
-# 
+#
 
 HERE=$(realpath $(dirname $0))
 OSM_JENKINS=$(dirname $HERE)
 . $OSM_JENKINS/common/all_funcs
 
-INFO "installing packages"
-apt update
+INFO "Installing packages"
+add-apt-repository -y ppa:juju/stable
+apt-get update
+apt-get install -y juju lxd squid-deb-proxy
+
+echo 'streams.canonical' > /etc/squid-deb-proxy/mirror-dstdomain.acl.d/20-juju-streams
+
+INFO "Configuring LXD"
+# ZFS doesn't work inside a nested container. ZFS should be configured in the host LXD.
 lxd init --auto
 lxd waitready
 systemctl stop lxd-bridge
@@ -47,15 +54,23 @@ EOF
 
 systemctl enable lxd-bridge
 systemctl start lxd-bridge
-lxc image copy ubuntu:16.04 local: --alias ubuntu-xenial
-add-apt-repository -y ppa:juju/stable
-apt update
-apt install -y juju
-juju bootstrap localhost osm
+
+INFO "Pre-caching Ubuntu:16.04 image (this may take several minutes)..."
+
+# Setup a daily cron to update the cached image
+cp $HERE/update-lxd-image.sh /etc/cron.daily
+
+# Run it for the first time
+/etc/cron.daily/update-lxd-image.sh xenial
+
+INFO "Bootstrapping VCA"
+juju bootstrap localhost osm \
+--config default-series=xenial \
+--config enable-os-refresh-update=false \
+--config enable-os-upgrade=false \
+--config apt-http-proxy=http://10.44.127.1:8000
 
 RC=0
 
 INFO "done, RC=$RC"
 exit $RC
-
-
