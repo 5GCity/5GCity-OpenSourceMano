@@ -2855,7 +2855,8 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
             net_type = net.pop("type", "bridge")
             net_public = net.pop("shared", False)
             net_ipprofile = net.pop("ip_profile", None)
-            content = myvim.new_network(net_name, net_type, net_ipprofile, shared=net_public, **net)
+            net_vlan = net.pop("vlan", None)
+            content = myvim.new_network(net_name, net_type, net_ipprofile, shared=net_public, vlan=net_vlan) #, **net)
         elif item=="tenants":
             tenant = descriptor["tenant"]
             content = myvim.new_tenant(tenant["name"], tenant.get("description"))

@@ -481,7 +481,7 @@ class vimconnector(vimconn.vimconnector):
         except requests.exceptions.RequestException as e:
             self._format_request_exception(e)
 
-    def new_network(self,net_name, net_type, ip_profile=None, shared=False, **vim_specific):
+    def new_network(self,net_name, net_type, ip_profile=None, shared=False, vlan=None): #, **vim_specific):
         '''Adds a tenant network to VIM'''
         '''Returns the network identifier'''
         try:
@@ -489,7 +489,9 @@ class vimconnector(vimconn.vimconnector):
             if net_type=="bridge":
                 net_type="bridge_data"
             payload_req = {"name": net_name, "type": net_type, "tenant_id": self.tenant, "shared": shared}
-            payload_req.update(vim_specific)
+            if vlan:
+                payload_req["provider:vlan"] = vlan
+            # payload_req.update(vim_specific)
             url = self.url+'/networks'
             self.logger.info("Adding a new network POST: %s  DATA: %s", url, str(payload_req))
             vim_response = requests.post(url, headers = self.headers_req, data=json.dumps({"network": payload_req}) )
