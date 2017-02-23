@@ -141,3 +141,45 @@ def test_instantiate_cirros(session, so_host, data_center_id, rest_endpoint):
             time.sleep(min(time_remaining, retry_interval))
 
     wait_for_cirros_ns('instance-0')
+
+
+@pytest.fixture(scope='session')
+def test_add_datacenter(name, url, vim_type, tenant_id=None, tenant_name=None, user=None, password=None,
+                        description=None, config=None):
+    ''' Add a datacenter to RO
+    '''
+    onboard_command = \
+        'lxc exec RO --env OPENMANO_TENANT=osm -- openmano datacenter-create "{name}" "{url}" --type={vimtype}'.format(
+            name=name, url=url, vimtype=vim_type)
+    if description:
+        onboard_command += ' --description="{}"'.format(description)
+    out = subprocess.check_output(onboard_command, shell=True)
+    assert out
+    datacenter_id = out.split()[0]
+
+    onboard_command = 'lxc exec RO --env OPENMANO_TENANT=osm -- openmano datacenter-attach {id}'.format(
+        id=datacenter_id)
+    if tenant_id:
+        onboard_command += " --vim_tenant_id=" + tenant_id
+    if tenant_name:
+        onboard_command += " --vim_tenant_name=" + tenant_name
+    if user:
+        onboard_command += " --user=" + user
+    if password:
+        onboard_command += " --password=" + password
+    if config:
+        onboard_command += " --config=" + yaml.safe_dump(config)
+
+    subprocess.check_call(onboard_command, shell=True)
+    return datacenter_id
+
+@pytest.fixture(scope='session')
+def get_datacenter_id(name):
+    ''' Get the id of a datacenter
+    '''
+    onboard_command = \
+        'lxc exec RO --env OPENMANO_TENANT=osm -- openmano datacenter-list {name}'.format(name=name)
+    out = subprocess.check_output(onboard_command, shell=True)
+    assert(out)
+    datacenter_id = out.split()[0]
+    return datacenter_id
