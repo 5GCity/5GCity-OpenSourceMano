@@ -20,7 +20,7 @@ import pytest
 import requests
 import subprocess
 import time
-
+import yaml
 import certs
 
 logger = logging.getLogger(__name__)
