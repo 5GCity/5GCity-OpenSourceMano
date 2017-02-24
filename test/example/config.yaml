@@ -1,0 +1,8 @@
+so_host:
+    type: 'string'
+    default: '127.0.0.1'
+    description: 'Host name or ip of the SO'
+so_port:
+    type: int
+    default: 80
+    description: 'Port'
