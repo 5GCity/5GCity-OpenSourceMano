@@ -74,7 +74,7 @@ class openmanoclient():
         self.datacenter_id = kwargs.get("datacenter_id")
         self.datacenter_name = kwargs.get("datacenter_name")
         self.datacenter = None
-        self.logger = logging.getLogger('manoclient')
+        self.logger = logging.getLogger(kwargs.get('logger','manoclient'))
         if kwargs.get("debug"):
             self.logger.setLevel(logging.DEBUG)
         
@@ -424,7 +424,10 @@ class openmanoclient():
         Return: Raises an exception on error, not found, found several, not free
                 Obtain a dictionary with format {'result': text indicating deleted}
         '''
-        return self._del_item("datacenters", uuid, name, all_tenants=True)
+        if not uuid:
+            # check that exist
+            uuid = self._get_item_uuid("datacenters", uuid, name, all_tenants=True)
+        return self._del_item("datacenters", uuid, name, all_tenants=None)
 
     def create_datacenter(self, descriptor=None, descriptor_format=None, name=None, vim_url=None, **kwargs):
 #, type="openvim", public=False, description=None):
@@ -832,9 +835,14 @@ class openmanoclient():
         Return: Raises an exception on error
                 Obtain a dictionary with format {'tenant':{new_tenant_info}}
         '''
-        if item not in ("tenants", "networks"):
-            raise OpenmanoBadParamsException("Unknown value for item '{}', must be 'tenants' or 'nets'".format(str(item))) 
+        if item not in ("tenants", "networks", "images"):
+            raise OpenmanoBadParamsException("Unknown value for item '{}', must be 'tenants', 'nets' or "
+                                             "images".format(str(item)))
 
+        image_actions = ['list','get','show','delete']
+        if item == "images" and action not in image_actions:
+            raise OpenmanoBadParamsException("Only available actions for item '{}' are {}\n"
+                                             "Requested action was '{}'".format(item, ', '.join(image_actions), action))
         if all_tenants:
             tenant_text = "/any"
         else:
