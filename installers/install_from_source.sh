@@ -24,8 +24,8 @@ function usage(){
     echo -e "                    ..."
     echo -e "     --develop:     (deprecated, use '-b master') install OSM from source code using the master branch"
     echo -e "     --nat:         install only NAT rules"
-    echo -e "     --update:      update to the latest stable release or to the latest commit if using a specific branch"
-    echo -e "     --showopts:    show current options"
+#    echo -e "     --update:      update to the latest stable release or to the latest commit if using a specific branch"
+    echo -e "     --showopts:    print chosen options and exit (only for debugging)"
     echo -e "     -h / --help:   print this help"
 }
 
