@@ -1,0 +1,39 @@
+vnfd:vnfd-catalog:
+    vnfd:
+    -   connection-point:
+        -   name: mgmt
+            type: VPORT
+        -   name: west
+            type: VPORT
+        -   name: east
+            type: VPORT
+        description: A simple VNF descriptor w/ one VDU
+        id: Ref_Vnf_22
+        name: Ref_VNF_22
+        short-name: Ref_VNF_22
+        vdu:
+        -   external-interface:
+            -   name: iface60
+                virtual-interface:
+                    type: OM-MGMT
+                vnfd-connection-point-ref: mgmt
+            -   name: iface61
+                virtual-interface:
+                    type: PCI-PASSTHROUGH
+                vnfd-connection-point-ref: west
+            -   name: iface62
+                virtual-interface:
+                    type: SR-IOV
+                vnfd-connection-point-ref: east
+            id: abd6831e-f811-4580-9aad-1de9c6424180
+            image: ref_vm22.qcow2
+            name: Ref_VM6
+            guest-epa:
+                cpu-pinning-policy: DEDICATED
+                mempage-size: "LARGE"
+            vm-flavor:
+                memory-mb: '1024'
+                storage-gb: '16'
+                vcpu-count: '1'
+        vendor: ETSI
+        version: '1.0'

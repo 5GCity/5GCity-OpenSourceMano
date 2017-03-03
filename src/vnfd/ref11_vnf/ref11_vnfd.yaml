@@ -1,0 +1,66 @@
+vnfd:vnfd-catalog:
+    vnfd:
+    -   connection-point:
+        -   name: mgmt0
+            type: VPORT
+        -   name: west
+            type: VPORT
+        description: A simple VNF descriptor w/ VM1 and VM2
+        id: Ref_Vnf_11
+        name: Ref_VNF_11
+        short-name: Ref_VNF_11
+        internal-vld:
+        -   description: Internal VL
+            id: VL12
+            name: VL12
+            short-name: VL12
+            type: ELAN
+            vendor: ETSI
+            internal-connection-point:
+            -   id-ref: 'iface11'
+                id-ref: 'iface21'
+        vdu:
+        -   external-interface:
+            -   name: iface10
+                virtual-interface:
+                    type: OM-MGMT
+                vnfd-connection-point-ref: mgmt0
+            internal-interface:
+            -   name: iface11
+                virtual-interface:
+                    type: VIRTIO
+                vdu-internal-connection-point-ref: iface11
+            internal-connection-point:
+            -   name: iface11
+                id: iface11
+                type: VPORT
+            id: Ref_VM1
+            image: ref_vm1.qcow2
+            name: Ref_VM1
+            vm-flavor:
+                memory-mb: '2048'
+                storage-gb: '8'
+                vcpu-count: '2'
+        -   external-interface:
+            -   name: iface22
+                virtual-interface:
+                    type: VIRTIO
+                vnfd-connection-point-ref: west
+            internal-interface:
+            -   name: iface21
+                virtual-interface:
+                    type: VIRTIO
+                vdu-internal-connection-point-ref: iface21
+            internal-connection-point:
+            -   name: iface21
+                id: iface21
+                type: VPORT
+            id: Ref_VM2
+            image: ref_vm2.qcow2
+            name: Ref_VM2
+            vm-flavor:
+                memory-mb: '4096'
+                storage-gb: '16'
+                vcpu-count: '2'
+        vendor: ETSI
+        version: '1.0'
