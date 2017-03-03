@@ -323,11 +323,13 @@ get_processor_rankings_response_schema = {
 }
 
 class vimconnector(vimconn.vimconnector):
-    def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None,log_level="DEBUG",config={}):
+    def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None,
+                 log_level="DEBUG", config={}, persistent_info={}):
         vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level, config)
         self.tenant = None
         self.headers_req = {'content-type': 'application/json'}
         self.logger = logging.getLogger('openmano.vim.openvim')
+        self.persistent_info = persistent_info
         if tenant_id:
             self.tenant = tenant_id
 

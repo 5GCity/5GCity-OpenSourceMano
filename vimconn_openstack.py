@@ -68,7 +68,8 @@ volume_timeout = 60
 server_timeout = 60
 
 class vimconnector(vimconn.vimconnector):
-    def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None, config={}):
+    def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None,
+                 log_level=None, config={}, persistent_info={}):
         '''using common constructor parameters. In this case
         'url' is the keystone authorization url,
         'url_admin' is not use
@@ -77,7 +78,8 @@ class vimconnector(vimconn.vimconnector):
         if config.get('APIversion') == 'v3.3':
             self.osc_api_version = 'v3.3'
         vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level, config)
-        
+
+        self.persistent_info = persistent_info
         self.k_creds={}
         self.n_creds={}
         if self.config.get("insecure"):

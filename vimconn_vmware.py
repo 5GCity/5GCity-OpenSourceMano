@@ -127,7 +127,7 @@ flavorlist = {}
 
 class vimconnector(vimconn.vimconnector):
     def __init__(self, uuid=None, name=None, tenant_id=None, tenant_name=None,
-                 url=None, url_admin=None, user=None, passwd=None, log_level=None, config={}):
+                 url=None, url_admin=None, user=None, passwd=None, log_level=None, config={}, persistent_info={}):
         """
         Constructor create vmware connector to vCloud director.
 
@@ -164,6 +164,7 @@ class vimconnector(vimconn.vimconnector):
 
         self.logger = logging.getLogger('openmano.vim.vmware')
         self.logger.setLevel(10)
+        self.persistent_info = persistent_info
 
         self.name = name
         self.id = uuid
