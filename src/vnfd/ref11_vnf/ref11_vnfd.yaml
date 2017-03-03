@@ -18,7 +18,7 @@ vnfd:vnfd-catalog:
             vendor: ETSI
             internal-connection-point:
             -   id-ref: 'iface11'
-                id-ref: 'iface21'
+            -   id-ref: 'iface21'
         vdu:
         -   external-interface:
             -   name: iface10

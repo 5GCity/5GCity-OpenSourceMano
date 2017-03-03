@@ -20,7 +20,7 @@ vnfd:vnfd-catalog:
             vendor: ETSI
             internal-connection-point:
             -   id-ref: 'iface31'
-                id-ref: 'iface41'
+            -   id-ref: 'iface41'
         vdu:
         -   description: Middlepoint
             external-interface:
