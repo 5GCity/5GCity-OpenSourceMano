@@ -121,11 +121,10 @@ netStatus2manoFormat = {'ACTIVE': 'ACTIVE', 'PAUSED': 'PAUSED', 'INACTIVE': 'INA
                         'ERROR': 'ERROR', 'DELETED': 'DELETED'
                         }
 
-# dict used to store flavor in memory
-flavorlist = {}
-
-
 class vimconnector(vimconn.vimconnector):
+    # dict used to store flavor in memory
+    flavorlist = {}
+
     def __init__(self, uuid=None, name=None, tenant_id=None, tenant_name=None,
                  url=None, url_admin=None, user=None, passwd=None, log_level=None, config={}, persistent_info={}):
         """
@@ -154,6 +153,7 @@ class vimconnector(vimconn.vimconnector):
 
             dict['admin_username']
             dict['admin_password']
+            config - Provide NSX and vCenter information
 
             Returns:
                 Nothing.
@@ -181,6 +181,10 @@ class vimconnector(vimconn.vimconnector):
         self.nsx_manager = None
         self.nsx_user = None
         self.nsx_password = None
+        self.vcenter_ip = None
+        self.vcenter_port = None
+        self.vcenter_user = None
+        self.vcenter_password = None
 
         if tenant_name is not None:
             orgnameandtenant = tenant_name.split(":")
@@ -207,6 +211,11 @@ class vimconnector(vimconn.vimconnector):
             self.nsx_password = config['nsx_password']
         except KeyError:
             raise vimconn.vimconnException(message="Error: nsx manager or nsx user or nsx password is empty in Config")
+
+        self.vcenter_ip = config.get("vcenter_ip", None)
+        self.vcenter_port = config.get("vcenter_port", None)
+        self.vcenter_user = config.get("vcenter_user", None)
+        self.vcenter_password = config.get("vcenter_password", None)
 
         self.org_uuid = None
         self.vca = None
@@ -695,9 +704,9 @@ class vimconnector(vimconn.vimconnector):
         """Obtain flavor details from the  VIM
             Returns the flavor dict details {'id':<>, 'name':<>, other vim specific } #TODO to concrete
         """
-        if flavor_id not in flavorlist:
+        if flavor_id not in vimconnector.flavorlist:
             raise vimconn.vimconnNotFoundException("Flavor not found.")
-        return flavorlist[flavor_id]
+        return vimconnector.flavorlist[flavor_id]
 
     def new_flavor(self, flavor_data):
         """Adds a tenant flavor to VIM
@@ -745,7 +754,7 @@ class vimconnector(vimconn.vimconnector):
         new_flavor[FLAVOR_DISK_KEY] = disk
         # generate a new uuid put to internal dict and return it.
         flavor_id = uuid.uuid4()
-        flavorlist[str(flavor_id)] = new_flavor
+        vimconnector.flavorlist[str(flavor_id)] = new_flavor
         self.logger.debug("Created flavor - {} : {}".format(flavor_id, new_flavor))
 
         return str(flavor_id)
@@ -755,10 +764,10 @@ class vimconnector(vimconn.vimconnector):
 
            Returns the used id or raise an exception
         """
-        if flavor_id not in flavorlist:
+        if flavor_id not in vimconnector.flavorlist:
             raise vimconn.vimconnNotFoundException("Flavor not found.")
 
-        flavorlist.pop(flavor_id, None)
+        vimconnector.flavorlist.pop(flavor_id, None)
         return flavor_id
 
     def new_image(self, image_dict):
@@ -1223,8 +1232,8 @@ class vimconnector(vimconn.vimconnector):
         """
 
         self.logger.info("Creating new instance for entry {}".format(name))
-        self.logger.debug("desc {} boot {} image_id: {} flavor_id: {} net_list: {} cloud_config {}".
-                          format(description, start, image_id, flavor_id, net_list, cloud_config))
+        self.logger.debug("desc {} boot {} image_id: {} flavor_id: {} net_list: {} cloud_config {}".format(
+                                    description, start, image_id, flavor_id, net_list, cloud_config))
         vca = self.connect()
         if not vca:
             raise vimconn.vimconnConnectionException("self.connect() is failed.")
@@ -1263,13 +1272,13 @@ class vimconnector(vimconn.vimconnector):
         vm_disk = None
         pci_devices_info = []
         if flavor_id is not None:
-            if flavor_id not in flavorlist:
+            if flavor_id not in vimconnector.flavorlist:
                 raise vimconn.vimconnNotFoundException("new_vminstance(): Failed create vApp {}: "
                                                        "Failed retrieve flavor information "
                                                        "flavor id {}".format(name, flavor_id))
             else:
                 try:
-                    flavor = flavorlist[flavor_id]
+                    flavor = vimconnector.flavorlist[flavor_id]
                     vm_cpus = flavor[FLAVOR_VCPUS_KEY]
                     vm_memory = flavor[FLAVOR_RAM_KEY]
                     vm_disk = flavor[FLAVOR_DISK_KEY]
@@ -1281,8 +1290,8 @@ class vimconnector(vimconn.vimconnector):
                                 for interface in numa.get("interfaces",() ):
                                     if interface["dedicated"].strip()=="yes":
                                         pci_devices_info.append(interface)
-                except KeyError:
-                    raise vimconn.vimconnException("Corrupted flavor. {}".format(flavor_id))
+                except Exception as exp:
+                    raise vimconn.vimconnException("Corrupted flavor. {}.Exception: {}".format(flavor_id, exp))
 
         # image upload creates template name as catalog name space Template.
         templateName = self.get_catalogbyid(catalog_uuid=image_id, catalogs=catalogs)
@@ -2907,7 +2916,6 @@ class vimconnector(vimconn.vimconnector):
                         vmext = vim_info.find('vmext:VmVimObjectRef', namespaces)
                         if vmext is not None:
                             vm_vcenter_info["vm_moref_id"] = vmext.find('vmext:MoRef', namespaces).text
-                            vm_vcenter_info["vim_server_href"] = vmext.find('vmext:VimServerRef', namespaces).attrib['href']
                         parsed_respond["vm_vcenter_info"]= vm_vcenter_info
 
                     virtual_hardware_section = children_section.find('ovf:VirtualHardwareSection', namespaces)
@@ -3075,27 +3083,31 @@ class vimconnector(vimconn.vimconnector):
         vm_obj = None
         vcenter_conect = None
         self.logger.info("Add pci devices {} into vApp {}".format(pci_devices , vapp_uuid))
-        #Assuming password of vCenter user is same as password of vCloud user
-        vm_moref_id , vm_vcenter_host , vm_vcenter_username, vm_vcenter_port = self.get_vcenter_info_rest(vapp_uuid)
-        self.logger.info("vm_moref_id,  {} vm_vcenter_host {} vm_vcenter_username{} "\
-                         "vm_vcenter_port{}".format(
-                                            vm_moref_id, vm_vcenter_host,
-                                            vm_vcenter_username, vm_vcenter_port))
-        if vm_moref_id and vm_vcenter_host and vm_vcenter_username:
+        try:
+            vm_vcenter_info = self.get_vm_vcenter_info(vapp_uuid)
+        except Exception as exp:
+            self.logger.error("Error occurred while getting vCenter infromationn"\
+                             " for VM : {}".format(exp))
+            raise vimconn.vimconnException(message=exp)
+
+        if vm_vcenter_info["vm_moref_id"]:
             context = None
             if hasattr(ssl, '_create_unverified_context'):
                 context = ssl._create_unverified_context()
             try:
                 no_of_pci_devices = len(pci_devices)
                 if no_of_pci_devices > 0:
-                    vcenter_conect = SmartConnect(host=vm_vcenter_host, user=vm_vcenter_username,
-                                      pwd=self.passwd, port=int(vm_vcenter_port) ,
-                                      sslContext=context)
+                    vcenter_conect = SmartConnect(
+                                            host=vm_vcenter_info["vm_vcenter_ip"],
+                                            user=vm_vcenter_info["vm_vcenter_user"],
+                                            pwd=vm_vcenter_info["vm_vcenter_password"],
+                                            port=int(vm_vcenter_info["vm_vcenter_port"]),
+                                            sslContext=context)
                     atexit.register(Disconnect, vcenter_conect)
                     content = vcenter_conect.RetrieveContent()
 
                     #Get VM and its host
-                    host_obj, vm_obj = self.get_vm_obj(content ,vm_moref_id)
+                    host_obj, vm_obj = self.get_vm_obj(content ,vm_vcenter_info["vm_moref_id"])
                     self.logger.info("VM {} is currently on host {}".format(vm_obj, host_obj))
                     if host_obj and vm_obj:
                         #get PCI devies from host on which vapp is currently installed
@@ -3133,7 +3145,7 @@ class vimconnector(vimconn.vimconnector):
                                     if status:
                                         self.logger.info("Added PCI device {} to VM {}".format(pci_device,str(vm_obj)))
                                 else:
-                                    self.logger.info("Fail to add PCI device {} to VM {}".format(pci_device,str(vm_obj)))
+                                    self.logger.error("Fail to add PCI device {} to VM {}".format(pci_device,str(vm_obj)))
                             return True, vm_obj, vcenter_conect
                         else:
                             self.logger.error("Currently there is no host with"\
@@ -3364,10 +3376,9 @@ class vimconnector(vimconn.vimconnector):
                                                                              exp))
         return task
 
-    def get_vcenter_info_rest(self , vapp_uuid):
+    def get_vm_vcenter_info(self , vapp_uuid):
         """
-        https://192.169.241.105/api/admin/extension/vimServer/cc82baf9-9f80-4468-bfe9-ce42b3f9dde5
-        Method to get details of vCenter
+        Method to get details of vCenter and vm
 
             Args:
                 vapp_uuid - uuid of vApp or VM
@@ -3375,46 +3386,39 @@ class vimconnector(vimconn.vimconnector):
             Returns:
                 Moref Id of VM and deails of vCenter
         """
-        vm_moref_id = None
-        vm_vcenter = None
-        vm_vcenter_username = None
-        vm_vcenter_port = None
+        vm_vcenter_info = {}
 
-        vm_details = self.get_vapp_details_rest(vapp_uuid, need_admin_access=True)
-        if vm_details and "vm_vcenter_info" in vm_details:
-            vm_moref_id = vm_details["vm_vcenter_info"]["vm_moref_id"]
-            vim_server_href = vm_details["vm_vcenter_info"]["vim_server_href"]
+        if self.vcenter_ip is not None:
+            vm_vcenter_info["vm_vcenter_ip"] = self.vcenter_ip
+        else:
+            raise vimconn.vimconnException(message="vCenter IP is not provided."\
+                                           " Please provide vCenter IP while attaching datacenter to tenant in --config")
+        if self.vcenter_port is not None:
+            vm_vcenter_info["vm_vcenter_port"] = self.vcenter_port
+        else:
+            raise vimconn.vimconnException(message="vCenter port is not provided."\
+                                           " Please provide vCenter port while attaching datacenter to tenant in --config")
+        if self.vcenter_user is not None:
+            vm_vcenter_info["vm_vcenter_user"] = self.vcenter_user
+        else:
+            raise vimconn.vimconnException(message="vCenter user is not provided."\
+                                           " Please provide vCenter user while attaching datacenter to tenant in --config")
 
-            if vim_server_href:
-                vca = self.connect_as_admin()
-                if not vca:
-                    raise vimconn.vimconnConnectionException("self.connect() is failed")
-                if vim_server_href is None:
-                    self.logger.error("No url to get vcenter details")
+        if self.vcenter_password is not None:
+            vm_vcenter_info["vm_vcenter_password"] = self.vcenter_password
+        else:
+            raise vimconn.vimconnException(message="vCenter user password is not provided."\
+                                           " Please provide vCenter user password while attaching datacenter to tenant in --config")
+        try:
+            vm_details = self.get_vapp_details_rest(vapp_uuid, need_admin_access=True)
+            if vm_details and "vm_vcenter_info" in vm_details:
+                vm_vcenter_info["vm_moref_id"] = vm_details["vm_vcenter_info"].get("vm_moref_id", None)
 
-                if vca.vcloud_session and vca.vcloud_session.organization:
-                    response = Http.get(url=vim_server_href,
-                                        headers=vca.vcloud_session.get_vcloud_headers(),
-                                        verify=vca.verify,
-                                        logger=vca.logger)
+            return vm_vcenter_info
 
-                if response.status_code != requests.codes.ok:
-                    self.logger.debug("GET REST API call {} failed. Return status code {}".format(vim_server_href,
-                                                                                    response.status_code))
-                try:
-                    namespaces={"vmext":"http://www.vmware.com/vcloud/extension/v1.5",
-                                "vcloud":"http://www.vmware.com/vcloud/v1.5"
-                                }
-                    xmlroot_respond = XmlElementTree.fromstring(response.content)
-                    vm_vcenter_username =  xmlroot_respond.find('vmext:Username', namespaces).text
-                    vcenter_url = xmlroot_respond.find('vmext:Url', namespaces).text
-                    vm_vcenter_port = vcenter_url.split(":")[2]
-                    vm_vcenter =  vcenter_url.split(":")[1].split("//")[1]
-
-                except Exception as exp :
-                    self.logger.info("Error occurred calling rest api for vcenter information {}".format(exp))
-
-        return vm_moref_id , vm_vcenter , vm_vcenter_username, vm_vcenter_port
+        except Exception as exp:
+            self.logger.error("Error occurred while getting vCenter infromationn"\
+                             " for VM : {}".format(exp))
 
 
     def get_vm_pci_details(self, vmuuid):
@@ -3430,28 +3434,38 @@ class vimconnector(vimconn.vimconnector):
         """
         vm_pci_devices_info = {}
         try:
-            vm_moref_id , vm_vcenter_host , vm_vcenter_username, vm_vcenter_port = self.get_vcenter_info_rest(vmuuid)
-            if vm_moref_id and vm_vcenter_host and vm_vcenter_username:
+            vm_vcenter_info = self.get_vm_vcenter_info(vmuuid)
+            if vm_vcenter_info["vm_moref_id"]:
                 context = None
                 if hasattr(ssl, '_create_unverified_context'):
                     context = ssl._create_unverified_context()
-                vcenter_conect = SmartConnect(host=vm_vcenter_host, user=vm_vcenter_username,
-                                  pwd=self.passwd, port=int(vm_vcenter_port),
-                                  sslContext=context)
+                vcenter_conect = SmartConnect(host=vm_vcenter_info["vm_vcenter_ip"],
+                                        user=vm_vcenter_info["vm_vcenter_user"],
+                                        pwd=vm_vcenter_info["vm_vcenter_password"],
+                                        port=int(vm_vcenter_info["vm_vcenter_port"]),
+                                        sslContext=context
+                                    )
                 atexit.register(Disconnect, vcenter_conect)
                 content = vcenter_conect.RetrieveContent()
 
                 #Get VM and its host
-                host_obj, vm_obj = self.get_vm_obj(content ,vm_moref_id)
-                for device in vm_obj.config.hardware.device:
-                    if type(device) == vim.vm.device.VirtualPCIPassthrough:
-                        device_details={'devide_id':device.backing.id,
-                                        'pciSlotNumber':device.slotInfo.pciSlotNumber
-                                     }
-                        vm_pci_devices_info[device.deviceInfo.label] = device_details
+                if content:
+                    host_obj, vm_obj = self.get_vm_obj(content ,vm_vcenter_info["vm_moref_id"])
+                    if host_obj and vm_obj:
+                        vm_pci_devices_info["host_name"]= host_obj.name
+                        vm_pci_devices_info["host_ip"]= host_obj.config.network.vnic[0].spec.ip.ipAddress
+                        for device in vm_obj.config.hardware.device:
+                            if type(device) == vim.vm.device.VirtualPCIPassthrough:
+                                device_details={'devide_id':device.backing.id,
+                                                'pciSlotNumber':device.slotInfo.pciSlotNumber,
+                                            }
+                                vm_pci_devices_info[device.deviceInfo.label] = device_details
+                else:
+                    self.logger.error("Can not connect to vCenter while getting "\
+                                          "PCI devices infromationn")
+                return vm_pci_devices_info
         except Exception as exp:
-            self.logger.info("Error occurred while getting PCI devices infromationn"\
-                             " for VM {} : {}".format(vm_obj,exp))
-        return vm_pci_devices_info
-
+            self.logger.error("Error occurred while getting VM infromationn"\
+                             " for VM : {}".format(exp))
+            raise vimconn.vimconnException(message=exp)
 
