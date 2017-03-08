@@ -389,6 +389,8 @@ class vimconnector(vimconn.vimconnector):
                 subnet = {"id": subnet_id, "fault": str(e)}
             subnets.append(subnet)
         net["subnets"] = subnets
+        net["network_type"] = net.get('provider:network_type')
+        net["segmentation_id"] = net.get('provider:segmentation_id')
         return net
 
     def delete_network(self, net_id):

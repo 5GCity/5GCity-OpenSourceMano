@@ -25,10 +25,10 @@
 '''
 openmano python client used to interact with openmano-server  
 '''
-__author__="Alfonso Tierno"
+__author__="Alfonso Tierno, Pablo Montes"
 __date__ ="$09-Mar-2016 09:09:48$"
-__version__="0.0.1-r467"
-version_date="Mar 2016"
+__version__="0.0.2-r468"
+version_date="Feb 2017"
 
 import requests
 import json

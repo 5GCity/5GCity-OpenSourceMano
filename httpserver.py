@@ -42,7 +42,9 @@ from openmano_schemas import vnfd_schema_v01, vnfd_schema_v02, \
                             scenario_action_schema, instance_scenario_action_schema, instance_scenario_create_schema_v01, \
                             tenant_schema, tenant_edit_schema,\
                             datacenter_schema, datacenter_edit_schema, datacenter_action_schema, datacenter_associate_schema,\
-                            object_schema, netmap_new_schema, netmap_edit_schema
+                            object_schema, netmap_new_schema, netmap_edit_schema, sdn_controller_schema, sdn_controller_edit_schema, \
+                            sdn_port_mapping_schema
+
 import nfvo
 import utils
 from db_base import db_base_Exception
@@ -544,6 +546,138 @@ def http_edit_datacenter_id(datacenter_id_name):
         logger.error("Unexpected exception: ", exc_info=True)
         bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
+@bottle.route(url_base + '/<tenant_id>/sdn_controllers', method='POST')
+def http_post_sdn_controller(tenant_id):
+    '''insert a sdn controller into the catalogue. '''
+    #parse input data
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    http_content,_ = format_in( sdn_controller_schema )
+    try:
+        logger.debug("tenant_id: "+tenant_id)
+        #logger.debug("content: {}".format(http_content['sdn_controller']))
+
+        data = nfvo.sdn_controller_create(mydb, tenant_id, http_content['sdn_controller'])
+        return format_out({"sdn_controller": nfvo.sdn_controller_list(mydb, tenant_id, data)})
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_sdn_controller error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
+@bottle.route(url_base + '/<tenant_id>/sdn_controllers/<controller_id>', method='PUT')
+def http_put_sdn_controller_update(tenant_id, controller_id):
+    '''Update sdn controller'''
+    #parse input data
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    http_content,_ = format_in( sdn_controller_edit_schema )
+#    r = utils.remove_extra_items(http_content, datacenter_schema)
+#    if r:
+#        logger.debug("Remove received extra items %s", str(r))
+    try:
+        #logger.debug("tenant_id: "+tenant_id)
+        logger.debug("content: {}".format(http_content['sdn_controller']))
+
+        data = nfvo.sdn_controller_update(mydb, tenant_id, controller_id, http_content['sdn_controller'])
+        return format_out({"sdn_controller": nfvo.sdn_controller_list(mydb, tenant_id, controller_id)})
+
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_sdn_controller error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
+@bottle.route(url_base + '/<tenant_id>/sdn_controllers', method='GET')
+def http_get_sdn_controller(tenant_id):
+    '''get sdn controllers list, can use both uuid or name'''
+    try:
+        logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+
+        data = {'sdn_controllers': nfvo.sdn_controller_list(mydb, tenant_id)}
+        return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_get_sdn_controller error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
+@bottle.route(url_base + '/<tenant_id>/sdn_controllers/<controller_id>', method='GET')
+def http_get_sdn_controller_id(tenant_id, controller_id):
+    '''get sdn controller details, can use both uuid or name'''
+    try:
+        logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+        data = nfvo.sdn_controller_list(mydb, tenant_id, controller_id)
+        return format_out({"sdn_controllers": data})
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_get_sdn_controller_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
+@bottle.route(url_base + '/<tenant_id>/sdn_controllers/<controller_id>', method='DELETE')
+def http_delete_sdn_controller_id(tenant_id, controller_id):
+    '''delete sdn controller, can use both uuid or name'''
+    try:
+        logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+        data = nfvo.sdn_controller_delete(mydb, tenant_id, controller_id)
+        return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_delete_sdn_controller_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
+@bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/sdn_mapping', method='POST')
+def http_post_datacenter_sdn_port_mapping(tenant_id, datacenter_id):
+    '''Set the sdn port mapping for a datacenter. '''
+    #parse input data
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    http_content, _ = format_in(sdn_port_mapping_schema)
+#    r = utils.remove_extra_items(http_content, datacenter_schema)
+#    if r:
+#        logger.debug("Remove received extra items %s", str(r))
+    try:
+        data = nfvo.datacenter_sdn_port_mapping_set(mydb, tenant_id, datacenter_id, http_content['sdn_port_mapping'])
+        return format_out({"sdn_port_mapping": data})
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_datacenter_sdn_port_mapping error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
+@bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/sdn_mapping', method='GET')
+def http_get_datacenter_sdn_port_mapping(tenant_id, datacenter_id):
+    '''get datacenter sdn mapping details, can use both uuid or name'''
+    try:
+        logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+
+        data = nfvo.datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id)
+        return format_out({"sdn_port_mapping": data})
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_get_datacenter_sdn_port_mapping error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
+@bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/sdn_mapping', method='DELETE')
+def http_delete_datacenter_sdn_port_mapping(tenant_id, datacenter_id):
+    '''clean datacenter sdn mapping, can use both uuid or name'''
+    try:
+        logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+        data = nfvo.datacenter_sdn_port_mapping_delete(mydb, tenant_id, datacenter_id)
+        return format_out({"result": data})
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_delete_datacenter_sdn_port_mapping error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/networks', method='GET')  #deprecated
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>/netmaps', method='GET')
@@ -739,6 +873,30 @@ def http_associate_datacenters(tenant_id, datacenter_id):
         logger.error("Unexpected exception: ", exc_info=True)
         bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
+@bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>', method='PUT')
+def http_associate_datacenters_edit(tenant_id, datacenter_id):
+    '''associate an existing datacenter to a this tenant. '''
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    #parse input data
+    http_content,_ = format_in( datacenter_associate_schema )
+    r = utils.remove_extra_items(http_content, datacenter_associate_schema)
+    if r:
+        logger.debug("Remove received extra items %s", str(r))
+    try:
+        id_ = nfvo.edit_datacenter_to_tenant(mydb, tenant_id, datacenter_id,
+                                    http_content['datacenter'].get('vim_tenant'),
+                                    http_content['datacenter'].get('vim_tenant_name'),
+                                    http_content['datacenter'].get('vim_username'),
+                                    http_content['datacenter'].get('vim_password'),
+                                    http_content['datacenter'].get('config')
+        )
+        return http_get_datacenter_id(tenant_id, id_)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_associate_datacenters_edit error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>', method='DELETE')
 def http_deassociate_datacenters(tenant_id, datacenter_id):

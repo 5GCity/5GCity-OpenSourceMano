@@ -39,15 +39,19 @@ import vimconn
 import logging
 import collections
 from db_base import db_base_Exception
+
 import nfvo_db
 from threading import Lock
 from time import time
+import openvim.ovim as Ovim
 
 global global_config
 global vimconn_imported
 global logger
 global default_volume_size
 default_volume_size = '5' #size in GB
+global ovim
+ovim = None
 
 
 vimconn_imported = {}   # dictionary with VIM type as key, loaded module as value
@@ -107,6 +111,31 @@ def start_service(mydb):
     global db, global_config
     db = nfvo_db.nfvo_db()
     db.connect(global_config['db_host'], global_config['db_user'], global_config['db_passwd'], global_config['db_name'])
+    global ovim
+
+    # Initialize openvim for SDN control
+    # TODO: Avoid static configuration by adding new parameters to openmanod.cfg
+    # TODO: review ovim.py to delete not needed configuration
+    ovim_configuration = {
+        'logger_name': 'openvim',
+        'network_vlan_range_start': 1000,
+        'network_vlan_range_end': 4096,
+        'log_level_db': 'DEBUG',
+        'db_name': 'mano_vim_db',
+        'db_host': 'localhost',
+        'db_user': 'vim',
+        'db_passwd': 'vimpw',
+        'database_version': '0.15',
+        'bridge_ifaces': {},
+        'mode': 'normal',
+        'of_controller_nets_with_same_vlan': True,
+        'network_type': 'bridge',
+        #TODO: log_level_of should not be needed. To be modified in ovim
+        'log_level_of': 'DEBUG'
+    }
+    ovim = Ovim.ovim(ovim_configuration)
+    ovim.start_service()
+
     from_= 'tenants_datacenters as td join datacenters as d on td.datacenter_id=d.uuid join datacenter_tenants as dt on td.datacenter_tenant_id=dt.uuid'
     select_ = ('type','d.config as config','d.uuid as datacenter_id', 'vim_url', 'vim_url_admin', 'd.name as datacenter_name',
                    'dt.uuid as datacenter_tenant_id','dt.vim_tenant_name as vim_tenant_name','dt.vim_tenant_id as vim_tenant_id',
@@ -148,14 +177,15 @@ def start_service(mydb):
                 raise NfvoException("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, str(e)), HTTP_Internal_Server_Error)
             thread_name = get_non_used_vim_name(vim['datacenter_name'], vim['vim_tenant_id'], vim['vim_tenant_name'], vim['vim_tenant_id'])
             new_thread = vim_thread.vim_thread(myvim, task_lock, thread_name, vim['datacenter_name'],
-                                               vim.get('datacenter_tenant_id'), db=db, db_lock=db_lock)
+                                               vim.get('datacenter_tenant_id'), db=db, db_lock=db_lock, ovim=ovim)
             new_thread.start()
             vim_threads["running"][thread_id] = new_thread
     except db_base_Exception as e:
         raise NfvoException(str(e) + " at nfvo.get_vim", e.http_code)
 
-
 def stop_service():
+    if ovim:
+        ovim.stop_service()
     for thread_id,thread in vim_threads["running"].items():
         thread.insert_task(new_task("exit", None, store=False))
         vim_threads["deleting"][thread_id] = thread
@@ -2394,7 +2424,7 @@ def delete_instance(mydb, tenant_id, instance_id):
                     else:  # ok
                         task = new_task("del-net", old_task["result"])
             else:
-                task = new_task("del-net", net['vim_net_id'], store=False)
+                task = new_task("del-net", (net['vim_net_id'], net['sdn_net_id']), store=False)
             if task:
                 myvim_thread.insert_task(task)
         except vimconn.vimconnNotFoundException as e:
@@ -2731,7 +2761,10 @@ def edit_datacenter(mydb, datacenter_id_name, datacenter_descriptor):
                     if new_config_dict[k]==None:
                         to_delete.append(k)
 
-                config_dict = yaml.load(datacenter["config"])
+                config_text = datacenter.get("config")
+                if not config_text:
+                    config_text = '{}'
+                config_dict = yaml.load(config_text)
                 config_dict.update(new_config_dict)
                 #delete null fields
                 for k in to_delete:
@@ -2811,12 +2844,48 @@ def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=
     # create thread
     datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_dict['uuid'], datacenter_id)  # reload data
     thread_name = get_non_used_vim_name(datacenter_name, datacenter_id, tenant_dict['name'], tenant_dict['uuid'])
-    new_thread = vim_thread.vim_thread(myvim, task_lock, thread_name, datacenter_name, db=db, db_lock=db_lock)
+    new_thread = vim_thread.vim_thread(myvim, task_lock, thread_name, datacenter_name, db=db, db_lock=db_lock, ovim=ovim)
     new_thread.start()
     thread_id = datacenter_id + "." + tenant_dict['uuid']
     vim_threads["running"][thread_id] = new_thread
     return datacenter_id
 
+def edit_datacenter_to_tenant(mydb, nfvo_tenant, datacenter_id, vim_tenant_id=None, vim_tenant_name=None, vim_username=None, vim_password=None, config=None):
+    #Obtain the data of this datacenter_tenant_id
+    vim_data = mydb.get_rows(
+        SELECT=("datacenter_tenants.vim_tenant_name", "datacenter_tenants.vim_tenant_id", "datacenter_tenants.user",
+                "datacenter_tenants.passwd", "datacenter_tenants.config"),
+        FROM="datacenter_tenants JOIN tenants_datacenters ON datacenter_tenants.uuid=tenants_datacenters.datacenter_tenant_id",
+        WHERE={"tenants_datacenters.nfvo_tenant_id": nfvo_tenant,
+               "tenants_datacenters.datacenter_id": datacenter_id})
+
+    logger.debug(str(vim_data))
+    if len(vim_data) < 1:
+        raise NfvoException("Datacenter {} is not attached for tenant {}".format(datacenter_id, nfvo_tenant), HTTP_Conflict)
+
+    v = vim_data[0]
+    if v['config']:
+        v['config'] = yaml.load(v['config'])
+
+    if vim_tenant_id:
+        v['vim_tenant_id'] = vim_tenant_id
+    if vim_tenant_name:
+        v['vim_tenant_name'] = vim_tenant_name
+    if vim_username:
+        v['user'] = vim_username
+    if vim_password:
+        v['passwd'] = vim_password
+    if config:
+        if not v['config']:
+            v['config'] = {}
+        v['config'].update(config)
+
+    logger.debug(str(v))
+    deassociate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter_id, vim_tenant_id=v['vim_tenant_id'])
+    associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter_id, vim_tenant_id=v['vim_tenant_id'], vim_tenant_name=v['vim_tenant_name'],
+                                   vim_username=v['user'], vim_password=v['passwd'], config=v['config'])
+
+    return datacenter_id
 
 def deassociate_datacenter_to_tenant(mydb, tenant_id, datacenter, vim_tenant_id=None):
     #get datacenter info
@@ -3054,3 +3123,122 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
         raise NfvoException("Not possible to create {} at VIM: {}".format(item, str(e)), e.http_code)
 
     return vim_action_get(mydb, tenant_id, datacenter, item, content)
+
+def sdn_controller_create(mydb, tenant_id, sdn_controller):
+    data = ovim.new_of_controller(sdn_controller)
+    logger.debug('New SDN controller created with uuid {}'.format(data))
+    return data
+
+def sdn_controller_update(mydb, tenant_id, controller_id, sdn_controller):
+    data = ovim.edit_of_controller(controller_id, sdn_controller)
+    msg = 'SDN controller {} updated'.format(data)
+    logger.debug(msg)
+    return msg
+
+def sdn_controller_list(mydb, tenant_id, controller_id=None):
+    if controller_id == None:
+        data = ovim.get_of_controllers()
+    else:
+        data = ovim.show_of_controller(controller_id)
+
+    msg = 'SDN controller list:\n {}'.format(data)
+    logger.debug(msg)
+    return data
+
+def sdn_controller_delete(mydb, tenant_id, controller_id):
+    select_ = ('uuid', 'config')
+    datacenters = mydb.get_rows(FROM='datacenters', SELECT=select_)
+    for datacenter in datacenters:
+        if datacenter['config']:
+            config = yaml.load(datacenter['config'])
+            if 'sdn-controller' in config and config['sdn-controller'] == controller_id:
+                raise NfvoException("SDN controller {} is in use by datacenter {}".format(controller_id, datacenter['uuid']), HTTP_Conflict)
+
+    data = ovim.delete_of_controller(controller_id)
+    msg = 'SDN controller {} deleted'.format(data)
+    logger.debug(msg)
+    return msg
+
+def datacenter_sdn_port_mapping_set(mydb, tenant_id, datacenter_id, sdn_port_mapping):
+    controller = mydb.get_rows(FROM="datacenters", SELECT=("config",), WHERE={"uuid":datacenter_id})
+    if len(controller) < 1:
+        raise NfvoException("Datacenter {} not present in the database".format(datacenter_id), HTTP_Not_Found)
+
+    try:
+        sdn_controller_id = yaml.load(controller[0]["config"])["sdn-controller"]
+    except:
+        raise NfvoException("The datacenter {} has not an SDN controller associated".format(datacenter_id), HTTP_Bad_Request)
+
+    sdn_controller = ovim.show_of_controller(sdn_controller_id)
+    switch_dpid = sdn_controller["dpid"]
+
+    maps = list()
+    for compute_node in sdn_port_mapping:
+        #element = {"ofc_id": sdn_controller_id, "region": datacenter_id, "switch_dpid": switch_dpid}
+        element = dict()
+        element["compute_node"] = compute_node["compute_node"]
+        for port in compute_node["ports"]:
+            element["pci"] = port.get("pci")
+            element["switch_port"] = port.get("switch_port")
+            element["switch_mac"] = port.get("switch_mac")
+            if not element["pci"] or not (element["switch_port"] or element["switch_mac"]):
+                raise NfvoException ("The mapping must contain the 'pci' and at least one of the elements 'switch_port'"
+                                     " or 'switch_mac'", HTTP_Bad_Request)
+            maps.append(dict(element))
+
+    return ovim.set_of_port_mapping(maps, ofc_id=sdn_controller_id, switch_dpid=switch_dpid, region=datacenter_id)
+
+def datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id):
+    maps = ovim.get_of_port_mappings(db_filter={"region": datacenter_id})
+
+    result = {
+        "sdn-controller": None,
+        "datacenter-id": datacenter_id,
+        "dpid": None,
+        "ports_mapping": list()
+    }
+
+    datacenter = mydb.get_table_by_uuid_name('datacenters', datacenter_id)
+    if datacenter['config']:
+        config = yaml.load(datacenter['config'])
+        if 'sdn-controller' in config:
+            controller_id = config['sdn-controller']
+            sdn_controller = sdn_controller_list(mydb, tenant_id, controller_id)
+            result["sdn-controller"] = controller_id
+            result["dpid"] = sdn_controller["dpid"]
+
+    if result["sdn-controller"] == None or result["dpid"] == None:
+        raise NfvoException("Not all SDN controller information for datacenter {} could be found: {}".format(datacenter_id, result),
+                            HTTP_Internal_Server_Error)
+
+    if len(maps) == 0:
+        return result
+
+    ports_correspondence_dict = dict()
+    for link in maps:
+        if result["sdn-controller"] != link["ofc_id"]:
+            raise NfvoException("The sdn-controller specified for different port mappings differ", HTTP_Internal_Server_Error)
+        if result["dpid"] != link["switch_dpid"]:
+            raise NfvoException("The dpid specified for different port mappings differ", HTTP_Internal_Server_Error)
+        element = dict()
+        element["pci"] = link["pci"]
+        if link["switch_port"]:
+            element["switch_port"] = link["switch_port"]
+        if link["switch_mac"]:
+            element["switch_mac"] = link["switch_mac"]
+
+        if not link["compute_node"] in ports_correspondence_dict:
+            content = dict()
+            content["compute_node"] = link["compute_node"]
+            content["ports"] = list()
+            ports_correspondence_dict[link["compute_node"]] = content
+
+        ports_correspondence_dict[link["compute_node"]]["ports"].append(element)
+
+    for key in sorted(ports_correspondence_dict):
+        result["ports_mapping"].append(ports_correspondence_dict[key])
+
+    return result
+
+def datacenter_sdn_port_mapping_delete(mydb, tenant_id, datacenter_id):
+    return ovim.clear_of_port_mapping(db_filter={"region":datacenter_id})

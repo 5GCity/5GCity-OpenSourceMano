@@ -1095,3 +1095,75 @@ instance_scenario_action_schema = {
     #"maxProperties": 1,
     "additionalProperties": False
 }
+
+sdn_controller_properties={
+    "name": name_schema,
+    "dpid": {"type":"string", "pattern":"^[0-9a-fA-F][02468aceACE](:[0-9a-fA-F]{2}){7}$"},
+    "ip": ip_schema,
+    "port": port_schema,
+    "type": {"type": "string", "enum": ["opendaylight","floodlight","onos"]},
+    "version": {"type" : "string", "minLength":1, "maxLength":12},
+    "user": nameshort_schema,
+    "password": passwd_schema
+}
+sdn_controller_schema = {
+    "title":"sdn controller information schema",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type":"object",
+    "properties":{
+        "sdn_controller":{
+            "type":"object",
+            "properties":sdn_controller_properties,
+            "required": ["name", "port", 'ip', 'dpid', 'type'],
+            "additionalProperties": False
+        }
+    },
+    "required": ["sdn_controller"],
+    "additionalProperties": False
+}
+
+sdn_controller_edit_schema = {
+    "title":"sdn controller update information schema",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type":"object",
+    "properties":{
+        "sdn_controller":{
+            "type":"object",
+            "properties":sdn_controller_properties,
+            "additionalProperties": False
+        }
+    },
+    "required": ["sdn_controller"],
+    "additionalProperties": False
+}
+
+sdn_port_mapping_schema  = {
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title":"sdn port mapping information schema",
+    "type": "object",
+    "properties": {
+        "sdn_port_mapping": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "compute_node": nameshort_schema,
+                    "ports": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "pci": pci_schema,
+                                "switch_port": nameshort_schema,
+                                "switch_mac": mac_schema
+                            },
+                            "required": ["pci"]
+                        }
+                    }
+                },
+                "required": ["compute_node", "ports"]
+            }
+        }
+    },
+    "required": ["sdn_port_mapping"]
+}

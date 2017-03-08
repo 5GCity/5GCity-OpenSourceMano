@@ -912,7 +912,7 @@ class nfvo_db(db_base.db_base):
                     #from_text = "instance_nets join instance_scenarios on instance_nets.instance_scenario_id=instance_scenarios.uuid " + \
                     #            "join sce_nets on instance_scenarios.scenario_id=sce_nets.scenario_id"
                     #where_text = "instance_nets.instance_scenario_id='"+ instance_dict['uuid'] + "'"
-                    cmd = "SELECT uuid,vim_net_id,status,error_msg,vim_info,created, sce_net_id, net_id as vnf_net_id, datacenter_id, datacenter_tenant_id"\
+                    cmd = "SELECT uuid,vim_net_id,status,error_msg,vim_info,created, sce_net_id, net_id as vnf_net_id, datacenter_id, datacenter_tenant_id, sdn_net_id"\
                             " FROM instance_nets" \
                             " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid'])
                     self.logger.debug(cmd)

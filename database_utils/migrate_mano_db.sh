@@ -187,6 +187,7 @@ DATABASE_TARGET_VER_NUM=0
 [ $OPENMANO_VER_NUM -ge 5003 ] && DATABASE_TARGET_VER_NUM=17  #0.5.3 =>  17
 [ $OPENMANO_VER_NUM -ge 5004 ] && DATABASE_TARGET_VER_NUM=18  #0.5.4 =>  18
 [ $OPENMANO_VER_NUM -ge 5005 ] && DATABASE_TARGET_VER_NUM=19  #0.5.5 =>  19
+[ $OPENMANO_VER_NUM -ge 5009 ] && DATABASE_TARGET_VER_NUM=20  #0.5.9 =>  20
 #TODO ... put next versions here
 
 
@@ -728,6 +729,27 @@ function downgrade_from_19(){
     echo "      remove column 'boot_data' from table 'vms'"
     echo "ALTER TABLE vms DROP COLUMN boot_data;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "DELETE FROM schema_version WHERE version_int='19';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+
+function upgrade_to_20(){
+    echo "    upgrade database from version 0.19 to version 0.20"
+    echo "      add column 'sdn_net_id' at table 'instance_nets' and columns 'sdn_port_id', 'compute_node', 'pci' and 'vlan' to table 'instance_interfaces'"
+    echo "ALTER TABLE instance_nets ADD sdn_net_id varchar(36) DEFAULT NULL NULL COMMENT 'Network id in ovim';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_interfaces ADD sdn_port_id varchar(36) DEFAULT NULL NULL COMMENT 'Port id in ovim';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_interfaces ADD compute_node varchar(100) DEFAULT NULL NULL COMMENT 'Compute node id used to specify the SDN port mapping';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_interfaces ADD pci varchar(12) DEFAULT NULL NULL COMMENT 'PCI of the physical port in the host';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_interfaces ADD vlan SMALLINT UNSIGNED DEFAULT NULL NULL COMMENT 'VLAN tag used by the port';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (20, '0.20', '0.5.9', 'Added columns to store dataplane connectivity info', '2017-03-13');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+function downgrade_from_20(){
+    echo "    downgrade database from version 0.20 to version 0.19"
+    echo "      remove column 'sdn_net_id' at table 'instance_nets' and columns 'sdn_port_id', 'compute_node', 'pci' and 'vlan' to table 'instance_interfaces'"
+    echo "ALTER TABLE instance_nets DROP COLUMN sdn_net_id;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_interfaces DROP COLUMN vlan;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_interfaces DROP COLUMN pci;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_interfaces DROP COLUMN compute_node;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_interfaces DROP COLUMN sdn_port_id;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "DELETE FROM schema_version WHERE version_int='20';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
 
 function upgrade_to_X(){

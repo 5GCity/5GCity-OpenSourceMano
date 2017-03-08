@@ -25,7 +25,7 @@
 This is thread that interact with the host and the libvirt to manage VM
 One thread will be launched per host 
 '''
-__author__ = "Alfonso Tierno"
+__author__ = "Alfonso Tierno, Pablo Montes"
 __date__ = "$10-feb-2017 12:07:15$"
 
 import threading
@@ -34,6 +34,7 @@ import Queue
 import logging
 import vimconn
 from db_base import db_base_Exception
+from openvim.ovim import ovimException
 
 
 # from logging import Logger
@@ -46,7 +47,7 @@ def is_task_id(id):
 
 class vim_thread(threading.Thread):
 
-    def __init__(self, vimconn, task_lock, name=None, datacenter_name=None, datacenter_tenant_id=None, db=None, db_lock=None):
+    def __init__(self, vimconn, task_lock, name=None, datacenter_name=None, datacenter_tenant_id=None, db=None, db_lock=None, ovim=None):
         """Init a thread.
         Arguments:
             'id' number of thead
@@ -64,6 +65,7 @@ class vim_thread(threading.Thread):
         self.vim = vimconn
         self.datacenter_name = datacenter_name
         self.datacenter_tenant_id = datacenter_tenant_id
+        self.ovim = ovim
         if not name:
             self.name = vimconn["id"] + "." + vimconn["config"]["datacenter_tenant_id"]
         else:
@@ -152,11 +154,30 @@ class vim_thread(threading.Thread):
             task_id = task["id"]
             params = task["params"]
             net_id = self.vim.new_network(*params)
-            try:
-                with self.db_lock:
-                    self.db.update_rows("instance_nets", UPDATE={"vim_net_id": net_id}, WHERE={"vim_net_id": task_id})
-            except db_base_Exception as e:
-                self.logger.error("Error updating database %s", str(e))
+
+            net_name = params[0]
+            net_type = params[1]
+
+            network = None
+            sdn_controller = self.vim.config.get('sdn-controller')
+            if sdn_controller and (net_type == "data" or net_type == "ptp"):
+                network = {"name": net_name, "type": net_type}
+
+                vim_net = self.vim.get_network(net_id)
+                if vim_net.get('network_type') != 'vlan':
+                    raise vimconn.vimconnException(net_name + "defined as type " + net_type + " but the created network in vim is " + vim_net['provider:network_type'])
+
+                network["vlan"] = vim_net.get('segmentation_id')
+
+            sdn_net_id = None
+            with self.db_lock:
+                if network:
+                    sdn_net_id = self.ovim.new_network(network)
+                self.db.update_rows("instance_nets", UPDATE={"vim_net_id": net_id, "sdn_net_id": sdn_net_id}, WHERE={"vim_net_id": task_id})
+
+            return True, net_id
+        except db_base_Exception as e:
+            self.logger.error("Error updating database %s", str(e))
             return True, net_id
         except vimconn.vimconnException as e:
             self.logger.error("Error creating NET, task=%s: %s", str(task_id), str(e))
@@ -167,6 +188,9 @@ class vim_thread(threading.Thread):
                                         WHERE={"vim_net_id": task_id})
             except db_base_Exception as e:
                 self.logger.error("Error updating database %s", str(e))
+            return False, str(e)
+        except ovimException as e:
+            self.logger.error("Error creating NET in ovim, task=%s: %s", str(task_id), str(e))
             return False, str(e)
 
     def new_vm(self, task):
@@ -227,7 +251,8 @@ class vim_thread(threading.Thread):
             return False, str(e)
 
     def del_net(self, task):
-        net_id = task["params"]
+        net_id = task["params"][0]
+        sdn_net_id = task["params"][1]
         if is_task_id(net_id):
             try:
                 task_create = task["depends"][net_id]
@@ -240,8 +265,15 @@ class vim_thread(threading.Thread):
             except Exception as e:
                 return False, "Error trying to get task_id='{}':".format(net_id, str(e))
         try:
-            return True, self.vim.delete_network(net_id)
+            result = self.vim.delete_network(net_id)
+            if sdn_net_id:
+                with self.db_lock:
+                    self.ovim.delete_network(sdn_net_id)
+            return True, result
         except vimconn.vimconnException as e:
+            return False, str(e)
+        except ovimException as e:
+            logging.error("Error deleting network from ovim. net_id: {}, sdn_net_id: {}".format(net_id, sdn_net_id))
             return False, str(e)
 
 

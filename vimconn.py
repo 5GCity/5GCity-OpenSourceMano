@@ -232,6 +232,8 @@ class vimconnector():
             'id': (mandatory) VIM network id
             'name': (mandatory) VIM network name
             'status': (mandatory) can be 'ACTIVE', 'INACTIVE', 'DOWN', 'BUILD', 'ERROR', 'VIM_ERROR', 'OTHER'
+            'network_type': (optional) can be 'vxlan', 'vlan' or 'flat'
+            'segmentation_id': (optional) in case network_type is vlan or vxlan this field contains the segmentation id
             'error_msg': (optional) text that explains the ERROR status
             other VIM specific fields: (optional) whenever possible using the same naming of filter_dict param
         List can be empty if no network map the filter_dict. Raise an exception only upon VIM connectivity,
