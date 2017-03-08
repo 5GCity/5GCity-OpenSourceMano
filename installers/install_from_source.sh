@@ -26,6 +26,7 @@ function usage(){
     echo -e "     --nat:         install only NAT rules"
 #    echo -e "     --update:      update to the latest stable release or to the latest commit if using a specific branch"
     echo -e "     --showopts:    print chosen options and exit (only for debugging)"
+    echo -e "     -y:            do not prompt for confirmation, assumes yes"
     echo -e "     -h / --help:   print this help"
 }
 
@@ -188,8 +189,9 @@ TEST_INSTALLER=""
 LXD=""
 SHOWOPTS=""
 COMMIT_ID=""
+ASSUME_YES=""
 
-while getopts ":h-:b:" o; do
+while getopts ":hy-:b:" o; do
     case "${o}" in
         h)
             usage && exit 0
@@ -213,6 +215,9 @@ while getopts ":h-:b:" o; do
         \?)
             echo -e "Invalid option: '-$OPTARG'\n" >&2
             usage && exit 1
+            ;;
+        y)
+            ASSUME_YES="y"
             ;;
         *)
             usage && exit 1
@@ -268,6 +273,12 @@ OSM_JENKINS="$TEMPDIR/jenkins"
 [ -n "$RECONFIGURE" ] && configure && echo -e "\nDONE" && exit 0
 
 #Installation starts here
+if [ -z "$ASSUME_YES" ]; then 
+    read -e -p "The installation will take about 75-90 minutes. Continue (Y/n)?" USER_CONFIRMATION
+    [ -n "$USER_CONFIRMATION" ] && [ "$USER_CONFIRMATION" != "yes" ] && \
+        [ "$USER_CONFIRMATION" != "y" ] && echo "Cancelled!" && exit 0
+fi
+
 [ -z "$COMMIT_ID" ] && [ -n "$LATEST_STABLE_DEVOPS" ] && COMMIT_ID="tags/$LATEST_STABLE_DEVOPS"
 echo -e "\n Installing OSM from refspec: $COMMIT_ID"
 
