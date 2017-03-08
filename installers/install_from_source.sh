@@ -66,7 +66,7 @@ function update(){
     lxc exec $CONTAINER -- git -C $INSTALL_FOLDER fetch --all
     BRANCH=""
     BRANCH=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER status -sb | head -n1 | sed -n 's/^## \(.*\).*/\1/p'|awk '{print $1}' |sed 's/\(.*\)\.\.\..*/\1/'`
-    [ -z "$BRANCH" ] && echo "        Could not find the current branch in use in the $MDG" && exit 1
+    [ -z "$BRANCH" ] && FATAL "Could not find the current branch in use in the '$MDG'"
     CURRENT=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER status |head -n1`
     CURRENT_COMMIT_ID=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER rev-parse HEAD`
     echo "         FROM: $CURRENT ($CURRENT_COMMIT_ID)"
@@ -102,7 +102,7 @@ function update(){
     lxc exec $CONTAINER -- git -C $INSTALL_FOLDER fetch --all
     BRANCH=""
     BRANCH=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER status -sb | head -n1 | sed -n 's/^## \(.*\).*/\1/p'|awk '{print $1}' |sed 's/\(.*\)\.\.\..*/\1/'`
-    [ -z "$BRANCH" ] && echo "        Could not find the current branch in use in the $MDG" && exit 1
+    [ -z "$BRANCH" ] && FATAL "Could not find the current branch in use in the '$MDG'"
     CURRENT=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER status |head -n1`
     CURRENT_COMMIT_ID=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER rev-parse HEAD`
     echo "         FROM: $CURRENT ($CURRENT_COMMIT_ID)"
@@ -290,10 +290,10 @@ echo -e "\nChecking required packages: wget, curl, tar"
 dpkg -l wget curl tar &>/dev/null || ! echo -e "    One or several packages are not installed.\nInstalling required packages\n     Root privileges are required" || sudo apt install -y wget curl tar
 
 echo -e "\nCreating the containers and building ..."
-$OSM_DEVOPS/jenkins/host/start_build RO --notest checkout $COMMIT_ID
-$OSM_DEVOPS/jenkins/host/start_build VCA
-$OSM_DEVOPS/jenkins/host/start_build SO checkout $COMMIT_ID
-$OSM_DEVOPS/jenkins/host/start_build UI checkout $COMMIT_ID
+$OSM_DEVOPS/jenkins/host/start_build RO --notest checkout $COMMIT_ID || FATAL "RO container build failed (refspec: '$COMMIT_ID')"
+$OSM_DEVOPS/jenkins/host/start_build VCA || FATAL "VCA container build failed"
+$OSM_DEVOPS/jenkins/host/start_build SO checkout $COMMIT_ID || FATAL "SO container build failed (refspec: '$COMMIT_ID')"
+$OSM_DEVOPS/jenkins/host/start_build UI checkout $COMMIT_ID || FATAL "UI container build failed (refspec: '$COMMIT_ID')"
 
 #Install iptables-persistent and configure NAT rules
 nat
