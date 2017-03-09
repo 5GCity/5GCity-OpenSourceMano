@@ -1,0 +1,11 @@
+[Unit]
+Description=openmano server (OSM RO)
+
+[Service]
+User=${USER_OWNER}
+ExecStart=openmanod -c /etc/osm/openmanod.cfg --log-file=/var/log/osm/openmano.log
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
