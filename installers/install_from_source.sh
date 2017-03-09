@@ -304,5 +304,5 @@ nat
 #Configure components
 configure
 
-echo -e "\nDONE"
 wget -q -O- https://osm-download.etsi.org/ftp/osm-1.0-one/README2.txt &> /dev/null
+echo -e "\nDONE"
