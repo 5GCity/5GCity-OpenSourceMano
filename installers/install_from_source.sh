@@ -245,9 +245,6 @@ if [ -z "$TEST_INSTALLER" ]; then
     RC_CLONE=$?
 fi
 
-echo -e "Checking required packages: lxd"
-lxd --version &>/dev/null || echo -e "lxd not present, exiting " >&2 && exit 1
-
 echo -e "\nGuessing the current stable release"
 LATEST_STABLE_DEVOPS=`git -C $TEMPDIR tag -l v[0-9].* | tail -n1`
 [ -z "$COMMIT_ID" ] && [ -z "$LATEST_STABLE_DEVOPS" ] && echo "Could not find the current latest stable release" && exit 0
@@ -281,6 +278,9 @@ if [ -z "$ASSUME_YES" ]; then
     [ -n "$USER_CONFIRMATION" ] && [ "$USER_CONFIRMATION" != "yes" ] && \
         [ "$USER_CONFIRMATION" != "y" ] && echo "Cancelled!" && exit 0
 fi
+
+echo -e "Checking required packages: lxd"
+lxd --version &>/dev/null || echo -e "lxd not present, exiting " >&2 && exit 1
 
 [ -z "$COMMIT_ID" ] && [ -n "$LATEST_STABLE_DEVOPS" ] && COMMIT_ID="tags/$LATEST_STABLE_DEVOPS"
 echo -e "\n Installing OSM from refspec: $COMMIT_ID"
