@@ -558,11 +558,11 @@ class vimconnector(vimconn.vimconnector):
         if vdc is None:
             raise vimconn.vimconnConnectionException("Can't retrieve information for a VDC {}.".format(self.tenant_name))
 
-        vdcid = vdc.get_id().split(":")[3]
-        networks = vca.get_networks(vdc.get_name())
-        network_list = []
-
         try:
+            vdcid = vdc.get_id().split(":")[3]
+            networks = vca.get_networks(vdc.get_name())
+            network_list = []
+
             for network in networks:
                 filter_entry = {}
                 net_uuid = network.get_id().split(":")
@@ -610,13 +610,13 @@ class vimconnector(vimconn.vimconnector):
         if not vca:
             raise vimconn.vimconnConnectionException("self.connect() is failed")
 
-        vdc = vca.get_vdc(self.tenant_name)
-        vdc_id = vdc.get_id().split(":")[3]
-
-        networks = vca.get_networks(vdc.get_name())
-        filter_dict = {}
-
         try:
+            vdc = vca.get_vdc(self.tenant_name)
+            vdc_id = vdc.get_id().split(":")[3]
+
+            networks = vca.get_networks(vdc.get_name())
+            filter_dict = {}
+
             for network in networks:
                 vdc_network_id = network.get_id().split(":")
                 if len(vdc_network_id) == 4 and vdc_network_id[3] == net_id:
@@ -844,117 +844,124 @@ class vimconnector(vimconn.vimconnector):
         #  create vApp Template and check the status if vCD able to read OVF it will respond with appropirate
         #  status change.
         #  if VCD can parse OVF we upload VMDK file
-        for catalog in vca.get_catalogs():
-            if catalog_name != catalog.name:
-                continue
-            link = filter(lambda link: link.get_type() == "application/vnd.vmware.vcloud.media+xml" and
-                                       link.get_rel() == 'add', catalog.get_Link())
-            assert len(link) == 1
-            data = """
-            <UploadVAppTemplateParams name="%s" xmlns="http://www.vmware.com/vcloud/v1.5" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"><Description>%s vApp Template</Description></UploadVAppTemplateParams>
-            """ % (escape(catalog_name), escape(description))
-            headers = vca.vcloud_session.get_vcloud_headers()
-            headers['Content-Type'] = 'application/vnd.vmware.vcloud.uploadVAppTemplateParams+xml'
-            response = Http.post(link[0].get_href(), headers=headers, data=data, verify=vca.verify, logger=self.logger)
-            if response.status_code == requests.codes.created:
-                catalogItem = XmlElementTree.fromstring(response.content)
-                entity = [child for child in catalogItem if
-                          child.get("type") == "application/vnd.vmware.vcloud.vAppTemplate+xml"][0]
-                href = entity.get('href')
-                template = href
-                response = Http.get(href, headers=vca.vcloud_session.get_vcloud_headers(),
-                                    verify=vca.verify, logger=self.logger)
-
-                if response.status_code == requests.codes.ok:
-                    media = mediaType.parseString(response.content, True)
-                    link = filter(lambda link: link.get_rel() == 'upload:default',
-                                  media.get_Files().get_File()[0].get_Link())[0]
-                    headers = vca.vcloud_session.get_vcloud_headers()
-                    headers['Content-Type'] = 'Content-Type text/xml'
-                    response = Http.put(link.get_href(),
-                                        data=open(media_file_name, 'rb'),
-                                        headers=headers,
+        try:
+            for catalog in vca.get_catalogs():
+                if catalog_name != catalog.name:
+                    continue
+                link = filter(lambda link: link.get_type() == "application/vnd.vmware.vcloud.media+xml" and
+                                           link.get_rel() == 'add', catalog.get_Link())
+                assert len(link) == 1
+                data = """
+                <UploadVAppTemplateParams name="%s" xmlns="http://www.vmware.com/vcloud/v1.5" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"><Description>%s vApp Template</Description></UploadVAppTemplateParams>
+                """ % (escape(catalog_name), escape(description))
+                headers = vca.vcloud_session.get_vcloud_headers()
+                headers['Content-Type'] = 'application/vnd.vmware.vcloud.uploadVAppTemplateParams+xml'
+                response = Http.post(link[0].get_href(), headers=headers, data=data, verify=vca.verify, logger=self.logger)
+                if response.status_code == requests.codes.created:
+                    catalogItem = XmlElementTree.fromstring(response.content)
+                    entity = [child for child in catalogItem if
+                              child.get("type") == "application/vnd.vmware.vcloud.vAppTemplate+xml"][0]
+                    href = entity.get('href')
+                    template = href
+                    response = Http.get(href, headers=vca.vcloud_session.get_vcloud_headers(),
                                         verify=vca.verify, logger=self.logger)
-                    if response.status_code != requests.codes.ok:
-                        self.logger.debug(
-                            "Failed create vApp template for catalog name {} and image {}".format(catalog_name,
-                                                                                                  media_file_name))
+
+                    if response.status_code == requests.codes.ok:
+                        media = mediaType.parseString(response.content, True)
+                        link = filter(lambda link: link.get_rel() == 'upload:default',
+                                      media.get_Files().get_File()[0].get_Link())[0]
+                        headers = vca.vcloud_session.get_vcloud_headers()
+                        headers['Content-Type'] = 'Content-Type text/xml'
+                        response = Http.put(link.get_href(),
+                                            data=open(media_file_name, 'rb'),
+                                            headers=headers,
+                                            verify=vca.verify, logger=self.logger)
+                        if response.status_code != requests.codes.ok:
+                            self.logger.debug(
+                                "Failed create vApp template for catalog name {} and image {}".format(catalog_name,
+                                                                                                      media_file_name))
+                            return False
+
+                    # TODO fix this with aync block
+                    time.sleep(5)
+
+                    self.logger.debug("vApp template for catalog name {} and image {}".format(catalog_name, media_file_name))
+
+                    # uploading VMDK file
+                    # check status of OVF upload and upload remaining files.
+                    response = Http.get(template,
+                                        headers=vca.vcloud_session.get_vcloud_headers(),
+                                        verify=vca.verify,
+                                        logger=self.logger)
+
+                    if response.status_code == requests.codes.ok:
+                        media = mediaType.parseString(response.content, True)
+                        number_of_files = len(media.get_Files().get_File())
+                        for index in xrange(0, number_of_files):
+                            links_list = filter(lambda link: link.get_rel() == 'upload:default',
+                                                media.get_Files().get_File()[index].get_Link())
+                            for link in links_list:
+                                # we skip ovf since it already uploaded.
+                                if 'ovf' in link.get_href():
+                                    continue
+                                # The OVF file and VMDK must be in a same directory
+                                head, tail = os.path.split(media_file_name)
+                                file_vmdk = head + '/' + link.get_href().split("/")[-1]
+                                if not os.path.isfile(file_vmdk):
+                                    return False
+                                statinfo = os.stat(file_vmdk)
+                                if statinfo.st_size == 0:
+                                    return False
+                                hrefvmdk = link.get_href()
+
+                                if progress:
+                                    print("Uploading file: {}".format(file_vmdk))
+                                if progress:
+                                    widgets = ['Uploading file: ', Percentage(), ' ', Bar(), ' ', ETA(), ' ',
+                                               FileTransferSpeed()]
+                                    progress_bar = ProgressBar(widgets=widgets, maxval=statinfo.st_size).start()
+
+                                bytes_transferred = 0
+                                f = open(file_vmdk, 'rb')
+                                while bytes_transferred < statinfo.st_size:
+                                    my_bytes = f.read(chunk_bytes)
+                                    if len(my_bytes) <= chunk_bytes:
+                                        headers = vca.vcloud_session.get_vcloud_headers()
+                                        headers['Content-Range'] = 'bytes %s-%s/%s' % (
+                                            bytes_transferred, len(my_bytes) - 1, statinfo.st_size)
+                                        headers['Content-Length'] = str(len(my_bytes))
+                                        response = Http.put(hrefvmdk,
+                                                            headers=headers,
+                                                            data=my_bytes,
+                                                            verify=vca.verify,
+                                                            logger=None)
+
+                                        if response.status_code == requests.codes.ok:
+                                            bytes_transferred += len(my_bytes)
+                                            if progress:
+                                                progress_bar.update(bytes_transferred)
+                                        else:
+                                            self.logger.debug(
+                                                'file upload failed with error: [%s] %s' % (response.status_code,
+                                                                                            response.content))
+
+                                            f.close()
+                                            return False
+                                f.close()
+                                if progress:
+                                    progress_bar.finish()
+                                time.sleep(10)
+                        return True
+                    else:
+                        self.logger.debug("Failed retrieve vApp template for catalog name {} for OVF {}".
+                                          format(catalog_name, media_file_name))
                         return False
-
-                # TODO fix this with aync block
-                time.sleep(5)
-
-                self.logger.debug("vApp template for catalog name {} and image {}".format(catalog_name, media_file_name))
-
-                # uploading VMDK file
-                # check status of OVF upload and upload remaining files.
-                response = Http.get(template,
-                                    headers=vca.vcloud_session.get_vcloud_headers(),
-                                    verify=vca.verify,
-                                    logger=self.logger)
-
-                if response.status_code == requests.codes.ok:
-                    media = mediaType.parseString(response.content, True)
-                    number_of_files = len(media.get_Files().get_File())
-                    for index in xrange(0, number_of_files):
-                        links_list = filter(lambda link: link.get_rel() == 'upload:default',
-                                            media.get_Files().get_File()[index].get_Link())
-                        for link in links_list:
-                            # we skip ovf since it already uploaded.
-                            if 'ovf' in link.get_href():
-                                continue
-                            # The OVF file and VMDK must be in a same directory
-                            head, tail = os.path.split(media_file_name)
-                            file_vmdk = head + '/' + link.get_href().split("/")[-1]
-                            if not os.path.isfile(file_vmdk):
-                                return False
-                            statinfo = os.stat(file_vmdk)
-                            if statinfo.st_size == 0:
-                                return False
-                            hrefvmdk = link.get_href()
-
-                            if progress:
-                                print("Uploading file: {}".format(file_vmdk))
-                            if progress:
-                                widgets = ['Uploading file: ', Percentage(), ' ', Bar(), ' ', ETA(), ' ',
-                                           FileTransferSpeed()]
-                                progress_bar = ProgressBar(widgets=widgets, maxval=statinfo.st_size).start()
-
-                            bytes_transferred = 0
-                            f = open(file_vmdk, 'rb')
-                            while bytes_transferred < statinfo.st_size:
-                                my_bytes = f.read(chunk_bytes)
-                                if len(my_bytes) <= chunk_bytes:
-                                    headers = vca.vcloud_session.get_vcloud_headers()
-                                    headers['Content-Range'] = 'bytes %s-%s/%s' % (
-                                        bytes_transferred, len(my_bytes) - 1, statinfo.st_size)
-                                    headers['Content-Length'] = str(len(my_bytes))
-                                    response = Http.put(hrefvmdk,
-                                                        headers=headers,
-                                                        data=my_bytes,
-                                                        verify=vca.verify,
-                                                        logger=None)
-
-                                    if response.status_code == requests.codes.ok:
-                                        bytes_transferred += len(my_bytes)
-                                        if progress:
-                                            progress_bar.update(bytes_transferred)
-                                    else:
-                                        self.logger.debug(
-                                            'file upload failed with error: [%s] %s' % (response.status_code,
-                                                                                        response.content))
-
-                                        f.close()
-                                        return False
-                            f.close()
-                            if progress:
-                                progress_bar.finish()
-                            time.sleep(10)
-                    return True
-                else:
-                    self.logger.debug("Failed retrieve vApp template for catalog name {} for OVF {}".
-                                      format(catalog_name, media_file_name))
-                    return False
+        except Exception as exp:
+            self.logger.debug("Failed while uploading OVF to catalog {} for OVF file {} with Exception {}"
+                .format(catalog_name,media_file_name, exp))
+            raise vimconn.vimconnException(
+                "Failed while uploading OVF to catalog {} for OVF file {} with Exception {}"
+                .format(catalog_name,media_file_name, exp))
 
         self.logger.debug("Failed retrieve catalog name {} for OVF file {}".format(catalog_name, media_file_name))
         return False
@@ -1058,7 +1065,12 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("File name {} Catalog Name {} file path {} "
                           "vdc catalog name {}".format(filename, catalog_name, path, catalog_md5_name))
 
-        catalogs = vca.get_catalogs()
+        try:
+            catalogs = vca.get_catalogs()
+        except Exception as exp:
+            self.logger.debug("Failed get catalogs() with Exception {} ".format(exp))
+            raise vimconn.vimconnException("Failed get catalogs() with Exception {} ".format(exp))
+
         if len(catalogs) == 0:
             self.logger.info("Creating a new catalog entry {} in vcloud director".format(catalog_name))
             result = self.create_vimcatalog(vca, catalog_md5_name)
@@ -1325,25 +1337,37 @@ class vimconnector(vimconn.vimconnector):
 
         # use: 'data', 'bridge', 'mgmt'
         # create vApp.  Set vcpu and ram based on flavor id.
-        vapptask = vca.create_vapp(self.tenant_name, vmname_andid, templateName,
-                                   self.get_catalogbyid(image_id, catalogs),
-                                   network_name=None,  # None while creating vapp
-                                   network_mode=network_mode,
-                                   vm_name=vmname_andid,
-                                   vm_cpus=vm_cpus,  # can be None if flavor is None
-                                   vm_memory=vm_memory)  # can be None if flavor is None
+        try:
+            vapptask = vca.create_vapp(self.tenant_name, vmname_andid, templateName,
+                                       self.get_catalogbyid(image_id, catalogs),
+                                       network_name=None,  # None while creating vapp
+                                       network_mode=network_mode,
+                                       vm_name=vmname_andid,
+                                       vm_cpus=vm_cpus,  # can be None if flavor is None
+                                       vm_memory=vm_memory)  # can be None if flavor is None
 
-        if vapptask is None or vapptask is False:
-            raise vimconn.vimconnUnexpectedResponse("new_vminstance(): failed deploy vApp {}".format(vmname_andid))
-        if type(vapptask) is VappTask:
-            vca.block_until_completed(vapptask)
+            if vapptask is None or vapptask is False:
+                raise vimconn.vimconnUnexpectedResponse(
+                    "new_vminstance(): failed to create vApp {}".format(vmname_andid))
+            if type(vapptask) is VappTask:
+                vca.block_until_completed(vapptask)
+
+        except Exception as exp:
+            raise vimconn.vimconnUnexpectedResponse(
+                "new_vminstance(): failed to create vApp {} with Exception:{}".format(vmname_andid, exp))
 
         # we should have now vapp in undeployed state.
-        vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vmname_andid)
-        vapp_uuid = self.get_vappid(vca.get_vdc(self.tenant_name), vmname_andid)
+        try:
+            vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vmname_andid)
+            vapp_uuid = self.get_vappid(vca.get_vdc(self.tenant_name), vmname_andid)
+        except Exception as exp:
+            raise vimconn.vimconnUnexpectedResponse(
+                    "new_vminstance(): Failed to retrieve vApp {} after creation: Exception:{}"
+                    .format(vmname_andid, exp))
+
         if vapp is None:
             raise vimconn.vimconnUnexpectedResponse(
-                "new_vminstance(): Failed failed retrieve vApp {} after we deployed".format(
+                "new_vminstance(): Failed to retrieve vApp {} after creation".format(
                                                                             vmname_andid))
 
         #Add PCI passthrough configrations
@@ -1415,41 +1439,48 @@ class vimconnector(vimconn.vimconnector):
                         if type(task) is GenericTask:
                             vca.block_until_completed(task)
                 nicIndex += 1
-        except KeyError:
-            # it might be a case if specific mandatory entry in dict is empty
-            self.logger.debug("Key error {}".format(KeyError.message))
-            raise vimconn.vimconnUnexpectedResponse("new_vminstance(): Failed create new vm instance {}".format(name))
 
-        # deploy and power on vm
-        self.logger.debug("new_vminstance(): Deploying vApp {} ".format(name))
-        deploytask = vapp.deploy(powerOn=False)
-        if type(deploytask) is GenericTask:
-            vca.block_until_completed(deploytask)
+            # deploy and power on vm
+            self.logger.debug("new_vminstance(): Deploying vApp {} ".format(name))
+            deploytask = vapp.deploy(powerOn=False)
+            if type(deploytask) is GenericTask:
+                vca.block_until_completed(deploytask)
 
-        # If VM has PCI devices reserve memory for VM
-        if PCI_devices_status and vm_obj and vcenter_conect:
-            memReserve = vm_obj.config.hardware.memoryMB
-            spec = vim.vm.ConfigSpec()
-            spec.memoryAllocation = vim.ResourceAllocationInfo(reservation=memReserve)
-            task = vm_obj.ReconfigVM_Task(spec=spec)
-            if task:
-                result = self.wait_for_vcenter_task(task, vcenter_conect)
-                self.logger.info("Reserved memmoery {} MB for "\
-                                 "VM VM status: {}".format(str(memReserve),result))
-            else:
-                self.logger.info("Fail to reserved memmoery {} to VM {}".format(
-                                                            str(memReserve),str(vm_obj)))
+            # If VM has PCI devices reserve memory for VM
+            if PCI_devices_status and vm_obj and vcenter_conect:
+                memReserve = vm_obj.config.hardware.memoryMB
+                spec = vim.vm.ConfigSpec()
+                spec.memoryAllocation = vim.ResourceAllocationInfo(reservation=memReserve)
+                task = vm_obj.ReconfigVM_Task(spec=spec)
+                if task:
+                    result = self.wait_for_vcenter_task(task, vcenter_conect)
+                    self.logger.info("Reserved memmoery {} MB for "\
+                                     "VM VM status: {}".format(str(memReserve),result))
+                else:
+                    self.logger.info("Fail to reserved memmoery {} to VM {}".format(
+                                                                str(memReserve),str(vm_obj)))
 
-        self.logger.debug("new_vminstance(): power on vApp {} ".format(name))
-        poweron_task = vapp.poweron()
-        if type(poweron_task) is GenericTask:
-            vca.block_until_completed(poweron_task)
+            self.logger.debug("new_vminstance(): power on vApp {} ".format(name))
+            poweron_task = vapp.poweron()
+            if type(poweron_task) is GenericTask:
+                vca.block_until_completed(poweron_task)
+
+        except Exception as exp :
+            # it might be a case if specific mandatory entry in dict is empty or some other pyVcloud exception
+            self.logger.debug("new_vminstance(): Failed create new vm instance {}".format(name, exp))
+            raise vimconn.vimconnException("new_vminstance(): Failed create new vm instance {}".format(name, exp))
 
         # check if vApp deployed and if that the case return vApp UUID otherwise -1
         wait_time = 0
         vapp_uuid = None
         while wait_time <= MAX_WAIT_TIME:
-            vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vmname_andid)
+            try:
+                vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vmname_andid)
+            except Exception as exp:
+                raise vimconn.vimconnUnexpectedResponse(
+                        "new_vminstance(): Failed to retrieve vApp {} after creation: Exception:{}"
+                        .format(vmname_andid, exp))
+
             if vapp and vapp.me.deployed:
                 vapp_uuid = self.get_vappid(vca.get_vdc(self.tenant_name), vmname_andid)
                 break
@@ -1719,18 +1750,18 @@ class vimconnector(vimconn.vimconnector):
             vmname = self.get_namebyvappid(vca, vdc, vmuuid)
             if vmname is not None:
 
-                the_vapp = vca.get_vapp(vdc, vmname)
-                vm_info = the_vapp.get_vms_details()
-                vm_status = vm_info[0]['status']
-                vm_pci_details = self.get_vm_pci_details(vmuuid)
-                vm_info[0].update(vm_pci_details)
-
-                vm_dict = {'status': vcdStatusCode2manoFormat[the_vapp.me.get_status()],
-                           'error_msg': vcdStatusCode2manoFormat[the_vapp.me.get_status()],
-                           'vim_info': yaml.safe_dump(vm_info), 'interfaces': []}
-
-                # get networks
                 try:
+                    the_vapp = vca.get_vapp(vdc, vmname)
+                    vm_info = the_vapp.get_vms_details()
+                    vm_status = vm_info[0]['status']
+                    vm_pci_details = self.get_vm_pci_details(vmuuid)
+                    vm_info[0].update(vm_pci_details)
+
+                    vm_dict = {'status': vcdStatusCode2manoFormat[the_vapp.me.get_status()],
+                               'error_msg': vcdStatusCode2manoFormat[the_vapp.me.get_status()],
+                               'vim_info': yaml.safe_dump(vm_info), 'interfaces': []}
+
+                    # get networks
                     vm_app_networks = the_vapp.get_vms_network_info()
                     for vapp_network in vm_app_networks:
                         for vm_network in vapp_network:
@@ -1747,8 +1778,8 @@ class vimconnector(vimconn.vimconnector):
                                 vm_dict["interfaces"].append(interface)
                     # add a vm to vm dict
                     vms_dict.setdefault(vmuuid, vm_dict)
-                except KeyError:
-                    self.logger.debug("Error in respond {}".format(KeyError.message))
+                except Exception as exp:
+                    self.logger.debug("Error in response {}".format(exp))
                     self.logger.debug(traceback.format_exc())
 
         return vms_dict
@@ -1828,8 +1859,9 @@ class vimconnector(vimconn.vimconnector):
             #     server.create_image()
             else:
                 pass
-        except:
-            pass
+        except Exception as exp :
+            self.logger.debug("action_vminstance: Failed with Exception {}".format(exp))
+            raise vimconn.vimconnException("action_vminstance: Failed with Exception {}".format(exp))
 
     def get_vminstance_console(self, vm_id, console_type="vnc"):
         """
@@ -2303,8 +2335,8 @@ class vimconnector(vimconn.vimconnector):
         if network_uuid is None:
             return network_uuid
 
-        content = self.get_network_action(network_uuid=network_uuid)
         try:
+            content = self.get_network_action(network_uuid=network_uuid)
             vm_list_xmlroot = XmlElementTree.fromstring(content)
 
             network_configuration['status'] = vm_list_xmlroot.get("status")
@@ -2320,8 +2352,9 @@ class vimconnector(vimconn.vimconnector):
                         if tagKey != "":
                             network_configuration[tagKey] = configuration.text.strip()
             return network_configuration
-        except:
-            pass
+        except Exception as exp :
+            self.logger.debug("get_vcd_network: Failed with Exception {}".format(exp))
+            raise vimconn.vimconnException("get_vcd_network: Failed with Exception {}".format(exp))
 
         return network_configuration
 
@@ -2387,7 +2420,7 @@ class vimconnector(vimconn.vimconnector):
             vm_list_xmlroot = XmlElementTree.fromstring(content)
             vcd_uuid = vm_list_xmlroot.get('id').split(":")
             if len(vcd_uuid) == 4:
-                self.logger.info("Create new network name: {} uuid: {}".format(network_name, vcd_uuid[3]))
+                self.logger.info("Created new network name: {} uuid: {}".format(network_name, vcd_uuid[3]))
                 return vcd_uuid[3]
         except:
             self.logger.debug("Failed create network {}".format(network_name))
@@ -2473,26 +2506,45 @@ class vimconnector(vimconn.vimconnector):
                 except:
                     return None
 
-            #Configure IP profile of the network
-            ip_profile = ip_profile if ip_profile is not None else DEFAULT_IP_PROFILE
+            try:
+                #Configure IP profile of the network
+                ip_profile = ip_profile if ip_profile is not None else DEFAULT_IP_PROFILE
 
-            gateway_address=ip_profile['gateway_address']
-            dhcp_count=int(ip_profile['dhcp_count'])
-            subnet_address=self.convert_cidr_to_netmask(ip_profile['subnet_address'])
+                if 'gateway_address' not in ip_profile or ip_profile['gateway_address'] is None:
+                    ip_profile['gateway_address']=DEFAULT_IP_PROFILE['gateway_address']
+                if 'dhcp_count' not in ip_profile or ip_profile['dhcp_count'] is None:
+                    ip_profile['dhcp_count']=DEFAULT_IP_PROFILE['dhcp_count']
+                if 'subnet_address' not in ip_profile or ip_profile['subnet_address'] is None:
+                    ip_profile['subnet_address']=DEFAULT_IP_PROFILE['subnet_address']
+                if 'dhcp_enabled' not in ip_profile or ip_profile['dhcp_enabled'] is None:
+                    ip_profile['dhcp_enabled']=DEFAULT_IP_PROFILE['dhcp_enabled']
+                if 'dhcp_start_address' not in ip_profile or ip_profile['dhcp_start_address'] is None:
+                    ip_profile['dhcp_start_address']=DEFAULT_IP_PROFILE['dhcp_start_address']
+                if 'ip_version' not in ip_profile or ip_profile['ip_version'] is None:
+                    ip_profile['ip_version']=DEFAULT_IP_PROFILE['ip_version']
+                if 'dns_address' not in ip_profile or ip_profile['dns_address'] is None:
+                    ip_profile['dns_address']=DEFAULT_IP_PROFILE['dns_address']
 
-            if ip_profile['dhcp_enabled']==True:
-                dhcp_enabled='true'
-            else:
-                dhcp_enabled='false'
-            dhcp_start_address=ip_profile['dhcp_start_address']
+                gateway_address=ip_profile['gateway_address']
+                dhcp_count=int(ip_profile['dhcp_count'])
+                subnet_address=self.convert_cidr_to_netmask(ip_profile['subnet_address'])
 
-            #derive dhcp_end_address from dhcp_start_address & dhcp_count
-            end_ip_int = int(netaddr.IPAddress(dhcp_start_address))
-            end_ip_int += dhcp_count - 1
-            dhcp_end_address = str(netaddr.IPAddress(end_ip_int))
+                if ip_profile['dhcp_enabled']==True:
+                    dhcp_enabled='true'
+                else:
+                    dhcp_enabled='false'
+                dhcp_start_address=ip_profile['dhcp_start_address']
 
-            ip_version=ip_profile['ip_version']
-            dns_address=ip_profile['dns_address']
+                #derive dhcp_end_address from dhcp_start_address & dhcp_count
+                end_ip_int = int(netaddr.IPAddress(dhcp_start_address))
+                end_ip_int += dhcp_count - 1
+                dhcp_end_address = str(netaddr.IPAddress(end_ip_int))
+
+                ip_version=ip_profile['ip_version']
+                dns_address=ip_profile['dns_address']
+            except KeyError as exp:
+                self.logger.debug("Create Network REST: Key error {}".format(exp))
+                raise vimconn.vimconnException("Create Network REST: Key error{}".format(exp))
 
             # either use client provided UUID or search for a first available
             #  if both are not defined we return none
@@ -2569,8 +2621,8 @@ class vimconnector(vimconn.vimconnector):
                                      logger=vca.logger)
 
                 if response.status_code != 201:
-                    self.logger.debug("Create Network POST REST API call failed. Return status code {}"
-                                      .format(response.status_code))
+                    self.logger.debug("Create Network POST REST API call failed. Return status code {}, Response content: {}"
+                                      .format(response.status_code,response.content))
                 else:
                     network = networkType.parseString(response.content, True)
                     create_nw_task = network.get_Tasks().get_Task()[0]
@@ -2578,7 +2630,7 @@ class vimconnector(vimconn.vimconnector):
                     # if we all ok we respond with content after network creation completes
                     # otherwise by default return None
                     if create_nw_task is not None:
-                        self.logger.debug("Create Network REST : Waiting for Nw creation complete")
+                        self.logger.debug("Create Network REST : Waiting for Network creation complete")
                         status = vca.block_until_completed(create_nw_task)
                         if status:
                             return response.content
