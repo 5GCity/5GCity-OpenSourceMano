@@ -1431,13 +1431,24 @@ class vimconnector(vimconn.vimconnector):
                         if type(task) is GenericTask:
                             vca.block_until_completed(task)
                         # connect network to VM - with all DHCP by default
-                        self.logger.info("new_vminstance(): Connecting VM to a network {}".format(nets[0].name))
-                        task = vapp.connect_vms(nets[0].name,
-                                                connection_index=nicIndex,
-                                                connections_primary_index=primary_nic_index,
-                                                ip_allocation_mode='DHCP')
-                        if type(task) is GenericTask:
-                            vca.block_until_completed(task)
+
+                        type_list = ['PF','VF','VFnotShared']
+                        if 'type' in net and net['type'] not in type_list:
+                            # fetching nic type from vnf
+                            if 'model' in net:
+                                nic_type = net['model']
+                                self.logger.info("new_vminstance(): adding network adapter "\
+                                                          "to a network {}".format(nets[0].name))
+                                self.add_network_adapter_to_vms(vapp, nets[0].name,
+                                                                primary_nic_index,
+                                                                nicIndex,
+                                                                nic_type=nic_type)
+                            else:
+                                self.logger.info("new_vminstance(): adding network adapter "\
+                                                         "to a network {}".format(nets[0].name))
+                                self.add_network_adapter_to_vms(vapp, nets[0].name,
+                                                                primary_nic_index,
+                                                                nicIndex)
                 nicIndex += 1
 
             # deploy and power on vm
@@ -1813,55 +1824,53 @@ class vimconnector(vimconn.vimconnector):
             if "start" in action_dict:
                 vm_info = the_vapp.get_vms_details()
                 vm_status = vm_info[0]['status']
-                self.logger.info("Power on vApp: vm_status:{} {}".format(type(vm_status),vm_status))
+                self.logger.info("action_vminstance: Power on vApp: {}".format(vapp_name))
                 if vm_status == "Suspended" or vm_status == "Powered off":
                     power_on_task = the_vapp.poweron()
-                    if power_on_task is not None and type(power_on_task) is GenericTask:
-                        result = vca.block_until_completed(power_on_task)
-                        if result:
-                            self.logger.info("action_vminstance: Powered on vApp: {}".format(vapp_name))
-                        else:
-                            self.logger.info("action_vminstance: Failed to power on vApp: {}".format(vapp_name))
-                    else:
-                        self.logger.info("action_vminstance: Wait for vApp {} to power on".format(vapp_name))
-            elif "rebuild" in action_dict:
-                self.logger.info("action_vminstance: Rebuilding vApp: {}".format(vapp_name))
-                power_on_task = the_vapp.deploy(powerOn=True)
-                if type(power_on_task) is GenericTask:
                     result = vca.block_until_completed(power_on_task)
-                    if result:
-                        self.logger.info("action_vminstance: Rebuilt vApp: {}".format(vapp_name))
-                    else:
-                        self.logger.info("action_vminstance: Failed to rebuild vApp: {}".format(vapp_name))
-                else:
-                    self.logger.info("action_vminstance: Wait for vApp rebuild {} to power on".format(vapp_name))
+                    self.instance_actions_result("start", result, vapp_name)
+            elif "rebuild" in action_dict:
+                self.logger.info("action_vminstance: Rebuild vApp: {}".format(vapp_name))
+                rebuild_task = the_vapp.deploy(powerOn=True)
+                result = vca.block_until_completed(rebuild_task)
+                self.instance_actions_result("rebuild", result, vapp_name)
             elif "pause" in action_dict:
-                pass
-                ## server.pause()
+                self.logger.info("action_vminstance: pause vApp: {}".format(vapp_name))
+                pause_task = the_vapp.undeploy(action='suspend')
+                result = vca.block_until_completed(pause_task)
+                self.instance_actions_result("pause", result, vapp_name)
             elif "resume" in action_dict:
-                pass
-                ## server.resume()
+                self.logger.info("action_vminstance: resume vApp: {}".format(vapp_name))
+                power_task = the_vapp.poweron()
+                result = vca.block_until_completed(power_task)
+                self.instance_actions_result("resume", result, vapp_name)
             elif "shutoff" in action_dict or "shutdown" in action_dict:
+                action_name , value = action_dict.items()[0]
+                self.logger.info("action_vminstance: {} vApp: {}".format(action_name, vapp_name))
                 power_off_task = the_vapp.undeploy(action='powerOff')
-                if type(power_off_task) is GenericTask:
-                    result = vca.block_until_completed(power_off_task)
-                    if result:
-                        self.logger.info("action_vminstance: Powered off vApp: {}".format(vapp_name))
-                    else:
-                        self.logger.info("action_vminstance: Failed to power off vApp: {}".format(vapp_name))
+                result = vca.block_until_completed(power_off_task)
+                if action_name == "shutdown":
+                    self.instance_actions_result("shutdown", result, vapp_name)
                 else:
-                    self.logger.info("action_vminstance: Wait for vApp {} to power off".format(vapp_name))
+                    self.instance_actions_result("shutoff", result, vapp_name)
             elif "forceOff" in action_dict:
-                the_vapp.reset()
-            elif "terminate" in action_dict:
-                the_vapp.delete()
-            # elif "createImage" in action_dict:
-            #     server.create_image()
+                result = the_vapp.undeploy(action='force')
+                self.instance_actions_result("forceOff", result, vapp_name)
+            elif "reboot" in action_dict:
+                self.logger.info("action_vminstance: reboot vApp: {}".format(vapp_name))
+                reboot_task = the_vapp.reboot()
             else:
-                pass
+                raise vimconn.vimconnException("action_vminstance: Invalid action {} or action is None.".format(action_dict))
+            return vm__vim_uuid
         except Exception as exp :
             self.logger.debug("action_vminstance: Failed with Exception {}".format(exp))
             raise vimconn.vimconnException("action_vminstance: Failed with Exception {}".format(exp))
+
+    def instance_actions_result(self, action, result, vapp_name):
+        if result:
+            self.logger.info("action_vminstance: Sucessfully {} the vApp: {}".format(action, vapp_name))
+        else:
+            self.logger.error("action_vminstance: Failed to {} vApp: {}".format(action, vapp_name))
 
     def get_vminstance_console(self, vm_id, console_type="vnc"):
         """
@@ -3521,3 +3530,130 @@ class vimconnector(vimconn.vimconnector):
                              " for VM : {}".format(exp))
             raise vimconn.vimconnException(message=exp)
 
+    def add_network_adapter_to_vms(self, vapp, network_name, primary_nic_index, nicIndex, nic_type=None):
+        """
+            Method to add network adapter type to vm
+            Args :
+                network_name - name of network
+                primary_nic_index - int value for primary nic index
+                nicIndex - int value for nic index
+                nic_type - specify model name to which add to vm
+            Returns:
+                None
+        """
+        try:
+            vca = self.connect()
+            if not vca:
+                raise vimconn.vimconnConnectionException("Failed to connect vCloud director")
+
+            if not nic_type:
+                for vms in vapp._get_vms():
+                    vm_id = (vms.id).split(':')[-1]
+
+                    url_rest_call = "{}/api/vApp/vm-{}/networkConnectionSection/".format(vca.host, vm_id)
+
+                    response = Http.get(url=url_rest_call,
+                                        headers=vca.vcloud_session.get_vcloud_headers(),
+                                        verify=vca.verify,
+                                        logger=vca.logger)
+                    if response.status_code != 200:
+                        self.logger.error("add_network_adapter_to_vms : Get network connection section "\
+                                          "REST call {} failed status code : {}".format(url_rest_call,
+                                                                                   response.status_code))
+                        self.logger.error("Failed reason to get network adapter : {} ".format(response.content))
+
+                    data = response.content
+                    if '<PrimaryNetworkConnectionIndex>' not in data:
+                        item = """<PrimaryNetworkConnectionIndex>{}</PrimaryNetworkConnectionIndex>
+                                <NetworkConnection network="{}">
+                                <NetworkConnectionIndex>{}</NetworkConnectionIndex>
+                                <IsConnected>true</IsConnected>
+                                <IpAddressAllocationMode>DHCP</IpAddressAllocationMode>
+                                </NetworkConnection>""".format(primary_nic_index, network_name, nicIndex)
+                        data = data.replace('</ovf:Info>\n','</ovf:Info>\n{}\n'.format(item))
+                    else:
+                        new_item = """<NetworkConnection network="{}">
+                                    <NetworkConnectionIndex>{}</NetworkConnectionIndex>
+                                    <IsConnected>true</IsConnected>
+                                    <IpAddressAllocationMode>DHCP</IpAddressAllocationMode>
+                                    </NetworkConnection>""".format(network_name, nicIndex)
+                        data = data.replace('</NetworkConnection>\n','</NetworkConnection>\n{}\n'.format(new_item))
+
+                    headers = vca.vcloud_session.get_vcloud_headers()
+                    headers['Content-Type'] = 'application/vnd.vmware.vcloud.networkConnectionSection+xml'
+                    response = Http.put(url=url_rest_call, headers=headers, data=data,
+                                                                   verify=vca.verify,
+                                                                   logger=vca.logger)
+
+                    if response.status_code != 202:
+                        self.logger.error("add_network_adapter_to_vms : Put network adapter REST call {} "\
+                                            "failed status code : {}".format(url_rest_call,
+                                                                        response.status_code))
+                        self.logger.error("Failed reason to add network adapter: {} ".format(response.content))
+                    else:
+                        nic_task = taskType.parseString(response.content, True)
+                        if isinstance(nic_task, GenericTask):
+                            vca.block_until_completed(nic_task)
+                            self.logger.info("add_network_adapter_to_vms(): VM {} conneced to "\
+                                                               "default NIC type".format(vm_id))
+                        else:
+                            self.logger.error("add_network_adapter_to_vms(): VM {} failed to "\
+                                                              "connect NIC type".format(vm_id))
+            else:
+                for vms in vapp._get_vms():
+                    vm_id = (vms.id).split(':')[-1]
+
+                    url_rest_call = "{}/api/vApp/vm-{}/networkConnectionSection/".format(vca.host, vm_id)
+
+                    response = Http.get(url=url_rest_call,
+                                        headers=vca.vcloud_session.get_vcloud_headers(),
+                                        verify=vca.verify,
+                                        logger=vca.logger)
+                    if response.status_code != 200:
+                        self.logger.error("add_network_adapter_to_vms : Get network connection section "\
+                                          "REST call {} failed status code : {}".format(url_rest_call,
+                                                                                   response.status_code))
+                        self.logger.error("Failed reason to get network adapter : {} ".format(response.content))
+
+                    data = response.content
+                    if '<PrimaryNetworkConnectionIndex>' not in data:
+                        item = """<PrimaryNetworkConnectionIndex>{}</PrimaryNetworkConnectionIndex>
+                                <NetworkConnection network="{}">
+                                <NetworkConnectionIndex>{}</NetworkConnectionIndex>
+                                <IsConnected>true</IsConnected>
+                                <IpAddressAllocationMode>DHCP</IpAddressAllocationMode>
+                                <NetworkAdapterType>{}</NetworkAdapterType>
+                                </NetworkConnection>""".format(primary_nic_index, network_name, nicIndex, nic_type)
+                        data = data.replace('</ovf:Info>\n','</ovf:Info>\n{}\n'.format(item))
+                    else:
+                        new_item = """<NetworkConnection network="{}">
+                                    <NetworkConnectionIndex>{}</NetworkConnectionIndex>
+                                    <IsConnected>true</IsConnected>
+                                    <IpAddressAllocationMode>DHCP</IpAddressAllocationMode>
+                                    <NetworkAdapterType>{}</NetworkAdapterType>
+                                    </NetworkConnection>""".format(network_name, nicIndex, nic_type)
+                        data = data.replace('</NetworkConnection>\n','</NetworkConnection>\n{}\n'.format(new_item))
+
+                    headers = vca.vcloud_session.get_vcloud_headers()
+                    headers['Content-Type'] = 'application/vnd.vmware.vcloud.networkConnectionSection+xml'
+                    response = Http.put(url=url_rest_call, headers=headers, data=data,
+                                                                   verify=vca.verify,
+                                                                   logger=vca.logger)
+
+                    if response.status_code != 202:
+                        self.logger.error("add_network_adapter_to_vms : Put network adapter call {} "\
+                                             "failed status code : {}".format(url_rest_call,
+                                                                          response.status_code))
+                        self.logger.error("Failed reason to add network adapter: {} ".format(response.content))
+                    else:
+                        nic_task = taskType.parseString(response.content, True)
+                        if isinstance(nic_task, GenericTask):
+                            vca.block_until_completed(nic_task)
+                            self.logger.info("add_network_adapter_to_vms(): VM {} "\
+                                               "conneced to NIC type {}".format(vm_id, nic_type))
+                        else:
+                            self.logger.error("add_network_adapter_to_vms(): VM {} "\
+                                               "failed to connect NIC type {}".format(vm_id, nic_type))
+        except Exception as exp:
+            self.logger.error("add_network_adapter_to_vms() : exception {} occurred "\
+                                               "while adding Network adapter".format(exp))
