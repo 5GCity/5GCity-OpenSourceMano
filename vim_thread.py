@@ -142,18 +142,31 @@ class vim_thread(threading.Thread):
     def terminate(self, task):
         return True, None
 
+    def _format_vim_error_msg(self, error_text):
+        if len(error_text) >= 1024:
+            return error_text[:516] + " ... " + error_text[-500:]
+        return error_text
+
     def new_net(self, task):
         try:
             task_id = task["id"]
             params = task["params"]
             net_id = self.vim.new_network(*params)
-            with self.db_lock:
-                self.db.update_rows("instance_nets", UPDATE={"vim_net_id": net_id}, WHERE={"vim_net_id": task_id})
-            return True, net_id
-        except db_base_Exception as e:
-            self.logger.error("Error updating database %s", str(e))
+            try:
+                with self.db_lock:
+                    self.db.update_rows("instance_nets", UPDATE={"vim_net_id": net_id}, WHERE={"vim_net_id": task_id})
+            except db_base_Exception as e:
+                self.logger.error("Error updating database %s", str(e))
             return True, net_id
         except vimconn.vimconnException as e:
+            self.logger.error("Error creating NET, task=%s: %s", str(task_id), str(e))
+            try:
+                with self.db_lock:
+                    self.db.update_rows("instance_nets",
+                                        UPDATE={"error_msg": self._format_vim_error_msg(str(e)), "status": "VIM_ERROR"},
+                                        WHERE={"vim_net_id": task_id})
+            except db_base_Exception as e:
+                self.logger.error("Error updating database %s", str(e))
             return False, str(e)
 
     def new_vm(self, task):
@@ -178,13 +191,21 @@ class vim_thread(threading.Thread):
                         return False, "Error trying to map from task_id={} to task result: {}".format(net["net_id"],
                                                                                                       str(e))
             vm_id = self.vim.new_vminstance(*params)
-            with self.db_lock:
-                self.db.update_rows("instance_vms", UPDATE={"vim_vm_id": vm_id}, WHERE={"vim_vm_id": task_id})
-            return True, vm_id
-        except db_base_Exception as e:
-            self.logger.error("Error updtaing database %s", str(e))
+            try:
+                with self.db_lock:
+                    self.db.update_rows("instance_vms", UPDATE={"vim_vm_id": vm_id}, WHERE={"vim_vm_id": task_id})
+            except db_base_Exception as e:
+                self.logger.error("Error updating database %s", str(e))
             return True, vm_id
         except vimconn.vimconnException as e:
+            self.logger.error("Error creating VM, task=%s: %s", str(task_id), str(e))
+            try:
+                with self.db_lock:
+                    self.db.update_rows("instance_vms",
+                                        UPDATE={"error_msg": self._format_vim_error_msg(str(e)), "status": "VIM_ERROR"},
+                                        WHERE={"vim_vm_id": task_id})
+            except db_base_Exception as e:
+                self.logger.error("Error updating database %s", str(e))
             return False, str(e)
 
     def del_vm(self, task):
