@@ -3541,11 +3541,11 @@ class vimconnector(vimconn.vimconnector):
             Returns:
                 None
         """
-        try:
-            vca = self.connect()
-            if not vca:
-                raise vimconn.vimconnConnectionException("Failed to connect vCloud director")
+        vca = self.connect()
+        if not vca:
+            raise vimconn.vimconnConnectionException("Failed to connect vCloud director")
 
+        try:
             if not nic_type:
                 for vms in vapp._get_vms():
                     vm_id = (vms.id).split(':')[-1]
@@ -3557,10 +3557,12 @@ class vimconnector(vimconn.vimconnector):
                                         verify=vca.verify,
                                         logger=vca.logger)
                     if response.status_code != 200:
-                        self.logger.error("add_network_adapter_to_vms : Get network connection section "\
-                                          "REST call {} failed status code : {}".format(url_rest_call,
-                                                                                   response.status_code))
-                        self.logger.error("Failed reason to get network adapter : {} ".format(response.content))
+                        self.logger.error("REST call {} failed reason : {}"\
+                                             "status code : {}".format(url_rest_call,
+                                                                    response.content,
+                                                               response.status_code))
+                        raise vimconn.vimconnException("add_network_adapter_to_vms : Failed to get "\
+                                                                         "network connection section")
 
                     data = response.content
                     if '<PrimaryNetworkConnectionIndex>' not in data:
@@ -3584,12 +3586,13 @@ class vimconnector(vimconn.vimconnector):
                     response = Http.put(url=url_rest_call, headers=headers, data=data,
                                                                    verify=vca.verify,
                                                                    logger=vca.logger)
-
                     if response.status_code != 202:
-                        self.logger.error("add_network_adapter_to_vms : Put network adapter REST call {} "\
-                                            "failed status code : {}".format(url_rest_call,
-                                                                        response.status_code))
-                        self.logger.error("Failed reason to add network adapter: {} ".format(response.content))
+                        self.logger.error("REST call {} failed reason : {}"\
+                                            "status code : {} ".format(url_rest_call,
+                                                                    response.content,
+                                                               response.status_code))
+                        raise vimconn.vimconnException("add_network_adapter_to_vms : Failed to update "\
+                                                                            "network connection section")
                     else:
                         nic_task = taskType.parseString(response.content, True)
                         if isinstance(nic_task, GenericTask):
@@ -3610,11 +3613,12 @@ class vimconnector(vimconn.vimconnector):
                                         verify=vca.verify,
                                         logger=vca.logger)
                     if response.status_code != 200:
-                        self.logger.error("add_network_adapter_to_vms : Get network connection section "\
-                                          "REST call {} failed status code : {}".format(url_rest_call,
-                                                                                   response.status_code))
-                        self.logger.error("Failed reason to get network adapter : {} ".format(response.content))
-
+                        self.logger.error("REST call {} failed reason : {}"\
+                                            "status code : {}".format(url_rest_call,
+                                                                   response.content,
+                                                              response.status_code))
+                        raise vimconn.vimconnException("add_network_adapter_to_vms : Failed to get "\
+                                                                        "network connection section")
                     data = response.content
                     if '<PrimaryNetworkConnectionIndex>' not in data:
                         item = """<PrimaryNetworkConnectionIndex>{}</PrimaryNetworkConnectionIndex>
@@ -3641,10 +3645,12 @@ class vimconnector(vimconn.vimconnector):
                                                                    logger=vca.logger)
 
                     if response.status_code != 202:
-                        self.logger.error("add_network_adapter_to_vms : Put network adapter call {} "\
-                                             "failed status code : {}".format(url_rest_call,
-                                                                          response.status_code))
-                        self.logger.error("Failed reason to add network adapter: {} ".format(response.content))
+                        self.logger.error("REST call {} failed reason : {}"\
+                                            "status code : {}".format(url_rest_call,
+                                                                   response.content,
+                                                              response.status_code))
+                        raise vimconn.vimconnException("add_network_adapter_to_vms : Failed to update "\
+                                                                           "network connection section")
                     else:
                         nic_task = taskType.parseString(response.content, True)
                         if isinstance(nic_task, GenericTask):
@@ -3655,5 +3661,6 @@ class vimconnector(vimconn.vimconnector):
                             self.logger.error("add_network_adapter_to_vms(): VM {} "\
                                                "failed to connect NIC type {}".format(vm_id, nic_type))
         except Exception as exp:
-            self.logger.error("add_network_adapter_to_vms() : exception {} occurred "\
-                                               "while adding Network adapter".format(exp))
+            self.logger.error("add_network_adapter_to_vms() : exception occurred "\
+                                               "while adding Network adapter")
+            raise vimconn.vimconnException(message=exp)
