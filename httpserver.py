@@ -508,7 +508,7 @@ def http_get_datacenter_id(tenant_id, datacenter_id):
 
 @bottle.route(url_base + '/datacenters', method='POST')
 def http_post_datacenters():
-    '''insert a tenant into the catalogue. '''
+    '''insert a datacenter into the catalogue. '''
     #parse input data
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     http_content,_ = format_in( datacenter_schema )
