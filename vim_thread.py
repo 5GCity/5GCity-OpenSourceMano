@@ -164,8 +164,8 @@ class vim_thread(threading.Thread):
                 network = {"name": net_name, "type": net_type}
 
                 vim_net = self.vim.get_network(net_id)
-                if vim_net.get('network_type') != 'vlan':
-                    raise vimconn.vimconnException(net_name + "defined as type " + net_type + " but the created network in vim is " + vim_net['provider:network_type'])
+                if vim_net.get('encapsulation') != 'vlan':
+                    raise vimconn.vimconnException(net_name + "defined as type " + net_type + " but the created network in vim is " + vim_net['encapsulation'])
 
                 network["vlan"] = vim_net.get('segmentation_id')
 
