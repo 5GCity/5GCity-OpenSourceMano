@@ -43,7 +43,7 @@ from db_base import db_base_Exception
 import nfvo_db
 from threading import Lock
 from time import time
-import openvim.ovim as Ovim
+#import openvim.ovim as Ovim
 
 global global_config
 global vimconn_imported
@@ -133,8 +133,8 @@ def start_service(mydb):
         #TODO: log_level_of should not be needed. To be modified in ovim
         'log_level_of': 'DEBUG'
     }
-    ovim = Ovim.ovim(ovim_configuration)
-    ovim.start_service()
+    #ovim = Ovim.ovim(ovim_configuration)
+    #ovim.start_service()
 
     from_= 'tenants_datacenters as td join datacenters as d on td.datacenter_id=d.uuid join datacenter_tenants as dt on td.datacenter_tenant_id=dt.uuid'
     select_ = ('type','d.config as config','d.uuid as datacenter_id', 'vim_url', 'vim_url_admin', 'd.name as datacenter_name',
@@ -3125,22 +3125,25 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
     return vim_action_get(mydb, tenant_id, datacenter, item, content)
 
 def sdn_controller_create(mydb, tenant_id, sdn_controller):
-    data = ovim.new_of_controller(sdn_controller)
+    #data = ovim.new_of_controller(sdn_controller)
+    data = []
     logger.debug('New SDN controller created with uuid {}'.format(data))
     return data
 
 def sdn_controller_update(mydb, tenant_id, controller_id, sdn_controller):
-    data = ovim.edit_of_controller(controller_id, sdn_controller)
+    #data = ovim.edit_of_controller(controller_id, sdn_controller)
+    data = []
     msg = 'SDN controller {} updated'.format(data)
     logger.debug(msg)
     return msg
 
 def sdn_controller_list(mydb, tenant_id, controller_id=None):
     if controller_id == None:
-        data = ovim.get_of_controllers()
+        #data = ovim.get_of_controllers()
+        data = []
     else:
-        data = ovim.show_of_controller(controller_id)
-
+        #data = ovim.show_of_controller(controller_id)
+        data = {'dpid': None}
     msg = 'SDN controller list:\n {}'.format(data)
     logger.debug(msg)
     return data
@@ -3154,7 +3157,8 @@ def sdn_controller_delete(mydb, tenant_id, controller_id):
             if 'sdn-controller' in config and config['sdn-controller'] == controller_id:
                 raise NfvoException("SDN controller {} is in use by datacenter {}".format(controller_id, datacenter['uuid']), HTTP_Conflict)
 
-    data = ovim.delete_of_controller(controller_id)
+    #data = ovim.delete_of_controller(controller_id)
+    data = 0
     msg = 'SDN controller {} deleted'.format(data)
     logger.debug(msg)
     return msg
@@ -3169,8 +3173,8 @@ def datacenter_sdn_port_mapping_set(mydb, tenant_id, datacenter_id, sdn_port_map
     except:
         raise NfvoException("The datacenter {} has not an SDN controller associated".format(datacenter_id), HTTP_Bad_Request)
 
-    sdn_controller = ovim.show_of_controller(sdn_controller_id)
-    switch_dpid = sdn_controller["dpid"]
+    #sdn_controller = ovim.show_of_controller(sdn_controller_id)
+    #switch_dpid = sdn_controller["dpid"]
 
     maps = list()
     for compute_node in sdn_port_mapping:
@@ -3186,10 +3190,12 @@ def datacenter_sdn_port_mapping_set(mydb, tenant_id, datacenter_id, sdn_port_map
                                      " or 'switch_mac'", HTTP_Bad_Request)
             maps.append(dict(element))
 
-    return ovim.set_of_port_mapping(maps, ofc_id=sdn_controller_id, switch_dpid=switch_dpid, region=datacenter_id)
+    #return ovim.set_of_port_mapping(maps, ofc_id=sdn_controller_id, switch_dpid=switch_dpid, region=datacenter_id)
+    return []
 
 def datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id):
-    maps = ovim.get_of_port_mappings(db_filter={"region": datacenter_id})
+    #maps = ovim.get_of_port_mappings(db_filter={"region": datacenter_id})
+    maps = []
 
     result = {
         "sdn-controller": None,
@@ -3207,9 +3213,9 @@ def datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id):
             result["sdn-controller"] = controller_id
             result["dpid"] = sdn_controller["dpid"]
 
-    if result["sdn-controller"] == None or result["dpid"] == None:
-        raise NfvoException("Not all SDN controller information for datacenter {} could be found: {}".format(datacenter_id, result),
-                            HTTP_Internal_Server_Error)
+    # if result["sdn-controller"] == None or result["dpid"] == None:
+    #     raise NfvoException("Not all SDN controller information for datacenter {} could be found: {}".format(datacenter_id, result),
+    #                         HTTP_Internal_Server_Error)
 
     if len(maps) == 0:
         return result
@@ -3241,4 +3247,5 @@ def datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id):
     return result
 
 def datacenter_sdn_port_mapping_delete(mydb, tenant_id, datacenter_id):
-    return ovim.clear_of_port_mapping(db_filter={"region":datacenter_id})
+    #return ovim.clear_of_port_mapping(db_filter={"region":datacenter_id})
+    return 0
