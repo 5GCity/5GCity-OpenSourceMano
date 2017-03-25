@@ -1446,14 +1446,20 @@ class vimconnector(vimconn.vimconnector):
                                 self.add_network_adapter_to_vms(vapp, nets[0].name,
                                                                 primary_nic_index,
                                                                 nicIndex,
+                                                                net,
                                                                 nic_type=nic_type)
                             else:
                                 self.logger.info("new_vminstance(): adding network adapter "\
                                                          "to a network {}".format(nets[0].name))
                                 self.add_network_adapter_to_vms(vapp, nets[0].name,
                                                                 primary_nic_index,
-                                                                nicIndex)
+                                                                nicIndex,
+                                                                net)
                 nicIndex += 1
+
+            # cloud-init for ssh-key injection
+            if cloud_config:
+                self.cloud_init(vapp,cloud_config)
 
             # deploy and power on vm
             self.logger.debug("new_vminstance(): Deploying vApp {} ".format(name))
@@ -3618,7 +3624,7 @@ class vimconnector(vimconn.vimconnector):
                              " for VM : {}".format(exp))
             raise vimconn.vimconnException(message=exp)
 
-    def add_network_adapter_to_vms(self, vapp, network_name, primary_nic_index, nicIndex, nic_type=None):
+    def add_network_adapter_to_vms(self, vapp, network_name, primary_nic_index, nicIndex, net, nic_type=None):
         """
             Method to add network adapter type to vm
             Args :
@@ -3634,6 +3640,10 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnConnectionException("Failed to connect vCloud director")
 
         try:
+            floating_ip = False
+            if 'floating_ip' in net: floating_ip = net['floating_ip']
+            allocation_mode = "POOL" if floating_ip else "DHCP"
+
             if not nic_type:
                 for vms in vapp._get_vms():
                     vm_id = (vms.id).split(':')[-1]
@@ -3658,15 +3668,19 @@ class vimconnector(vimconn.vimconnector):
                                 <NetworkConnection network="{}">
                                 <NetworkConnectionIndex>{}</NetworkConnectionIndex>
                                 <IsConnected>true</IsConnected>
-                                <IpAddressAllocationMode>DHCP</IpAddressAllocationMode>
-                                </NetworkConnection>""".format(primary_nic_index, network_name, nicIndex)
+                                <IpAddressAllocationMode>{}</IpAddressAllocationMode>
+                                </NetworkConnection>""".format(primary_nic_index, network_name, nicIndex,
+                                                                                         allocation_mode)
+
                         data = data.replace('</ovf:Info>\n','</ovf:Info>\n{}\n'.format(item))
                     else:
                         new_item = """<NetworkConnection network="{}">
                                     <NetworkConnectionIndex>{}</NetworkConnectionIndex>
                                     <IsConnected>true</IsConnected>
-                                    <IpAddressAllocationMode>DHCP</IpAddressAllocationMode>
-                                    </NetworkConnection>""".format(network_name, nicIndex)
+                                    <IpAddressAllocationMode>{}</IpAddressAllocationMode>
+                                    </NetworkConnection>""".format(network_name, nicIndex,
+                                                                          allocation_mode)
+
                         data = data.replace('</NetworkConnection>\n','</NetworkConnection>\n{}\n'.format(new_item))
 
                     headers = vca.vcloud_session.get_vcloud_headers()
@@ -3713,17 +3727,21 @@ class vimconnector(vimconn.vimconnector):
                                 <NetworkConnection network="{}">
                                 <NetworkConnectionIndex>{}</NetworkConnectionIndex>
                                 <IsConnected>true</IsConnected>
-                                <IpAddressAllocationMode>DHCP</IpAddressAllocationMode>
+                                <IpAddressAllocationMode>{}</IpAddressAllocationMode>
                                 <NetworkAdapterType>{}</NetworkAdapterType>
-                                </NetworkConnection>""".format(primary_nic_index, network_name, nicIndex, nic_type)
+                                </NetworkConnection>""".format(primary_nic_index, network_name, nicIndex,
+                                                                               allocation_mode, nic_type)
+
                         data = data.replace('</ovf:Info>\n','</ovf:Info>\n{}\n'.format(item))
                     else:
                         new_item = """<NetworkConnection network="{}">
                                     <NetworkConnectionIndex>{}</NetworkConnectionIndex>
                                     <IsConnected>true</IsConnected>
-                                    <IpAddressAllocationMode>DHCP</IpAddressAllocationMode>
+                                    <IpAddressAllocationMode>{}</IpAddressAllocationMode>
                                     <NetworkAdapterType>{}</NetworkAdapterType>
-                                    </NetworkConnection>""".format(network_name, nicIndex, nic_type)
+                                    </NetworkConnection>""".format(network_name, nicIndex,
+                                                                allocation_mode, nic_type)
+
                         data = data.replace('</NetworkConnection>\n','</NetworkConnection>\n{}\n'.format(new_item))
 
                     headers = vca.vcloud_session.get_vcloud_headers()
@@ -3803,3 +3821,99 @@ class vimconnector(vimconn.vimconnector):
                                                        "for VM {} : {}".format(vm_obj, vm_moref_id))
             raise vimconn.vimconnException("set_numa_affinity : Error {} failed to assign numa "\
                                                                            "affinity".format(exp))
+
+
+    def cloud_init(self, vapp, cloud_config):
+        """
+        Method to inject ssh-key
+        vapp - vapp object
+        cloud_config a dictionary with:
+                'key-pairs': (optional) list of strings with the public key to be inserted to the default user
+                'users': (optional) list of users to be inserted, each item is a dict with:
+                    'name': (mandatory) user name,
+                    'key-pairs': (optional) list of strings with the public key to be inserted to the user
+                'user-data': (optional) string is a text script to be passed directly to cloud-init
+                'config-files': (optional). List of files to be transferred. Each item is a dict with:
+                    'dest': (mandatory) string with the destination absolute path
+                    'encoding': (optional, by default text). Can be one of:
+                        'b64', 'base64', 'gz', 'gz+b64', 'gz+base64', 'gzip+b64', 'gzip+base64'
+                    'content' (mandatory): string with the content of the file
+                    'permissions': (optional) string with file permissions, typically octal notation '0644'
+                    'owner': (optional) file owner, string with the format 'owner:group'
+                'boot-data-drive': boolean to indicate if user-data must be passed using a boot drive (hard disk
+        """
+        vca = self.connect()
+        if not vca:
+            raise vimconn.vimconnConnectionException("Failed to connect vCloud director")
+
+        try:
+            if isinstance(cloud_config, dict):
+                key_pairs = []
+                userdata = []
+                if "key-pairs" in cloud_config:
+                    key_pairs = cloud_config["key-pairs"]
+
+                if "users" in cloud_config:
+                    userdata = cloud_config["users"]
+
+            for key in key_pairs:
+                for user in userdata:
+                    if 'name' in user: user_name = user['name']
+                    if 'key-pairs' in user and len(user['key-pairs']) > 0:
+                        for user_key in user['key-pairs']:
+                            customize_script = """
+                        #!/bin/bash
+                        echo performing customization tasks with param $1 at `date "+DATE: %Y-%m-%d - TIME: %H:%M:%S"` >> /root/customization.log
+                        if [ "$1" = "precustomization" ];then
+                            echo performing precustomization tasks   on `date "+DATE: %Y-%m-%d - TIME: %H:%M:%S"` >> /root/customization.log
+                            if [ ! -d /root/.ssh ];then
+                                mkdir /root/.ssh
+                                chown root:root /root/.ssh
+                                chmod 700 /root/.ssh
+                                touch /root/.ssh/authorized_keys
+                                chown root:root /root/.ssh/authorized_keys
+                                chmod 600 /root/.ssh/authorized_keys
+                                # make centos with selinux happy
+                                which restorecon && restorecon -Rv /root/.ssh
+                                echo '{key}' >> /root/.ssh/authorized_keys
+                            else
+                                touch /root/.ssh/authorized_keys
+                                chown root:root /root/.ssh/authorized_keys
+                                chmod 600 /root/.ssh/authorized_keys
+                                echo '{key}' >> /root/.ssh/authorized_keys
+                            fi
+                            if [ -d /home/{user_name} ];then
+                                if [ ! -d /home/{user_name}/.ssh ];then
+                                    mkdir /home/{user_name}/.ssh
+                                    chown {user_name}:{user_name} /home/{user_name}/.ssh
+                                    chmod 700 /home/{user_name}/.ssh
+                                    touch /home/{user_name}/.ssh/authorized_keys
+                                    chown {user_name}:{user_name} /home/{user_name}/.ssh/authorized_keys
+                                    chmod 600 /home/{user_name}/.ssh/authorized_keys
+                                    # make centos with selinux happy
+                                    which restorecon && restorecon -Rv /home/{user_name}/.ssh
+                                    echo '{user_key}' >> /home/{user_name}/.ssh/authorized_keys
+                                else
+                                    touch /home/{user_name}/.ssh/authorized_keys
+                                    chown {user_name}:{user_name} /home/{user_name}/.ssh/authorized_keys
+                                    chmod 600 /home/{user_name}/.ssh/authorized_keys
+                                    echo '{user_key}' >> /home/{user_name}/.ssh/authorized_keys
+                                fi
+                            fi
+                        fi""".format(key=key, user_name=user_name, user_key=user_key)
+
+                            for vm in vapp._get_vms():
+                                vm_name = vm.name
+                                task = vapp.customize_guest_os(vm_name, customization_script=customize_script)
+                                if isinstance(task, GenericTask):
+                                    vca.block_until_completed(task)
+                                    self.logger.info("cloud_init : customized guest os task "\
+                                                        "completed for VM {}".format(vm_name))
+                                else:
+                                    self.logger.error("cloud_init : task for customized guest os"\
+                                                               "failed for VM {}".format(vm_name))
+        except Exception as exp:
+            self.logger.error("cloud_init : exception occurred while injecting "\
+                                                                       "ssh-key")
+            raise vimconn.vimconnException("cloud_init : Error {} failed to inject "\
+                                                               "ssh-key".format(exp))
