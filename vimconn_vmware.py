@@ -63,6 +63,7 @@ import hashlib
 import socket
 import struct
 import netaddr
+import random
 
 # global variable for vcd connector type
 STANDALONE = 'standalone'
@@ -71,13 +72,9 @@ STANDALONE = 'standalone'
 FLAVOR_RAM_KEY = 'ram'
 FLAVOR_VCPUS_KEY = 'vcpus'
 FLAVOR_DISK_KEY = 'disk'
-DEFAULT_IP_PROFILE = {'gateway_address':"192.168.1.1",
-                      'dhcp_count':50,
-                      'subnet_address':"192.168.1.0/24",
+DEFAULT_IP_PROFILE = {'dhcp_count':50,
                       'dhcp_enabled':True,
-                      'dhcp_start_address':"192.168.1.3",
-                      'ip_version':"IPv4",
-                      'dns_address':"192.168.1.2"
+                      'ip_version':"IPv4"
                       }
 # global variable for wait time
 INTERVAL_TIME = 5
@@ -1397,6 +1394,13 @@ class vimconnector(vimconn.vimconnector):
             if result :
                 self.logger.debug("Modified Disk size of VM {} ".format(vmname_andid))
 
+        if numas:
+            # Assigning numa affinity setting
+            for numa in numas:
+                if 'paired-threads-id' in numa:
+                    paired_threads_id = numa['paired-threads-id']
+                    self.set_numa_affinity(vapp_uuid, paired_threads_id)
+
         # add NICs & connect to networks in netlist
         try:
             self.logger.info("Request to connect VM to a network: {}".format(net_list))
@@ -1715,39 +1719,6 @@ class vimconnector(vimconn.vimconnector):
 
         self.logger.debug("Client requesting refresh vm status for {} ".format(vm_list))
 
-        mac_ip_addr={}
-        rheaders = {'Content-Type': 'application/xml'}
-        iso_edges = ['edge-2','edge-3','edge-6','edge-7','edge-8','edge-9','edge-10']
-
-        try:
-            for edge in iso_edges:
-                nsx_api_url = '/api/4.0/edges/'+ edge +'/dhcp/leaseInfo'
-                self.logger.debug("refresh_vms_status: NSX Manager url: {}".format(nsx_api_url))
-
-                resp = requests.get(self.nsx_manager + nsx_api_url,
-                                    auth = (self.nsx_user, self.nsx_password),
-                                    verify = False, headers = rheaders)
-
-                if resp.status_code == requests.codes.ok:
-                    dhcp_leases = XmlElementTree.fromstring(resp.text)
-                    for child in dhcp_leases:
-                        if child.tag == 'dhcpLeaseInfo':
-                            dhcpLeaseInfo = child
-                            for leaseInfo in dhcpLeaseInfo:
-                                for elem in leaseInfo:
-                                    if (elem.tag)=='macAddress':
-                                        mac_addr = elem.text
-                                    if (elem.tag)=='ipAddress':
-                                        ip_addr = elem.text
-                                if (mac_addr) is not None:
-                                    mac_ip_addr[mac_addr]= ip_addr
-                    self.logger.debug("NSX Manager DHCP Lease info: mac_ip_addr : {}".format(mac_ip_addr))
-                else:
-                    self.logger.debug("Error occurred while getting DHCP lease info from NSX Manager: {}".format(resp.content))
-        except KeyError:
-            self.logger.debug("Error in response from NSX Manager {}".format(KeyError.message))
-            self.logger.debug(traceback.format_exc())
-
         vca = self.connect()
         if not vca:
             raise vimconn.vimconnConnectionException("self.connect() is failed.")
@@ -1757,6 +1728,7 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnException("Failed to get a reference of VDC for a tenant {}".format(self.tenant_name))
 
         vms_dict = {}
+        nsx_edge_list = []
         for vmuuid in vm_list:
             vmname = self.get_namebyvappid(vca, vdc, vmuuid)
             if vmname is not None:
@@ -1778,12 +1750,19 @@ class vimconnector(vimconn.vimconnector):
                         for vm_network in vapp_network:
                             if vm_network['name'] == vmname:
                                 #Assign IP Address based on MAC Address in NSX DHCP lease info
-                                for mac_adres,ip_adres in mac_ip_addr.iteritems():
-                                    if mac_adres == vm_network['mac']:
-                                        vm_network['ip']=ip_adres
+                                if vm_network['ip'] is None:
+                                    if not nsx_edge_list:
+                                        nsx_edge_list = self.get_edge_details()
+                                        if nsx_edge_list is None:
+                                            raise vimconn.vimconnException("refresh_vms_status:"\
+                                                                           "Failed to get edge details from NSX Manager")
+                                    if vm_network['mac'] is not None:
+                                        vm_network['ip'] = self.get_ipaddr_from_NSXedge(nsx_edge_list, vm_network['mac'])
+
+                                vm_net_id = self.get_network_id_by_name(vm_network['network_name'])
                                 interface = {"mac_address": vm_network['mac'],
-                                             "vim_net_id": self.get_network_id_by_name(vm_network['network_name']),
-                                             "vim_interface_id": self.get_network_id_by_name(vm_network['network_name']),
+                                             "vim_net_id": vm_net_id,
+                                             "vim_interface_id": vm_net_id,
                                              'ip_address': vm_network['ip']}
                                 # interface['vim_info'] = yaml.safe_dump(vm_network)
                                 vm_dict["interfaces"].append(interface)
@@ -1794,6 +1773,110 @@ class vimconnector(vimconn.vimconnector):
                     self.logger.debug(traceback.format_exc())
 
         return vms_dict
+
+
+    def get_edge_details(self):
+        """Get the NSX edge list from NSX Manager
+           Returns list of NSX edges
+        """
+        edge_list = []
+        rheaders = {'Content-Type': 'application/xml'}
+        nsx_api_url = '/api/4.0/edges'
+
+        self.logger.debug("Get edge details from NSX Manager {} {}".format(self.nsx_manager, nsx_api_url))
+
+        try:
+            resp = requests.get(self.nsx_manager + nsx_api_url,
+                                auth = (self.nsx_user, self.nsx_password),
+                                verify = False, headers = rheaders)
+            if resp.status_code == requests.codes.ok:
+                paged_Edge_List = XmlElementTree.fromstring(resp.text)
+                for edge_pages in paged_Edge_List:
+                    if edge_pages.tag == 'edgePage':
+                        for edge_summary in edge_pages:
+                            if edge_summary.tag == 'pagingInfo':
+                                for element in edge_summary:
+                                    if element.tag == 'totalCount' and element.text == '0':
+                                        raise vimconn.vimconnException("get_edge_details: No NSX edges details found: {}"
+                                                                       .format(self.nsx_manager))
+
+                            if edge_summary.tag == 'edgeSummary':
+                                for element in edge_summary:
+                                    if element.tag == 'id':
+                                        edge_list.append(element.text)
+                    else:
+                        raise vimconn.vimconnException("get_edge_details: No NSX edge details found: {}"
+                                                       .format(self.nsx_manager))
+
+                if not edge_list:
+                    raise vimconn.vimconnException("get_edge_details: "\
+                                                   "No NSX edge details found: {}"
+                                                   .format(self.nsx_manager))
+                else:
+                    self.logger.debug("get_edge_details: Found NSX edges {}".format(edge_list))
+                    return edge_list
+            else:
+                self.logger.debug("get_edge_details: "
+                                  "Failed to get NSX edge details from NSX Manager: {}"
+                                  .format(resp.content))
+                return None
+
+        except Exception as exp:
+            self.logger.debug("get_edge_details: "\
+                              "Failed to get NSX edge details from NSX Manager: {}"
+                              .format(exp))
+            raise vimconn.vimconnException("get_edge_details: "\
+                                           "Failed to get NSX edge details from NSX Manager: {}"
+                                           .format(exp))
+
+
+    def get_ipaddr_from_NSXedge(self, nsx_edges, mac_address):
+        """Get IP address details from NSX edges, using the MAC address
+           PARAMS: nsx_edges : List of NSX edges
+                   mac_address : Find IP address corresponding to this MAC address
+           Returns: IP address corrresponding to the provided MAC address
+        """
+
+        ip_addr = None
+        rheaders = {'Content-Type': 'application/xml'}
+
+        self.logger.debug("get_ipaddr_from_NSXedge: Finding IP addr from NSX edge")
+
+        try:
+            for edge in nsx_edges:
+                nsx_api_url = '/api/4.0/edges/'+ edge +'/dhcp/leaseInfo'
+
+                resp = requests.get(self.nsx_manager + nsx_api_url,
+                                    auth = (self.nsx_user, self.nsx_password),
+                                    verify = False, headers = rheaders)
+
+                if resp.status_code == requests.codes.ok:
+                    dhcp_leases = XmlElementTree.fromstring(resp.text)
+                    for child in dhcp_leases:
+                        if child.tag == 'dhcpLeaseInfo':
+                            dhcpLeaseInfo = child
+                            for leaseInfo in dhcpLeaseInfo:
+                                for elem in leaseInfo:
+                                    if (elem.tag)=='macAddress':
+                                        edge_mac_addr = elem.text
+                                    if (elem.tag)=='ipAddress':
+                                        ip_addr = elem.text
+                                if edge_mac_addr is not None:
+                                    if edge_mac_addr == mac_address:
+                                        self.logger.debug("Found ip addr {} for mac {} at NSX edge {}"
+                                                          .format(ip_addr, mac_address,edge))
+                                        return ip_addr
+                else:
+                    self.logger.debug("get_ipaddr_from_NSXedge: "\
+                                      "Error occurred while getting DHCP lease info from NSX Manager: {}"
+                                      .format(resp.content))
+
+            self.logger.debug("get_ipaddr_from_NSXedge: No IP addr found in any NSX edge")
+            return None
+
+        except XmlElementTree.ParseError as Err:
+            self.logger.debug("ParseError in response from NSX Manager {}".format(Err.message), exc_info=True)
+
 
     def action_vminstance(self, vm__vim_uuid=None, action_dict=None):
         """Send and action over a VM instance from VIM
@@ -2519,20 +2602,25 @@ class vimconnector(vimconn.vimconnector):
                 #Configure IP profile of the network
                 ip_profile = ip_profile if ip_profile is not None else DEFAULT_IP_PROFILE
 
+                if 'subnet_address' not in ip_profile or ip_profile['subnet_address'] is None:
+                    subnet_rand = random.randint(0, 255)
+                    ip_base = "192.168.{}.".format(subnet_rand)
+                    ip_profile['subnet_address'] = ip_base + "0/24"
+                else:
+                    ip_base = ip_profile['subnet_address'].rsplit('.',1)[0] + '.'
+
                 if 'gateway_address' not in ip_profile or ip_profile['gateway_address'] is None:
-                    ip_profile['gateway_address']=DEFAULT_IP_PROFILE['gateway_address']
+                    ip_profile['gateway_address']=ip_base + "1"
                 if 'dhcp_count' not in ip_profile or ip_profile['dhcp_count'] is None:
                     ip_profile['dhcp_count']=DEFAULT_IP_PROFILE['dhcp_count']
-                if 'subnet_address' not in ip_profile or ip_profile['subnet_address'] is None:
-                    ip_profile['subnet_address']=DEFAULT_IP_PROFILE['subnet_address']
                 if 'dhcp_enabled' not in ip_profile or ip_profile['dhcp_enabled'] is None:
                     ip_profile['dhcp_enabled']=DEFAULT_IP_PROFILE['dhcp_enabled']
                 if 'dhcp_start_address' not in ip_profile or ip_profile['dhcp_start_address'] is None:
-                    ip_profile['dhcp_start_address']=DEFAULT_IP_PROFILE['dhcp_start_address']
+                    ip_profile['dhcp_start_address']=ip_base + "3"
                 if 'ip_version' not in ip_profile or ip_profile['ip_version'] is None:
                     ip_profile['ip_version']=DEFAULT_IP_PROFILE['ip_version']
                 if 'dns_address' not in ip_profile or ip_profile['dns_address'] is None:
-                    ip_profile['dns_address']=DEFAULT_IP_PROFILE['dns_address']
+                    ip_profile['dns_address']=ip_base + "2"
 
                 gateway_address=ip_profile['gateway_address']
                 dhcp_count=int(ip_profile['dhcp_count'])
@@ -3664,3 +3752,54 @@ class vimconnector(vimconn.vimconnector):
             self.logger.error("add_network_adapter_to_vms() : exception occurred "\
                                                "while adding Network adapter")
             raise vimconn.vimconnException(message=exp)
+
+
+    def set_numa_affinity(self, vmuuid, paired_threads_id):
+        """
+            Method to assign numa affinity in vm configuration parammeters
+            Args :
+                vmuuid - vm uuid
+                paired_threads_id - one or more virtual processor
+                                    numbers
+            Returns:
+                return if True
+        """
+        try:
+            vm_moref_id , vm_vcenter_host , vm_vcenter_username, vm_vcenter_port = self.get_vcenter_info_rest(vmuuid)
+            if vm_moref_id and vm_vcenter_host and vm_vcenter_username:
+                context = None
+                if hasattr(ssl, '_create_unverified_context'):
+                    context = ssl._create_unverified_context()
+                    vcenter_conect = SmartConnect(host=vm_vcenter_host, user=vm_vcenter_username,
+                                  pwd=self.passwd, port=int(vm_vcenter_port),
+                                  sslContext=context)
+                    atexit.register(Disconnect, vcenter_conect)
+                    content = vcenter_conect.RetrieveContent()
+
+                    host_obj, vm_obj = self.get_vm_obj(content ,vm_moref_id)
+                    if vm_obj:
+                        config_spec = vim.vm.ConfigSpec()
+                        config_spec.extraConfig = []
+                        opt = vim.option.OptionValue()
+                        opt.key = 'numa.nodeAffinity'
+                        opt.value = str(paired_threads_id)
+                        config_spec.extraConfig.append(opt)
+                        task = vm_obj.ReconfigVM_Task(config_spec)
+                        if task:
+                            result = self.wait_for_vcenter_task(task, vcenter_conect)
+                            extra_config = vm_obj.config.extraConfig
+                            flag = False
+                            for opts in extra_config:
+                                if 'numa.nodeAffinity' in opts.key:
+                                    flag = True
+                                    self.logger.info("set_numa_affinity: Sucessfully assign numa affinity "\
+                                                             "value {} for vm {}".format(opt.value, vm_obj))
+                            if flag:
+                                return
+                    else:
+                        self.logger.error("set_numa_affinity: Failed to assign numa affinity")
+        except Exception as exp:
+            self.logger.error("set_numa_affinity : exception occurred while setting numa affinity "\
+                                                       "for VM {} : {}".format(vm_obj, vm_moref_id))
+            raise vimconn.vimconnException("set_numa_affinity : Error {} failed to assign numa "\
+                                                                           "affinity".format(exp))
