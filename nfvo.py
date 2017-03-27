@@ -52,7 +52,7 @@ global default_volume_size
 default_volume_size = '5' #size in GB
 global ovim
 ovim = None
-
+global_config = None
 
 vimconn_imported = {}   # dictionary with VIM type as key, loaded module as value
 vim_threads = {"running":{}, "deleting": {}, "names": []}      # threads running for attached-VIMs
@@ -184,12 +184,16 @@ def start_service(mydb):
         raise NfvoException(str(e) + " at nfvo.get_vim", e.http_code)
 
 def stop_service():
+    global ovim, global_config
     if ovim:
         ovim.stop_service()
     for thread_id,thread in vim_threads["running"].items():
         thread.insert_task(new_task("exit", None, store=False))
         vim_threads["deleting"][thread_id] = thread
     vim_threads["running"] = {}
+    if global_config and global_config.get("console_thread"):
+        for thread in global_config["console_thread"]:
+            thread.terminate = True
 
 
 def get_flavorlist(mydb, vnf_id, nfvo_tenant=None):

@@ -316,6 +316,4 @@ if __name__=="__main__":
     nfvo.stop_service()
     if httpthread:
         httpthread.join(1)
-    for thread in global_config["console_thread"]:
-        thread.terminate = True
 
