@@ -34,7 +34,7 @@ import Queue
 import logging
 import vimconn
 from db_base import db_base_Exception
-#from openvim.ovim import ovimException
+from openvim.ovim import ovimException
 
 
 # from logging import Logger
@@ -159,8 +159,7 @@ class vim_thread(threading.Thread):
             net_type = params[1]
 
             network = None
-            #sdn_controller = self.vim.config.get('sdn-controller')
-            sdn_controller = None
+            sdn_controller = self.vim.config.get('sdn-controller')
             if sdn_controller and (net_type == "data" or net_type == "ptp"):
                 network = {"name": net_name, "type": net_type}
 
@@ -190,9 +189,9 @@ class vim_thread(threading.Thread):
             except db_base_Exception as e:
                 self.logger.error("Error updating database %s", str(e))
             return False, str(e)
-        # except ovimException as e:
-        #     self.logger.error("Error creating NET in ovim, task=%s: %s", str(task_id), str(e))
-        #     return False, str(e)
+        except ovimException as e:
+            self.logger.error("Error creating NET in ovim, task=%s: %s", str(task_id), str(e))
+            return False, str(e)
 
     def new_vm(self, task):
         try:
@@ -253,8 +252,7 @@ class vim_thread(threading.Thread):
 
     def del_net(self, task):
         net_id = task["params"][0]
-        #sdn_net_id = task["params"][1]
-        sdn_net_id = None
+        sdn_net_id = task["params"][1]
         if is_task_id(net_id):
             try:
                 task_create = task["depends"][net_id]
@@ -274,7 +272,8 @@ class vim_thread(threading.Thread):
             return True, result
         except vimconn.vimconnException as e:
             return False, str(e)
-        # except ovimException as e:
-        #     logging.error("Error deleting network from ovim. net_id: {}, sdn_net_id: {}".format(net_id, sdn_net_id))
-        #     return False, str(e)
+        except ovimException as e:
+            logging.error("Error deleting network from ovim. net_id: {}, sdn_net_id: {}".format(net_id, sdn_net_id))
+            return False, str(e)
+
 
