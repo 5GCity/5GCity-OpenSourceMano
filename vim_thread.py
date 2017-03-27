@@ -77,6 +77,171 @@ class vim_thread(threading.Thread):
 
         self.task_lock = task_lock
         self.task_queue = Queue.Queue(2000)
+        self.refresh_list = []
+        """Contains time ordered task list for refreshing the status of VIM VMs and nets"""
+
+    def _refres_elements(self):
+        """Call VIM to get VMs and networks status until 10 elements"""
+        now = time.time()
+        vm_to_refresh_list = []
+        net_to_refresh_list = []
+        vm_to_refresh_dict = {}
+        net_to_refresh_dict = {}
+        items_to_refresh = 0
+        while self.refresh_list:
+            task = self.refresh_list[0]
+            with self.task_lock:
+                if task['status'] == 'deleted':
+                    self.refresh_list.pop(0)
+                    continue
+                if task['time'] > now:
+                    break
+                task["status"] = "processing"
+            self.refresh_list.pop(0)
+            if task["name"] == 'get-vm':
+                vm_to_refresh_list.append(task["vim_id"])
+                vm_to_refresh_dict[task["vim_id"]] = task
+            elif task["name"] == 'get-net':
+                net_to_refresh_list.append(task["vim_id"])
+                net_to_refresh_dict[task["vim_id"]] = task
+            else:
+                error_text = "unknown task {}".format(task["name"])
+                self.logger.error(error_text)
+            items_to_refresh += 1
+            if items_to_refresh == 10:
+                break
+
+        if vm_to_refresh_list:
+            try:
+                vim_dict = self.vim.refresh_vms_status(vm_to_refresh_list)
+                for vim_id, vim_info in vim_dict.items():
+                    #look for task
+                    task = vm_to_refresh_dict[vim_id]
+                    self.logger.debug("get-vm vm_id=%s result=%s", task["vim_id"], str(vim_info))
+
+                    # update database
+                    if vim_info.get("error_msg"):
+                        vim_info["error_msg"] = self._format_vim_error_msg(vim_info["error_msg"])
+                    if task["vim_info"].get("status") != vim_info["status"] or \
+                        task["vim_info"].get("error_msg") != vim_info.get("error_msg") or \
+                        task["vim_info"].get("vim_info") != vim_info["vim_info"]:
+                        with self.db_lock:
+                            temp_dict={ "status": vim_info["status"],
+                                        "error_msg": vim_info.get("error_msg"),
+                                        "vim_info": vim_info["vim_info"]
+                                       }
+                            self.db.update_rows('instance_vms', UPDATE=temp_dict, WHERE={"vim_vm_id": vim_id})
+                    for interface in vim_info["interfaces"]:
+                        for task_interface in task["vim_info"]["interfaces"]:
+                            if task_interface["vim_net_id"] == interface["vim_net_id"]:
+                                break
+                        else:
+                            task_interface = {"vim_net_id": interface["vim_net_id"]}
+                            task["vim_info"]["interfaces"].append(task_interface)
+                        if task_interface != interface:
+                            #delete old port
+                            if task_interface.get("sdn_port_id"):
+                                try:
+                                    self.ovim.delete_port(task_interface["sdn_port_id"])
+                                    task_interface["sdn_port_id"] = None
+                                except ovimException as e:
+                                    self.logger.error("ovimException deleting external_port={} ".format(
+                                        task_interface["sdn_port_id"]) + str(e), exc_info=True)
+                                    # TODO Set error_msg at instance_nets
+                            vim_net_id = interface.pop("vim_net_id")
+                            sdn_net_id = None
+                            sdn_port_name = None
+                            with self.db_lock:
+                                where_= {'iv.vim_vm_id': vim_id, "ine.vim_net_id": vim_net_id,
+                                            'ine.datacenter_tenant_id': self.datacenter_tenant_id}
+                                # TODO check why vim_interface_id is not present at database
+                                # if interface.get("vim_interface_id"):
+                                #     where_["vim_interface_id"] = interface["vim_interface_id"]
+                                db_ifaces = self.db.get_rows(
+                                    FROM="instance_interfaces as ii left join instance_nets as ine on "
+                                         "ii.instance_net_id=ine.uuid left join instance_vms as iv on "
+                                         "ii.instance_vm_id=iv.uuid",
+                                    SELECT=("ii.uuid as iface_id", "ine.uuid as net_id", "iv.uuid as vm_id", "sdn_net_id"),
+                                    WHERE=where_)
+                            if len(db_ifaces)>1:
+                                self.logger.error("Refresing interfaces. "
+                                                  "Found more than one interface at database for '{}'".format(where_))
+                            elif len(db_ifaces)==0:
+                                self.logger.error("Refresing interfaces. "
+                                                  "Not found any interface at database for '{}'".format(where_))
+                            else:
+                                db_iface = db_ifaces[0]
+                                if db_iface.get("sdn_net_id") and interface.get("compute_node") and interface.get("pci"):
+                                    sdn_net_id = db_iface["sdn_net_id"]
+                                    sdn_port_name = sdn_net_id + "." + db_iface["vm_id"]
+                                    sdn_port_name = sdn_port_name[:63]
+                                    try:
+                                        sdn_port_id = self.ovim.new_external_port(
+                                            {"compute_node": interface["compute_node"],
+                                             "pci": interface["pci"],
+                                             "vlan": interface.get("vlan"),
+                                             "net_id": sdn_net_id,
+                                             "region": self.vim["config"]["datacenter_id"],
+                                             "name": sdn_port_name})
+                                        interface["sdn_port_id"] = sdn_port_id
+                                    except (ovimException, Exception) as e:
+                                        self.logger.error(
+                                            "ovimException creating new_external_port compute_node={} " \
+                                            "pci={} vlan={} ".format(
+                                                interface["compute_node"],
+                                                interface["pci"],
+                                                interface.get("vlan")) + str(e),
+                                            exc_info=True)
+                                        # TODO Set error_msg at instance_nets
+                                with self.db_lock:
+                                    self.db.update_rows('instance_interfaces', UPDATE=interface,
+                                                    WHERE={'uuid': db_iface["iface_id"]})
+                                # TODO insert instance_id
+                            interface["vim_net_id"] = vim_net_id
+
+                    task["vim_info"] = vim_info
+                    if "ACTIVE" in task["vim_info"]["status"]:
+                        self._insert_refresh(task, now+300) # 5minutes
+                    else:
+                        self._insert_refresh(task, now+5)  # 5seconds
+            except vimconn.vimconnException as e:
+                self.logger.error("vimconnException Exception when trying to refresh vms " + str(e))
+                self._insert_refresh(task, now + 300)  # 5minutes
+
+        if not items_to_refresh:
+            time.sleep(1)
+
+    def _insert_refresh(self, task, threshold_time):
+        """Insert a task at list of refreshing elements. The refreshing list is ordered by threshold_time (task['time']
+        It is assumed that this is called inside this thread
+        """
+        task["time"] = threshold_time
+        for index in range(0, len(self.refresh_list)):
+            if self.refresh_list[index]["time"] > threshold_time:
+                self.refresh_list.insert(index, task)
+                break
+        else:
+            index = len(self.refresh_list)
+            self.refresh_list.append(task)
+        self.logger.debug("new refresh task={} name={}, time={} index={}".format(
+            task["id"], task["name"], task["time"], index))
+
+    def _remove_refresh(self, task_name, vim_id):
+        """Remove a task with this name and vim_id from the list of refreshing elements.
+        It is assumed that this is called inside this thread outside _refres_elements method
+        Return True if self.refresh_list is modified, task is found
+        Return False if not found
+        """
+        index_to_delete = None
+        for index in range(0, len(self.refresh_list)):
+            if self.refresh_list[index]["name"] == task_name and self.refresh_list[index]["vim_id"] == vim_id:
+                index_to_delete = index
+                break
+        else:
+            return False
+        if index_to_delete != None:
+            del self.refresh_list[index_to_delete]
+        return True
 
     def insert_task(self, task):
         try:
@@ -105,11 +270,10 @@ class vim_thread(threading.Thread):
                     if task["status"] == "deleted":
                         self.task_lock.release()
                         continue
-                    task["status"] == "processing"
+                    task["status"] = "processing"
                     self.task_lock.release()
                 else:
-                    now=time.time()
-                    time.sleep(1)
+                    self._refres_elements()
                     continue
                 self.logger.debug("processing task id={} name={} params={}".format(task["id"], task["name"],
                                                                                    str(task["params"])))
@@ -128,6 +292,9 @@ class vim_thread(threading.Thread):
                     self.logger.error(error_text)
                     result = False
                     content = error_text
+                self.logger.debug("task id={} name={} result={}:{} params={}".format(task["id"], task["name"],
+                                                                                    result, content,
+                                                                                    str(task["params"])))
 
                 with self.task_lock:
                     task["status"] = "done" if result else "error"
@@ -145,7 +312,7 @@ class vim_thread(threading.Thread):
         return True, None
 
     def _format_vim_error_msg(self, error_text):
-        if len(error_text) >= 1024:
+        if error_text and len(error_text) >= 1024:
             return error_text[:516] + " ... " + error_text[-500:]
         return error_text
 
@@ -199,27 +366,48 @@ class vim_thread(threading.Thread):
             task_id = task["id"]
             depends = task.get("depends")
             net_list = params[5]
+            error_text = ""
             for net in net_list:
-                if is_task_id(net["net_id"]):  # change task_id into network_id
+                if "net_id" in net and is_task_id(net["net_id"]):  # change task_id into network_id
                     try:
                         task_net = depends[net["net_id"]]
                         with self.task_lock:
                             if task_net["status"] == "error":
-                                return False, "Cannot create VM because depends on a network that cannot be created: " + \
+                                error_text = "Cannot create VM because depends on a network that cannot be created: " +\
                                        str(task_net["result"])
+                                break
                             elif task_net["status"] == "enqueued" or task_net["status"] == "processing":
-                                return False, "Cannot create VM because depends on a network still not created"
+                                error_text = "Cannot create VM because depends on a network still not created"
+                                break
                             network_id = task_net["result"]
                         net["net_id"] = network_id
                     except Exception as e:
-                        return False, "Error trying to map from task_id={} to task result: {}".format(net["net_id"],
-                                                                                                      str(e))
-            vm_id = self.vim.new_vminstance(*params)
+                        error_text = "Error trying to map from task_id={} to task result: {}".format(
+                            net["net_id"],str(e))
+                        break
+            if not error_text:
+                vm_id = self.vim.new_vminstance(*params)
             try:
                 with self.db_lock:
-                    self.db.update_rows("instance_vms", UPDATE={"vim_vm_id": vm_id}, WHERE={"vim_vm_id": task_id})
+                    if error_text:
+                        update = self.db.update_rows("instance_vms",
+                                                     UPDATE={"status": "VIM_ERROR", "error_msg": error_text},
+                                                     WHERE={"vim_vm_id": task_id})
+                    else:
+                        update = self.db.update_rows("instance_vms", UPDATE={"vim_vm_id": vm_id}, WHERE={"vim_vm_id": task_id})
+                    if not update:
+                        self.logger.error("task id={} name={} database not updated vim_vm_id={}".format(
+                            task["id"], task["name"], vm_id))
             except db_base_Exception as e:
                 self.logger.error("Error updating database %s", str(e))
+            if error_text:
+                return False, error_text
+            new_refresh_task = {"status": "enqueued",
+                                "id": task_id,
+                                "name": "get-vm",
+                                "vim_id": vm_id,
+                                "vim_info": {"interfaces":[]} }
+            self._insert_refresh(new_refresh_task, time.time())
             return True, vm_id
         except vimconn.vimconnException as e:
             self.logger.error("Error creating VM, task=%s: %s", str(task_id), str(e))
@@ -228,12 +416,13 @@ class vim_thread(threading.Thread):
                     self.db.update_rows("instance_vms",
                                         UPDATE={"error_msg": self._format_vim_error_msg(str(e)), "status": "VIM_ERROR"},
                                         WHERE={"vim_vm_id": task_id})
-            except db_base_Exception as e:
-                self.logger.error("Error updating database %s", str(e))
+            except db_base_Exception as edb:
+                self.logger.error("Error updating database %s", str(edb))
             return False, str(e)
 
     def del_vm(self, task):
-        vm_id = task["params"]
+        vm_id = task["params"][0]
+        interfaces = task["params"][1]
         if is_task_id(vm_id):
             try:
                 task_create = task["depends"][vm_id]
@@ -241,11 +430,21 @@ class vim_thread(threading.Thread):
                     if task_create["status"] == "error":
                         return True, "VM was not created. It has error: " + str(task_create["result"])
                     elif task_create["status"] == "enqueued" or task_create["status"] == "processing":
-                        return False, "Cannot delete VM because still creating"
+                        return False, "Cannot delete VM vim_id={} because still creating".format(vm_id)
                     vm_id = task_create["result"]
             except Exception as e:
                 return False, "Error trying to get task_id='{}':".format(vm_id, str(e))
         try:
+            self._remove_refresh("get-vm", vm_id)
+            for iface in interfaces:
+                if iface.get("sdn_port_id"):
+                    try:
+                        self.ovim.delete_port(iface["sdn_port_id"])
+                    except ovimException as e:
+                        self.logger.error("ovimException deleting external_port={} at VM vim_id={} deletion ".format(
+                            iface["sdn_port_id"], vm_id) + str(e), exc_info=True)
+                        # TODO Set error_msg at instance_nets
+
             return True, self.vim.delete_vminstance(vm_id)
         except vimconn.vimconnException as e:
             return False, str(e)

@@ -1094,9 +1094,9 @@ class vimconnector(vimconn.vimconnector):
                         vim_net_id:       #network id where this interface is connected
                         vim_interface_id: #interface/port VIM id
                         ip_address:       #null, or text with IPv4, IPv6 address
-                        physical_compute: #identification of compute node where PF,VF interface is allocated
-                        physical_pci:     #PCI address of the NIC that hosts the PF,VF
-                        physical_vlan:    #physical VLAN used for VF
+                        compute_node:     #identification of compute node where PF,VF interface is allocated
+                        pci:              #PCI address of the NIC that hosts the PF,VF
+                        vlan:             #physical VLAN used for VF
         '''
         vm_dict={}
         self.logger.debug("refresh_vms status: Getting tenant VM instance information from VIM")
@@ -1129,19 +1129,19 @@ class vimconnector(vimconn.vimconnector):
                         interface["mac_address"] = port.get("mac_address")
                         interface["vim_net_id"] = port["network_id"]
                         interface["vim_interface_id"] = port["id"]
-                        interface["physical_compute"] = vm_vim['OS-EXT-SRV-ATTR:host']
-                        interface["physical_pci"] = None
-                        # TODO: At the moment sr-iov pci addresses are converted to PF pci addresses by setting the slot to 0x00
-                        # TODO: This is just a workaround valid for niantinc. Find a better way to do so
-                        if 'pci_slot' in port['binding:profile']:
-                            pci = list(port['binding:profile']['pci_slot'])
-                            pci[-4] = '0'
-                            pci[-3] = '0'
-                            interface["physical_pci"] = ''.join(pci)
-                        interface["physical_vlan"] = None
+                        interface["compute_node"] = vm_vim['OS-EXT-SRV-ATTR:host']
+                        interface["pci"] = None
+                        if port['binding:profile'].get('pci_slot'):
+                            # TODO: At the moment sr-iov pci addresses are converted to PF pci addresses by setting the slot to 0x00
+                            # TODO: This is just a workaround valid for niantinc. Find a better way to do so
+                            #   CHANGE DDDD:BB:SS.F to DDDD:BB:00.(F%2)   assuming there are 2 ports per nic
+                            pci = port['binding:profile']['pci_slot']
+                            # interface["pci"] = pci[:-4] + "00." + str(int(pci[-1]) % 2)
+                            interface["pci"] = pci
+                        interface["vlan"] = None
                         network = self.neutron.show_network(port["network_id"])
                         if network['network'].get('provider:network_type') == 'vlan':
-                            interface["physical_vlan"] = network['network'].get('provider:segmentation_id')
+                            interface["vlan"] = network['network'].get('provider:segmentation_id')
                         ips=[]
                         #look for floating ip address
                         floating_ip_dict = self.neutron.list_floatingips(port_id=port["id"])
