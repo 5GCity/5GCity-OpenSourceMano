@@ -1,11 +1,34 @@
 #!/usr/bin/env python
 
-from distutils.core import setup
+from setuptools import setup
 #import glob
+
+requirements = [
+    "PyYAML",
+    "bottle",
+    "mysqldb",
+    "jsonschema",
+    "paramiko",
+    "argcomplete",
+    "requests",
+    "logutils",
+    "pip",
+    "novaclient",
+    "keystoneclient",
+    "glanceclient",
+    "neutronclient",
+    "cinderclient",
+    "boto",
+    "pyvcloud",
+    "progressbar",
+    "prettytable",
+    "pyvmomi",
+]
 
 setup(name='osm-ro',
       version='1.0',
       description='OSM Resource Orchestrator',
+      long_description=open('README.rst').read(),
       author='ETSI OSM',
       author_email='alfonso.tiernosepulveda@telefonica.com',
       maintainer='garciadeblas',
@@ -31,6 +54,7 @@ setup(name='osm-ro',
                   'vmwarecli',
                   'vmwarerecli',
                  ],
+     install_requires=requirements,
      #package_data={'': ['vnfs', 'scenarios', 'instance-scenarios', 'database_utils/mano_db_structure.sql']}
      data_files=[('/etc/osm/', ['openmanod.cfg']),
                  ('/etc/systemd/system/', ['openmano.service']),
