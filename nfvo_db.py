@@ -755,6 +755,8 @@ class nfvo_db(db_base.db_base):
                             INSERT_={'vim_net_id': vim_id, 'created': net.get('created', False), 'instance_scenario_id':instance_uuid } #,  'type': net['type']
                             INSERT_['datacenter_id'] = datacenter_site_id 
                             INSERT_['datacenter_tenant_id'] = scenarioDict["datacenter2tenant"][datacenter_site_id]
+                            if not net.get('created', False):
+                                INSERT_['status'] = "ACTIVE"
                             if sce_net_id:
                                 INSERT_['sce_net_id'] = sce_net_id
                             created_time += 0.00001
