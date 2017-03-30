@@ -49,13 +49,14 @@ global test_directory
 global scenario_test_folder
 global test_image_name
 global management_network
+global manual
 
 def check_instance_scenario_active(uuid):
     instance = client.get_instance(uuid=uuid)
 
     for net in instance['nets']:
         status = net['status']
-        if status != 'ACTIVE':
+        if status != 'BUILD':
             return (False, status)
 
     for vnf in instance['vnfs']:
@@ -456,6 +457,10 @@ class descriptor_based_scenario_test(unittest.TestCase):
                                                            scenario_test_folder)
         self.__class__.test_index += 1
 
+        if manual:
+            raw_input('Scenario has been deployed. Perform manual check and press any key to resume')
+            return
+
         keep_waiting = 50
         instance_active = False
         while(keep_waiting):
@@ -518,6 +523,7 @@ if __name__=="__main__":
                       default=default_logger_file)
     parser.add_option('--list-tests', help='List all available tests', dest='list-tests', action="store_true",
                       default=False)
+    parser.add_option('-m', '--manual-check', help='Pause execution once deployed to allow manual checking of the deployed instance scenario', dest='manual', action="store_true", default=False)
     parser.add_option('--test', '--tests', help='Specify the tests to run', dest='tests', default=None)
 
     #Mandatory arguments
@@ -593,6 +599,7 @@ if __name__=="__main__":
     # set test image name and management network
     test_image_name = options.__dict__['image-name']
     management_network = options.__dict__['mgmt-net']
+    manual = options.__dict__['manual']
 
     #Create the list of tests to be run
     descriptor_based_tests = []
