@@ -178,10 +178,6 @@ class vimconnector(vimconn.vimconnector):
         self.nsx_manager = None
         self.nsx_user = None
         self.nsx_password = None
-        self.vcenter_ip = None
-        self.vcenter_port = None
-        self.vcenter_user = None
-        self.vcenter_password = None
 
         if tenant_name is not None:
             orgnameandtenant = tenant_name.split(":")
@@ -1016,6 +1012,25 @@ class vimconnector(vimconn.vimconnector):
                 return catalog.name
         return None
 
+    def get_catalog_obj(self, catalog_uuid=None, catalogs=None):
+        """  Method check catalog and return catalog name lookup done by catalog UUID.
+
+        Args
+            catalog_name: catalog name as string
+            catalogs:  list of catalogs.
+
+        Return: catalogs name or None
+        """
+
+        if not self.validate_uuid4(uuid_string=catalog_uuid):
+            return None
+
+        for catalog in catalogs:
+            catalog_id = catalog.get_id().split(":")[3]
+            if catalog_id == catalog_uuid:
+                return catalog
+        return None
+
     def get_image_id_from_path(self, path=None, progress=False):
         """  Method upload OVF image to vCloud director.
 
@@ -1241,8 +1256,8 @@ class vimconnector(vimconn.vimconnector):
         """
 
         self.logger.info("Creating new instance for entry {}".format(name))
-        self.logger.debug("desc {} boot {} image_id: {} flavor_id: {} net_list: {} cloud_config {}".format(
-                                    description, start, image_id, flavor_id, net_list, cloud_config))
+        self.logger.debug("desc {} boot {} image_id: {} flavor_id: {} net_list: {} cloud_config {} disk_list {}".format(
+                                    description, start, image_id, flavor_id, net_list, cloud_config, disk_list))
         vca = self.connect()
         if not vca:
             raise vimconn.vimconnConnectionException("self.connect() is failed.")
@@ -1387,12 +1402,33 @@ class vimconnector(vimconn.vimconnector):
                                                             pci_devices_info,
                                                             vmname_andid)
                                  )
-        # add vm disk
+        # Modify vm disk
         if vm_disk:
             #Assuming there is only one disk in ovf and fast provisioning in organization vDC is disabled
             result = self.modify_vm_disk(vapp_uuid, vm_disk)
             if result :
                 self.logger.debug("Modified Disk size of VM {} ".format(vmname_andid))
+
+        #Add new or existing disks to vApp
+        if disk_list:
+            added_existing_disk = False
+            for disk in disk_list:
+                if "image_id" in disk and disk["image_id"] is not None:
+                    self.logger.debug("Adding existing disk from image {} to vm {} ".format(
+                                                                    disk["image_id"] , vapp_uuid))
+                    self.add_existing_disk(catalogs=catalogs,
+                                           image_id=disk["image_id"],
+                                           size = disk["size"],
+                                           template_name=templateName,
+                                           vapp_uuid=vapp_uuid
+                                           )
+                    added_existing_disk = True
+                else:
+                    #Wait till added existing disk gets reflected into vCD database/API
+                    if added_existing_disk:
+                        time.sleep(5)
+                        added_existing_disk = False
+                    self.add_new_disk(vca, vapp_uuid, disk['size'])
 
         if numas:
             # Assigning numa affinity setting
@@ -2655,64 +2691,36 @@ class vimconnector(vimconn.vimconnector):
                 url_list = [vca.host, '/api/admin/network/', parent_network_uuid]
                 add_vdc_rest_url = ''.join(url_list)
 
-            if net_type=='ptp':
-                fence_mode="isolated"
-                isshared='false'
-                is_inherited='false'
-                data = """ <OrgVdcNetwork name="{0:s}" xmlns="http://www.vmware.com/vcloud/v1.5">
-                                <Description>Openmano created</Description>
-                                        <Configuration>
-                                            <IpScopes>
-                                                <IpScope>
-                                                    <IsInherited>{1:s}</IsInherited>
-                                                    <Gateway>{2:s}</Gateway>
-                                                    <Netmask>{3:s}</Netmask>
-                                                    <Dns1>{4:s}</Dns1>
-                                                    <IsEnabled>{5:s}</IsEnabled>
-                                                    <IpRanges>
-                                                        <IpRange>
-                                                            <StartAddress>{6:s}</StartAddress>
-                                                            <EndAddress>{7:s}</EndAddress>
-                                                        </IpRange>
-                                                    </IpRanges>
-                                                </IpScope>
-                                            </IpScopes>
-                                            <FenceMode>{8:s}</FenceMode>
-                                        </Configuration>
-                                        <IsShared>{9:s}</IsShared>
-                            </OrgVdcNetwork> """.format(escape(network_name), is_inherited, gateway_address,
-                                                        subnet_address, dns_address, dhcp_enabled,
-                                                        dhcp_start_address, dhcp_end_address, fence_mode, isshared)
-
-            else:
-                fence_mode="bridged"
-                is_inherited='false'
-                data = """ <OrgVdcNetwork name="{0:s}" xmlns="http://www.vmware.com/vcloud/v1.5">
-                                <Description>Openmano created</Description>
-                                        <Configuration>
-                                            <IpScopes>
-                                                <IpScope>
-                                                    <IsInherited>{1:s}</IsInherited>
-                                                    <Gateway>{2:s}</Gateway>
-                                                    <Netmask>{3:s}</Netmask>
-                                                    <Dns1>{4:s}</Dns1>
-                                                    <IsEnabled>{5:s}</IsEnabled>
-                                                    <IpRanges>
-                                                        <IpRange>
-                                                            <StartAddress>{6:s}</StartAddress>
-                                                            <EndAddress>{7:s}</EndAddress>
-                                                        </IpRange>
-                                                    </IpRanges>
-                                                </IpScope>
-                                            </IpScopes>
-                                            <ParentNetwork href="{8:s}"/>
-                                            <FenceMode>{9:s}</FenceMode>
-                                        </Configuration>
-                                        <IsShared>{10:s}</IsShared>
-                            </OrgVdcNetwork> """.format(escape(network_name), is_inherited, gateway_address,
-                                                        subnet_address, dns_address, dhcp_enabled,
-                                                        dhcp_start_address, dhcp_end_address, available_networks,
-                                                        fence_mode, isshared)
+            #Creating all networks as Direct Org VDC type networks.
+            #Unused in case of Underlay (data/ptp) network interface.
+            fence_mode="bridged"
+            is_inherited='false'
+            data = """ <OrgVdcNetwork name="{0:s}" xmlns="http://www.vmware.com/vcloud/v1.5">
+                            <Description>Openmano created</Description>
+                                    <Configuration>
+                                        <IpScopes>
+                                            <IpScope>
+                                                <IsInherited>{1:s}</IsInherited>
+                                                <Gateway>{2:s}</Gateway>
+                                                <Netmask>{3:s}</Netmask>
+                                                <Dns1>{4:s}</Dns1>
+                                                <IsEnabled>{5:s}</IsEnabled>
+                                                <IpRanges>
+                                                    <IpRange>
+                                                        <StartAddress>{6:s}</StartAddress>
+                                                        <EndAddress>{7:s}</EndAddress>
+                                                    </IpRange>
+                                                </IpRanges>
+                                            </IpScope>
+                                        </IpScopes>
+                                        <ParentNetwork href="{8:s}"/>
+                                        <FenceMode>{9:s}</FenceMode>
+                                    </Configuration>
+                                    <IsShared>{10:s}</IsShared>
+                        </OrgVdcNetwork> """.format(escape(network_name), is_inherited, gateway_address,
+                                                    subnet_address, dns_address, dhcp_enabled,
+                                                    dhcp_start_address, dhcp_end_address, available_networks,
+                                                    fence_mode, isshared)
 
             headers = vca.vcloud_session.get_vcloud_headers()
             headers['Content-Type'] = 'application/vnd.vmware.vcloud.orgVdcNetwork+xml'
@@ -3236,33 +3244,16 @@ class vimconnector(vimconn.vimconnector):
                 vcenter_conect object
         """
         vm_obj = None
-        vcenter_conect = None
         self.logger.info("Add pci devices {} into vApp {}".format(pci_devices , vapp_uuid))
-        try:
-            vm_vcenter_info = self.get_vm_vcenter_info(vapp_uuid)
-        except Exception as exp:
-            self.logger.error("Error occurred while getting vCenter infromationn"\
-                             " for VM : {}".format(exp))
-            raise vimconn.vimconnException(message=exp)
+        vcenter_conect, content = self.get_vcenter_content()
+        vm_moref_id = self.get_vm_moref_id(vapp_uuid)
 
-        if vm_vcenter_info["vm_moref_id"]:
-            context = None
-            if hasattr(ssl, '_create_unverified_context'):
-                context = ssl._create_unverified_context()
+        if vm_moref_id:
             try:
                 no_of_pci_devices = len(pci_devices)
                 if no_of_pci_devices > 0:
-                    vcenter_conect = SmartConnect(
-                                            host=vm_vcenter_info["vm_vcenter_ip"],
-                                            user=vm_vcenter_info["vm_vcenter_user"],
-                                            pwd=vm_vcenter_info["vm_vcenter_password"],
-                                            port=int(vm_vcenter_info["vm_vcenter_port"]),
-                                            sslContext=context)
-                    atexit.register(Disconnect, vcenter_conect)
-                    content = vcenter_conect.RetrieveContent()
-
                     #Get VM and its host
-                    host_obj, vm_obj = self.get_vm_obj(content ,vm_vcenter_info["vm_moref_id"])
+                    host_obj, vm_obj = self.get_vm_obj(content, vm_moref_id)
                     self.logger.info("VM {} is currently on host {}".format(vm_obj, host_obj))
                     if host_obj and vm_obj:
                         #get PCI devies from host on which vapp is currently installed
@@ -3531,7 +3522,7 @@ class vimconnector(vimconn.vimconnector):
                                                                              exp))
         return task
 
-    def get_vm_vcenter_info(self , vapp_uuid):
+    def get_vm_vcenter_info(self):
         """
         Method to get details of vCenter and vm
 
@@ -3564,16 +3555,8 @@ class vimconnector(vimconn.vimconnector):
         else:
             raise vimconn.vimconnException(message="vCenter user password is not provided."\
                                            " Please provide vCenter user password while attaching datacenter to tenant in --config")
-        try:
-            vm_details = self.get_vapp_details_rest(vapp_uuid, need_admin_access=True)
-            if vm_details and "vm_vcenter_info" in vm_details:
-                vm_vcenter_info["vm_moref_id"] = vm_details["vm_vcenter_info"].get("vm_moref_id", None)
 
-            return vm_vcenter_info
-
-        except Exception as exp:
-            self.logger.error("Error occurred while getting vCenter infromationn"\
-                             " for VM : {}".format(exp))
+        return vm_vcenter_info
 
 
     def get_vm_pci_details(self, vmuuid):
@@ -3589,23 +3572,12 @@ class vimconnector(vimconn.vimconnector):
         """
         vm_pci_devices_info = {}
         try:
-            vm_vcenter_info = self.get_vm_vcenter_info(vmuuid)
-            if vm_vcenter_info["vm_moref_id"]:
-                context = None
-                if hasattr(ssl, '_create_unverified_context'):
-                    context = ssl._create_unverified_context()
-                vcenter_conect = SmartConnect(host=vm_vcenter_info["vm_vcenter_ip"],
-                                        user=vm_vcenter_info["vm_vcenter_user"],
-                                        pwd=vm_vcenter_info["vm_vcenter_password"],
-                                        port=int(vm_vcenter_info["vm_vcenter_port"]),
-                                        sslContext=context
-                                    )
-                atexit.register(Disconnect, vcenter_conect)
-                content = vcenter_conect.RetrieveContent()
-
+            vcenter_conect, content = self.get_vcenter_content()
+            vm_moref_id = self.get_vm_moref_id(vmuuid)
+            if vm_moref_id:
                 #Get VM and its host
                 if content:
-                    host_obj, vm_obj = self.get_vm_obj(content ,vm_vcenter_info["vm_moref_id"])
+                    host_obj, vm_obj = self.get_vm_obj(content, vm_moref_id)
                     if host_obj and vm_obj:
                         vm_pci_devices_info["host_name"]= host_obj.name
                         vm_pci_devices_info["host_ip"]= host_obj.config.network.vnic[0].spec.ip.ipAddress
@@ -3943,3 +3915,407 @@ class vimconnector(vimconn.vimconnector):
                                                                        "ssh-key")
             raise vimconn.vimconnException("cloud_init : Error {} failed to inject "\
                                                                "ssh-key".format(exp))
+
+
+    def add_new_disk(self, vca, vapp_uuid, disk_size):
+        """
+            Method to create an empty vm disk
+
+            Args:
+                vapp_uuid - is vapp identifier.
+                disk_size - size of disk to be created in GB
+
+            Returns:
+                None
+        """
+        status = False
+        vm_details = None
+        try:
+            #Disk size in GB, convert it into MB
+            if disk_size is not None:
+                disk_size_mb = int(disk_size) * 1024
+                vm_details = self.get_vapp_details_rest(vapp_uuid)
+
+            if vm_details and "vm_virtual_hardware" in vm_details:
+                self.logger.info("Adding disk to VM: {} disk size:{}GB".format(vm_details["name"], disk_size))
+                disk_href = vm_details["vm_virtual_hardware"]["disk_edit_href"]
+                status = self.add_new_disk_rest(vca, disk_href, disk_size_mb)
+
+        except Exception as exp:
+            msg = "Error occurred while creating new disk {}.".format(exp)
+            self.rollback_newvm(vapp_uuid, msg)
+
+        if status:
+            self.logger.info("Added new disk to VM: {} disk size:{}GB".format(vm_details["name"], disk_size))
+        else:
+            #If failed to add disk, delete VM
+            msg = "add_new_disk: Failed to add new disk to {}".format(vm_details["name"])
+            self.rollback_newvm(vapp_uuid, msg)
+
+
+    def add_new_disk_rest(self, vca, disk_href, disk_size_mb):
+        """
+        Retrives vApp Disks section & add new empty disk
+
+        Args:
+            disk_href: Disk section href to addd disk
+            disk_size_mb: Disk size in MB
+
+            Returns: Status of add new disk task
+        """
+        status = False
+        if vca.vcloud_session and vca.vcloud_session.organization:
+            response = Http.get(url=disk_href,
+                                headers=vca.vcloud_session.get_vcloud_headers(),
+                                verify=vca.verify,
+                                logger=vca.logger)
+
+        if response.status_code != requests.codes.ok:
+            self.logger.error("add_new_disk_rest: GET REST API call {} failed. Return status code {}"
+                              .format(disk_href, response.status_code))
+            return status
+        try:
+            #Find but type & max of instance IDs assigned to disks
+            lxmlroot_respond = lxmlElementTree.fromstring(response.content)
+            namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.iteritems() if prefix}
+            namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
+            instance_id = 0
+            for item in lxmlroot_respond.iterfind('xmlns:Item',namespaces):
+                if item.find("rasd:Description",namespaces).text == "Hard disk":
+                    inst_id = int(item.find("rasd:InstanceID" ,namespaces).text)
+                    if inst_id > instance_id:
+                        instance_id = inst_id
+                        disk_item = item.find("rasd:HostResource" ,namespaces)
+                        bus_subtype = disk_item.attrib["{"+namespaces['xmlns']+"}busSubType"]
+                        bus_type = disk_item.attrib["{"+namespaces['xmlns']+"}busType"]
+
+            instance_id = instance_id + 1
+            new_item =   """<Item>
+                                <rasd:Description>Hard disk</rasd:Description>
+                                <rasd:ElementName>New disk</rasd:ElementName>
+                                <rasd:HostResource
+                                    xmlns:vcloud="http://www.vmware.com/vcloud/v1.5"
+                                    vcloud:capacity="{}"
+                                    vcloud:busSubType="{}"
+                                    vcloud:busType="{}"></rasd:HostResource>
+                                <rasd:InstanceID>{}</rasd:InstanceID>
+                                <rasd:ResourceType>17</rasd:ResourceType>
+                            </Item>""".format(disk_size_mb, bus_subtype, bus_type, instance_id)
+
+            new_data = response.content
+            #Add new item at the bottom
+            new_data = new_data.replace('</Item>\n</RasdItemsList>', '</Item>\n{}\n</RasdItemsList>'.format(new_item))
+
+            # Send PUT request to modify virtual hardware section with new disk
+            headers = vca.vcloud_session.get_vcloud_headers()
+            headers['Content-Type'] = 'application/vnd.vmware.vcloud.rasdItemsList+xml; charset=ISO-8859-1'
+
+            response = Http.put(url=disk_href,
+                                data=new_data,
+                                headers=headers,
+                                verify=vca.verify, logger=self.logger)
+
+            if response.status_code != 202:
+                self.logger.error("PUT REST API call {} failed. Return status code {}. Response Content:{}"
+                                  .format(disk_href, response.status_code, response.content))
+            else:
+                add_disk_task = taskType.parseString(response.content, True)
+                if type(add_disk_task) is GenericTask:
+                    status = vca.block_until_completed(add_disk_task)
+                    if not status:
+                        self.logger.error("Add new disk REST task failed to add {} MB disk".format(disk_size_mb))
+
+        except Exception as exp:
+            self.logger.error("Error occurred calling rest api for creating new disk {}".format(exp))
+
+        return status
+
+
+    def add_existing_disk(self, catalogs=None, image_id=None, size=None, template_name=None, vapp_uuid=None):
+        """
+            Method to add existing disk to vm
+            Args :
+                catalogs - List of VDC catalogs
+                image_id - Catalog ID
+                template_name - Name of template in catalog
+                vapp_uuid - UUID of vApp
+            Returns:
+                None
+        """
+        disk_info = None
+        vcenter_conect, content = self.get_vcenter_content()
+        #find moref-id of vm in image
+        catalog_vm_info = self.get_vapp_template_details(catalogs=catalogs,
+                                                         image_id=image_id,
+                                                        )
+
+        if catalog_vm_info and "vm_vcenter_info" in catalog_vm_info:
+            if "vm_moref_id" in catalog_vm_info["vm_vcenter_info"]:
+                catalog_vm_moref_id = catalog_vm_info["vm_vcenter_info"].get("vm_moref_id", None)
+                if catalog_vm_moref_id:
+                    self.logger.info("Moref_id of VM in catalog : {}" .format(catalog_vm_moref_id))
+                    host, catalog_vm_obj = self.get_vm_obj(content, catalog_vm_moref_id)
+                    if catalog_vm_obj:
+                        #find existing disk
+                        disk_info = self.find_disk(catalog_vm_obj)
+                    else:
+                        exp_msg = "No VM with image id {} found".format(image_id)
+                        self.rollback_newvm(vapp_uuid, exp_msg, exp_type="NotFound")
+        else:
+            exp_msg = "No Image found with image ID {} ".format(image_id)
+            self.rollback_newvm(vapp_uuid, exp_msg, exp_type="NotFound")
+
+        if disk_info:
+            self.logger.info("Existing disk_info : {}".format(disk_info))
+            #get VM
+            vm_moref_id = self.get_vm_moref_id(vapp_uuid)
+            host, vm_obj = self.get_vm_obj(content, vm_moref_id)
+            if vm_obj:
+                status = self.add_disk(vcenter_conect=vcenter_conect,
+                                       vm=vm_obj,
+                                       disk_info=disk_info,
+                                       size=size,
+                                       vapp_uuid=vapp_uuid
+                                       )
+            if status:
+                self.logger.info("Disk from image id {} added to {}".format(image_id,
+                                                                            vm_obj.config.name)
+                                 )
+        else:
+            msg = "No disk found with image id {} to add in VM {}".format(
+                                                            image_id,
+                                                            vm_obj.config.name)
+            self.rollback_newvm(vapp_uuid, msg, exp_type="NotFound")
+
+
+    def find_disk(self, vm_obj):
+        """
+         Method to find details of existing disk in VM
+            Args :
+                vm_obj - vCenter object of VM
+                image_id - Catalog ID
+            Returns:
+                disk_info : dict of disk details
+        """
+        disk_info = {}
+        if vm_obj:
+            try:
+                devices = vm_obj.config.hardware.device
+                for device in devices:
+                    if type(device) is vim.vm.device.VirtualDisk:
+                        if isinstance(device.backing,vim.vm.device.VirtualDisk.FlatVer2BackingInfo) and hasattr(device.backing, 'fileName'):
+                            disk_info["full_path"] = device.backing.fileName
+                            disk_info["datastore"] = device.backing.datastore
+                            disk_info["capacityKB"] = device.capacityInKB
+                            break
+            except Exception as exp:
+                self.logger.error("find_disk() : exception occurred while "\
+                                  "getting existing disk details :{}".format(exp))
+        return disk_info
+
+
+    def add_disk(self, vcenter_conect=None, vm=None, size=None, vapp_uuid=None, disk_info={}):
+        """
+         Method to add existing disk in VM
+            Args :
+                vcenter_conect - vCenter content object
+                vm - vCenter vm object
+                disk_info : dict of disk details
+            Returns:
+                status : status of add disk task
+        """
+        datastore = disk_info["datastore"] if "datastore" in disk_info else None
+        fullpath = disk_info["full_path"] if "full_path" in disk_info else None
+        capacityKB = disk_info["capacityKB"] if "capacityKB" in disk_info else None
+        if size is not None:
+            #Convert size from GB to KB
+            sizeKB = int(size) * 1024 * 1024
+            #compare size of existing disk and user given size.Assign whicherver is greater
+            self.logger.info("Add Existing disk : sizeKB {} , capacityKB {}".format(
+                                                                    sizeKB, capacityKB))
+            if sizeKB > capacityKB:
+                capacityKB = sizeKB
+
+        if datastore and fullpath and capacityKB:
+            try:
+                spec = vim.vm.ConfigSpec()
+                # get all disks on a VM, set unit_number to the next available
+                unit_number = 0
+                for dev in vm.config.hardware.device:
+                    if hasattr(dev.backing, 'fileName'):
+                        unit_number = int(dev.unitNumber) + 1
+                        # unit_number 7 reserved for scsi controller
+                        if unit_number == 7:
+                            unit_number += 1
+                    if isinstance(dev, vim.vm.device.VirtualDisk):
+                        #vim.vm.device.VirtualSCSIController
+                        controller_key = dev.controllerKey
+
+                self.logger.info("Add Existing disk : unit number {} , controller key {}".format(
+                                                                    unit_number, controller_key))
+                # add disk here
+                dev_changes = []
+                disk_spec = vim.vm.device.VirtualDeviceSpec()
+                disk_spec.operation = vim.vm.device.VirtualDeviceSpec.Operation.add
+                disk_spec.device = vim.vm.device.VirtualDisk()
+                disk_spec.device.backing = \
+                    vim.vm.device.VirtualDisk.FlatVer2BackingInfo()
+                disk_spec.device.backing.thinProvisioned = True
+                disk_spec.device.backing.diskMode = 'persistent'
+                disk_spec.device.backing.datastore  = datastore
+                disk_spec.device.backing.fileName  = fullpath
+
+                disk_spec.device.unitNumber = unit_number
+                disk_spec.device.capacityInKB = capacityKB
+                disk_spec.device.controllerKey = controller_key
+                dev_changes.append(disk_spec)
+                spec.deviceChange = dev_changes
+                task = vm.ReconfigVM_Task(spec=spec)
+                status = self.wait_for_vcenter_task(task, vcenter_conect)
+                return status
+            except Exception as exp:
+                exp_msg = "add_disk() : exception {} occurred while adding disk "\
+                          "{} to vm {}".format(exp,
+                                               fullpath,
+                                               vm.config.name)
+                self.rollback_newvm(vapp_uuid, exp_msg)
+        else:
+            msg = "add_disk() : Can not add disk to VM with disk info {} ".format(disk_info)
+            self.rollback_newvm(vapp_uuid, msg)
+
+
+    def get_vcenter_content(self):
+        """
+         Get the vsphere content object
+        """
+        try:
+            vm_vcenter_info = self.get_vm_vcenter_info()
+        except Exception as exp:
+            self.logger.error("Error occurred while getting vCenter infromationn"\
+                             " for VM : {}".format(exp))
+            raise vimconn.vimconnException(message=exp)
+
+        context = None
+        if hasattr(ssl, '_create_unverified_context'):
+            context = ssl._create_unverified_context()
+
+        vcenter_conect = SmartConnect(
+                    host=vm_vcenter_info["vm_vcenter_ip"],
+                    user=vm_vcenter_info["vm_vcenter_user"],
+                    pwd=vm_vcenter_info["vm_vcenter_password"],
+                    port=int(vm_vcenter_info["vm_vcenter_port"]),
+                    sslContext=context
+                )
+        atexit.register(Disconnect, vcenter_conect)
+        content = vcenter_conect.RetrieveContent()
+        return vcenter_conect, content
+
+
+    def get_vm_moref_id(self, vapp_uuid):
+        """
+        Get the moref_id of given VM
+        """
+        try:
+            if vapp_uuid:
+                vm_details = self.get_vapp_details_rest(vapp_uuid, need_admin_access=True)
+                if vm_details and "vm_vcenter_info" in vm_details:
+                    vm_moref_id = vm_details["vm_vcenter_info"].get("vm_moref_id", None)
+
+            return vm_moref_id
+
+        except Exception as exp:
+            self.logger.error("Error occurred while getting VM moref ID "\
+                             " for VM : {}".format(exp))
+            return None
+
+
+    def get_vapp_template_details(self, catalogs=None, image_id=None , template_name=None):
+        """
+            Method to get vApp template details
+                Args :
+                    catalogs - list of VDC catalogs
+                    image_id - Catalog ID to find
+                    template_name : template name in catalog
+                Returns:
+                    parsed_respond : dict of vApp tempalte details
+        """
+        parsed_response = {}
+
+        vca = self.connect_as_admin()
+        if not vca:
+            raise vimconn.vimconnConnectionException("self.connect() is failed")
+
+        try:
+            catalog = self.get_catalog_obj(image_id, catalogs)
+            if catalog:
+                template_name = self.get_catalogbyid(image_id, catalogs)
+                catalog_items = filter(lambda catalogItemRef: catalogItemRef.get_name() == template_name, catalog.get_CatalogItems().get_CatalogItem())
+                if len(catalog_items) == 1:
+                    response = Http.get(catalog_items[0].get_href(),
+                                        headers=vca.vcloud_session.get_vcloud_headers(),
+                                        verify=vca.verify,
+                                        logger=vca.logger)
+                    catalogItem = XmlElementTree.fromstring(response.content)
+                    entity = [child for child in catalogItem if child.get("type") == "application/vnd.vmware.vcloud.vAppTemplate+xml"][0]
+                    vapp_tempalte_href = entity.get("href")
+                    #get vapp details and parse moref id
+
+                    namespaces = {"vssd":"http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData" ,
+                                  'ovf': 'http://schemas.dmtf.org/ovf/envelope/1',
+                                  'vmw': 'http://www.vmware.com/schema/ovf',
+                                  'vm': 'http://www.vmware.com/vcloud/v1.5',
+                                  'rasd':"http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData",
+                                  'vmext':"http://www.vmware.com/vcloud/extension/v1.5",
+                                  'xmlns':"http://www.vmware.com/vcloud/v1.5"
+                                }
+
+                    if vca.vcloud_session and vca.vcloud_session.organization:
+                        response = Http.get(url=vapp_tempalte_href,
+                                            headers=vca.vcloud_session.get_vcloud_headers(),
+                                            verify=vca.verify,
+                                            logger=vca.logger
+                                            )
+
+                        if response.status_code != requests.codes.ok:
+                            self.logger.debug("REST API call {} failed. Return status code {}".format(
+                                                vapp_tempalte_href, response.status_code))
+
+                        else:
+                            xmlroot_respond = XmlElementTree.fromstring(response.content)
+                            children_section = xmlroot_respond.find('vm:Children/', namespaces)
+                            if children_section is not None:
+                                vCloud_extension_section = children_section.find('xmlns:VCloudExtension', namespaces)
+                            if vCloud_extension_section is not None:
+                                vm_vcenter_info = {}
+                                vim_info = vCloud_extension_section.find('vmext:VmVimInfo', namespaces)
+                                vmext = vim_info.find('vmext:VmVimObjectRef', namespaces)
+                                if vmext is not None:
+                                    vm_vcenter_info["vm_moref_id"] = vmext.find('vmext:MoRef', namespaces).text
+                                parsed_response["vm_vcenter_info"]= vm_vcenter_info
+
+        except Exception as exp :
+            self.logger.info("Error occurred calling rest api for getting vApp details {}".format(exp))
+
+        return parsed_response
+
+
+    def rollback_newvm(self, vapp_uuid, msg , exp_type="Genric"):
+        """
+            Method to delete vApp
+                Args :
+                    vapp_uuid - vApp UUID
+                    msg - Error message to be logged
+                    exp_type : Exception type
+                Returns:
+                    None
+        """
+        if vapp_uuid:
+            status = self.delete_vminstance(vapp_uuid)
+        else:
+            msg = "No vApp ID"
+        self.logger.error(msg)
+        if exp_type == "Genric":
+            raise vimconn.vimconnException(msg)
+        elif exp_type == "NotFound":
+            raise vimconn.vimconnNotFoundException(message=msg)
+
