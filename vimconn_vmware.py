@@ -3640,9 +3640,19 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnConnectionException("Failed to connect vCloud director")
 
         try:
+            ip_address = None
             floating_ip = False
             if 'floating_ip' in net: floating_ip = net['floating_ip']
-            allocation_mode = "POOL" if floating_ip else "DHCP"
+
+            # Stub for ip_address feature
+            if 'ip_address' in net: ip_address = net['ip_address']
+
+            if floating_ip:
+                allocation_mode = "POOL"
+            elif ip_address:
+                allocation_mode = "MANUAL"
+            else:
+                allocation_mode = "DHCP"
 
             if not nic_type:
                 for vms in vapp._get_vms():
@@ -3671,6 +3681,10 @@ class vimconnector(vimconn.vimconnector):
                                 <IpAddressAllocationMode>{}</IpAddressAllocationMode>
                                 </NetworkConnection>""".format(primary_nic_index, network_name, nicIndex,
                                                                                          allocation_mode)
+                        # Stub for ip_address feature
+                        if ip_address:
+                            ip_tag = '<IpAddress>{}</IpAddress>'.format(ip_address)
+                            item =  item.replace('</NetworkConnectionIndex>\n','</NetworkConnectionIndex>\n{}\n'.format(ip_tag))
 
                         data = data.replace('</ovf:Info>\n','</ovf:Info>\n{}\n'.format(item))
                     else:
@@ -3680,6 +3694,10 @@ class vimconnector(vimconn.vimconnector):
                                     <IpAddressAllocationMode>{}</IpAddressAllocationMode>
                                     </NetworkConnection>""".format(network_name, nicIndex,
                                                                           allocation_mode)
+                        # Stub for ip_address feature
+                        if ip_address:
+                            ip_tag = '<IpAddress>{}</IpAddress>'.format(ip_address)
+                            new_item =  new_item.replace('</NetworkConnectionIndex>\n','</NetworkConnectionIndex>\n{}\n'.format(ip_tag))
 
                         data = data.replace('</NetworkConnection>\n','</NetworkConnection>\n{}\n'.format(new_item))
 
@@ -3731,6 +3749,10 @@ class vimconnector(vimconn.vimconnector):
                                 <NetworkAdapterType>{}</NetworkAdapterType>
                                 </NetworkConnection>""".format(primary_nic_index, network_name, nicIndex,
                                                                                allocation_mode, nic_type)
+                        # Stub for ip_address feature
+                        if ip_address:
+                            ip_tag = '<IpAddress>{}</IpAddress>'.format(ip_address)
+                            item =  item.replace('</NetworkConnectionIndex>\n','</NetworkConnectionIndex>\n{}\n'.format(ip_tag))
 
                         data = data.replace('</ovf:Info>\n','</ovf:Info>\n{}\n'.format(item))
                     else:
@@ -3741,6 +3763,10 @@ class vimconnector(vimconn.vimconnector):
                                     <NetworkAdapterType>{}</NetworkAdapterType>
                                     </NetworkConnection>""".format(network_name, nicIndex,
                                                                 allocation_mode, nic_type)
+                        # Stub for ip_address feature
+                        if ip_address:
+                            ip_tag = '<IpAddress>{}</IpAddress>'.format(ip_address)
+                            new_item =  new_item.replace('</NetworkConnectionIndex>\n','</NetworkConnectionIndex>\n{}\n'.format(ip_tag))
 
                         data = data.replace('</NetworkConnection>\n','</NetworkConnection>\n{}\n'.format(new_item))
 
