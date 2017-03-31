@@ -70,6 +70,7 @@ function db_exists() {
 }
 
 GIT_URL=https://osm.etsi.org/gerrit/osm/RO.git
+GIT_OVIM_URL=https://osm.etsi.org/gerrit/osm/openvim.git
 DBUSER="root"
 DBPASSWD=""
 DBPASSWD_PARAM=""
@@ -207,8 +208,8 @@ echo '
 #################################################################
 #####               INSTALL REQUIRED PACKAGES               #####
 #################################################################'
-[ "$_DISTRO" == "Ubuntu" ] && install_packages "git screen wget mysql-server"
-[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "git screen wget mariadb mariadb-server"
+[ "$_DISTRO" == "Ubuntu" ] && install_packages "git make screen wget mysql-server"
+[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "git make screen wget mariadb mariadb-server"
 
 if [[ "$_DISTRO" == "Ubuntu" ]]
 then
@@ -287,8 +288,19 @@ if [[ -z $NOCLONE ]]; then
 #################################################################'
     su $SUDO_USER -c "git clone ${GIT_URL} ${OPENMANO_BASEFOLDER}"
     su $SUDO_USER -c "cp ${OPENMANO_BASEFOLDER}/.gitignore-common ${OPENMANO_BASEFOLDER}/.gitignore"
-    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C  ${OPENMANO_BASEFOLDER} checkout tags/v1.0.2"
+    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER} checkout tags/v1.1.0"
 fi
+
+echo '
+#################################################################
+#####        INSTALLING OVIM LIBRARY                        #####
+#################################################################'
+su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER} clone ${GIT_OVIM_URL} openvim"
+[[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER}/openvim checkout master"
+# Install debian dependencies before setup.py
+#[ "$_DISTRO" == "Ubuntu" ] && install_packages "git"
+#[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "git"
+make -C ${OPENMANO_BASEFOLDER}/openvim lite
 
 echo '
 #################################################################
@@ -328,8 +340,14 @@ echo '
 #################################################################
 #####        INIT DATABASE                                  #####
 #################################################################'
-su $SUDO_USER -c "${OPENMANO_BASEFOLDER}/database_utils/init_mano_db.sh -u mano -p manopw -d mano_db" || ! echo "Failed while initializing database" || exit 1
+su $SUDO_USER -c "${OPENMANO_BASEFOLDER}/database_utils/init_mano_db.sh -u mano -p manopw -d mano_db" || ! echo "Failed while initializing main database" || exit 1
 
+echo '
+#################################################################
+#####        CREATE AND INIT MANO_VIM DATABASE              #####
+#################################################################'
+# Install mano_vim_db after setup
+su $SUDO_USER -c "${OPENMANO_BASEFOLDER}/openvim/database_utils/install-db-server.sh -U $DBUSER ${DBPASSWD_PARAM/p/P} -u mano -p manopw -d mano_vim_db" || ! echo "Failed while installing ovim database" || exit 1
 
 if [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ]
 then
