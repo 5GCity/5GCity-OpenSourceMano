@@ -210,6 +210,14 @@ class vimconnector(vimconn.vimconnector):
         self.vcenter_user = config.get("vcenter_user", None)
         self.vcenter_password = config.get("vcenter_password", None)
 
+# ############# Stub code for SRIOV #################
+#         try:
+#             self.dvs_name = config['dv_switch_name']
+#         except KeyError:
+#             raise vimconn.vimconnException(message="Error: distributed virtaul switch name is empty in Config")
+#
+#         self.vlanID_range = config.get("vlanID_range", None)
+
         self.org_uuid = None
         self.vca = None
 
@@ -466,6 +474,12 @@ class vimconnector(vimconn.vimconnector):
         if shared:
             isshared = 'true'
 
+# ############# Stub code for SRIOV #################
+#         if net_type == "data" or net_type == "ptp":
+#             if self.config.get('dv_switch_name') == None:
+#                  raise vimconn.vimconnConflictException("You must provide 'dv_switch_name' at config value")
+#             network_uuid = self.create_dvPort_group(net_name)
+
         network_uuid = self.create_network(network_name=net_name, net_type=net_type,
                                            ip_profile=ip_profile, isshared=isshared)
         if network_uuid is not None:
@@ -641,6 +655,18 @@ class vimconnector(vimconn.vimconnector):
         vca = self.connect()
         if not vca:
             raise vimconn.vimconnConnectionException("self.connect() for tenant {} is failed.".format(self.tenant_name))
+
+        # ############# Stub code for SRIOV #################
+#         dvport_group = self.get_dvport_group(net_id)
+#         if dvport_group:
+#             #delete portgroup
+#             status = self.destroy_dvport_group(net_id)
+#             if status:
+#                 # Remove vlanID from persistent info
+#                 if net_id in self.persistent_info["used_vlanIDs"]:
+#                     del self.persistent_info["used_vlanIDs"][net_id]
+#
+#                 return net_id
 
         vcd_network = self.get_vcd_network(network_uuid=net_id)
         if vcd_network is not None and vcd_network:
@@ -1290,11 +1316,10 @@ class vimconnector(vimconn.vimconnector):
 
 
         # Set vCPU and Memory based on flavor.
-        #
         vm_cpus = None
         vm_memory = None
         vm_disk = None
-        pci_devices_info = []
+
         if flavor_id is not None:
             if flavor_id not in vimconnector.flavorlist:
                 raise vimconn.vimconnNotFoundException("new_vminstance(): Failed create vApp {}: "
@@ -1309,11 +1334,7 @@ class vimconnector(vimconn.vimconnector):
                     extended = flavor.get("extended", None)
                     if extended:
                         numas=extended.get("numas", None)
-                        if numas:
-                            for numa in numas:
-                                for interface in numa.get("interfaces",() ):
-                                    if interface["dedicated"].strip()=="yes":
-                                        pci_devices_info.append(interface)
+
                 except Exception as exp:
                     raise vimconn.vimconnException("Corrupted flavor. {}.Exception: {}".format(flavor_id, exp))
 
@@ -1382,10 +1403,19 @@ class vimconnector(vimconn.vimconnector):
                 "new_vminstance(): Failed to retrieve vApp {} after creation".format(
                                                                             vmname_andid))
 
-        #Add PCI passthrough configrations
-        PCI_devices_status = False
+        #Add PCI passthrough/SRIOV configrations
         vm_obj = None
-        si = None
+        pci_devices_info = []
+        sriov_net_info = []
+        reserve_memory = False
+
+        for net in net_list:
+            if net["type"]=="PF":
+                pci_devices_info.append(net)
+            elif  (net["type"]=="VF" or  net["type"]=="VFnotShared") and 'net_id'in net:
+                sriov_net_info.append(net)
+
+        #Add PCI
         if len(pci_devices_info) > 0:
             self.logger.info("Need to add PCI devices {} into VM {}".format(pci_devices_info,
                                                                         vmname_andid ))
@@ -1397,6 +1427,7 @@ class vimconnector(vimconn.vimconnector):
                                                             pci_devices_info,
                                                             vmname_andid)
                                  )
+                reserve_memory = True
             else:
                 self.logger.info("Fail to add PCI devives {} to VM {}".format(
                                                             pci_devices_info,
@@ -1503,8 +1534,28 @@ class vimconnector(vimconn.vimconnector):
             if type(deploytask) is GenericTask:
                 vca.block_until_completed(deploytask)
 
-            # If VM has PCI devices reserve memory for VM
-            if PCI_devices_status and vm_obj and vcenter_conect:
+        # ############# Stub code for SRIOV #################
+        #Add SRIOV
+#         if len(sriov_net_info) > 0:
+#             self.logger.info("Need to add SRIOV adapters {} into VM {}".format(sriov_net_info,
+#                                                                         vmname_andid ))
+#             sriov_status, vm_obj, vcenter_conect = self.add_sriov(vapp_uuid,
+#                                                                   sriov_net_info,
+#                                                                   vmname_andid)
+#             if sriov_status:
+#                 self.logger.info("Added SRIOV {} to VM {}".format(
+#                                                             sriov_net_info,
+#                                                             vmname_andid)
+#                                  )
+#                 reserve_memory = True
+#             else:
+#                 self.logger.info("Fail to add SRIOV {} to VM {}".format(
+#                                                             sriov_net_info,
+#                                                             vmname_andid)
+#                                  )
+
+            # If VM has PCI devices or SRIOV reserve memory for VM
+            if reserve_memory:
                 memReserve = vm_obj.config.hardware.memoryMB
                 spec = vim.vm.ConfigSpec()
                 spec.memoryAllocation = vim.ResourceAllocationInfo(reservation=memReserve)
@@ -3821,6 +3872,7 @@ class vimconnector(vimconn.vimconnector):
                                                                            "affinity".format(exp))
 
 
+
     def cloud_init(self, vapp, cloud_config):
         """
         Method to inject ssh-key
@@ -4318,4 +4370,421 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnException(msg)
         elif exp_type == "NotFound":
             raise vimconn.vimconnNotFoundException(message=msg)
+
+    def add_sriov(self, vapp_uuid, sriov_nets, vmname_andid):
+        """
+            Method to attach SRIOV adapters to VM
+
+             Args:
+                vapp_uuid - uuid of vApp/VM
+                sriov_nets - SRIOV devices infromation as specified in VNFD (flavor)
+                vmname_andid - vmname
+
+            Returns:
+                The status of add SRIOV adapter task , vm object and
+                vcenter_conect object
+        """
+        vm_obj = None
+        vcenter_conect, content = self.get_vcenter_content()
+        vm_moref_id = self.get_vm_moref_id(vapp_uuid)
+
+        if vm_moref_id:
+            try:
+                no_of_sriov_devices = len(sriov_nets)
+                if no_of_sriov_devices > 0:
+                    #Get VM and its host
+                    host_obj, vm_obj = self.get_vm_obj(content, vm_moref_id)
+                    self.logger.info("VM {} is currently on host {}".format(vm_obj, host_obj))
+                    if host_obj and vm_obj:
+                        #get SRIOV devies from host on which vapp is currently installed
+                        avilable_sriov_devices = self.get_sriov_devices(host_obj,
+                                                                no_of_sriov_devices,
+                                                                )
+
+                        if len(avilable_sriov_devices) == 0:
+                            #find other hosts with active pci devices
+                            new_host_obj , avilable_sriov_devices = self.get_host_and_sriov_devices(
+                                                                content,
+                                                                no_of_sriov_devices,
+                                                                )
+
+                            if new_host_obj is not None and len(avilable_sriov_devices)> 0:
+                                #Migrate vm to the host where SRIOV devices are available
+                                self.logger.info("Relocate VM {} on new host {}".format(vm_obj,
+                                                                                    new_host_obj))
+                                task = self.relocate_vm(new_host_obj, vm_obj)
+                                if task is not None:
+                                    result = self.wait_for_vcenter_task(task, vcenter_conect)
+                                    self.logger.info("Migrate VM status: {}".format(result))
+                                    host_obj = new_host_obj
+                                else:
+                                    self.logger.info("Fail to migrate VM : {}".format(result))
+                                    raise vimconn.vimconnNotFoundException(
+                                    "Fail to migrate VM : {} to host {}".format(
+                                                    vmname_andid,
+                                                    new_host_obj)
+                                        )
+
+                        if host_obj is not None and avilable_sriov_devices is not None and len(avilable_sriov_devices)> 0:
+                            #Add SRIOV devices one by one
+                            for sriov_net in sriov_nets:
+                                network_name = sriov_net.get('net_id')
+                                dvs_portgr_name = self.create_dvPort_group(network_name)
+                                if sriov_net.get('type') == "VF":
+                                    #add vlan ID ,Modify portgroup for vlan ID
+                                    self.configure_vlanID(content, vcenter_conect, network_name)
+
+                                task = self.add_sriov_to_vm(content,
+                                                            vm_obj,
+                                                            host_obj,
+                                                            network_name,
+                                                            avilable_sriov_devices[0]
+                                                            )
+                                if task:
+                                    status= self.wait_for_vcenter_task(task, vcenter_conect)
+                                    if status:
+                                        self.logger.info("Added SRIOV {} to VM {}".format(
+                                                                        no_of_sriov_devices,
+                                                                        str(vm_obj)))
+                                else:
+                                    self.logger.error("Fail to add SRIOV {} to VM {}".format(
+                                                                        no_of_sriov_devices,
+                                                                        str(vm_obj)))
+                                    raise vimconn.vimconnUnexpectedResponse(
+                                    "Fail to add SRIOV adapter in VM ".format(str(vm_obj))
+                                        )
+                            return True, vm_obj, vcenter_conect
+                        else:
+                            self.logger.error("Currently there is no host with"\
+                                              " {} number of avaialble SRIOV "\
+                                              "VFs required for VM {}".format(
+                                                                no_of_sriov_devices,
+                                                                vmname_andid)
+                                              )
+                            raise vimconn.vimconnNotFoundException(
+                                    "Currently there is no host with {} "\
+                                    "number of avaialble SRIOV devices required for VM {}".format(
+                                                                            no_of_sriov_devices,
+                                                                            vmname_andid))
+                else:
+                    self.logger.debug("No infromation about SRIOV devices {} ",sriov_nets)
+
+            except vmodl.MethodFault as error:
+                self.logger.error("Error occurred while adding SRIOV {} ",error)
+        return None, vm_obj, vcenter_conect
+
+
+    def get_sriov_devices(self,host, no_of_vfs):
+        """
+            Method to get the details of SRIOV devices on given host
+             Args:
+                host - vSphere host object
+                no_of_vfs - number of VFs needed on host
+
+             Returns:
+                array of SRIOV devices
+        """
+        sriovInfo=[]
+        if host:
+            for device in host.config.pciPassthruInfo:
+                if isinstance(device,vim.host.SriovInfo) and device.sriovActive:
+                    if device.numVirtualFunction >= no_of_vfs:
+                        sriovInfo.append(device)
+                        break
+        return sriovInfo
+
+
+    def get_host_and_sriov_devices(self, content, no_of_vfs):
+        """
+         Method to get the details of SRIOV devices infromation on all hosts
+
+            Args:
+                content - vSphere host object
+                no_of_vfs - number of pci VFs needed on host
+
+            Returns:
+                 array of SRIOV devices and host object
+        """
+        host_obj = None
+        sriov_device_objs = None
+        try:
+            if content:
+                container = content.viewManager.CreateContainerView(content.rootFolder,
+                                                            [vim.HostSystem], True)
+                for host in container.view:
+                    devices = self.get_sriov_devices(host, no_of_vfs)
+                    if devices:
+                        host_obj = host
+                        sriov_device_objs = devices
+                        break
+        except Exception as exp:
+            self.logger.error("Error {} occurred while finding SRIOV devices on host: {}".format(exp, host_obj))
+
+        return host_obj,sriov_device_objs
+
+
+    def add_sriov_to_vm(self,content, vm_obj, host_obj, network_name, sriov_device):
+        """
+         Method to add SRIOV adapter to vm
+
+            Args:
+                host_obj - vSphere host object
+                vm_obj - vSphere vm object
+                content - vCenter content object
+                network_name - name of distributed virtaul portgroup
+                sriov_device - SRIOV device info
+
+            Returns:
+                 task object
+        """
+        devices = []
+        vnic_label = "sriov nic"
+        try:
+            dvs_portgr = self.get_dvport_group(network_name)
+            network_name = dvs_portgr.name
+            nic = vim.vm.device.VirtualDeviceSpec()
+            # VM device
+            nic.operation = vim.vm.device.VirtualDeviceSpec.Operation.add
+            nic.device = vim.vm.device.VirtualSriovEthernetCard()
+            nic.device.addressType = 'assigned'
+            #nic.device.key = 13016
+            nic.device.deviceInfo = vim.Description()
+            nic.device.deviceInfo.label = vnic_label
+            nic.device.deviceInfo.summary = network_name
+            nic.device.backing = vim.vm.device.VirtualEthernetCard.NetworkBackingInfo()
+
+            nic.device.backing.network = self.get_obj(content, [vim.Network], network_name)
+            nic.device.backing.deviceName = network_name
+            nic.device.backing.useAutoDetect = False
+            nic.device.connectable = vim.vm.device.VirtualDevice.ConnectInfo()
+            nic.device.connectable.startConnected = True
+            nic.device.connectable.allowGuestControl = True
+
+            nic.device.sriovBacking = vim.vm.device.VirtualSriovEthernetCard.SriovBackingInfo()
+            nic.device.sriovBacking.physicalFunctionBacking = vim.vm.device.VirtualPCIPassthrough.DeviceBackingInfo()
+            nic.device.sriovBacking.physicalFunctionBacking.id = sriov_device.id
+
+            devices.append(nic)
+            vmconf = vim.vm.ConfigSpec(deviceChange=devices)
+            task = vm_obj.ReconfigVM_Task(vmconf)
+            return task
+        except Exception as exp:
+            self.logger.error("Error {} occurred while adding SRIOV adapter in VM: {}".format(exp, vm_obj))
+            return None
+
+
+    def create_dvPort_group(self, network_name):
+        """
+         Method to create disributed virtual portgroup
+
+            Args:
+                network_name - name of network/portgroup
+
+            Returns:
+                portgroup key
+        """
+        try:
+            new_network_name = [network_name, '-', str(uuid.uuid4())]
+            network_name=''.join(new_network_name)
+            vcenter_conect, content = self.get_vcenter_content()
+
+            dv_switch = self.get_obj(content, [vim.DistributedVirtualSwitch], self.dvs_name)
+            if dv_switch:
+                dv_pg_spec = vim.dvs.DistributedVirtualPortgroup.ConfigSpec()
+                dv_pg_spec.name = network_name
+
+                dv_pg_spec.type = vim.dvs.DistributedVirtualPortgroup.PortgroupType.earlyBinding
+                dv_pg_spec.defaultPortConfig = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
+                dv_pg_spec.defaultPortConfig.securityPolicy = vim.dvs.VmwareDistributedVirtualSwitch.SecurityPolicy()
+                dv_pg_spec.defaultPortConfig.securityPolicy.allowPromiscuous = vim.BoolPolicy(value=False)
+                dv_pg_spec.defaultPortConfig.securityPolicy.forgedTransmits = vim.BoolPolicy(value=False)
+                dv_pg_spec.defaultPortConfig.securityPolicy.macChanges = vim.BoolPolicy(value=False)
+
+                task = dv_switch.AddDVPortgroup_Task([dv_pg_spec])
+                self.wait_for_vcenter_task(task, vcenter_conect)
+
+                dvPort_group = self.get_obj(content, [vim.dvs.DistributedVirtualPortgroup], network_name)
+                if dvPort_group:
+                    self.logger.info("Created disributed virtaul port group: {}".format(dvPort_group))
+                    return dvPort_group.key
+            else:
+                self.logger.debug("No disributed virtual switch found with name {}".format(network_name))
+
+        except Exception as exp:
+            self.logger.error("Error occurred while creating disributed virtaul port group {}"\
+                             " : {}".format(network_name, exp))
+        return None
+
+    def reconfig_portgroup(self, content, dvPort_group_name , config_info={}):
+        """
+         Method to reconfigure disributed virtual portgroup
+
+            Args:
+                dvPort_group_name - name of disributed virtual portgroup
+                content - vCenter content object
+                config_info - disributed virtual portgroup configuration
+
+            Returns:
+                task object
+        """
+        try:
+            dvPort_group = self.get_dvport_group(dvPort_group_name)
+            if dvPort_group:
+                dv_pg_spec = vim.dvs.DistributedVirtualPortgroup.ConfigSpec()
+                dv_pg_spec.configVersion = dvPort_group.config.configVersion
+                dv_pg_spec.defaultPortConfig = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
+                if "vlanID" in config_info:
+                    dv_pg_spec.defaultPortConfig.vlan = vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec()
+                    dv_pg_spec.defaultPortConfig.vlan.vlanId = config_info.get('vlanID')
+
+                task = dvPort_group.ReconfigureDVPortgroup_Task(spec=dv_pg_spec)
+                return task
+            else:
+                return None
+        except Exception as exp:
+            self.logger.error("Error occurred while reconfiguraing disributed virtaul port group {}"\
+                             " : {}".format(dvPort_group_name, exp))
+            return None
+
+
+    def destroy_dvport_group(self , dvPort_group_name):
+        """
+         Method to destroy disributed virtual portgroup
+
+            Args:
+                network_name - name of network/portgroup
+
+            Returns:
+                True if portgroup successfully got deleted else false
+        """
+        vcenter_conect, content = self.get_vcenter_content()
+        try:
+            status = None
+            dvPort_group = self.get_dvport_group(dvPort_group_name)
+            if dvPort_group:
+                task = dvPort_group.Destroy_Task()
+                status = self.wait_for_vcenter_task(task, vcenter_conect)
+            return status
+        except vmodl.MethodFault as exp:
+            self.logger.error("Caught vmodl fault {} while deleting disributed virtaul port group {}".format(
+                                                                    exp, dvPort_group_name))
+            return None
+
+
+    def get_dvport_group(self, dvPort_group_name):
+        """
+        Method to get disributed virtual portgroup
+
+            Args:
+                network_name - name of network/portgroup
+
+            Returns:
+                portgroup object
+        """
+        vcenter_conect, content = self.get_vcenter_content()
+        dvPort_group = None
+        try:
+            container = content.viewManager.CreateContainerView(content.rootFolder, [vim.dvs.DistributedVirtualPortgroup], True)
+            for item in container.view:
+                if item.key == dvPort_group_name:
+                    dvPort_group = item
+                    break
+            return dvPort_group
+        except vmodl.MethodFault as exp:
+            self.logger.error("Caught vmodl fault {} for disributed virtaul port group {}".format(
+                                                                            exp, dvPort_group_name))
+            return None
+
+    def get_vlanID_from_dvs_portgr(self, dvPort_group_name):
+        """
+         Method to get disributed virtual portgroup vlanID
+
+            Args:
+                network_name - name of network/portgroup
+
+            Returns:
+                vlan ID
+        """
+        vlanId = None
+        try:
+            dvPort_group = self.get_dvport_group(dvPort_group_name)
+            if dvPort_group:
+                vlanId = dvPort_group.config.defaultPortConfig.vlan.vlanId
+        except vmodl.MethodFault as exp:
+            self.logger.error("Caught vmodl fault {} for disributed virtaul port group {}".format(
+                                                                            exp, dvPort_group_name))
+        return vlanId
+
+
+    def configure_vlanID(self, content, vcenter_conect, dvPort_group_name):
+        """
+         Method to configure vlanID in disributed virtual portgroup vlanID
+
+            Args:
+                network_name - name of network/portgroup
+
+            Returns:
+                None
+        """
+        vlanID = self.get_vlanID_from_dvs_portgr(dvPort_group_name)
+        if vlanID == 0:
+            #configure vlanID
+            vlanID = self.genrate_vlanID(dvPort_group_name)
+            config = {"vlanID":vlanID}
+            task = self.reconfig_portgroup(content, dvPort_group_name,
+                                    config_info=config)
+            if task:
+                status= self.wait_for_vcenter_task(task, vcenter_conect)
+                if status:
+                    self.logger.info("Reconfigured Port group {} for vlan ID {}".format(
+                                                        dvPort_group_name,vlanID))
+            else:
+                self.logger.error("Fail reconfigure portgroup {} for vlanID{}".format(
+                                        dvPort_group_name, vlanID))
+
+
+    def genrate_vlanID(self, network_name):
+        """
+         Method to get unused vlanID
+            Args:
+                network_name - name of network/portgroup
+            Returns:
+                vlanID
+        """
+        vlan_id = None
+        used_ids = []
+        if self.config.get('vlanID_range') == None:
+            raise vimconn.vimconnConflictException("You must provide a 'vlanID_range' "\
+                        "at config value before creating sriov network with vlan tag")
+        if "used_vlanIDs" not in self.persistent_info:
+                self.persistent_info["used_vlanIDs"] = {}
+        else:
+            used_ids = self.persistent_info["used_vlanIDs"].values()
+
+        for vlanID_range in self.config.get('vlanID_range'):
+            start_vlanid , end_vlanid = vlanID_range.split("-")
+            if start_vlanid > end_vlanid:
+                raise vimconn.vimconnConflictException("Invalid vlan ID range {}".format(
+                                                                        vlanID_range))
+
+            for id in xrange(int(start_vlanid), int(end_vlanid) + 1):
+                if id not in used_ids:
+                    vlan_id = id
+                    self.persistent_info["used_vlanIDs"][network_name] = vlan_id
+                    return vlan_id
+        if vlan_id is None:
+            raise vimconn.vimconnConflictException("All Vlan IDs are in use")
+
+
+    def get_obj(self, content, vimtype, name):
+        """
+         Get the vsphere object associated with a given text name
+        """
+        obj = None
+        container = content.viewManager.CreateContainerView(content.rootFolder, vimtype, True)
+        for item in container.view:
+            if item.name == name:
+                obj = item
+                break
+        return obj
 
