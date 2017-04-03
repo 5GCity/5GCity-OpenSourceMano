@@ -39,6 +39,7 @@ function usage(){
     echo -e "     --force:    makes idenpotent, delete previous installations folders if needed"
     echo -e "     --noclone:  assumes that openmano was cloned previously and that this script is run from the local repo"
     echo -e "     --no-install-packages: use this option to skip updating and installing the requires packages. This avoid wasting time if you are sure requires packages are present e.g. because of a previous installation"
+    echo -e "     --no-db: do not insall mysql server"
 }
 
 function install_packages(){
@@ -59,16 +60,6 @@ function install_packages(){
     done
 }
 
-function db_exists() {
-    RESULT=`mysqlshow --defaults-extra-file="$2" | grep -v Wildcard | grep -o $1`
-    if [ "$RESULT" == "$1" ]; then
-        echo " DB $1 exists"
-        return 0
-    fi
-    echo " DB $1 does not exist"
-    return 1
-}
-
 GIT_URL=https://osm.etsi.org/gerrit/osm/RO.git
 DBUSER="root"
 DBPASSWD=""
@@ -79,6 +70,7 @@ FORCEDB=""
 FORCE=""
 NOCLONE=""
 NO_PACKAGES=""
+NO_DB=""
 while getopts ":u:p:hiq-:" o; do
     case "${o}" in
         u)
@@ -103,6 +95,7 @@ while getopts ":u:p:hiq-:" o; do
             [ "${OPTARG}" == "noclone" ] && NOCLONE="y" && continue
             [ "${OPTARG}" == "quiet" ] && export QUIET_MODE=yes && export DEBIAN_FRONTEND=noninteractive && continue
             [ "${OPTARG}" == "no-install-packages" ] && export NO_PACKAGES=yes && continue
+            [ "${OPTARG}" == "no-db" ] && NO_DB="y" && continue
             echo -e "Invalid option: '--$OPTARG'\nTry $0 --help for more information" >&2 
             exit 1
             ;; 
@@ -207,54 +200,9 @@ echo '
 #################################################################
 #####               INSTALL REQUIRED PACKAGES               #####
 #################################################################'
-[ "$_DISTRO" == "Ubuntu" ] && install_packages "git screen wget mysql-server"
-[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "git screen wget mariadb mariadb-server"
+[ "$_DISTRO" == "Ubuntu" ] && install_packages "git screen wget mysql-client"
+[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "git screen wget mariadb-client"
 
-if [[ "$_DISTRO" == "Ubuntu" ]]
-then
-    #start services. By default CentOS does not start services
-    service mysql start >> /dev/null
-    # try to set admin password, ignore if fails
-    [[ -n $DBPASSWD ]] && mysqladmin -u $DBUSER -s password $DBPASSWD
-fi
-
-if [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ]
-then
-    #start services. By default CentOS does not start services
-    service mariadb start
-    service httpd   start
-    systemctl enable mariadb
-    systemctl enable httpd
-    read -e -p "Do you want to configure mariadb (recommended if not done before) (Y/n)" KK
-    [ "$KK" != "n" -a  "$KK" != "no" ] && mysql_secure_installation
-
-    read -e -p "Do you want to set firewall to grant web access port 80,443  (Y/n)" KK
-    [ "$KK" != "n" -a  "$KK" != "no" ] && 
-        firewall-cmd --permanent --zone=public --add-service=http &&
-        firewall-cmd --permanent --zone=public --add-service=https &&
-        firewall-cmd --reload
-fi
-fi  #[[ -z "$NO_PACKAGES" ]]
-
-#check and ask for database user password. Must be done after database installation
-if [[ -n $QUIET_MODE ]]
-then 
-    echo -e "\nCheking database connection and ask for credentials"
-    while ! mysqladmin -s -u$DBUSER $DBPASSWD_PARAM status >/dev/null
-    do
-        [ -n "$logintry" ] &&  echo -e "\nInvalid database credentials!!!. Try again (Ctrl+c to abort)"
-        [ -z "$logintry" ] &&  echo -e "\nProvide database credentials"
-        read -e -p "database user? ($DBUSER) " DBUSER_
-        [ -n "$DBUSER_" ] && DBUSER=$DBUSER_
-        read -e -s -p "database password? (Enter for not using password) " DBPASSWD_
-        [ -n "$DBPASSWD_" ] && DBPASSWD="$DBPASSWD_" && DBPASSWD_PARAM="-p$DBPASSWD_"
-        [ -z "$DBPASSWD_" ] && DBPASSWD=""           && DBPASSWD_PARAM=""
-        logintry="yes"
-    done
-fi
-
-if [[ -z "$NO_PACKAGES" ]]
-then
 echo '
 #################################################################
 #####        INSTALL PYTHON PACKAGES                        #####
@@ -289,47 +237,6 @@ if [[ -z $NOCLONE ]]; then
     su $SUDO_USER -c "cp ${OPENMANO_BASEFOLDER}/.gitignore-common ${OPENMANO_BASEFOLDER}/.gitignore"
     [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C  ${OPENMANO_BASEFOLDER} checkout tags/v1.0.2"
 fi
-
-echo '
-#################################################################
-#####        CREATE DATABASE                                #####
-#################################################################'
-echo -e "\nCreating temporary file form MYSQL installation and initialization"
-TEMPFILE="$(mktemp -q --tmpdir "installopenmano.XXXXXX")"
-trap 'rm -f "$TEMPFILE"' EXIT
-chmod 0600 "$TEMPFILE"
-echo -e "[client]\n user='$DBUSER'\n password='$DBPASSWD'">"$TEMPFILE"
-
-if db_exists "mano_db" $TEMPFILE ; then
-    if [[ -n $FORCEDB ]]; then
-        echo "   Deleting previous database mano_db"
-        DBDELETEPARAM=""
-        [[ -n $QUIET_MODE ]] && DBDELETEPARAM="-f"
-        mysqladmin --defaults-extra-file=$TEMPFILE -s drop mano_db $DBDELETEPARAM || ! echo "Could not delete mano_db database" || exit 1
-        #echo "REVOKE ALL PRIVILEGES ON mano_db.* FROM 'mano'@'localhost';" | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
-        #echo "DELETE USER 'mano'@'localhost';"   | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
-        mysqladmin --defaults-extra-file=$TEMPFILE -s create mano_db || ! echo "Error creating mano_db database" || exit 1
-        echo "DROP USER 'mano'@'localhost';"   | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
-        echo "CREATE USER 'mano'@'localhost' identified by 'manopw';"   | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
-        echo "GRANT ALL PRIVILEGES ON mano_db.* TO 'mano'@'localhost';" | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
-        echo " Database 'mano_db' created, user 'mano' password 'manopw'"
-    else
-        echo "Database exists. Use option '--forcedb' to force the deletion of the existing one" && exit 1
-    fi
-else
-    mysqladmin -u$DBUSER $DBPASSWD_PARAM -s create mano_db || ! echo "Error creating mano_db database" || exit 1 
-    echo "CREATE USER 'mano'@'localhost' identified by 'manopw';"   | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
-    echo "GRANT ALL PRIVILEGES ON mano_db.* TO 'mano'@'localhost';" | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
-    echo " Database 'mano_db' created, user 'mano' password 'manopw'"
-fi
-
-
-echo '
-#################################################################
-#####        INIT DATABASE                                  #####
-#################################################################'
-su $SUDO_USER -c "${OPENMANO_BASEFOLDER}/database_utils/init_mano_db.sh -u mano -p manopw -d mano_db" || ! echo "Failed while initializing database" || exit 1
-
 
 if [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ]
 then
@@ -404,8 +311,20 @@ then
     su $SUDO_USER -c 'echo ". ${HOME}/.bash_completion.d/python-argcomplete.sh" >> ~/.bashrc'
 fi
 
+if [ -z "$NO_DB" ]; then
+echo '
+#################################################################
+#####               INSTALL DATABASE SERVER                 #####
+#################################################################'
 
-
+    if [ -n "$QUIET_MODE" ]; then
+        DB_QUIET='-q'
+    fi
+    if [ -n "$FORCEDB" ]; then
+        DB_FORCE='--forcedb'
+    fi
+    ${OPENMANO_BASEFOLDER}/scripts/install-db-server.sh -u $DBUSER $DBPASSWD_PARAM $DB_QUIET $DB_FORCE || exit 1
+fi
 
 if [[ -n "$INSTALL_AS_A_SERVICE"  ]]
 then
@@ -431,6 +350,4 @@ else
     echo " Run './${OPENMANO_BASEFOLDER}/scripts/service-openmano.sh start' for starting openmano in a screen"
 
 fi
-
-
 
