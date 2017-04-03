@@ -1,0 +1,50 @@
+from ubuntu:xenial
+
+MAINTAINER Gennadiy Dubina <gennadiy.dubina@dataat.com>
+
+# script uses it
+ENV USER=root
+
+#avoid extra information from packages
+RUN echo 'path-exclude /usr/share/doc/*\n\
+path-include /usr/share/doc/*/copyright\n\
+path-exclude /usr/share/man/*\n\
+path-exclude /usr/share/groff/*\n\
+path-exclude /usr/share/info/*\n\
+path-exclude /usr/share/lintian/*\n\
+path-exclude /usr/share/linda/*\n'\
+> /etc/dpkg/dpkg.cfg.d/01_nodoc && \
+    echo  'APT::Install-Recommends "false";\n\
+APT::AutoRemove::RecommendsImportant "false";\n\
+APT::AutoRemove::SuggestsImportant "false";\n'\
+> /etc/apt/apt.conf.d/99_norecommends
+
+#generate lsb_release stub
+RUN echo 'if [ "$1" == "-is" ]; then echo "Ubuntu"; else if [ "$1" == "-rs" ]; then echo "16.04"; fi fi' > /usr/bin/lsb_release && chmod +x /usr/bin/lsb_release
+
+COPY . /usr/local/src/openmano
+
+RUN apt update && \
+  DEBIAN_FRONTEND=noninteractive apt install -fqy software-properties-common make gcc git python python-dev python-pip sudo wget && \
+  pip install --upgrade pip && \
+  cd /usr/local/src/openmano && \
+  make build && \
+  cd build && \
+  ./scripts/install-openmano.sh -q --noclone --no-db && \
+  cd / && \
+  rm -rf /usr/local/src/openmano && \
+  rm -rf /usr/include/* && \
+  rm -rf /root/.cache && \
+  apt purge -y make gcc git curl wget python-dev python-pip && \
+  apt autoremove -y && \ 
+  apt clean && \
+  rm -rf /var/lib/apt/lists/*
+
+COPY docker/scripts/ /opt/openmano-docker
+
+VOLUME /opt/openmano/logs
+EXPOSE 9090
+
+env DB_USER='' DB_PSWD='' DB_HOST='' DB_PORT=3306 DB_NAME=mano_db
+
+CMD /opt/openmano-docker/start.sh

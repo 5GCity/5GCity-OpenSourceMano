@@ -2,6 +2,8 @@ SHELL := /bin/bash
 all: pip deb
 
 prepare:
+	pip install setuptools
+	#pip install -r requirements.txt
 	mkdir -p build/
 	cp MANIFEST.in build/
 	cp requirements.txt build/
@@ -51,6 +53,15 @@ sync:
 
 test:
 	./test/basictest.sh --force --insert-bashrc --install-openvim --init-openvim
+
+build-docker-from-source:
+	docker build -t osm/openmano -f docker/Dockerfile-local .
+
+run-docker:
+	docker-compose -f docker/openmano-compose.yml up
+
+stop-docker:
+	docker-compose -f docker/openmano-compose.yml down
 
 clean:
 	rm -rf build
