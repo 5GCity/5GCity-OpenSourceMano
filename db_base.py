@@ -265,6 +265,8 @@ class db_base():
         '''
         if data==None:
             return 'Null'
+        elif isinstance(data[1], str):
+            return json.dumps(data)
         else:
             return json.dumps(str(data))
     
@@ -277,6 +279,8 @@ class db_base():
         '''
         if data[1]==None:
             return str(data[0]) + "=Null"
+        elif isinstance(data[1], str):
+            return str(data[0]) + '=' + json.dumps(data[1])
         else:
             return str(data[0]) + '=' + json.dumps(str(data[1]))
     
@@ -289,24 +293,10 @@ class db_base():
         '''
         if data[1]==None:
             return str(data[0]) + " is Null"
-        
-#         if type(data[1]) is tuple:  #this can only happen in a WHERE_OR clause
-#             text =[]
-#             for d in data[1]:
-#                 if d==None:
-#                     text.append(str(data[0]) + " is Null")
-#                     continue
-#                 out=str(d)
-#                 if "'" not in out:
-#                     text.append( str(data[0]) + "='" + out + "'" )
-#                 elif '"' not in out:
-#                     text.append( str(data[0]) + '="' + out + '"' )
-#                 else:
-#                     text.append( str(data[0]) + '=' + json.dumps(out) )
-#             return " OR ".join(text)
-
-        out=str(data[1])
-        return str(data[0]) + '=' + json.dumps(out)
+        elif isinstance(data[1], str):
+            return str(data[0]) + '=' + json.dumps(data[1])
+        else:
+            return str(data[0]) + '=' + json.dumps(str(data[1]))
 
     def __tuple2db_format_where_not(self, data):
         '''Compose the needed text for a SQL WHERE(not). parameter 'data' is a pair tuple (A,B),
@@ -317,8 +307,10 @@ class db_base():
         '''
         if data[1]==None:
             return str(data[0]) + " is not Null"
-        out=str(data[1])
-        return str(data[0]) + '<>' + json.dumps(out)
+        elif isinstance(data[1], str):
+            return str(data[0]) + '<>' + json.dumps(data[1])
+        else:
+            return str(data[0]) + '<>' + json.dumps(str(data[1]))
     
     def __remove_quotes(self, data):
         '''remove single quotes ' of any string content of data dictionary'''
