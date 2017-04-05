@@ -54,10 +54,10 @@ trap 'rm -f "$TEMPFILE"' EXIT
 for i in `ls vimconn_*.py |sed "s/\.py//"`; do echo "import $i" >> $TEMPFILE; done
 
 python $TEMPFILE &&
-python -m py_compile *.py   &&
+python -m py_compile *.py  # &&
 
-INFO "  basic_test"         &&
-./test/basictest.sh --force --insert-bashrc --install-openvim --init-openvim  #&&   #uncomment to add new tests
+#INFO "  basic_test"         &&
+#./test/basictest.sh --force --insert-bashrc --install-openvim --init-openvim  #&&   #uncomment to add new tests
 # OTHER TESTS HERE
 
 RC=$?
