@@ -1,8 +1,8 @@
 vnfd:vnfd-catalog:
     vnfd:
     -   id: cirros_vnfd
-        name: cirros_vnfd
-        short-name: cirros_vnfd
+        name: cirros_vnf
+        short-name: cirros_vnf
         description: Simple VNF example with a cirros 
         vendor: OSM
         version: '1.0'
