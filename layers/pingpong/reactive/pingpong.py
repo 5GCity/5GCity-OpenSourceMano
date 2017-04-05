@@ -55,7 +55,7 @@ def start():
     try:
         # Bring up the eth1 interface.
         # The selinux label on the file needs to be set correctly
-        cmd = "sudo /sbin/restorecon -v /etc/sysconfig/network-scripts/ifcfg-eth1"
+        cmd = "sudo timeout 5 /sbin/restorecon -v /etc/sysconfig/network-scripts/ifcfg-eth1"
         result, err = charms.sshproxy._run(cmd)
     except Exception as e:
         err = "{}".format(e)
@@ -64,7 +64,7 @@ def start():
         return
 
     try:
-        cmd =  "sudo /sbin/ifup eth1"
+        cmd =  "sudo timeout 30 /sbin/ifup eth1"
         result, err = charms.sshproxy._run(cmd)
     except Exception as e:
         action_fail('command failed: {}, errors: {}'.format(e, e.output))
@@ -72,7 +72,7 @@ def start():
         return
 
     try:
-        cmd =  "sudo /usr/bin/systemctl start {}". \
+        cmd =  "sudo timeout 30 /usr/bin/systemctl start {}". \
               format(cfg['mode'])
         result, err = charms.sshproxy._run(cmd)
     except Exception as e:
@@ -89,7 +89,7 @@ def start():
 def stop():
     try:
         # Enter the command to stop your service(s)
-        cmd = "sudo /usr/bin/systemctl stop {}".format(cfg['mode'])
+        cmd = "sudo timeout 30 /usr/bin/systemctl stop {}".format(cfg['mode'])
         result, err = charms.sshproxy._run(cmd)
     except Exception as e:
         action_fail('command failed: {}, errors: {}'.format(e, e.output))
@@ -105,7 +105,7 @@ def stop():
 def restart():
     try:
         # Enter the command to restart your service(s)
-        cmd = "sudo /usr/bin/systemctl restart {}".format(cfg['mode'])
+        cmd = "sudo timeout 30 /usr/bin/systemctl restart {}".format(cfg['mode'])
         result, err = charms.sshproxy._run(cmd)
     except Exception as e:
         action_fail('command failed: {}, errors: {}'.format(e, e.output))
