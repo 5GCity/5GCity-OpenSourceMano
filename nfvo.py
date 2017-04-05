@@ -43,7 +43,7 @@ from db_base import db_base_Exception
 import nfvo_db
 from threading import Lock
 from time import time
-import openvim.ovim as Ovim
+import ovim as ovim_module
 
 global global_config
 global vimconn_imported
@@ -115,23 +115,20 @@ def start_service(mydb):
     # TODO: Avoid static configuration by adding new parameters to openmanod.cfg
     # TODO: review ovim.py to delete not needed configuration
     ovim_configuration = {
-        'logger_name': 'openvim',
+        'logger_name': 'openmano.ovim',
         'network_vlan_range_start': 1000,
         'network_vlan_range_end': 4096,
-        'log_level_db': 'DEBUG',
-        'db_name': 'mano_vim_db',
-        'db_host': 'localhost',
-        'db_user': 'vim',
-        'db_passwd': 'vimpw',
-        'database_version': '0.15',
+        'db_name': global_config["db_ovim_name"],
+        'db_host': global_config["db_ovim_host"],
+        'db_user': global_config["db_ovim_user"],
+        'db_passwd': global_config["db_ovim_passwd"],
         'bridge_ifaces': {},
         'mode': 'normal',
-        'of_controller_nets_with_same_vlan': True,
         'network_type': 'bridge',
         #TODO: log_level_of should not be needed. To be modified in ovim
         'log_level_of': 'DEBUG'
     }
-    ovim = Ovim.ovim(ovim_configuration)
+    ovim = ovim_module.ovim(ovim_configuration)
     ovim.start_service()
 
     from_= 'tenants_datacenters as td join datacenters as d on td.datacenter_id=d.uuid join datacenter_tenants as dt on td.datacenter_tenant_id=dt.uuid'

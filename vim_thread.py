@@ -34,7 +34,7 @@ import Queue
 import logging
 import vimconn
 from db_base import db_base_Exception
-from openvim.ovim import ovimException
+from ovim import ovimException
 
 
 # from logging import Logger
@@ -163,11 +163,12 @@ class vim_thread(threading.Thread):
                                     SELECT=("ii.uuid as iface_id", "ine.uuid as net_id", "iv.uuid as vm_id", "sdn_net_id"),
                                     WHERE=where_)
                             if len(db_ifaces)>1:
-                                self.logger.error("Refresing interfaces. "
+                                self.logger.critical("Refresing interfaces. "
                                                   "Found more than one interface at database for '{}'".format(where_))
                             elif len(db_ifaces)==0:
-                                self.logger.error("Refresing interfaces. "
+                                self.logger.critical("Refresing interfaces. "
                                                   "Not found any interface at database for '{}'".format(where_))
+                                continue
                             else:
                                 db_iface = db_ifaces[0]
                                 if db_iface.get("sdn_net_id") and interface.get("compute_node") and interface.get("pci"):
@@ -224,11 +225,12 @@ class vim_thread(threading.Thread):
                             SELECT=("uuid as net_id", "sdn_net_id"),
                             WHERE=where_)
                     if len(db_nets) > 1:
-                        self.logger.error("Refresing networks. "
+                        self.logger.critical("Refresing networks. "
                                           "Found more than one instance-networks at database for '{}'".format(where_))
                     elif len(db_nets) == 0:
-                        self.logger.error("Refresing networks. "
+                        self.logger.critical("Refresing networks. "
                                           "Not found any instance-network at database for '{}'".format(where_))
+                        continue
                     else:
                         db_net = db_nets[0]
                         if db_net.get("sdn_net_id"):
@@ -330,56 +332,59 @@ class vim_thread(threading.Thread):
         while True:
             #TODO reload service
             while True:
-                if not self.task_queue.empty():
-                    task = self.task_queue.get()
-                    self.task_lock.acquire()
-                    if task["status"] == "deleted":
+                try:
+                    if not self.task_queue.empty():
+                        task = self.task_queue.get()
+                        self.task_lock.acquire()
+                        if task["status"] == "deleted":
+                            self.task_lock.release()
+                            continue
+                        task["status"] = "processing"
                         self.task_lock.release()
+                    else:
+                        self._refres_elements()
                         continue
-                    task["status"] = "processing"
-                    self.task_lock.release()
-                else:
-                    self._refres_elements()
-                    continue
-                self.logger.debug("processing task id={} name={} params={}".format(task["id"], task["name"],
-                                                                                   str(task["params"])))
-                if task["name"] == 'exit' or task["name"] == 'reload':
-                    result, content = self.terminate(task)
-                elif task["name"] == 'new-vm':
-                    result, content = self.new_vm(task)
-                elif task["name"] == 'del-vm':
-                    result, content = self.del_vm(task)
-                elif task["name"] == 'new-net':
-                    result, content = self.new_net(task)
-                elif task["name"] == 'del-net':
-                    result, content = self.del_net(task)
-                else:
-                    error_text = "unknown task {}".format(task["name"])
-                    self.logger.error(error_text)
-                    result = False
-                    content = error_text
-                self.logger.debug("task id={} name={} result={}:{} params={}".format(task["id"], task["name"],
-                                                                                    result, content,
-                                                                                    str(task["params"])))
+                    self.logger.debug("processing task id={} name={} params={}".format(task["id"], task["name"],
+                                                                                       str(task["params"])))
+                    if task["name"] == 'exit' or task["name"] == 'reload':
+                        result, content = self.terminate(task)
+                    elif task["name"] == 'new-vm':
+                        result, content = self.new_vm(task)
+                    elif task["name"] == 'del-vm':
+                        result, content = self.del_vm(task)
+                    elif task["name"] == 'new-net':
+                        result, content = self.new_net(task)
+                    elif task["name"] == 'del-net':
+                        result, content = self.del_net(task)
+                    else:
+                        error_text = "unknown task {}".format(task["name"])
+                        self.logger.error(error_text)
+                        result = False
+                        content = error_text
+                    self.logger.debug("task id={} name={} result={}:{} params={}".format(task["id"], task["name"],
+                                                                                        result, content,
+                                                                                        str(task["params"])))
 
-                with self.task_lock:
-                    task["status"] = "done" if result else "error"
-                    task["result"] = content
-                self.task_queue.task_done()
+                    with self.task_lock:
+                        task["status"] = "done" if result else "error"
+                        task["result"] = content
+                    self.task_queue.task_done()
 
-                if task["name"] == 'exit':
-                    return 0
-                elif task["name"] == 'reload':
-                    break
+                    if task["name"] == 'exit':
+                        return 0
+                    elif task["name"] == 'reload':
+                        break
+                except Exception as e:
+                    self.logger.critical("Unexpected exception at run: " + str(e), exc_info=True)
 
         self.logger.debug("Finishing")
 
     def terminate(self, task):
         return True, None
 
-    def _format_vim_error_msg(self, error_text, len=1024):
-        if error_text and len(error_text) >= len:
-            return error_text[:len//2-3] + " ... " + error_text[-len//2+3:]
+    def _format_vim_error_msg(self, error_text, max_length=1024):
+        if error_text and len(error_text) >= max_length:
+            return error_text[:max_length//2-3] + " ... " + error_text[-max_length//2+3:]
         return error_text
 
     def new_net(self, task):
@@ -539,7 +544,7 @@ class vim_thread(threading.Thread):
             except Exception as e:
                 return False, "Error trying to get task_id='{}':".format(net_id, str(e))
         try:
-            self._remove_refresh("get-vm", net_id)
+            self._remove_refresh("get-net", net_id)
             result = self.vim.delete_network(net_id)
             if sdn_net_id:
                 with self.db_lock:
