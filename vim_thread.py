@@ -397,6 +397,7 @@ class vim_thread(threading.Thread):
             net_type = params[1]
 
             network = None
+            sdn_net_id = None
             sdn_controller = self.vim.config.get('sdn-controller')
             if sdn_controller and (net_type == "data" or net_type == "ptp"):
                 network = {"name": net_name, "type": net_type}
@@ -407,7 +408,6 @@ class vim_thread(threading.Thread):
                         "net '{}' defined as type '{}' has not vlan encapsulation '{}'".format(
                             net_name, net_type, vim_net['encapsulation']))
                 network["vlan"] = vim_net.get('segmentation_id')
-                sdn_net_id = None
                 try:
                     sdn_net_id = self.ovim.new_network(network)
                 except (ovimException, Exception) as e:
