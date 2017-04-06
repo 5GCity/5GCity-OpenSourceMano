@@ -56,7 +56,7 @@ def check_instance_scenario_active(uuid):
 
     for net in instance['nets']:
         status = net['status']
-        if status != 'BUILD':
+        if status != 'ACTIVE':
             return (False, status)
 
     for vnf in instance['vnfs']:
