@@ -2,41 +2,46 @@ SHELL := /bin/bash
 all: pypackage debpackage
 
 prepare:
-	mkdir -p build
-	cp *.py build/
-	#cd build; mv openmanod.py openmanod
-	cp openmano build/
-	cp openmanod.cfg build/
+	mkdir -p build/
+	cp MANIFEST.in build/
 	cp requirements.txt build/
 	cp README.rst build/
-	cp openmano.service build/
-	cp -r vnfs build/
-	cp -r scenarios build/
-	cp -r instance-scenarios build/
-	cp -r scripts build/
-	cd build/scripts; mv service-openmano.sh service-openmano; mv openmano-report.sh openmano-report
-	cp -r database_utils build/
+	cp setup.py build/
+	cp -r osm_ro build/
+	cp openmano build/
+	cp openmanod.py build/
+	cp openmanod.cfg build/
+	cp osm-ro.service build/
+	cp -r vnfs build/osm_ro
+	cp -r scenarios build/osm_ro
+	cp -r instance-scenarios build/osm_ro
+	cp -r scripts build/osm_ro
+	cp -r database_utils build/osm_ro
 
 connectors: prepare
 	# python-novaclient is required for that
-	rm -f build/openmanolinkervimconn.py
-	cd build; for i in `ls vimconn_*.py |sed "s/\.py//"` ; do echo "import $$i" >> openmanolinkervimconn.py; done
-	python build/openmanolinkervimconn.py
-	rm -f build/openmanolinkervimconn.py
+	rm -f build/osm_ro/openmanolinkervimconn.py
+	cd build/osm_ro; for i in `ls vimconn_*.py |sed "s/\.py//"` ; do echo "import $$i" >> openmanolinkervimconn.py; done
+	python build/osm_ro/openmanolinkervimconn.py
+	rm -f build/osm_ro/openmanolinkervimconn.py
 
-build: prepare
-	python -m py_compile build/*.py
+build: connectors prepare
+	python -m py_compile build/osm_ro/*.py
 
-pypackage: build
+pypackage: prepare
 	cd build; ./setup.py sdist
-	#cp build/dist/* /root/artifacts/...
+	cd build; ./setup.py bdist_wheel
 
-debpackage: build
-	echo "Nothing to be done yet"
+debpackage: prepare
+	echo "Nothing to be done"
+	#cd build; ./setup.py --command-packages=stdeb.command bdist_deb
 	#fpm -s python -t deb build/setup.py
 
 snappackage:
 	echo "Nothing to be done yet"
+
+sync:
+	#cp build/dist/* /root/artifacts/...
 
 test:
 	./test/basictest.sh --force --insert-bashrc --install-openvim --init-openvim

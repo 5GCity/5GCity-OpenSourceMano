@@ -116,7 +116,7 @@ do
             running=y
         done
         #if installed as a service and it is not provided a screen name call service
-        [[ -f /etc/systemd/system/openmano.service ]] && [[ -z $option_screen_name ]] && running=y #&& service openmano status
+        [[ -f /etc/systemd/system/osm-ro.service ]] && [[ -z $option_screen_name ]] && running=y #&& service osm-ro status
         if [ -z "$running" ]
         then
             echo -n "    $om_name not running" && [[ -n "$option_screen_name" ]] && echo " on screen '$option_screen_name'" || echo
@@ -124,7 +124,7 @@ do
     fi
 
     #if installed as a service and it is not provided a screen name call service
-    [[ -f /etc/systemd/system/openmano.service ]] && [[ -z $option_screen_name ]] && service openmano $om_action && ( [[ $om_action == status ]] || sleep 5 ) && exit $?
+    [[ -f /etc/systemd/system/osm-ro.service ]] && [[ -z $option_screen_name ]] && service osm-ro $om_action && ( [[ $om_action == status ]] || sleep 5 ) && exit $?
 
 
     #stop

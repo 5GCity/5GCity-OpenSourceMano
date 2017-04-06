@@ -37,19 +37,17 @@ __version__="0.5.8-r518"
 version_date="Jan 2017"
 database_version="0.19"      #expected database schema version
 
-import httpserver
 import time
 import sys
 import getopt
 import yaml
-import nfvo_db
 from jsonschema import validate as js_v, exceptions as js_e
-from openmano_schemas import config_schema
-from db_base import db_base_Exception
-import nfvo
 import logging
 import logging.handlers as log_handlers
 import socket
+from osm_ro import httpserver, nfvo, nfvo_db
+from osm_ro.openmano_schemas import config_schema
+from osm_ro.db_base import db_base_Exception
 
 global global_config
 global logger
