@@ -26,6 +26,7 @@ apt-get update
 apt-get install -y juju lxd squid-deb-proxy
 
 echo 'streams.canonical' > /etc/squid-deb-proxy/mirror-dstdomain.acl.d/20-juju-streams
+service squid-deb-proxy reload
 
 INFO "Configuring LXD"
 # ZFS doesn't work inside a nested container. ZFS should be configured in the host LXD.
