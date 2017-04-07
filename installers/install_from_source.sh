@@ -284,7 +284,7 @@ if [ -z "$ASSUME_YES" ]; then
 fi
 
 echo -e "Checking required packages: lxd"
-lxd --version &>/dev/null || echo -e "lxd not present, exiting " >&2 && exit 1
+lxd --version &>/dev/null || FATAL "lxd not present, exiting."
 
 wget -q -O- https://osm-download.etsi.org/ftp/osm-1.0-one/README.txt &> /dev/null
 
