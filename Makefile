@@ -18,7 +18,23 @@
 #
 BUILD_DIR = build
 
-NSDS := gw_corpa_ns ims_allin1_corpa mwc16_gen_ns mwc16_pe_ns VyOS_ns cirros_ns cirros_2vnf_ns ubuntu_xenial_ns ping_pong_ns knt_flownac_ns knt_flownac-us_ns sandvine_pts_ns ref1_ns ref2_ns
+NSDS := \
+    gw_corpa_ns \
+    ims_allin1_corpa \
+    mwc16_gen_ns \
+    mwc16_pe_ns \
+    VyOS_ns \
+    cirros_ns \
+    cirros_2vnf_ns \
+    ubuntu_xenial_ns \
+    ping_pong_ns \
+    knt_flownac_ns \
+    knt_flownac-us_ns \
+    sandvine_pts_ns \
+    sonussbc_ns \
+    ref1_ns \
+    ref2_ns
+
 NSD_SRC_DIR := src/nsd
 NSD_BUILD_DIR := $(BUILD_DIR)/nsd
 
@@ -27,7 +43,29 @@ NSD_BUILD_DIRS := $(addprefix $(NSD_BUILD_DIR)/, $(NSDS))
 NSD_PKGS := $(addsuffix .tar.gz, $(NSDS))
 NSD_BUILD_PKGS := $(addprefix $(NSD_BUILD_DIR)_pkgs/, $(NSD_PKGS))
 
-VNFDS := 6wind_vnf gw_corpa_pe1_vnf gw_corpa_pe2_vnf ims_allin1_2p_vnf tidgen_mwc16_vnf VyOS_vnf cirros_vnf ubuntu_xenial_vnf ping_vnf pong_vnf knt_fnc_vnf knt_fne_vnf knt_fnu_vnf knt_fnd_vnf sandvine_pts_vnf ref11_vnf ref21_vnf ref12_vnf ref22_vnf
+VNFDS := \
+    6wind_vnf \
+    gw_corpa_pe1_vnf \
+    gw_corpa_pe2_vnf \
+    ims_allin1_2p_vnf \
+    tidgen_mwc16_vnf \
+    VyOS_vnf \
+    cirros_vnf \
+    ubuntu_xenial_vnf \
+    ping_vnf \
+    pong_vnf \
+    knt_fnc_vnf \
+    knt_fne_vnf \
+    knt_fnu_vnf \
+    knt_fnd_vnf \
+    sandvine_pts_vnf \
+    sonus_sbc_vnf \
+    sonus_test_vnf \
+    ref11_vnf \
+    ref21_vnf \
+    ref12_vnf \
+    ref22_vnf
+
 VNFD_SRC_DIR := src/vnfd
 VNFD_BUILD_DIR := $(BUILD_DIR)/vnfd
 

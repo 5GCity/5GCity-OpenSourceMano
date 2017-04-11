@@ -22,7 +22,7 @@ nsd:nsd-catalog:
         nsd:name: ping_pong_ns
         nsd:short-name: ping_pong_ns
         nsd:vendor: RIFT.io
-        nsd:version: '1.0'
+        nsd:version: '1.1'
         nsd:description: RIFT.io sample ping pong network service
         nsd:constituent-vnfd:
         -   nsd:member-vnf-index: '1'
@@ -34,6 +34,10 @@ nsd:nsd-catalog:
             nsd:parameter:
             -   nsd:name: port
                 nsd:value: 5555
+            -   nsd:name: ssh-username
+                nsd:value: fedora
+            -   nsd:name: ssh-password
+                nsd:value: fedora
             nsd:seq: '1'
             nsd:user-defined-script: start_traffic.py
         nsd:input-parameter-xpath:
