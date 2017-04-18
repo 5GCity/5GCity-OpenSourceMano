@@ -39,7 +39,7 @@ function usage(){
     echo -e "     --force:    makes idenpotent, delete previous installations folders if needed"
     echo -e "     --noclone:  assumes that openmano was cloned previously and that this script is run from the local repo"
     echo -e "     --no-install-packages: use this option to skip updating and installing the requires packages. This avoid wasting time if you are sure requires packages are present e.g. because of a previous installation"
-    echo -e "     --no-db: do not insall mysql server"
+    echo -e "     --no-db: do not install mysql server"
 }
 
 function install_packages(){
