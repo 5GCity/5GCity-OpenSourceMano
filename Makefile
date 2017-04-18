@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-all: pypackage debpackage
+all: pip deb
 
 prepare:
 	mkdir -p build/
@@ -9,7 +9,7 @@ prepare:
 	cp setup.py build/
 	cp -r osm_ro build/
 	cp openmano build/
-	cp openmanod.py build/
+	cp openmanod build/
 	cp openmanod.cfg build/
 	cp osm-ro.service build/
 	cp -r vnfs build/osm_ro
@@ -28,17 +28,23 @@ connectors: prepare
 build: connectors prepare
 	python -m py_compile build/osm_ro/*.py
 
-pypackage: prepare
-	cd build; ./setup.py sdist
-	cd build; ./setup.py bdist_wheel
+pip: prepare
+	cd build && ./setup.py sdist
+	cd build && ./setup.py bdist_wheel
 
-debpackage: prepare
+deb: prepare
 	echo "Nothing to be done"
 	#cd build; ./setup.py --command-packages=stdeb.command bdist_deb
 	#fpm -s python -t deb build/setup.py
 
-snappackage:
+snap:
 	echo "Nothing to be done yet"
+
+install:
+	cd build && pip install dist/*.tar.gz
+
+develop: prepare
+	cd build && ./setup.py develop
 
 sync:
 	#cp build/dist/* /root/artifacts/...

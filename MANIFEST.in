@@ -2,7 +2,7 @@
 #include requirements.txt
 include README.rst
 include openmano
-include openmanod.py
+include openmanod
 include openmanod.cfg
 include osm-ro.service
 recursive-include osm_ro *
