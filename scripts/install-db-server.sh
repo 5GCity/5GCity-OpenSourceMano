@@ -167,8 +167,7 @@ if db_exists "mano_db" $TEMPFILE ; then
         #echo "REVOKE ALL PRIVILEGES ON mano_db.* FROM 'mano'@'localhost';" | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
         #echo "DELETE USER 'mano'@'localhost';"   | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
         mysqladmin --defaults-extra-file=$TEMPFILE -s create mano_db || ! echo "Error creating mano_db database" || exit 1
-        echo "DROP USER 'mano'@'localhost';"   | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
-        echo "CREATE USER 'mano'@'localhost' identified by 'manopw';"   | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
+        echo "CREATE USER 'mano'@'localhost' identified by 'manopw';"   | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database"
         echo "GRANT ALL PRIVILEGES ON mano_db.* TO 'mano'@'localhost';" | mysql --defaults-extra-file=$TEMPFILE -s || ! echo "Failed while creating user mano at database" || exit 1
         echo " Database 'mano_db' created, user 'mano' password 'manopw'"
     else
