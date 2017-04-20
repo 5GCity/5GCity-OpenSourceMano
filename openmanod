@@ -48,6 +48,7 @@ import socket
 from osm_ro import httpserver, nfvo, nfvo_db
 from osm_ro.openmano_schemas import config_schema
 from osm_ro.db_base import db_base_Exception
+import osm_ro
 
 global global_config
 global logger
@@ -150,7 +151,7 @@ if __name__=="__main__":
         opts, args = getopt.getopt(sys.argv[1:], "hvc:V:p:P:", ["config=", "help", "version", "port=", "vnf-repository=", "adminport=", "log-socket-host=", "log-socket-port=", "log-file="])
         port=None
         port_admin = None
-        config_file = 'openmanod.cfg'
+        config_file = 'osm_ro/openmanod.cfg'
         vnf_repository = None
         log_file = None
         log_socket_host = None
@@ -264,8 +265,8 @@ if __name__=="__main__":
             r = mydb.get_db_version()
             if r[1] != database_version:
                 logger.critical("DATABASE wrong version '%s'. \
-                                Try to upgrade/downgrade to version '%s' with './database_utils/migrate_mano_db.sh'",
-                                r[1], database_version)
+                                Try to upgrade/downgrade to version '%s' with '%s/database_utils/migrate_mano_db.sh'",
+                                r[1], database_version, osm_ro.__path__[0])
                 exit(-1)
         except db_base_Exception as e:
             logger.critical("DATABASE is not a MANO one or it is a '0.0' version. Try to upgrade to version '%s' with \

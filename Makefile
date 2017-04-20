@@ -4,8 +4,10 @@ all: package install
 prepare:
 	pip install setuptools
 	mkdir -p build/
-	#git describe | sed -e 's/^v//' > build/RO_VERSION
-	echo "1.1.5" > build/RO_VERSION
+	VER1=$(shell git describe | sed -e 's/^v//' |cut -d- -f1); \
+	VER2=$(shell git describe | cut -d- -f2); \
+	VER3=$(shell git describe | cut -d- -f3); \
+	echo "$$VER1.dev$$VER2+$$VER3" > build/RO_VERSION
 	cp MANIFEST.in build/
 	cp requirements.txt build/
 	cp README.rst build/
@@ -34,6 +36,7 @@ pip: prepare
 	cd build && ./setup.py sdist
 
 package: prepare
+	#apt-get install -y python-stdeb
 	cd build && python setup.py --command-packages=stdeb.command sdist_dsc --with-python2=True
 	cd build && cp osm_ro/scripts/python-osm-ro.postinst deb_dist/osm-ro*/debian/
 	cd build/deb_dist/osm-ro* && dpkg-buildpackage -rfakeroot -uc -us
@@ -65,6 +68,6 @@ stop-docker:
 
 clean:
 	rm -rf build
-	#find build -name '*.pyc' -delete
-	#find build -name '*.pyo' -delete
+	find osm_ro -name '*.pyc' -delete
+	find osm_ro -name '*.pyo' -delete
 

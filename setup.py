@@ -7,7 +7,7 @@ from os import system
 #import glob
 
 _name = 'osm_ro'
-_version = open('RO_VERSION').read()
+_version = open('RO_VERSION').read().strip()
 _description = 'OSM Resource Orchestrator'
 _author = 'ETSI OSM'
 _author_email = 'alfonso.tiernosepulveda@telefonica.com'

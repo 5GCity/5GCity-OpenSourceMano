@@ -43,7 +43,7 @@ fi
 
 echo '
 To make OSM RO work, you have to install mysql and a database, and finally start openmano service'
-echo '     ${OSMRO_PATH}/scripts/install-db-server.sh -u USER -p '
+echo "     ${OSMRO_PATH}/database_utils/install-db-server.sh # -h for help"
 echo '     service openmano start'
 
 
