@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 
+#from distutils.core import setup
+#from distutils.command.install_data import install_data
 from setuptools import setup
-from setuptools.command.install import install
 from os import system
 #import glob
 
 _name = 'osm_ro'
-_version = '1.0.0'
+_version = open('RO_VERSION').read()
 _description = 'OSM Resource Orchestrator'
 _author = 'ETSI OSM'
 _author_email = 'alfonso.tiernosepulveda@telefonica.com'
@@ -35,12 +36,6 @@ _requirements = [
     "boto",
 ]
 
-class ROInstaller(install):
-    def run(self):
-        cmd = 'echo "Running install script"'
-        system(cmd)
-        install.run(self)
-
 setup(name=_name,
       version = _version,
       description = _description,
@@ -57,13 +52,12 @@ setup(name=_name,
       package_data = {_name: ['vnfs/*.yaml', 'vnfs/examples/*.yaml',
                          'scenarios/*.yaml', 'scenarios/examples/*.yaml',
                          'instance-scenarios/examples/*.yaml', 'database_utils/*',
-                         'scripts/install-openmano*.sh']},
-      data_files = [('/etc/osm/', ['openmanod.cfg']),
-                   ('/etc/systemd/system/', ['osm-ro.service']),
+                         'scripts/*']},
+      data_files = [('/etc/osm/', ['osm_ro/openmanod.cfg']),
+                   ('/etc/systemd/system/', ['osm_ro/osm-ro.service']),
                    ],
-      scripts=['openmanod', 'openmano', 'osm_ro/scripts/service-openmano.sh', 'osm_ro/scripts/openmano-report.sh',],
+      scripts=['openmanod', 'openmano', 'osm_ro/scripts/service-openmano', 'osm_ro/scripts/openmano-report',],
       install_requires=_requirements,
       include_package_data=True,
-      cmdclass = {'install': ROInstaller},
       )
 

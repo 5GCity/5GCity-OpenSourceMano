@@ -1,19 +1,19 @@
 SHELL := /bin/bash
-all: pip deb
+all: package install
 
 prepare:
 	pip install setuptools
-	#pip install -r requirements.txt
 	mkdir -p build/
+	#git describe | sed -e 's/^v//' > build/RO_VERSION
+	echo "1.1.5" > build/RO_VERSION
 	cp MANIFEST.in build/
 	cp requirements.txt build/
 	cp README.rst build/
 	cp setup.py build/
+	cp stdeb.cfg build/
 	cp -r osm_ro build/
 	cp openmano build/
 	cp openmanod build/
-	cp openmanod.cfg build/
-	cp osm-ro.service build/
 	cp -r vnfs build/osm_ro
 	cp -r scenarios build/osm_ro
 	cp -r instance-scenarios build/osm_ro
@@ -32,24 +32,24 @@ build: connectors prepare
 
 pip: prepare
 	cd build && ./setup.py sdist
-	cd build && ./setup.py bdist_wheel
 
-deb: prepare
-	echo "Nothing to be done"
-	#cd build; ./setup.py --command-packages=stdeb.command bdist_deb
-	#fpm -s python -t deb build/setup.py
+package: prepare
+	cd build && python setup.py --command-packages=stdeb.command sdist_dsc --with-python2=True
+	cd build && cp osm_ro/scripts/python-osm-ro.postinst deb_dist/osm-ro*/debian/
+	cd build/deb_dist/osm-ro* && dpkg-buildpackage -rfakeroot -uc -us
 
 snap:
 	echo "Nothing to be done yet"
 
 install:
-	cd build && pip install dist/*.tar.gz
+	DEBIAN_FRONTEND=noninteractive apt-get update && \
+	DEBIAN_FRONTEND=noninteractive apt-get install -y python-pip && \
+	pip install --upgrade pip && \
+	dpkg -i build/deb_dist/*.deb
 
 develop: prepare
+	#pip install -r requirements.txt
 	cd build && ./setup.py develop
-
-sync:
-	#cp build/dist/* /root/artifacts/...
 
 test:
 	./test/basictest.sh --force --insert-bashrc --install-openvim --init-openvim
