@@ -33,7 +33,8 @@ NSDS := \
     sandvine_pts_ns \
     sonussbc_ns \
     ref1_ns \
-    ref2_ns
+    ref2_ns \
+    ubuntu_cirros_multidisk_ns
 
 NSD_SRC_DIR := src/nsd
 NSD_BUILD_DIR := $(BUILD_DIR)/nsd
@@ -64,7 +65,8 @@ VNFDS := \
     ref11_vnf \
     ref21_vnf \
     ref12_vnf \
-    ref22_vnf
+    ref22_vnf \
+    ubuntu_cirros_multidisk_vnf
 
 VNFD_SRC_DIR := src/vnfd
 VNFD_BUILD_DIR := $(BUILD_DIR)/vnfd
