@@ -152,7 +152,7 @@ echo '
 #################################################################
 #####        CREATE DATABASE                                #####
 #################################################################'
-echo -e "\nCreating temporary file form MYSQL installation and initialization"
+echo -e "\nCreating temporary file for MYSQL installation and initialization"
 TEMPFILE="$(mktemp -q --tmpdir "installopenmano.XXXXXX")"
 trap 'rm -f "$TEMPFILE"' EXIT
 chmod 0600 "$TEMPFILE"
