@@ -552,10 +552,10 @@ class vimconnector(vimconn.vimconnector):
                             elif 'threads' in numa:
                                 vcpus = numa['threads']
                                 numa_properties["hw:cpu_policy"] = "isolated"
-                            for interface in numa.get("interfaces",() ):
-                                if interface["dedicated"]=="yes":
-                                    raise vimconn.vimconnException("Passthrough interfaces are not supported for the openstack connector", http_code=vimconn.HTTP_Service_Unavailable)
-                                #TODO, add the key 'pci_passthrough:alias"="<label at config>:<number ifaces>"' when a way to connect it is available
+                            # for interface in numa.get("interfaces",() ):
+                            #     if interface["dedicated"]=="yes":
+                            #         raise vimconn.vimconnException("Passthrough interfaces are not supported for the openstack connector", http_code=vimconn.HTTP_Service_Unavailable)
+                            #     #TODO, add the key 'pci_passthrough:alias"="<label at config>:<number ifaces>"' when a way to connect it is available
                                 
                 #create flavor                 
                 new_flavor=self.nova.flavors.create(name, 
@@ -733,35 +733,39 @@ class vimconnector(vimconn.vimconnector):
             for net in net_list:
                 if not net.get("net_id"): #skip non connected iface
                     continue
-                if net["type"]=="virtual" or net["type"]=="VF":
-                    port_dict={
-                        "network_id": net["net_id"],
-                        "name": net.get("name"),
-                        "admin_state_up": True
-                    }    
-                    if net["type"]=="virtual":
-                        if "vpci" in net:
-                            metadata_vpci[ net["net_id"] ] = [[ net["vpci"], "" ]]
-                    else: # for VF
-                        if "vpci" in net:
-                            if "VF" not in metadata_vpci:
-                                metadata_vpci["VF"]=[]
-                            metadata_vpci["VF"].append([ net["vpci"], "" ])
-                        port_dict["binding:vnic_type"]="direct"
-                    if not port_dict["name"]:
-                        port_dict["name"]=name
-                    if net.get("mac_address"):
-                        port_dict["mac_address"]=net["mac_address"]
-                    if net.get("port_security") == False:
-                        port_dict["port_security_enabled"]=net["port_security"]
-                    new_port = self.neutron.create_port({"port": port_dict })
-                    net["mac_adress"] = new_port["port"]["mac_address"]
-                    net["vim_id"] = new_port["port"]["id"]
-                    net["ip"] = new_port["port"].get("fixed_ips", [{}])[0].get("ip_address")
-                    net_list_vim.append({"port-id": new_port["port"]["id"]})
-                else:   # for PF
-                    self.logger.warn("new_vminstance: Warning, can not connect a passthrough interface ")
-                    #TODO insert this when openstack consider passthrough ports as openstack neutron ports
+
+                port_dict={
+                    "network_id": net["net_id"],
+                    "name": net.get("name"),
+                    "admin_state_up": True
+                }
+                if net["type"]=="virtual":
+                    if "vpci" in net:
+                        metadata_vpci[ net["net_id"] ] = [[ net["vpci"], "" ]]
+                elif net["type"]=="VF": # for VF
+                    if "vpci" in net:
+                        if "VF" not in metadata_vpci:
+                            metadata_vpci["VF"]=[]
+                        metadata_vpci["VF"].append([ net["vpci"], "" ])
+                    port_dict["binding:vnic_type"]="direct"
+                else: #For PT
+                    if "vpci" in net:
+                        if "PF" not in metadata_vpci:
+                            metadata_vpci["PF"]=[]
+                        metadata_vpci["PF"].append([ net["vpci"], "" ])
+                    port_dict["binding:vnic_type"]="direct-physical"
+                if not port_dict["name"]:
+                    port_dict["name"]=name
+                if net.get("mac_address"):
+                    port_dict["mac_address"]=net["mac_address"]
+                if net.get("port_security") == False:
+                    port_dict["port_security_enabled"]=net["port_security"]
+                new_port = self.neutron.create_port({"port": port_dict })
+                net["mac_adress"] = new_port["port"]["mac_address"]
+                net["vim_id"] = new_port["port"]["id"]
+                net["ip"] = new_port["port"].get("fixed_ips", [{}])[0].get("ip_address")
+                net_list_vim.append({"port-id": new_port["port"]["id"]})
+
                 if net.get('floating_ip', False):
                     net['exit_on_floating_ip_error'] = True
                     external_network.append(net)
@@ -1094,9 +1098,9 @@ class vimconnector(vimconn.vimconnector):
                         vim_net_id:       #network id where this interface is connected
                         vim_interface_id: #interface/port VIM id
                         ip_address:       #null, or text with IPv4, IPv6 address
-                        physical_compute: #identification of compute node where PF,VF interface is allocated
-                        physical_pci:     #PCI address of the NIC that hosts the PF,VF
-                        physical_vlan:    #physical VLAN used for VF
+                        compute_node:     #identification of compute node where PF,VF interface is allocated
+                        pci:              #PCI address of the NIC that hosts the PF,VF
+                        vlan:             #physical VLAN used for VF
         '''
         vm_dict={}
         self.logger.debug("refresh_vms status: Getting tenant VM instance information from VIM")
@@ -1129,19 +1133,21 @@ class vimconnector(vimconn.vimconnector):
                         interface["mac_address"] = port.get("mac_address")
                         interface["vim_net_id"] = port["network_id"]
                         interface["vim_interface_id"] = port["id"]
-                        interface["physical_compute"] = vm_vim['OS-EXT-SRV-ATTR:host']
-                        interface["physical_pci"] = None
-                        # TODO: At the moment sr-iov pci addresses are converted to PF pci addresses by setting the slot to 0x00
-                        # TODO: This is just a workaround valid for niantinc. Find a better way to do so
-                        if 'pci_slot' in port['binding:profile']:
-                            pci = list(port['binding:profile']['pci_slot'])
-                            pci[-4] = '0'
-                            pci[-3] = '0'
-                            interface["physical_pci"] = ''.join(pci)
-                        interface["physical_vlan"] = None
+                        interface["compute_node"] = vm_vim['OS-EXT-SRV-ATTR:host']
+                        interface["pci"] = None
+                        if port['binding:profile'].get('pci_slot'):
+                            # TODO: At the moment sr-iov pci addresses are converted to PF pci addresses by setting the slot to 0x00
+                            # TODO: This is just a workaround valid for niantinc. Find a better way to do so
+                            #   CHANGE DDDD:BB:SS.F to DDDD:BB:00.(F%2)   assuming there are 2 ports per nic
+                            pci = port['binding:profile']['pci_slot']
+                            # interface["pci"] = pci[:-4] + "00." + str(int(pci[-1]) % 2)
+                            interface["pci"] = pci
+                        interface["vlan"] = None
+                        #if network is of type vlan and port is of type direct (sr-iov) then set vlan id
                         network = self.neutron.show_network(port["network_id"])
-                        if network['network'].get('provider:network_type') == 'vlan':
-                            interface["physical_vlan"] = network['network'].get('provider:segmentation_id')
+                        if network['network'].get('provider:network_type') == 'vlan' and \
+                            port.get("binding:vnic_type") == "direct":
+                            interface["vlan"] = network['network'].get('provider:segmentation_id')
                         ips=[]
                         #look for floating ip address
                         floating_ip_dict = self.neutron.list_floatingips(port_id=port["id"])

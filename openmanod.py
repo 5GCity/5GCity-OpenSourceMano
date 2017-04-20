@@ -58,14 +58,16 @@ class LoadConfigurationException(Exception):
     pass
 
 def load_configuration(configuration_file):
-    default_tokens ={'http_port':9090,
-                     'http_host':'localhost',
-                     'http_console_proxy': True,
-                     'http_console_host': None,
-                     'log_level': 'DEBUG',
-                     'log_socket_port': 9022,
-                     'auto_push_VNF_to_VIMs': True
-                    }
+    default_tokens = {'http_port':9090,
+                      'http_host':'localhost',
+                      'http_console_proxy': True,
+                      'http_console_host': None,
+                      'log_level': 'DEBUG',
+                      'log_socket_port': 9022,
+                      'auto_push_VNF_to_VIMs': True,
+                      'db_host': 'localhost',
+                      'db_ovim_host': 'localhost'
+    }
     try:
         #Check config file exists
         with open(configuration_file, 'r') as f:
@@ -242,7 +244,7 @@ if __name__=="__main__":
         logger.critical("Starting openmano server version: '%s %s' command: '%s'",  
                          __version__, version_date, " ".join(sys.argv))
         
-        for log_module in ("nfvo", "http", "vim", "db", "console"):
+        for log_module in ("nfvo", "http", "vim", "db", "console", "ovim"):
             log_level_module = "log_level_" + log_module
             log_file_module = "log_file_" + log_module
             logger_module = logging.getLogger('openmano.' + log_module)

@@ -86,6 +86,10 @@ config_schema = {
         "db_user": nameshort_schema,
         "db_passwd": {"type":"string"},
         "db_name": nameshort_schema,
+        "db_ovim_host": nameshort_schema,
+        "db_ovim_user": nameshort_schema,
+        "db_ovim_passwd": {"type":"string"},
+        "db_ovim_name": nameshort_schema,
         # Next fields will disappear once the MANO API includes appropriate primitives
         "vim_url": http_schema,
         "vim_url_admin": http_schema,
@@ -109,16 +113,18 @@ config_schema = {
         "log_level_nfvo": log_level_schema,
         "log_level_http": log_level_schema,
         "log_level_console": log_level_schema,
+        "log_level_ovim": log_level_schema,
         "log_file_db": path_schema,
         "log_file_vim": path_schema,
         "log_file_nfvo": path_schema,
         "log_file_http": path_schema,
         "log_file_console": path_schema,
+        "log_file_ovim": path_schema,
         "log_socket_host": nameshort_schema,
         "log_socket_port": port_schema,
         "log_file": path_schema,
     },
-    "required": ['db_host', 'db_user', 'db_passwd', 'db_name'],
+    "required": ['db_user', 'db_passwd', 'db_name'],
     "additionalProperties": False
 }
 

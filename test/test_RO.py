@@ -49,6 +49,23 @@ global test_directory
 global scenario_test_folder
 global test_image_name
 global management_network
+global manual
+
+def check_instance_scenario_active(uuid):
+    instance = client.get_instance(uuid=uuid)
+
+    for net in instance['nets']:
+        status = net['status']
+        if status != 'ACTIVE':
+            return (False, status)
+
+    for vnf in instance['vnfs']:
+        for vm in vnf['vms']:
+            status = vm['status']
+            if status != 'ACTIVE':
+                return (False, status)
+
+    return (True, None)
 
 '''
 IMPORTANT NOTE
@@ -429,11 +446,41 @@ class descriptor_based_scenario_test(unittest.TestCase):
         self.__class__.test_index += 1
 
         instance = client.create_instance(scenario_id=self.__class__.scenario_uuid, name=self.__class__.test_text)
+        self.__class__.instance_scenario_uuid = instance['uuid']
         logger.debug(instance)
         self.__class__.to_delete_list.insert(0, {"item": "instance", "function": client.delete_instance,
                                   "params": {"uuid": instance['uuid']}})
 
-    def test_020_clean_deployment(self):
+    def test_020_check_deployent(self):
+        self.__class__.test_text = "{}.{}. TEST {} {}".format(test_number, self.__class__.test_index,
+                                                           inspect.currentframe().f_code.co_name,
+                                                           scenario_test_folder)
+        self.__class__.test_index += 1
+
+        if manual:
+            raw_input('Scenario has been deployed. Perform manual check and press any key to resume')
+            return
+
+        keep_waiting = 50
+        instance_active = False
+        while(keep_waiting):
+            result = check_instance_scenario_active(self.__class__.instance_scenario_uuid)
+            if result[0]:
+                break
+            elif 'ERROR' in result[1]:
+                msg = 'Got error while waiting for the instance to get active: '+result[1]
+                logging.error(msg)
+                raise Exception(msg)
+
+            keep_waiting -= 1
+            time.sleep(5)
+
+        if keep_waiting == 0:
+            msg = 'Timeout reached while waiting instance scenario to get active'
+            logging.error(msg)
+            raise Exception(msg)
+
+    def test_030_clean_deployment(self):
         self.__class__.test_text = "{}.{}. TEST {} {}".format(test_number, self.__class__.test_index,
                                                               inspect.currentframe().f_code.co_name,
                                                               scenario_test_folder)
@@ -476,6 +523,7 @@ if __name__=="__main__":
                       default=default_logger_file)
     parser.add_option('--list-tests', help='List all available tests', dest='list-tests', action="store_true",
                       default=False)
+    parser.add_option('-m', '--manual-check', help='Pause execution once deployed to allow manual checking of the deployed instance scenario', dest='manual', action="store_true", default=False)
     parser.add_option('--test', '--tests', help='Specify the tests to run', dest='tests', default=None)
 
     #Mandatory arguments
@@ -551,6 +599,7 @@ if __name__=="__main__":
     # set test image name and management network
     test_image_name = options.__dict__['image-name']
     management_network = options.__dict__['mgmt-net']
+    manual = options.__dict__['manual']
 
     #Create the list of tests to be run
     descriptor_based_tests = []

@@ -43,7 +43,7 @@ from db_base import db_base_Exception
 import nfvo_db
 from threading import Lock
 from time import time
-#import openvim.ovim as Ovim
+import ovim as ovim_module
 
 global global_config
 global vimconn_imported
@@ -59,7 +59,7 @@ vim_threads = {"running":{}, "deleting": {}, "names": []}      # threads running
 vim_persistent_info = {}
 logger = logging.getLogger('openmano.nfvo')
 task_lock = Lock()
-task_dict = {}
+global_instance_tasks = {}
 last_task_id = 0.0
 db=None
 db_lock=Lock()
@@ -79,13 +79,11 @@ def get_task_id():
     return "TASK.{:.6f}".format(task_id)
 
 
-def new_task(name, params, store=True, depends=None):
+def new_task(name, params, depends=None):
     task_id = get_task_id()
     task = {"status": "enqueued", "id": task_id, "name": name, "params": params}
     if depends:
         task["depends"] = depends
-    if store:
-        task_dict[task_id] = task
     return task
 
 
@@ -117,24 +115,21 @@ def start_service(mydb):
     # TODO: Avoid static configuration by adding new parameters to openmanod.cfg
     # TODO: review ovim.py to delete not needed configuration
     ovim_configuration = {
-        'logger_name': 'openvim',
+        'logger_name': 'openmano.ovim',
         'network_vlan_range_start': 1000,
         'network_vlan_range_end': 4096,
-        'log_level_db': 'DEBUG',
-        'db_name': 'mano_vim_db',
-        'db_host': 'localhost',
-        'db_user': 'vim',
-        'db_passwd': 'vimpw',
-        'database_version': '0.15',
+        'db_name': global_config["db_ovim_name"],
+        'db_host': global_config["db_ovim_host"],
+        'db_user': global_config["db_ovim_user"],
+        'db_passwd': global_config["db_ovim_passwd"],
         'bridge_ifaces': {},
         'mode': 'normal',
-        'of_controller_nets_with_same_vlan': True,
         'network_type': 'bridge',
         #TODO: log_level_of should not be needed. To be modified in ovim
         'log_level_of': 'DEBUG'
     }
-    #ovim = Ovim.ovim(ovim_configuration)
-    #ovim.start_service()
+    ovim = ovim_module.ovim(ovim_configuration)
+    ovim.start_service()
 
     from_= 'tenants_datacenters as td join datacenters as d on td.datacenter_id=d.uuid join datacenter_tenants as dt on td.datacenter_tenant_id=dt.uuid'
     select_ = ('type','d.config as config','d.uuid as datacenter_id', 'vim_url', 'vim_url_admin', 'd.name as datacenter_name',
@@ -143,7 +138,8 @@ def start_service(mydb):
     try:
         vims = mydb.get_rows(FROM=from_, SELECT=select_)
         for vim in vims:
-            extra={'datacenter_tenant_id': vim.get('datacenter_tenant_id')}
+            extra={'datacenter_tenant_id': vim.get('datacenter_tenant_id'),
+                   'datacenter_id': vim.get('datacenter_id')}
             if vim["config"]:
                 extra.update(yaml.load(vim["config"]))
             if vim.get('dt_config'):
@@ -161,7 +157,7 @@ def start_service(mydb):
                     raise NfvoException("Unknown vim type '{}'. Can not open file '{}.py'; {}: {}".format(
                         vim["type"], module, type(e).__name__, str(e)), HTTP_Bad_Request)
 
-            thread_id = vim["datacenter_id"] + "." + vim['nfvo_tenant_id']
+            thread_id = vim['datacenter_tenant_id']
             vim_persistent_info[thread_id] = {}
             try:
                 #if not tenant:
@@ -177,18 +173,19 @@ def start_service(mydb):
                 raise NfvoException("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, str(e)), HTTP_Internal_Server_Error)
             thread_name = get_non_used_vim_name(vim['datacenter_name'], vim['vim_tenant_id'], vim['vim_tenant_name'], vim['vim_tenant_id'])
             new_thread = vim_thread.vim_thread(myvim, task_lock, thread_name, vim['datacenter_name'],
-                                               vim.get('datacenter_tenant_id'), db=db, db_lock=db_lock, ovim=ovim)
+                                               vim['datacenter_tenant_id'], db=db, db_lock=db_lock, ovim=ovim)
             new_thread.start()
             vim_threads["running"][thread_id] = new_thread
     except db_base_Exception as e:
         raise NfvoException(str(e) + " at nfvo.get_vim", e.http_code)
+
 
 def stop_service():
     global ovim, global_config
     if ovim:
         ovim.stop_service()
     for thread_id,thread in vim_threads["running"].items():
-        thread.insert_task(new_task("exit", None, store=False))
+        thread.insert_task(new_task("exit", None))
         vim_threads["deleting"][thread_id] = thread
     vim_threads["running"] = {}
     if global_config and global_config.get("console_thread"):
@@ -263,7 +260,8 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
         vims = mydb.get_rows(FROM=from_, SELECT=select_, WHERE=WHERE_dict )
         vim_dict={}
         for vim in vims:
-            extra={'datacenter_tenant_id': vim.get('datacenter_tenant_id')}
+            extra={'datacenter_tenant_id': vim.get('datacenter_tenant_id'),
+                   'datacenter_id': vim.get('datacenter_id')}
             if vim["config"]:
                 extra.update(yaml.load(vim["config"]))
             if vim.get('dt_config'):
@@ -282,8 +280,8 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
                                             vim["type"], module, type(e).__name__, str(e)), HTTP_Bad_Request)
 
             try:
-                if 'nfvo_tenant_id' in vim:
-                    thread_id = vim["datacenter_id"] + "." + vim['nfvo_tenant_id']
+                if 'datacenter_tenant_id' in vim:
+                    thread_id = vim["datacenter_tenant_id"]
                     if thread_id not in vim_persistent_info:
                         vim_persistent_info[thread_id] = {}
                     persistent_info = vim_persistent_info[thread_id]
@@ -1868,33 +1866,40 @@ def unify_cloud_config(cloud_config_preserve, cloud_config):
     return new_cloud_config
 
 
-def get_vim_thread(tenant_id, datacenter_id_name=None, datacenter_tenant_id=None):
+def get_vim_thread(mydb, tenant_id, datacenter_id_name=None, datacenter_tenant_id=None):
     datacenter_id = None
     datacenter_name = None
     thread = None
-    if datacenter_id_name:
-        if utils.check_valid_uuid(datacenter_id_name):
-            datacenter_id = datacenter_id_name
+    try:
+        if datacenter_tenant_id:
+            thread_id = datacenter_tenant_id
+            thread = vim_threads["running"].get(datacenter_tenant_id)
         else:
-            datacenter_name = datacenter_id_name
-    if datacenter_id:
-        thread = vim_threads["running"].get(datacenter_id + "." + tenant_id)
-    else:
-        for k, v in vim_threads["running"].items():
-            datacenter_tenant = k.split(".")
-            if datacenter_tenant[0] == datacenter_id and datacenter_tenant[1] == tenant_id:
-                if thread:
-                    raise NfvoException("More than one datacenters found, try to identify with uuid", HTTP_Conflict)
-                thread = v
-            elif not datacenter_id and datacenter_tenant[1] == tenant_id:
-                if thread.datacenter_name == datacenter_name:
-                    if thread:
-                        raise NfvoException("More than one datacenters found, try to identify with uuid", HTTP_Conflict)
-                    thread = v
-    if not thread:
-        raise NfvoException("datacenter '{}' not found".format(str(datacenter_id_name)), HTTP_Not_Found)
-    return thread
-
+            where_={"td.nfvo_tenant_id": tenant_id}
+            if datacenter_id_name:
+                if utils.check_valid_uuid(datacenter_id_name):
+                    datacenter_id = datacenter_id_name
+                    where_["dt.datacenter_id"] = datacenter_id
+                else:
+                    datacenter_name = datacenter_id_name
+                    where_["d.name"] = datacenter_name
+            if datacenter_tenant_id:
+                where_["dt.uuid"] = datacenter_tenant_id
+            datacenters = mydb.get_rows(
+                SELECT=("dt.uuid as datacenter_tenant_id",),
+                FROM="datacenter_tenants as dt join tenants_datacenters as td on dt.uuid=td.datacenter_tenant_id "
+                     "join datacenters as d on d.uuid=dt.datacenter_id",
+                WHERE=where_)
+            if len(datacenters) > 1:
+                raise NfvoException("More than one datacenters found, try to identify with uuid", HTTP_Conflict)
+            elif datacenters:
+                thread_id = datacenters[0]["datacenter_tenant_id"]
+                thread = vim_threads["running"].get(thread_id)
+        if not thread:
+            raise NfvoException("datacenter '{}' not found".format(str(datacenter_id_name)), HTTP_Not_Found)
+        return thread_id, thread
+    except db_base_Exception as e:
+        raise NfvoException("{} {}".format(type(e).__name__ , str(e)), e.http_code)
 
 def get_datacenter_by_name_uuid(mydb, tenant_id, datacenter_id_name=None, **extra_filter):
     datacenter_id = None
@@ -1932,13 +1937,14 @@ def create_instance(mydb, tenant_id, instance_dict):
 
     #find main datacenter
     myvims = {}
-    myvim_threads = {}
-    datacenter2tenant = {}
+    myvim_threads_id = {}
+    instance_tasks={}
+    tasks_to_launch={}
     datacenter = instance_dict.get("datacenter")
     default_datacenter_id, vim = get_datacenter_by_name_uuid(mydb, tenant_id, datacenter)
     myvims[default_datacenter_id] = vim
-    myvim_threads[default_datacenter_id] = get_vim_thread(tenant_id, default_datacenter_id)
-    datacenter2tenant[default_datacenter_id] = vim['config']['datacenter_tenant_id']
+    myvim_threads_id[default_datacenter_id], _ = get_vim_thread(mydb, tenant_id, default_datacenter_id)
+    tasks_to_launch[myvim_threads_id[default_datacenter_id]] = []
     #myvim_tenant = myvim['tenant_id']
 #    default_datacenter_name = vim['name']
     rollbackList=[]
@@ -1958,7 +1964,6 @@ def create_instance(mydb, tenant_id, instance_dict):
     logger.debug("Creating instance from scenario-dict:\n%s", yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False))  #TODO remove
     instance_name = instance_dict["name"]
     instance_description = instance_dict.get("description")
-    instance_tasks={}
     try:
         # 0 check correct parameters
         for net_name, net_instance_desc in instance_dict.get("networks",{}).iteritems():
@@ -1978,8 +1983,8 @@ def create_instance(mydb, tenant_id, instance_dict):
                         #Add this datacenter to myvims
                         d, v = get_datacenter_by_name_uuid(mydb, tenant_id, site["datacenter"])
                         myvims[d] = v
-                        myvim_threads[d] = get_vim_thread(tenant_id, site["datacenter"])
-                        datacenter2tenant[d] = v['config']['datacenter_tenant_id']
+                        myvim_threads_id[d],_ = get_vim_thread(mydb, tenant_id, site["datacenter"])
+                        tasks_to_launch[myvim_threads_id[d]] = []
                         site["datacenter"] = d #change name to id
                 else:
                     if site_without_datacenter_field:
@@ -2000,8 +2005,8 @@ def create_instance(mydb, tenant_id, instance_dict):
                 if vnf_instance_desc["datacenter"] not in myvims:
                     d, v = get_datacenter_by_name_uuid(mydb, tenant_id, vnf_instance_desc["datacenter"])
                     myvims[d] = v
-                    myvim_threads[d] = get_vim_thread(tenant_id, vnf_instance_desc["datacenter"])
-                    datacenter2tenant[d] = v['config']['datacenter_tenant_id']
+                    myvim_threads_id[d],_ = get_vim_thread(mydb, tenant_id, vnf_instance_desc["datacenter"])
+                    tasks_to_launch[myvim_threads_id[d]] = []
                 scenario_vnf["datacenter"] = vnf_instance_desc["datacenter"]
 
     #0.1 parse cloud-config parameters
@@ -2052,11 +2057,11 @@ def create_instance(mydb, tenant_id, instance_dict):
                 if site.get("datacenter"):
                     vim = myvims[ site["datacenter"] ]
                     datacenter_id = site["datacenter"]
-                    myvim_thread = myvim_threads[ site["datacenter"] ]
+                    myvim_thread_id = myvim_threads_id[ site["datacenter"] ]
                 else:
                     vim = myvims[ default_datacenter_id ]
                     datacenter_id = default_datacenter_id
-                    myvim_thread = myvim_threads[default_datacenter_id]
+                    myvim_thread_id = myvim_threads_id[default_datacenter_id]
                 net_type = sce_net['type']
                 lookfor_filter = {'admin_state_up': True, 'status': 'ACTIVE'} #'shared': True
                 if sce_net["external"]:
@@ -2115,8 +2120,9 @@ def create_instance(mydb, tenant_id, instance_dict):
                 if create_network:
                     #if network is not external
                     task = new_task("new-net", (net_vim_name, net_type, sce_net.get('ip_profile',None)))
-                    task_id = myvim_thread.insert_task(task)
+                    task_id = task["id"]
                     instance_tasks[task_id] = task
+                    tasks_to_launch[myvim_thread_id].append(task)
                     #network_id = vim.new_network(net_vim_name, net_type, sce_net.get('ip_profile',None))
                     sce_net["vim_id_sites"][datacenter_id] = task_id
                     auxNetDict['scenario'][sce_net['uuid']][datacenter_id] = task_id
@@ -2130,11 +2136,11 @@ def create_instance(mydb, tenant_id, instance_dict):
                 if sce_vnf.get("datacenter"):
                     vim = myvims[ sce_vnf["datacenter"] ]
                     datacenter_id = sce_vnf["datacenter"]
-                    myvim_thread = myvim_threads[ sce_vnf["datacenter"]]
+                    myvim_thread_id = myvim_threads_id[ sce_vnf["datacenter"]]
                 else:
                     vim = myvims[ default_datacenter_id ]
                     datacenter_id = default_datacenter_id
-                    myvim_thread = myvim_threads[default_datacenter_id]
+                    myvim_thread_id = myvim_threads_id[default_datacenter_id]
                 descriptor_net =  instance_dict.get("vnfs",{}).get(sce_vnf["name"],{})
                 net_name = descriptor_net.get("name")
                 if not net_name:
@@ -2142,8 +2148,9 @@ def create_instance(mydb, tenant_id, instance_dict):
                     net_name = net_name[:255]     #limit length
                 net_type = net['type']
                 task = new_task("new-net", (net_name, net_type, net.get('ip_profile',None)))
-                task_id = myvim_thread.insert_task(task)
+                task_id = task["id"]
                 instance_tasks[task_id] = task
+                tasks_to_launch[myvim_thread_id].append(task)
                 # network_id = vim.new_network(net_name, net_type, net.get('ip_profile',None))
                 net['vim_id'] = task_id
                 if sce_vnf['uuid'] not in auxNetDict:
@@ -2161,11 +2168,11 @@ def create_instance(mydb, tenant_id, instance_dict):
         for sce_vnf in scenarioDict['vnfs']:
             if sce_vnf.get("datacenter"):
                 vim = myvims[ sce_vnf["datacenter"] ]
-                myvim_thread = myvim_threads[ sce_vnf["datacenter"] ]
+                myvim_thread_id = myvim_threads_id[ sce_vnf["datacenter"] ]
                 datacenter_id = sce_vnf["datacenter"]
             else:
                 vim = myvims[ default_datacenter_id ]
-                myvim_thread = myvim_threads[ default_datacenter_id ]
+                myvim_thread_id = myvim_threads_id[ default_datacenter_id ]
                 datacenter_id = default_datacenter_id
             sce_vnf["datacenter_id"] =  datacenter_id
             i = 0
@@ -2257,7 +2264,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                                 break
                     else:
                         netDict['net_id'] = auxNetDict[ sce_vnf['uuid'] ][ iface['net_id'] ]
-                    if is_task_id(netDict['net_id']):
+                    if netDict.get('net_id') and is_task_id(netDict['net_id']):
                         task_depends[netDict['net_id']] = instance_tasks[netDict['net_id']]
                     #skip bridge ifaces not connected to any net
                     #if 'net_id' not in netDict or netDict['net_id']==None:
@@ -2275,9 +2282,9 @@ def create_instance(mydb, tenant_id, instance_dict):
                 task = new_task("new-vm", (myVMDict['name'], myVMDict['description'], myVMDict.get('start', None),
                                            myVMDict['imageRef'], myVMDict['flavorRef'], myVMDict['networks'],
                                            cloud_config_vm, myVMDict['disks']), depends=task_depends)
-                vm_id = myvim_thread.insert_task(task)
-                instance_tasks[vm_id] = task
-
+                instance_tasks[task["id"]] = task
+                tasks_to_launch[myvim_thread_id].append(task)
+                vm_id = task["id"]
                 vm['vim_id'] = vm_id
                 rollbackList.append({'what':'vm','where':'vim','vim_id':datacenter_id,'uuid':vm_id})
                 #put interface uuid back to scenario[vnfs][vms[[interfaces]
@@ -2287,19 +2294,24 @@ def create_instance(mydb, tenant_id, instance_dict):
                             if net["name"]==iface["internal_name"]:
                                 iface["vim_id"]=net["vim_id"]
                                 break
-        scenarioDict["datacenter2tenant"] = datacenter2tenant
+        scenarioDict["datacenter2tenant"] = myvim_threads_id
         logger.debug("create_instance Deployment done scenarioDict: %s",
                     yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False) )
         instance_id = mydb.new_instance_scenario_as_a_whole(tenant_id,instance_name, instance_description, scenarioDict)
-        # Update database with those ended tasks
-        for task in instance_tasks.values():
-            if task["status"] == "ok":
-                if task["name"] == "new-vm":
-                    mydb.update_rows("instance_vms", UPDATE={"vim_vm_id": task["result"]},
-                                     WHERE={"vim_vm_id": task["id"]})
-                elif task["name"] == "new-net":
-                    mydb.update_rows("instance_nets", UPDATE={"vim_net_id": task["result"]},
-                                     WHERE={"vim_net_id": task["id"]})
+        for myvim_thread_id,task_list in tasks_to_launch.items():
+            for task in task_list:
+                vim_threads["running"][myvim_thread_id].insert_task(task)
+
+        global_instance_tasks[instance_id] = instance_tasks
+        # Update database with those ended instance_tasks
+        # for task in instance_tasks.values():
+        #     if task["status"] == "ok":
+        #         if task["name"] == "new-vm":
+        #             mydb.update_rows("instance_vms", UPDATE={"vim_vm_id": task["result"]},
+        #                             WHERE={"vim_vm_id": task["id"]})
+        #         elif task["name"] == "new-net":
+        #             mydb.update_rows("instance_nets", UPDATE={"vim_net_id": task["result"]},
+        #                              WHERE={"vim_net_id": task["id"]})
         return mydb.get_instance_scenario(instance_id)
     except (NfvoException, vimconn.vimconnException,db_base_Exception)  as e:
         message = rollback(mydb, myvims, rollbackList)
@@ -2335,7 +2347,7 @@ def delete_instance(mydb, tenant_id, instance_id):
         datacenter_key = (sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
         if datacenter_key not in myvims:
             try:
-                myvim_thread = get_vim_thread(tenant_id, sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
+                _,myvim_thread = get_vim_thread(mydb, tenant_id, sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
             except NfvoException as e:
                 logger.error(str(e))
                 myvim_thread = None
@@ -2358,7 +2370,7 @@ def delete_instance(mydb, tenant_id, instance_id):
                 task=None
                 if is_task_id(vm['vim_vm_id']):
                     task_id = vm['vim_vm_id']
-                    old_task = task_dict.get(task_id)
+                    old_task = global_instance_tasks[instance_id].get(task_id)
                     if not old_task:
                         error_msg += "\n    VM was scheduled for create, but task {} is not found".format(task_id)
                         continue
@@ -2368,11 +2380,11 @@ def delete_instance(mydb, tenant_id, instance_id):
                         elif old_task["status"] == "error":
                             continue
                         elif old_task["status"] == "processing":
-                            task = new_task("del-vm", task_id, depends={task_id: old_task})
+                            task = new_task("del-vm", (task_id, vm["interfaces"]), depends={task_id: old_task})
                         else: #ok
-                            task = new_task("del-vm", old_task["result"])
+                            task = new_task("del-vm", (old_task["result"], vm["interfaces"]))
                 else:
-                    task = new_task("del-vm", vm['vim_vm_id'], store=False)
+                    task = new_task("del-vm", (vm['vim_vm_id'], vm["interfaces"]) )
                 if task:
                     myvim_thread.insert_task(task)
             except vimconn.vimconnNotFoundException as e:
@@ -2392,7 +2404,7 @@ def delete_instance(mydb, tenant_id, instance_id):
         datacenter_key = (net["datacenter_id"], net["datacenter_tenant_id"])
         if datacenter_key not in myvims:
             try:
-                myvim_thread = get_vim_thread(tenant_id, sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
+                _,myvim_thread = get_vim_thread(mydb, tenant_id, sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
             except NfvoException as e:
                 logger.error(str(e))
                 myvim_thread = None
@@ -2414,7 +2426,7 @@ def delete_instance(mydb, tenant_id, instance_id):
             task = None
             if is_task_id(net['vim_net_id']):
                 task_id = net['vim_net_id']
-                old_task = task_dict.get(task_id)
+                old_task = global_instance_tasks[instance_id].get(task_id)
                 if not old_task:
                     error_msg += "\n    NET was scheduled for create, but task {} is not found".format(task_id)
                     continue
@@ -2428,7 +2440,7 @@ def delete_instance(mydb, tenant_id, instance_id):
                     else:  # ok
                         task = new_task("del-net", old_task["result"])
             else:
-                task = new_task("del-net", (net['vim_net_id'], net['sdn_net_id']), store=False)
+                task = new_task("del-net", (net['vim_net_id'], net['sdn_net_id']))
             if task:
                 myvim_thread.insert_task(task)
         except vimconn.vimconnNotFoundException as e:
@@ -2453,161 +2465,161 @@ def refresh_instance(mydb, nfvo_tenant, instanceDict, datacenter=None, vim_tenan
          - result: <0 if there is any unexpected error, n>=0 if no errors where n is the number of vms and nets that couldn't be updated in the database
          - error_msg
     '''
-    # Assumption: nfvo_tenant and instance_id were checked before entering into this function
-    #print "nfvo.refresh_instance begins"
-    #print json.dumps(instanceDict, indent=4)
-
-    #print "Getting the VIM URL and the VIM tenant_id"
-    myvims={}
-
-    # 1. Getting VIM vm and net list
-    vms_updated = [] #List of VM instance uuids in openmano that were updated
-    vms_notupdated=[]
-    vm_list = {}
-    for sce_vnf in instanceDict['vnfs']:
-        datacenter_key = (sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
-        if datacenter_key not in vm_list:
-            vm_list[datacenter_key] = []
-        if datacenter_key not in myvims:
-            vims = get_vim(mydb, nfvo_tenant, datacenter_id=sce_vnf["datacenter_id"],
-                           datacenter_tenant_id=sce_vnf["datacenter_tenant_id"])
-            if len(vims) == 0:
-                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"]))
-                myvims[datacenter_key] = None
-            else:
-                myvims[datacenter_key] = vims.values()[0]
-        for vm in sce_vnf['vms']:
-            vm_list[datacenter_key].append(vm['vim_vm_id'])
-            vms_notupdated.append(vm["uuid"])
-
-    nets_updated = [] #List of VM instance uuids in openmano that were updated
-    nets_notupdated=[]
-    net_list = {}
-    for net in instanceDict['nets']:
-        datacenter_key = (net["datacenter_id"], net["datacenter_tenant_id"])
-        if datacenter_key not in net_list:
-            net_list[datacenter_key] = []
-        if datacenter_key not in myvims:
-            vims = get_vim(mydb, nfvo_tenant, datacenter_id=net["datacenter_id"],
-                           datacenter_tenant_id=net["datacenter_tenant_id"])
-            if len(vims) == 0:
-                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(net["datacenter_id"], net["datacenter_tenant_id"]))
-                myvims[datacenter_key] = None
-            else:
-                myvims[datacenter_key] = vims.values()[0]
-
-        net_list[datacenter_key].append(net['vim_net_id'])
-        nets_notupdated.append(net["uuid"])
-
-    # 1. Getting the status of all VMs
-    vm_dict={}
-    for datacenter_key in myvims:
-        if not vm_list.get(datacenter_key):
-            continue
-        failed = True
-        failed_message=""
-        if not myvims[datacenter_key]:
-            failed_message = "datacenter '{}' with datacenter_tenant_id '{}' not found".format(net["datacenter_id"], net["datacenter_tenant_id"])
-        else:
-            try:
-                vm_dict.update(myvims[datacenter_key].refresh_vms_status(vm_list[datacenter_key]) )
-                failed = False
-            except vimconn.vimconnException as e:
-                logger.error("VIM exception %s %s", type(e).__name__, str(e))
-                failed_message = str(e)
-        if failed:
-            for vm in vm_list[datacenter_key]:
-                vm_dict[vm] = {'status': "VIM_ERROR", 'error_msg': failed_message}
-
-    # 2. Update the status of VMs in the instanceDict, while collects the VMs whose status changed
-    for sce_vnf in instanceDict['vnfs']:
-        for vm in sce_vnf['vms']:
-            vm_id = vm['vim_vm_id']
-            interfaces = vm_dict[vm_id].pop('interfaces', [])
-            #2.0 look if contain manamgement interface, and if not change status from ACTIVE:NoMgmtIP to ACTIVE
-            has_mgmt_iface = False
-            for iface in vm["interfaces"]:
-                if iface["type"]=="mgmt":
-                    has_mgmt_iface = True
-            if vm_dict[vm_id]['status'] == "ACTIVE:NoMgmtIP" and not has_mgmt_iface:
-                vm_dict[vm_id]['status'] = "ACTIVE"
-            if vm_dict[vm_id].get('error_msg') and len(vm_dict[vm_id]['error_msg']) >= 1024:
-                vm_dict[vm_id]['error_msg'] = vm_dict[vm_id]['error_msg'][:516] + " ... " + vm_dict[vm_id]['error_msg'][-500:]
-            if vm['status'] != vm_dict[vm_id]['status'] or vm.get('error_msg')!=vm_dict[vm_id].get('error_msg') or vm.get('vim_info')!=vm_dict[vm_id].get('vim_info'):
-                vm['status']    = vm_dict[vm_id]['status']
-                vm['error_msg'] = vm_dict[vm_id].get('error_msg')
-                vm['vim_info']  = vm_dict[vm_id].get('vim_info')
-                # 2.1. Update in openmano DB the VMs whose status changed
-                try:
-                    updates = mydb.update_rows('instance_vms', UPDATE=vm_dict[vm_id], WHERE={'uuid':vm["uuid"]})
-                    vms_notupdated.remove(vm["uuid"])
-                    if updates>0:
-                        vms_updated.append(vm["uuid"])
-                except db_base_Exception as e:
-                    logger.error("nfvo.refresh_instance error database update: %s", str(e))
-            # 2.2. Update in openmano DB the interface VMs
-            for interface in interfaces:
-                #translate from vim_net_id to instance_net_id
-                network_id_list=[]
-                for net in instanceDict['nets']:
-                    if net["vim_net_id"] == interface["vim_net_id"]:
-                        network_id_list.append(net["uuid"])
-                if not network_id_list:
-                    continue
-                del interface["vim_net_id"]
-                try:
-                    for network_id in network_id_list:
-                        mydb.update_rows('instance_interfaces', UPDATE=interface, WHERE={'instance_vm_id':vm["uuid"], "instance_net_id":network_id})
-                except db_base_Exception as e:
-                    logger.error( "nfvo.refresh_instance error with vm=%s, interface_net_id=%s", vm["uuid"], network_id)
-
-    # 3. Getting the status of all nets
-    net_dict = {}
-    for datacenter_key in myvims:
-        if not net_list.get(datacenter_key):
-            continue
-        failed = True
-        failed_message = ""
-        if not myvims[datacenter_key]:
-            failed_message = "datacenter '{}' with datacenter_tenant_id '{}' not found".format(net["datacenter_id"], net["datacenter_tenant_id"])
-        else:
-            try:
-                net_dict.update(myvims[datacenter_key].refresh_nets_status(net_list[datacenter_key]) )
-                failed = False
-            except vimconn.vimconnException as e:
-                logger.error("VIM exception %s %s", type(e).__name__, str(e))
-                failed_message = str(e)
-        if failed:
-            for net in net_list[datacenter_key]:
-                net_dict[net] = {'status': "VIM_ERROR", 'error_msg': failed_message}
-
-    # 4. Update the status of nets in the instanceDict, while collects the nets whose status changed
-    # TODO: update nets inside a vnf
-    for net in instanceDict['nets']:
-        net_id = net['vim_net_id']
-        if net_dict[net_id].get('error_msg') and len(net_dict[net_id]['error_msg']) >= 1024:
-            net_dict[net_id]['error_msg'] = net_dict[net_id]['error_msg'][:516] + " ... " + net_dict[vm_id]['error_msg'][-500:]
-        if net['status'] != net_dict[net_id]['status'] or net.get('error_msg')!=net_dict[net_id].get('error_msg') or net.get('vim_info')!=net_dict[net_id].get('vim_info'):
-            net['status']    = net_dict[net_id]['status']
-            net['error_msg'] = net_dict[net_id].get('error_msg')
-            net['vim_info']  = net_dict[net_id].get('vim_info')
-            # 5.1. Update in openmano DB the nets whose status changed
-            try:
-                updated = mydb.update_rows('instance_nets', UPDATE=net_dict[net_id], WHERE={'uuid':net["uuid"]})
-                nets_notupdated.remove(net["uuid"])
-                if updated>0:
-                    nets_updated.append(net["uuid"])
-            except db_base_Exception as e:
-                logger.error("nfvo.refresh_instance error database update: %s", str(e))
-
-    # Returns appropriate output
-    #print "nfvo.refresh_instance finishes"
-    logger.debug("VMs updated in the database: %s; nets updated in the database %s; VMs not updated: %s; nets not updated: %s",
-                str(vms_updated), str(nets_updated), str(vms_notupdated), str(nets_notupdated))
+    # # Assumption: nfvo_tenant and instance_id were checked before entering into this function
+    # #print "nfvo.refresh_instance begins"
+    # #print json.dumps(instanceDict, indent=4)
+    #
+    # #print "Getting the VIM URL and the VIM tenant_id"
+    # myvims={}
+    #
+    # # 1. Getting VIM vm and net list
+    # vms_updated = [] #List of VM instance uuids in openmano that were updated
+    # vms_notupdated=[]
+    # vm_list = {}
+    # for sce_vnf in instanceDict['vnfs']:
+    #     datacenter_key = (sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
+    #     if datacenter_key not in vm_list:
+    #         vm_list[datacenter_key] = []
+    #     if datacenter_key not in myvims:
+    #         vims = get_vim(mydb, nfvo_tenant, datacenter_id=sce_vnf["datacenter_id"],
+    #                        datacenter_tenant_id=sce_vnf["datacenter_tenant_id"])
+    #         if len(vims) == 0:
+    #             logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"]))
+    #             myvims[datacenter_key] = None
+    #         else:
+    #             myvims[datacenter_key] = vims.values()[0]
+    #     for vm in sce_vnf['vms']:
+    #         vm_list[datacenter_key].append(vm['vim_vm_id'])
+    #         vms_notupdated.append(vm["uuid"])
+    #
+    # nets_updated = [] #List of VM instance uuids in openmano that were updated
+    # nets_notupdated=[]
+    # net_list = {}
+    # for net in instanceDict['nets']:
+    #     datacenter_key = (net["datacenter_id"], net["datacenter_tenant_id"])
+    #     if datacenter_key not in net_list:
+    #         net_list[datacenter_key] = []
+    #     if datacenter_key not in myvims:
+    #         vims = get_vim(mydb, nfvo_tenant, datacenter_id=net["datacenter_id"],
+    #                        datacenter_tenant_id=net["datacenter_tenant_id"])
+    #         if len(vims) == 0:
+    #             logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(net["datacenter_id"], net["datacenter_tenant_id"]))
+    #             myvims[datacenter_key] = None
+    #         else:
+    #             myvims[datacenter_key] = vims.values()[0]
+    #
+    #     net_list[datacenter_key].append(net['vim_net_id'])
+    #     nets_notupdated.append(net["uuid"])
+    #
+    # # 1. Getting the status of all VMs
+    # vm_dict={}
+    # for datacenter_key in myvims:
+    #     if not vm_list.get(datacenter_key):
+    #         continue
+    #     failed = True
+    #     failed_message=""
+    #     if not myvims[datacenter_key]:
+    #         failed_message = "datacenter '{}' with datacenter_tenant_id '{}' not found".format(net["datacenter_id"], net["datacenter_tenant_id"])
+    #     else:
+    #         try:
+    #             vm_dict.update(myvims[datacenter_key].refresh_vms_status(vm_list[datacenter_key]) )
+    #             failed = False
+    #         except vimconn.vimconnException as e:
+    #             logger.error("VIM exception %s %s", type(e).__name__, str(e))
+    #             failed_message = str(e)
+    #     if failed:
+    #         for vm in vm_list[datacenter_key]:
+    #             vm_dict[vm] = {'status': "VIM_ERROR", 'error_msg': failed_message}
+    #
+    # # 2. Update the status of VMs in the instanceDict, while collects the VMs whose status changed
+    # for sce_vnf in instanceDict['vnfs']:
+    #     for vm in sce_vnf['vms']:
+    #         vm_id = vm['vim_vm_id']
+    #         interfaces = vm_dict[vm_id].pop('interfaces', [])
+    #         #2.0 look if contain manamgement interface, and if not change status from ACTIVE:NoMgmtIP to ACTIVE
+    #         has_mgmt_iface = False
+    #         for iface in vm["interfaces"]:
+    #             if iface["type"]=="mgmt":
+    #                 has_mgmt_iface = True
+    #         if vm_dict[vm_id]['status'] == "ACTIVE:NoMgmtIP" and not has_mgmt_iface:
+    #             vm_dict[vm_id]['status'] = "ACTIVE"
+    #         if vm_dict[vm_id].get('error_msg') and len(vm_dict[vm_id]['error_msg']) >= 1024:
+    #             vm_dict[vm_id]['error_msg'] = vm_dict[vm_id]['error_msg'][:516] + " ... " + vm_dict[vm_id]['error_msg'][-500:]
+    #         if vm['status'] != vm_dict[vm_id]['status'] or vm.get('error_msg')!=vm_dict[vm_id].get('error_msg') or vm.get('vim_info')!=vm_dict[vm_id].get('vim_info'):
+    #             vm['status']    = vm_dict[vm_id]['status']
+    #             vm['error_msg'] = vm_dict[vm_id].get('error_msg')
+    #             vm['vim_info']  = vm_dict[vm_id].get('vim_info')
+    #             # 2.1. Update in openmano DB the VMs whose status changed
+    #             try:
+    #                 updates = mydb.update_rows('instance_vms', UPDATE=vm_dict[vm_id], WHERE={'uuid':vm["uuid"]})
+    #                 vms_notupdated.remove(vm["uuid"])
+    #                 if updates>0:
+    #                     vms_updated.append(vm["uuid"])
+    #             except db_base_Exception as e:
+    #                 logger.error("nfvo.refresh_instance error database update: %s", str(e))
+    #         # 2.2. Update in openmano DB the interface VMs
+    #         for interface in interfaces:
+    #             #translate from vim_net_id to instance_net_id
+    #             network_id_list=[]
+    #             for net in instanceDict['nets']:
+    #                 if net["vim_net_id"] == interface["vim_net_id"]:
+    #                     network_id_list.append(net["uuid"])
+    #             if not network_id_list:
+    #                 continue
+    #             del interface["vim_net_id"]
+    #             try:
+    #                 for network_id in network_id_list:
+    #                     mydb.update_rows('instance_interfaces', UPDATE=interface, WHERE={'instance_vm_id':vm["uuid"], "instance_net_id":network_id})
+    #             except db_base_Exception as e:
+    #                 logger.error( "nfvo.refresh_instance error with vm=%s, interface_net_id=%s", vm["uuid"], network_id)
+    #
+    # # 3. Getting the status of all nets
+    # net_dict = {}
+    # for datacenter_key in myvims:
+    #     if not net_list.get(datacenter_key):
+    #         continue
+    #     failed = True
+    #     failed_message = ""
+    #     if not myvims[datacenter_key]:
+    #         failed_message = "datacenter '{}' with datacenter_tenant_id '{}' not found".format(net["datacenter_id"], net["datacenter_tenant_id"])
+    #     else:
+    #         try:
+    #             net_dict.update(myvims[datacenter_key].refresh_nets_status(net_list[datacenter_key]) )
+    #             failed = False
+    #         except vimconn.vimconnException as e:
+    #             logger.error("VIM exception %s %s", type(e).__name__, str(e))
+    #             failed_message = str(e)
+    #     if failed:
+    #         for net in net_list[datacenter_key]:
+    #             net_dict[net] = {'status': "VIM_ERROR", 'error_msg': failed_message}
+    #
+    # # 4. Update the status of nets in the instanceDict, while collects the nets whose status changed
+    # # TODO: update nets inside a vnf
+    # for net in instanceDict['nets']:
+    #     net_id = net['vim_net_id']
+    #     if net_dict[net_id].get('error_msg') and len(net_dict[net_id]['error_msg']) >= 1024:
+    #         net_dict[net_id]['error_msg'] = net_dict[net_id]['error_msg'][:516] + " ... " + net_dict[vm_id]['error_msg'][-500:]
+    #     if net['status'] != net_dict[net_id]['status'] or net.get('error_msg')!=net_dict[net_id].get('error_msg') or net.get('vim_info')!=net_dict[net_id].get('vim_info'):
+    #         net['status']    = net_dict[net_id]['status']
+    #         net['error_msg'] = net_dict[net_id].get('error_msg')
+    #         net['vim_info']  = net_dict[net_id].get('vim_info')
+    #         # 5.1. Update in openmano DB the nets whose status changed
+    #         try:
+    #             updated = mydb.update_rows('instance_nets', UPDATE=net_dict[net_id], WHERE={'uuid':net["uuid"]})
+    #             nets_notupdated.remove(net["uuid"])
+    #             if updated>0:
+    #                 nets_updated.append(net["uuid"])
+    #         except db_base_Exception as e:
+    #             logger.error("nfvo.refresh_instance error database update: %s", str(e))
+    #
+    # # Returns appropriate output
+    # #print "nfvo.refresh_instance finishes"
+    # logger.debug("VMs updated in the database: %s; nets updated in the database %s; VMs not updated: %s; nets not updated: %s",
+    #             str(vms_updated), str(nets_updated), str(vms_notupdated), str(nets_notupdated))
     instance_id = instanceDict['uuid']
-    if len(vms_notupdated)+len(nets_notupdated)>0:
-        error_msg = "VMs not updated: " + str(vms_notupdated) + "; nets not updated: " + str(nets_notupdated)
-        return len(vms_notupdated)+len(nets_notupdated), 'Scenario instance ' + instance_id + ' refreshed but some elements could not be updated in the database: ' + error_msg
+    # if len(vms_notupdated)+len(nets_notupdated)>0:
+    #     error_msg = "VMs not updated: " + str(vms_notupdated) + "; nets not updated: " + str(nets_notupdated)
+    #     return len(vms_notupdated)+len(nets_notupdated), 'Scenario instance ' + instance_id + ' refreshed but some elements could not be updated in the database: ' + error_msg
 
     return 0, 'Scenario instance ' + instance_id + ' refreshed.'
 
@@ -2850,7 +2862,7 @@ def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=
     thread_name = get_non_used_vim_name(datacenter_name, datacenter_id, tenant_dict['name'], tenant_dict['uuid'])
     new_thread = vim_thread.vim_thread(myvim, task_lock, thread_name, datacenter_name, db=db, db_lock=db_lock, ovim=ovim)
     new_thread.start()
-    thread_id = datacenter_id + "." + tenant_dict['uuid']
+    thread_id = datacenter_tenants_dict["uuid"]
     vim_threads["running"][thread_id] = new_thread
     return datacenter_id
 
@@ -2930,9 +2942,9 @@ def deassociate_datacenter_to_tenant(mydb, tenant_id, datacenter, vim_tenant_id=
         except db_base_Exception as e:
             logger.error("Cannot delete datacenter_tenants " + str(e))
             pass  # the error will be caused because dependencies, vim_tenant can not be deleted
-        thread_id = datacenter_id + "." + tenant_datacenter_item["nfvo_tenant_id"]
+        thread_id = tenant_datacenter_item["datacenter_tenant_id"]
         thread = vim_threads["running"][thread_id]
-        thread.insert_task(new_task("exit", None, store=False))
+        thread.insert_task(new_task("exit", None))
         vim_threads["deleting"][thread_id] = thread
     return "datacenter {} detached. {}".format(datacenter_id, warning)
 
@@ -3129,25 +3141,22 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
     return vim_action_get(mydb, tenant_id, datacenter, item, content)
 
 def sdn_controller_create(mydb, tenant_id, sdn_controller):
-    #data = ovim.new_of_controller(sdn_controller)
-    data = []
+    data = ovim.new_of_controller(sdn_controller)
     logger.debug('New SDN controller created with uuid {}'.format(data))
     return data
 
 def sdn_controller_update(mydb, tenant_id, controller_id, sdn_controller):
-    #data = ovim.edit_of_controller(controller_id, sdn_controller)
-    data = []
+    data = ovim.edit_of_controller(controller_id, sdn_controller)
     msg = 'SDN controller {} updated'.format(data)
     logger.debug(msg)
     return msg
 
 def sdn_controller_list(mydb, tenant_id, controller_id=None):
     if controller_id == None:
-        #data = ovim.get_of_controllers()
-        data = []
+        data = ovim.get_of_controllers()
     else:
-        #data = ovim.show_of_controller(controller_id)
-        data = {'dpid': None}
+        data = ovim.show_of_controller(controller_id)
+
     msg = 'SDN controller list:\n {}'.format(data)
     logger.debug(msg)
     return data
@@ -3161,8 +3170,7 @@ def sdn_controller_delete(mydb, tenant_id, controller_id):
             if 'sdn-controller' in config and config['sdn-controller'] == controller_id:
                 raise NfvoException("SDN controller {} is in use by datacenter {}".format(controller_id, datacenter['uuid']), HTTP_Conflict)
 
-    #data = ovim.delete_of_controller(controller_id)
-    data = 0
+    data = ovim.delete_of_controller(controller_id)
     msg = 'SDN controller {} deleted'.format(data)
     logger.debug(msg)
     return msg
@@ -3177,8 +3185,8 @@ def datacenter_sdn_port_mapping_set(mydb, tenant_id, datacenter_id, sdn_port_map
     except:
         raise NfvoException("The datacenter {} has not an SDN controller associated".format(datacenter_id), HTTP_Bad_Request)
 
-    #sdn_controller = ovim.show_of_controller(sdn_controller_id)
-    #switch_dpid = sdn_controller["dpid"]
+    sdn_controller = ovim.show_of_controller(sdn_controller_id)
+    switch_dpid = sdn_controller["dpid"]
 
     maps = list()
     for compute_node in sdn_port_mapping:
@@ -3194,12 +3202,10 @@ def datacenter_sdn_port_mapping_set(mydb, tenant_id, datacenter_id, sdn_port_map
                                      " or 'switch_mac'", HTTP_Bad_Request)
             maps.append(dict(element))
 
-    #return ovim.set_of_port_mapping(maps, ofc_id=sdn_controller_id, switch_dpid=switch_dpid, region=datacenter_id)
-    return []
+    return ovim.set_of_port_mapping(maps, ofc_id=sdn_controller_id, switch_dpid=switch_dpid, region=datacenter_id)
 
 def datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id):
-    #maps = ovim.get_of_port_mappings(db_filter={"region": datacenter_id})
-    maps = []
+    maps = ovim.get_of_port_mappings(db_filter={"region": datacenter_id})
 
     result = {
         "sdn-controller": None,
@@ -3217,9 +3223,9 @@ def datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id):
             result["sdn-controller"] = controller_id
             result["dpid"] = sdn_controller["dpid"]
 
-    # if result["sdn-controller"] == None or result["dpid"] == None:
-    #     raise NfvoException("Not all SDN controller information for datacenter {} could be found: {}".format(datacenter_id, result),
-    #                         HTTP_Internal_Server_Error)
+    if result["sdn-controller"] == None or result["dpid"] == None:
+        raise NfvoException("Not all SDN controller information for datacenter {} could be found: {}".format(datacenter_id, result),
+                            HTTP_Internal_Server_Error)
 
     if len(maps) == 0:
         return result
@@ -3251,5 +3257,4 @@ def datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id):
     return result
 
 def datacenter_sdn_port_mapping_delete(mydb, tenant_id, datacenter_id):
-    #return ovim.clear_of_port_mapping(db_filter={"region":datacenter_id})
-    return 0
+    return ovim.clear_of_port_mapping(db_filter={"region":datacenter_id})

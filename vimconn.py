@@ -432,9 +432,9 @@ class vimconnector():
                         vim_net_id:       #network id where this interface is connected, if provided at creation
                         vim_interface_id: #interface/port VIM id
                         ip_address:       #null, or text with IPv4, IPv6 address
-                        physical_compute: #identification of compute node where PF,VF interface is allocated
-                        physical_pci:     #PCI address of the NIC that hosts the PF,VF
-                        physical_vlan:    #physical VLAN used for VF
+                        compute_node:     #identification of compute node where PF,VF interface is allocated
+                        pci:              #PCI address of the NIC that hosts the PF,VF
+                        vlan:             #physical VLAN used for VF
         """
         raise vimconnNotImplemented( "Should have implemented this" )
     

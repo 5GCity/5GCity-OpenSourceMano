@@ -755,6 +755,8 @@ class nfvo_db(db_base.db_base):
                             INSERT_={'vim_net_id': vim_id, 'created': net.get('created', False), 'instance_scenario_id':instance_uuid } #,  'type': net['type']
                             INSERT_['datacenter_id'] = datacenter_site_id 
                             INSERT_['datacenter_tenant_id'] = scenarioDict["datacenter2tenant"][datacenter_site_id]
+                            if not net.get('created', False):
+                                INSERT_['status'] = "ACTIVE"
                             if sce_net_id:
                                 INSERT_['sce_net_id'] = sce_net_id
                             created_time += 0.00001
@@ -892,7 +894,7 @@ class nfvo_db(db_base.db_base):
                             vm_manage_iface_list=[]
                             #instance_interfaces
                             cmd = "SELECT vim_interface_id, instance_net_id, internal_name,external_name, mac_address,"\
-                                  " ii.ip_address as ip_address, vim_info, i.type as type"\
+                                  " ii.ip_address as ip_address, vim_info, i.type as type, sdn_port_id"\
                                   " FROM instance_interfaces as ii join interfaces as i on ii.interface_id=i.uuid"\
                                   " WHERE instance_vm_id='{}' ORDER BY created_at".format(vm['uuid'])
                             self.logger.debug(cmd)

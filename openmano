@@ -1161,7 +1161,7 @@ def sdn_controller_edit(args):
     if args.ip != None:
         controller_dict['ip'] = args.ip
     if args.port != None:
-        controller_dict['port'] = args.port
+        controller_dict['port'] = int(args.port)
     if args.dpid != None:
         controller_dict['dpid'] = args.dpid
     if args.type != None:
