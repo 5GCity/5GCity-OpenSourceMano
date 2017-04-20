@@ -1,0 +1,31 @@
+version: '2'
+services:
+  osm-ro-db:
+    image: mysql
+    container_name: osm-ro-db
+    restart: always
+    environment:
+      - MYSQL_RANDOM_ROOT_PASSWORD=true
+      - MYSQL_DATABASE=mano_db
+      - MYSQL_USER=mano
+      - MYSQL_PASSWORD=manopw
+  osm-ro:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile-local
+    image: osm/openmano
+    container_name: osm-ro
+    restart: always
+    environment:
+      - DB_USER=mano
+      - DB_PSWD=manopw
+      - DB_NAME=mano_db
+      - DB_HOST=osm-ro-db    
+    ports:
+      - "9090:9090"
+    volumes:
+      - /var/log/osm/openmano/logs:/opt/openmano/logs
+    depends_on:
+      - osm-ro-db
+    links:
+      - osm-ro-db

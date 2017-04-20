@@ -1,0 +1,8 @@
+#include MANIFEST.in
+#include requirements.txt
+include README.rst
+include RO_VERSION
+include openmano
+include openmanod
+recursive-include osm_ro *
+

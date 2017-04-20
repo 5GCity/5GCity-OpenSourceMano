@@ -25,8 +25,7 @@
 
 DIRNAME=$(readlink -f ${BASH_SOURCE[0]})
 DIRNAME=$(dirname $DIRNAME )
-OMCLIENT=$DIRNAME/../openmano/openmano
-OVCLIENT=$DIRNAME/../openvim/openvim
+OMCLIENT=openmano
 
 #get screen log files at the beginning
 echo
@@ -36,14 +35,8 @@ echo "-------------------------------"
 echo "-------------------------------"
 echo "OPENMANO"
 echo "-------------------------------"
-echo "cat $DIRNAME/../logs/openmano.log*"
-cat $DIRNAME/../logs/openmano.log*
-echo
-echo "-------------------------------"
-echo "OPENVIM"
-echo "-------------------------------"
-echo "cat $DIRNAME/../logs/openvim.?"
-cat $DIRNAME/../logs/openvim.?
+echo "cat /var/log/osm/openmano.log*"
+cat /var/log/osm/openmano.log*
 echo
 echo "-------------------------------"
 echo
@@ -56,14 +49,8 @@ echo "-------------------------------"
 echo "-------------------------------"
 echo "OPENMANO"
 echo "-------------------------------"
-echo "cat $DIRNAME/../openmano/openmanod.py|grep ^__version__"
-cat $DIRNAME/../openmano/openmanod.py|grep ^__version__
-echo
-echo "-------------------------------"
-echo "OPENVIM"
-echo "-------------------------------"
-echo "cat $DIRNAME/../openvim/openvimd.py|grep ^__version__"
-cat $DIRNAME/../openvim/openvimd.py|grep ^__version__
+echo "openmanod --version"
+openmanod --version
 echo
 echo "-------------------------------"
 echo
@@ -75,13 +62,8 @@ echo "-------------------------------"
 echo "-------------------------------"
 echo "OPENMANO"
 echo "-------------------------------"
-echo "cat $DIRNAME/../openmano/openmanod.cfg"
-cat $DIRNAME/../openmano/openmanod.cfg
-echo "-------------------------------"
-echo "OPENVIM"
-echo "-------------------------------"
-echo "cat $DIRNAME/../openvim/openvimd.cfg"
-cat $DIRNAME/../openvim/openvimd.cfg
+echo "cat /etc/osm/openmanod.cfg"
+cat /etc/osm/openmanod.cfg
 echo "-------------------------------"
 echo
 
@@ -136,34 +118,6 @@ do
     $OMCLIENT instance-scenario-list $i $verbose
     echo "-------------------------------"
   done
-  echo
-  echo "-------------------------------"
-  echo "OPENVIM$verbose"
-  echo "-------------------------------"
-  echo "$OVCLIENT config"
-  $OVCLIENT config
-  echo "-------------------------------"
-  echo "$OVCLIENT tenant-list $verbose"
-  $OVCLIENT tenant-list $verbose
-  echo "-------------------------------"
-  echo "$OVCLIENT host-list $verbose"
-  $OVCLIENT host-list $verbose
-  echo "-------------------------------"
-  echo "$OVCLIENT net-list $verbose"
-  $OVCLIENT net-list $verbose
-  echo "-------------------------------"
-  echo "$OVCLIENT port-list $verbose"
-  $OVCLIENT port-list $verbose
-  echo "-------------------------------"
-  echo "$OVCLIENT flavor-list $verbose"
-  $OVCLIENT flavor-list $verbose
-  echo "-------------------------------"
-  echo "$OVCLIENT image-list $verbose"
-  $OVCLIENT image-list $verbose
-  echo "-------------------------------"
-  echo "$OVCLIENT vm-list $verbose"
-  $OVCLIENT vm-list $verbose
-  echo "-------------------------------"
   echo
 
 done
