@@ -96,7 +96,7 @@ for om_component in $om_list
 do
     screen_name="${om_component}"
     [[ -n "$option_screen_name" ]] && screen_name=$option_screen_name
-    [ "${om_component}" == "mano" ] && om_cmd="./openmanod.py"   && om_name="openmano  " && om_dir=$(readlink -f ${DIR_OM})
+    [ "${om_component}" == "mano" ] && om_cmd="./openmanod"   && om_name="openmano  " && om_dir=$(readlink -f ${DIR_OM})
     #obtain PID of program
     component_id=`find_process_id "${om_cmd}" $option_screen_name`
     processes=$(echo $component_id | wc -w)
