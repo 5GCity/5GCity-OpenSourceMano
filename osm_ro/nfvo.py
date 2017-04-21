@@ -43,7 +43,7 @@ from db_base import db_base_Exception
 import nfvo_db
 from threading import Lock
 from time import time
-import ovim as ovim_module
+from lib_osm_openvim import ovim as ovim_module
 
 global global_config
 global vimconn_imported

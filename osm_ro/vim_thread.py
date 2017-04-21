@@ -34,7 +34,7 @@ import Queue
 import logging
 import vimconn
 from db_base import db_base_Exception
-from ovim import ovimException
+from lib_osm_openvim.ovim import ovimException
 
 
 # from logging import Logger
