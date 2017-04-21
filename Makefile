@@ -1,6 +1,13 @@
 SHELL := /bin/bash
 all: package install
 
+clean_deb:
+	rm -rf .build
+
+clean:
+	rm -rf build
+	find osm_ro -name '*.pyc' -delete
+	find osm_ro -name '*.pyo' -delete
 prepare:
 	pip install setuptools
 	mkdir -p build/
@@ -29,17 +36,19 @@ connectors: prepare
 	python build/osm_ro/openmanolinkervimconn.py
 	rm -f build/osm_ro/openmanolinkervimconn.py
 
-build: connectors prepare
+build: clean connectors prepare
 	python -m py_compile build/osm_ro/*.py
 
 pip: prepare
 	cd build && ./setup.py sdist
 
-package: prepare
+package: clean clean_deb prepare
 	#apt-get install -y python-stdeb
 	cd build && python setup.py --command-packages=stdeb.command sdist_dsc --with-python2=True
 	cd build && cp osm_ro/scripts/python-osm-ro.postinst deb_dist/osm-ro*/debian/
 	cd build/deb_dist/osm-ro* && dpkg-buildpackage -rfakeroot -uc -us
+	mkdir -p .build
+	cp build/deb_dist/python-*.deb ./build/
 
 snap:
 	echo "Nothing to be done yet"
@@ -48,7 +57,7 @@ install:
 	DEBIAN_FRONTEND=noninteractive apt-get update && \
 	DEBIAN_FRONTEND=noninteractive apt-get install -y python-pip && \
 	pip install --upgrade pip && \
-	dpkg -i build/deb_dist/*.deb
+	dpkg -i .build/*.deb
 
 develop: prepare
 	#pip install -r requirements.txt
@@ -66,8 +75,4 @@ run-docker:
 stop-docker:
 	docker-compose -f docker/openmano-compose.yml down
 
-clean:
-	rm -rf build
-	find osm_ro -name '*.pyc' -delete
-	find osm_ro -name '*.pyo' -delete
 

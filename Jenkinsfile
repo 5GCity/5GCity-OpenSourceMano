@@ -6,8 +6,7 @@ pipeline {
 				dockerfile true
 			}
 			steps {
-				sh 'make clean build'
-				sh 'make clean package'
+				sh 'make package'
 				stash name: "deb-files", includes: ".build/*.deb"
 			}
 		}
@@ -24,7 +23,7 @@ pipeline {
 				unstash "deb-files"
 				sh '''
 					mkdir -p pool/RO
-					mv build/deb_dist/*.deb pool/RO/
+					mv .build/*.deb pool/RO/
 					mkdir -p dists/$RELEASE/unstable/RO/binary-amd64/
 					apt-ftparchive packages pool/RO > dists/$RELEASE/unstable/RO/binary-amd64/Packages
 					gzip -9fk dists/$RELEASE/unstable/RO/binary-amd64/Packages
