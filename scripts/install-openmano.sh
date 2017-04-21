@@ -251,6 +251,7 @@ su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER} clone ${GIT_OVIM_URL} openvim"
 [ "$_DISTRO" == "Ubuntu" ] && install_packages "libmysqlclient-dev"
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "libmysqlclient-dev"  #TODO check if that's the name in CentOS and RedHat
 make -C ${OPENMANO_BASEFOLDER}/openvim lite
+OSMLIBOVIM_PATH=`python -c 'import lib_osm_openvim; print lib_osm_openvim.__path__[0]'
 
 if [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ]
 then
@@ -343,7 +344,7 @@ echo '
 #####        CREATE AND INIT MANO_VIM DATABASE              #####
 #################################################################'
 # Install mano_vim_db after setup
-    ${OPENMANO_BASEFOLDER}/openvim/database_utils/install-db-server.sh -U $DBUSER ${DBPASSWD_PARAM/p/P} -u mano -p manopw -d mano_vim_db || exit 1
+    ${OSMLIBOVIM_PATH}/database_utils/install-db-server.sh -U $DBUSER ${DBPASSWD_PARAM/p/P} -u mano -p manopw -d mano_vim_db || exit 1
 
 fi
 
