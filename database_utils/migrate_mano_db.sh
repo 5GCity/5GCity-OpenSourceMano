@@ -93,7 +93,7 @@ shift $((OPTIND-1))
 OPENMANO_VER="$1"
 if [ -z "$OPENMANO_VER" ]
 then 
-    OPENMANO_VER=`${DIRNAME}/../openmanod.py -v`
+    OPENMANO_VER=`${DIRNAME}/../openmanod -v`
     OPENMANO_VER=${OPENMANO_VER%%-r*}
     OPENMANO_VER=${OPENMANO_VER##*version }
     echo "    Detected openmano version $OPENMANO_VER"

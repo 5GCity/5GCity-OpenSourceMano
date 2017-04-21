@@ -127,7 +127,7 @@ fi
 #Discover Linux distribution
 #try redhat type
 [ -f /etc/redhat-release ] && _DISTRO=$(cat /etc/redhat-release 2>/dev/null | cut  -d" " -f1) 
-#if not assuming ubuntu type
+#else assuming ubuntu type
 [ -f /etc/redhat-release ] || _DISTRO=$(lsb_release -is  2>/dev/null)            
 if [ "$_DISTRO" == "Ubuntu" ]
 then
@@ -178,8 +178,7 @@ else
     OPENMANO_BASEFOLDER=$(dirname $HERE)
 fi
 
-
-if [[ -z "$NO_PACKAGES" ]]
+if [[ -z "$NO_PACKAGES" ]]  #if (UPDATE REPOS)
 then
 echo '
 #################################################################
@@ -193,9 +192,9 @@ echo '
   && sudo rpm -ivh epel-release-7-5.noarch.rpm && sudo yum install -y epel-release && rm -f epel-release-7-5.noarch.rpm
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && sudo yum repolist
 
-fi
+fi #if (UPDATE REPOS)
 
-if [[ -z "$NO_PACKAGES" ]]
+if [[ -z "$NO_PACKAGES" ]] #if (INSTALL DEPENDENCIES)
 then
 echo '
 #################################################################
@@ -203,10 +202,9 @@ echo '
 #################################################################'
 [ "$_DISTRO" == "Ubuntu" ] && install_packages "git make screen wget mysql-client"
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "git make screen wget mariadb-client"
+fi #if (INSTALL DEPENDENCIES)
 
-
-
-if [[ -z "$NO_PACKAGES" ]]
+if [[ -z "$NO_PACKAGES" ]] #if (PYTHON PACKAGES AND PIP PACKAGES)
 then
 echo '
 #################################################################
@@ -224,14 +222,14 @@ sudo pip install progressbar
 sudo pip install prettytable
 sudo pip install pyvmomi
 
-#requiered for AWS connector
+#required for AWS connector
 [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-boto"
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-boto"  #TODO check if at Centos it exist with this name, or PIP should be used
 
 #install openstack client needed for using openstack as a VIM
 [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-novaclient python-keystoneclient python-glanceclient python-neutronclient python-cinderclient"
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-devel" && easy_install python-novaclient python-keystoneclient python-glanceclient python-neutronclient python-cinderclient #TODO revise if gcc python-pip is needed
-fi  #[[ -z "$NO_PACKAGES" ]]
+fi #if (PYTHON PACKAGES AND PIP PACKAGES)
 
 if [[ -z $NOCLONE ]]; then
     echo '
@@ -250,11 +248,9 @@ echo '
 su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER} clone ${GIT_OVIM_URL} openvim"
 [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER}/openvim checkout master"
 # Install debian dependencies before setup.py
-#[ "$_DISTRO" == "Ubuntu" ] && install_packages "git"
-#[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "git"
+[ "$_DISTRO" == "Ubuntu" ] && install_packages "libmysqlclient-dev"
+[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "libmysqlclient-dev"  #TODO check if that's the name in CentOS and RedHat
 make -C ${OPENMANO_BASEFOLDER}/openvim lite
-
-
 
 if [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ]
 then
