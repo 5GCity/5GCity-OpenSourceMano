@@ -38,7 +38,7 @@ function usage(){
 function uninstall(){
     echo "systemctl disable openmano.service " &&  systemctl disable openmano.service 2>/dev/null || echo "  Already done"
     echo "service openmano stop " && service openmano stop 2>/dev/null || echo "  Already done"
-    for file in /opt/openmano /etc/default/openmanod.cfg /var/log/openmano /etc/systemd/system/openmano.service /usr/bin/openmano /usr/sbin/service-openmano /usr/bin/openmano-report
+    for file in /opt/openmano /etc/default/openmanod.cfg /etc/osm/openmanod.cfg /var/log/openmano /var/log/osm/openmano* /etc/systemd/system/openmano.service /usr/bin/openmano /usr/sbin/service-openmano /usr/bin/openmano-report
     do
         echo rm $file
         rm -rf $file || ! echo "Can not delete '$file'. Needed root privileges?" >&2 || exit 1
@@ -128,10 +128,10 @@ fi
 uninstall
 #copy files
 cp -r "$FILE" /opt/openmano         || ! echo $BAD_PATH_ERROR >&2 || exit 1
-mkdir -p /opt/openmano/logs
+mkdir -p /etc/osm  || echo "warning cannot create config folder '/etc/osm'"
+cp /opt/openmano/osm_ro/openmanod.cfg /etc/osm/openmanod.cfg  || echo "warning cannot create file '/etc/osm/openmanod.cfg'"
+mkdir -p /var/log/osm  || echo "warning cannot create log folder '/var/log/osm'"
 #makes links
-ln -s -v /opt/openmano/openmanod.cfg /etc/default/openmanod.cfg  || echo "warning cannot create link '/etc/default/openmanod.cfg'"
-ln -s -v /opt/openmano/logs /var/log/openmano  || echo "warning cannot create link '/var/log/openmano'"
 ln -s -v /opt/openmano/openmano /usr/bin/openmano
 ln -s -v /opt/openmano/scripts/service-openmano.sh /usr/sbin/service-openmano
 ln -s -v /opt/openmano/scripts/openmano-report.sh /usr/bin/openmano-report
@@ -145,7 +145,7 @@ Description=openmano server
 
 [Service]
 User=${USER_OWNER}
-ExecStart=/opt/openmano/openmanod.py -c /opt/openmano/openmanod.cfg --log-file=/opt/openmano/logs/openmano.log
+ExecStart=/opt/openmano/openmanod -c /etc/osm/openmanod.cfg --log-file=/var/log/osm/openmano.log
 Restart=always
 
 [Install]
