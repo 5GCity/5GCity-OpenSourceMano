@@ -26,9 +26,9 @@ pipeline {
 				sh '''
 					mkdir -p pool/RO
 					mv .build/*.deb pool/RO/
-					mkdir -p dists/$RELEASE/unstable/RO/binary-amd64/
-					apt-ftparchive packages pool/RO > dists/$RELEASE/unstable/RO/binary-amd64/Packages
-					gzip -9fk dists/$RELEASE/unstable/RO/binary-amd64/Packages
+					mkdir -p dists/ReleaseOne/unstable/RO/binary-amd64/
+					apt-ftparchive packages pool/RO > dists/ReleaseOne/unstable/RO/binary-amd64/Packages
+					gzip -9fk dists/ReleaseOne/unstable/RO/binary-amd64/Packages
 					'''
 				archiveArtifacts artifacts: "dists/**,pool/RO/*.deb"
 			}
