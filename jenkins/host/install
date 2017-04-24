@@ -1,0 +1,52 @@
+#!/bin/bash
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# install is run on a host to install a MDG from binaries
+#
+
+
+HERE=$(realpath $(dirname $0))
+OSM_JENKINS=$(dirname $HERE)
+. $OSM_JENKINS/common/all_funcs
+
+[ $# -lt 1 ] && FATAL "arg is MDG name"
+
+export OSM_MDG=$1
+shift
+OSM_load_config
+
+if ! container_exists $OSM_BUILD_CONTAINER; then
+	CONTAINER_OPTS=""
+	[[ "$OSM_BUILD_CONTAINER_PRIVILEGED" == yes ]] && CONTAINER_OPTS="$CONTAINER_OPTS -c security.privileged=true"
+	[[ "$OSM_BUILD_CONTAINER_ALLOW_NESTED" == yes ]] && CONTAINER_OPTS="$CONTAINER_OPTS -c security.nesting=true"
+	create_container $OSM_BASE_IMAGE $OSM_BUILD_CONTAINER $CONTAINER_OPTS
+	wait_container_up $OSM_BUILD_CONTAINER
+	if [ ${OSM_USE_LOCAL_DEVOPS:-false} ]; then
+		container_push_devops $OSM_BUILD_CONTAINER
+	else
+		container_exec $OSM_BUILD_CONTAINER git clone ${OSM_GIT_URL}/devops
+	fi
+else
+	if [ ${OSM_USE_LOCAL_DEVOPS:-false} ]; then
+		container_push_devops $OSM_BUILD_CONTAINER
+	else
+		container_exec $OSM_BUILD_CONTAINER git -C devops pull
+	fi
+fi
+
+container_exec $OSM_BUILD_CONTAINER ./devops/jenkins/$OSM_MDG/install $*
+RC=$?
+INFO "$OSM_MDG install complete. Return code was $RC"
+exit $RC
+

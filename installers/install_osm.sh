@@ -15,13 +15,14 @@
 
 function usage(){
     echo -e "usage: $0 [OPTIONS]"
-    echo -e "Install OSM from source code"
+    echo -e "Install OSM from binaries or source code (by default, from binaries)"
     echo -e "  OPTIONS"
     echo -e "     --uninstall:   uninstall OSM: remove the containers and delete NAT rules"
-    echo -e "     -b <branch>:   install OSM from source code using a specific branch (master, v1.0, ...) or tag"
-    echo -e "                    -b master"
-    echo -e "                    -b v1.0"
-    echo -e "                    -b tags/v1.1.0"
+    echo -e "     --source:      install OSM from source code using the latest stable tag"
+    echo -e "     -b <refspec>:  install OSM from source code using a specific branch (master, v2.0, ...) or tag"
+    echo -e "                    -b master          (main dev branch)"
+    echo -e "                    -b v2.0            (v2.0 branch)"
+    echo -e "                    -b tags/v1.1.0     (a specific tag)"
     echo -e "                    ..."
     echo -e "     --develop:     (deprecated, use '-b master') install OSM from source code using the master branch"
     echo -e "     --nat:         install only NAT rules"
@@ -33,6 +34,7 @@ function usage(){
 
 #Uninstall OSM: remove containers
 function uninstall(){
+    echo -e "\nUninstalling OSM"
     if [ $RC_CLONE ] || [ -n "$TEST_INSTALLER" ]; then
         $OSM_DEVOPS/jenkins/host/clean_container RO
         $OSM_DEVOPS/jenkins/host/clean_container VCA
@@ -85,13 +87,13 @@ function update(){
         echo "         Nothing to be done."
     else
         echo "         Update required."
-        lxc exec $CONTAINER -- service openmano stop
+        lxc exec $CONTAINER -- service osm-ro stop
         lxc exec $CONTAINER -- git -C /opt/openmano stash
         lxc exec $CONTAINER -- git -C /opt/openmano pull --rebase
         lxc exec $CONTAINER -- git -C /opt/openmano checkout $CHECKOUT_ID
         lxc exec $CONTAINER -- git -C /opt/openmano stash pop
         lxc exec $CONTAINER -- /opt/openmano/database_utils/migrate_mano_db.sh
-        lxc exec $CONTAINER -- service openmano start
+        lxc exec $CONTAINER -- service osm-ro start
     fi
     echo
 
@@ -137,8 +139,8 @@ function configure(){
     . $OSM_DEVOPS/installers/export_ips
 
     echo -e "       Configuring RO"
-    lxc exec RO -- sed -i -e "s/^\#\?log_socket_host:.*/log_socket_host: $SO_CONTAINER_IP/g" /opt/openmano/openmanod.cfg
-    lxc exec RO -- service openmano restart
+    lxc exec RO -- sed -i -e "s/^\#\?log_socket_host:.*/log_socket_host: $SO_CONTAINER_IP/g" /etc/osm/openmanod.cfg
+    lxc exec RO -- service osm-ro restart
     time=0; step=2; timelength=20; while [ $time -le $timelength ]; do sleep $step; echo -n "."; time=$((time+step)); done; echo
     lxc exec RO -- openmano tenant-delete -f osm >/dev/null
     RO_TENANT_ID=`lxc exec RO -- openmano tenant-create osm |awk '{print $1}'`
@@ -192,6 +194,7 @@ LXD=""
 SHOWOPTS=""
 COMMIT_ID=""
 ASSUME_YES=""
+INSTALL_FROM_SOURCE=""
 
 while getopts ":hy-:b:" o; do
     case "${o}" in
@@ -203,6 +206,7 @@ while getopts ":hy-:b:" o; do
             ;;
         -)
             [ "${OPTARG}" == "help" ] && usage && exit 0
+            [ "${OPTARG}" == "source" ] && INSTALL_FROM_SOURCE="y" && continue
             [ "${OPTARG}" == "develop" ] && DEVELOP="y" && continue
             [ "${OPTARG}" == "uninstall" ] && UNINSTALL="y" && continue
             [ "${OPTARG}" == "nat" ] && NAT="y" && continue
@@ -229,6 +233,7 @@ done
 
 if [ -n "$SHOWOPTS" ]; then
     echo "DEVELOP=$DEVELOP"
+    echo "INSTALL_FROM_SOURCE=$INSTALL_FROM_SOURCE"
     echo "UNINSTALL=$UNINSTALL"
     echo "NAT=$NAT"
     echo "UPDATE=$UPDATE"
@@ -241,7 +246,7 @@ if [ -n "$SHOWOPTS" ]; then
 fi
 
 [ -z "$COMMIT_ID" ] && [ -n "$DEVELOP" ] && COMMIT_ID="master"
-[ -n "$TEST_INSTALLER" ] && [ -z "$COMMIT_ID" ]  && echo "Use -b option to specify the branch to use for the test (e.g.: v1.0)" && exit 0
+[ -n "$COMMIT_ID" ] && INSTALL_FROM_SOURCE="y"
 
 if [ -n "$TEST_INSTALLER" ]; then
     echo -e "\nUsing local devops repo for OSM installation"
@@ -253,7 +258,7 @@ else
 fi
 
 echo -e "Checking required packages: git"
-dpkg -l git &>/dev/null || ! echo -e "     git not installed.\nInstalling git requires root privileges" || sudo apt install -y git
+dpkg -l git &>/dev/null || ! echo -e "     git not installed.\nInstalling git requires root privileges" || sudo apt-get install -y git
 if [ -z "$TEST_INSTALLER" ]; then
     echo -e "\nCloning devops repo temporarily"
     git clone https://osm.etsi.org/gerrit/osm/devops.git $TEMPDIR
@@ -265,8 +270,7 @@ LATEST_STABLE_DEVOPS=`git -C $TEMPDIR tag -l v[0-9].* | tail -n1`
 [ -z "$COMMIT_ID" ] && [ -z "$LATEST_STABLE_DEVOPS" ] && echo "Could not find the current latest stable release" && exit 0
 echo "Latest tag in devops repo: $LATEST_STABLE_DEVOPS"
 [ -z "$COMMIT_ID" ] && [ -n "$LATEST_STABLE_DEVOPS" ] && COMMIT_ID="tags/$LATEST_STABLE_DEVOPS"
-[ -z "$TEST_INSTALLER" ] && git -C $TEMPDIR checkout $LATEST_STABLE_DEVOPS
-echo -e "\n Installing OSM from refspec: $COMMIT_ID"
+[ -z "$TEST_INSTALLER" ] && git -C $TEMPDIR checkout tags/$LATEST_STABLE_DEVOPS
 
 OSM_DEVOPS=$TEMPDIR
 OSM_JENKINS="$TEMPDIR/jenkins"
@@ -278,27 +282,35 @@ OSM_JENKINS="$TEMPDIR/jenkins"
 [ -n "$RECONFIGURE" ] && configure && echo -e "\nDONE" && exit 0
 
 #Installation starts here
-if [ -z "$ASSUME_YES" ]; then 
+echo -e "\nInstalling OSM from refspec: $COMMIT_ID"
+if [ -n "$INSTALL_FROM_SOURCE" ] && [ -z "$ASSUME_YES" ]; then 
     read -e -p "The installation will take about 75-90 minutes. Continue (Y/n)?" USER_CONFIRMATION
     [ -n "$USER_CONFIRMATION" ] && [ "$USER_CONFIRMATION" != "yes" ] && \
         [ "$USER_CONFIRMATION" != "y" ] && echo "Cancelled!" && exit 0
 fi
 
+echo -e "\nChecking required packages: wget, curl, tar"
+dpkg -l wget curl tar &>/dev/null || ! echo -e "    One or several packages are not installed.\nInstalling required packages\n     Root privileges are required" || sudo apt-get install -y wget curl tar
+
 echo -e "Checking required packages: lxd"
 lxd --version &>/dev/null || FATAL "lxd not present, exiting."
-
-wget -q -O- https://osm-download.etsi.org/ftp/osm-1.0-one/README.txt &> /dev/null
-
 [ -n "$LXD" ] && echo -e "\nConfiguring lxd" && install_lxd
 
-echo -e "\nChecking required packages: wget, curl, tar"
-dpkg -l wget curl tar &>/dev/null || ! echo -e "    One or several packages are not installed.\nInstalling required packages\n     Root privileges are required" || sudo apt install -y wget curl tar
+wget -q -O- https://osm-download.etsi.org/ftp/osm-2.0-two/README.txt &> /dev/null
 
-echo -e "\nCreating the containers and building ..."
-$OSM_DEVOPS/jenkins/host/start_build RO --notest checkout $COMMIT_ID || FATAL "RO container build failed (refspec: '$COMMIT_ID')"
-$OSM_DEVOPS/jenkins/host/start_build VCA || FATAL "VCA container build failed"
-$OSM_DEVOPS/jenkins/host/start_build SO checkout $COMMIT_ID || FATAL "SO container build failed (refspec: '$COMMIT_ID')"
-$OSM_DEVOPS/jenkins/host/start_build UI checkout $COMMIT_ID || FATAL "UI container build failed (refspec: '$COMMIT_ID')"
+if [ -z "$INSTALL_FROM_SOURCE" ]; then
+    echo -e "\nCreating the containers and installing from binaries ..."
+    $OSM_DEVOPS/jenkins/host/install RO || FATAL "RO install failed"
+    $OSM_DEVOPS/jenkins/host/start_build VCA || FATAL "VCA install failed"
+    $OSM_DEVOPS/jenkins/host/install SO || FATAL "SO install failed"
+    $OSM_DEVOPS/jenkins/host/install UI || FATAL "UI install failed"
+else #install from source
+    echo -e "\nCreating the containers and building from source ..."
+    $OSM_DEVOPS/jenkins/host/start_build RO --notest checkout $COMMIT_ID || FATAL "RO container build failed (refspec: '$COMMIT_ID')"
+    $OSM_DEVOPS/jenkins/host/start_build VCA || FATAL "VCA container build failed"
+    $OSM_DEVOPS/jenkins/host/start_build SO checkout $COMMIT_ID || FATAL "SO container build failed (refspec: '$COMMIT_ID')"
+    $OSM_DEVOPS/jenkins/host/start_build UI checkout $COMMIT_ID || FATAL "UI container build failed (refspec: '$COMMIT_ID')"
+fi
 
 #Install iptables-persistent and configure NAT rules
 nat
@@ -306,5 +318,5 @@ nat
 #Configure components
 configure
 
-wget -q -O- https://osm-download.etsi.org/ftp/osm-1.0-one/README2.txt &> /dev/null
+wget -q -O- https://osm-download.etsi.org/ftp/osm-2.0-two/README2.txt &> /dev/null
 echo -e "\nDONE"
