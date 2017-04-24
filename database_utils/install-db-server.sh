@@ -10,6 +10,7 @@ DB_HOST=""
 DB_HOST_PARAM=""
 QUIET_MODE=""
 FORCEDB=""
+UPDATEDB=""
 NO_PACKAGES=""
 UNINSTALL=""
 
@@ -27,7 +28,8 @@ function usage(){
     echo -e "     -T: PORT  database port. '$DB_PORT' by default"
     echo -e "     -q --quiet: install in unattended mode"
     echo -e "     -h --help:  show this help"
-    echo -e "     --forcedb:  reinstall database, deleting previous database if exists and creating a new one"
+    echo -e "     --forcedb:  if database exists, it is dropped and a new one is created"
+    echo -e "     --updatedb: if database exists, it preserves the content and it is updated to the needed version"
     echo -e "     --no-install-packages: use this option to skip updating and installing the requires packages. This avoid wasting time if you are sure requires packages are present e.g. because of a previous installation"
     echo -e "     --unistall: delete database"
 }
@@ -87,36 +89,45 @@ function _install_mysql_package(){
 function _create_db(){
     echo '
     #################################################################
-    #####               CREATE DATABASE                         #####
+    #####        CREATE AND INIT DATABASE                       #####
     #################################################################'
-
-    if db_exists $DB_NAME $TEMPFILE ; then
-        if [[ -n $FORCEDB ]]; then
-            DBDELETEPARAM=""
-            [[ -n $QUIET_MODE ]] && DBDELETEPARAM="-f"
-            mysqladmin --defaults-extra-file="$TEMPFILE" -s drop ${DB_NAME} $DBDELETEPARAM || ! echo "Could not delete ${DB_NAME} database" || exit 1
-        elif [[ -z $QUIET_MODE ]] ; then
-            read -e -p "Drop exiting database '$DB_NAME'. All the content will be lost (y/N)? " KK_
-            [ "$KK_" != "yes" ] && [ "$KK_" != "y" ] && echo "Aborted!" && exit 1
-            mysqladmin --defaults-extra-file="$TEMPFILE" -s drop ${DB_NAME} -f || ! echo "Could not delete ${DB_NAME} database" || exit 1
-        else
-            echo "Database '$DB_NAME' exists. Use option '--forcedb' to force the deletion of the existing one" && exit 1
-        fi
-    fi
     echo "mysqladmin --defaults-extra-file="$TEMPFILE" -s create ${DB_NAME}"
-    mysqladmin --defaults-extra-file="$TEMPFILE" -s create ${DB_NAME} || ! echo "1 Error creating ${DB_NAME} database" || exit 1
-    echo "CREATE USER $DB_USER@'localhost' IDENTIFIED BY '$DB_PASS';"   | mysql --defaults-extra-file="$TEMPFILE" -s 2>/dev/null || echo "Warning: User '$DB_USER' cannot be created at database. Probably exist"
-    echo "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '$DB_USER'@'localhost';" | mysql --defaults-extra-file="$TEMPFILE" -s || ! echo "Error: Granting privileges to user '$DB_USER' at database" || exit 1
+    mysqladmin --defaults-extra-file="$TEMPFILE" -s create ${DB_NAME} \
+        || ! echo "Error creating ${DB_NAME} database" >&2 \
+        || exit 1
+    echo "CREATE USER $DB_USER@'localhost' IDENTIFIED BY '$DB_PASS';"   | mysql --defaults-extra-file="$TEMPFILE" -s 2>/dev/null \
+        || echo "Warning: User '$DB_USER' cannot be created at database. Probably exist" >&2
+    echo "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '$DB_USER'@'localhost';" | mysql --defaults-extra-file="$TEMPFILE" -s \
+        || ! echo "Error: Granting privileges to user '$DB_USER' at database" >&2 \
+        || exit 1
     echo " Database '${DB_NAME}' created, user '$DB_USER' password '$DB_PASS'"
+    DIRNAME=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
+    ${DIRNAME}/init_mano_db.sh -u"$DB_USER" -p"$DB_PASS" -d"$DB_NAME" -P"$DB_PORT" $DB_HOST_PARAM \
+        || ! echo "Error initializing database '$DB_NAME'" >&2 \
+        || exit 1
 }
 
-function _init_db(){
+function _delete_db(){
+   mysqladmin --defaults-extra-file="$TEMPFILE" -s drop "${DB_NAME}" $DBDELETEPARAM \
+       || ! echo "Error: Could not delete '${DB_NAME}' database" >&2 \
+       || exit 1
+}
+
+function _update_db(){
     echo '
     #################################################################
-    #####        INIT DATABASE                                  #####
+    #####        UPDATE DATABASE                                #####
     #################################################################'
+    echo "CREATE USER $DB_USER@'localhost' IDENTIFIED BY '$DB_PASS';" | mysql --defaults-extra-file="$TEMPFILE" -s 2>/dev/null \
+        || echo "Warning: User '$DB_USER' cannot be created at database. Probably exist" >&2
+    echo "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '$DB_USER'@'localhost';" | mysql --defaults-extra-file="$TEMPFILE" -s \
+        || ! echo "Error: Granting privileges to user '$DB_USER' at database" >&2 \
+        || exit 1
+    echo " Granted privileges to user '$DB_USER' password '$DB_PASS' to existing database '${DB_NAME}'"
     DIRNAME=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
-    ${DIRNAME}/init_mano_db.sh -u"$DB_USER" -p"$DB_PASS" -d"$DB_NAME" -P"$DB_PORT" $DB_HOST_PARAM || ! echo "Error initializing database '$DB_NAME'" || exit 1
+    ${DIRNAME}/migrate_mano_db.sh -u"$DB_USER" -p"$DB_PASS" -d"$DB_NAME" -P"$DB_PORT" $DB_HOST_PARAM \
+        || ! echo "Error updating database '$DB_NAME'" >&2 \
+        || exit 1
 }
 
 function _uninstall_db(){
@@ -126,12 +137,13 @@ echo '
     #################################################################'
     DBDELETEPARAM=""
     [[ -n $QUIET_MODE ]] && DBDELETEPARAM="-f"
-    mysqladmin  --defaults-extra-file="$TEMPFILE" -s drop "${DB_NAME}" $DBDELETEPARAM || ! echo "Error: Could not delete '${DB_NAME}' database" || exit 1
-
+    _delete_db
 }
 
 function db_exists(){  # (db_name, credential_file)
-    RESULT=`mysqlshow --defaults-extra-file="$2" | grep -v Wildcard | grep -o $1`
+    RESULT=`mysqlshow --defaults-extra-file="$2" | grep -v Wildcard | grep -o $1` \
+        || ! echo "$RESULT" >&2 \
+        || exit 1
     if [ "$RESULT" == "$1" ]; then
         # echo " DB $1 exists"
         return 0
@@ -174,6 +186,7 @@ while getopts ":U:P:d:u:p:H:T:hiq-:" o; do
         -)
             [ "${OPTARG}" == "help" ] && usage && exit 0
             [ "${OPTARG}" == "forcedb" ] && FORCEDB="y" && continue
+            [ "${OPTARG}" == "updatedb" ] && UPDATEDB="y" && continue
             [ "${OPTARG}" == "quiet" ] && export QUIET_MODE=yes && export DEBIAN_FRONTEND=noninteractive && continue
             [ "${OPTARG}" == "no-install-packages" ] && export NO_PACKAGES=yes && continue
             [ "${OPTARG}" == "uninstall" ] &&  UNINSTALL="y" && continue
@@ -194,6 +207,10 @@ while getopts ":U:P:d:u:p:H:T:hiq-:" o; do
             ;;
     esac
 done
+if [ -n "$FORCEDB" ] && [ -n "$UPDATEDB" ] ; then
+    echo "Error: options --forcedb and --updatedb are mutually exclusive" >&2
+    exit 1
+fi
 
 # Discover Linux distribution
 # try redhat type
@@ -238,5 +255,30 @@ then
     _install_mysql_package || exit 1
 fi
 
-_create_db || exit 1
-_init_db   || exit 1
+# Create or update database
+if db_exists $DB_NAME $TEMPFILE ; then
+    if [[ -n $FORCEDB ]] ; then
+        # DBDELETEPARAM=""
+        # [[ -n $QUIET_MODE ]] && DBDELETEPARAM="-f"
+        DBDELETEPARAM="-f"
+        _delete_db
+        _create_db
+    elif [[ -n $UPDATEDB ]] ; then
+        _update_db
+    elif [[ -z $QUIET_MODE ]] ; then
+        echo "database '$DB_NAME' exist. Reinstall it?"
+        read -e -p "Type 'y' to drop and reinstall exiting database (content will be lost), Type 'n' to update existing database (y/N)? " KK_
+        if [ "$KK_" == "yes" ] || [ "$KK_" != "y" ] ; then
+            _delete_db
+            _create_db
+        else
+            _update_db
+        fi
+    else
+        echo "Database '$DB_NAME' exists. Use option '--forcedb' to force the deletion of the existing one, or '--updatedb' to use existing one and update it"
+        exit 1
+    fi
+else
+    _create_db
+fi
+
