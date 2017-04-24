@@ -48,7 +48,7 @@ package: clean clean_deb prepare
 	cd build && cp osm_ro/scripts/python-osm-ro.postinst deb_dist/osm-ro*/debian/
 	cd build/deb_dist/osm-ro* && dpkg-buildpackage -rfakeroot -uc -us
 	mkdir -p .build
-	cp build/deb_dist/python-*.deb ./build/
+	cp build/deb_dist/python-*.deb .build/
 
 snap:
 	echo "Nothing to be done yet"
