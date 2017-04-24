@@ -28,7 +28,9 @@ function cache() {
 
     lxc delete $container -f || true
     lxc launch ubuntu:$series $container
-    sleep 5  # wait for network
+
+    # Wait for the container to get an IP address
+    lxc exec $container -- bash -c "for i in {1..60}; do sleep 1; ping -c1 10.44.127.1 &> /dev/null && break; done"
 
     lxc exec $container -- apt-get update -y
     lxc exec $container -- apt-get upgrade -y
