@@ -9,7 +9,7 @@ clean:
 	find osm_ro -name '*.pyc' -delete
 	find osm_ro -name '*.pyo' -delete
 prepare:
-	pip install setuptools
+	pip install --user --upgrade setuptools
 	mkdir -p build/
 	VER1=$(shell git describe | sed -e 's/^v//' |cut -d- -f1); \
 	VER2=$(shell git describe | cut -d- -f2); \
