@@ -21,6 +21,7 @@ pipeline {
 			}
 		}
 		stage("Repo Component") {
+			agent any
 			steps {
 				unstash "deb-files"
 				sh '''
