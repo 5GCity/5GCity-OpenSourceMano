@@ -257,6 +257,8 @@ echo '
 #################################################################'
 su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER} clone ${GIT_OVIM_URL} openvim"
 [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER}/openvim checkout v2.0"
+trap 'rm -rf "${OPENMANO_BASEFOLDER}/openvim"' EXIT
+
 # Install debian dependencies before setup.py
 [ "$_DISTRO" == "Ubuntu" ] && install_packages "libmysqlclient-dev"
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "libmysqlclient-dev"  #TODO check if that's the name in CentOS and RedHat
