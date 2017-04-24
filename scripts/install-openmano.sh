@@ -309,7 +309,7 @@ then
     su $SUDO_USER -c 'rm -f ${HOME}/bin/service-openmano'
     su $SUDO_USER -c "ln -s '${OPENMANO_BASEFOLDER}/openmano' "'${HOME}/bin/openmano'
     su $SUDO_USER -c "ln -s '${OPENMANO_BASEFOLDER}/scripts/openmano-report.sh'   "'${HOME}/bin/openmano-report'
-    su $SUDO_USER -c "ln -s '${OPENMANO_BASEFOLDER}/scripts/service-openmano.sh'  "'${HOME}/bin/service-openmano'
+    su $SUDO_USER -c "ln -s '${OPENMANO_BASEFOLDER}/scripts/service-openmano'  "'${HOME}/bin/service-openmano'
 
     #insert /home/<user>/bin in the PATH
     #skiped because normally this is done authomatically when ~/bin exist
@@ -371,14 +371,14 @@ echo '
 
     echo
     echo "Done!  installed at /opt/openmano"
-    echo " Manage server with 'sudo service openmano start|stop|status|...' "
+    echo " Manage server with 'sudo service osm-ro start|stop|status|...' "
 
 
 else
 
     echo
     echo "Done!  you may need to logout and login again for loading client configuration"
-    echo " Run './${OPENMANO_BASEFOLDER}/scripts/service-openmano.sh start' for starting openmano in a screen"
+    echo " Run './${OPENMANO_BASEFOLDER}/scripts/service-openmano start' for starting openmano in a screen"
 
 fi
 
