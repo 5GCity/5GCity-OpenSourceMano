@@ -27,8 +27,8 @@ NFVO engine, implementing all the methods for the creation, deletion and managem
 __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$16-sep-2014 22:05:01$"
 
-import imp
-#import json
+# import imp
+# import json
 import yaml
 import utils
 import vim_thread
@@ -148,12 +148,14 @@ def start_service(mydb):
                 module_info=None
                 try:
                     module = "vimconn_" + vim["type"]
-                    module_info = imp.find_module(module, [__file__[:__file__.rfind("/")]])
-                    vim_conn = imp.load_module(vim["type"], *module_info)
+                    pkg = __import__("osm_ro." + module)
+                    vim_conn = getattr(pkg, module)
+                    # module_info = imp.find_module(module, [__file__[:__file__.rfind("/")]])
+                    # vim_conn = imp.load_module(vim["type"], *module_info)
                     vimconn_imported[vim["type"]] = vim_conn
                 except (IOError, ImportError) as e:
-                    if module_info and module_info[0]:
-                        file.close(module_info[0])
+                    # if module_info and module_info[0]:
+                    #    file.close(module_info[0])
                     raise NfvoException("Unknown vim type '{}'. Cannot open file '{}.py'; {}: {}".format(
                         vim["type"], module, type(e).__name__, str(e)), HTTP_Bad_Request)
 
@@ -270,12 +272,14 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
                 module_info=None
                 try:
                     module = "vimconn_" + vim["type"]
-                    module_info = imp.find_module(module, [__file__[:__file__.rfind("/")]])
-                    vim_conn = imp.load_module(vim["type"], *module_info)
+                    pkg = __import__("osm_ro." + module)
+                    vim_conn = getattr(pkg, module)
+                    # module_info = imp.find_module(module, [__file__[:__file__.rfind("/")]])
+                    # vim_conn = imp.load_module(vim["type"], *module_info)
                     vimconn_imported[vim["type"]] = vim_conn
                 except (IOError, ImportError) as e:
-                    if module_info and module_info[0]:
-                        file.close(module_info[0])
+                    # if module_info and module_info[0]:
+                    #     file.close(module_info[0])
                     raise NfvoException("Unknown vim type '{}'. Can not open file '{}.py'; {}: {}".format(
                                             vim["type"], module, type(e).__name__, str(e)), HTTP_Bad_Request)
 
@@ -2751,10 +2755,12 @@ def new_datacenter(mydb, datacenter_descriptor):
     module_info = None
     try:
         module = "vimconn_" + datacenter_type
-        module_info = imp.find_module(module, [__file__[:__file__.rfind("/")]])
+        pkg = __import__("osm_ro." + module)
+        vim_conn = getattr(pkg, module)
+        # module_info = imp.find_module(module, [__file__[:__file__.rfind("/")]])
     except (IOError, ImportError):
-        if module_info and module_info[0]:
-            file.close(module_info[0])
+        # if module_info and module_info[0]:
+        #    file.close(module_info[0])
         raise NfvoException("Incorrect datacenter type '{}'. Plugin '{}'.py not installed".format(datacenter_type, module), HTTP_Bad_Request)
 
     datacenter_id = mydb.new_row("datacenters", datacenter_descriptor, add_uuid=True)
