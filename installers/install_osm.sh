@@ -183,6 +183,19 @@ function install_lxd() {
     systemctl start lxd-bridge
 }
 
+function ask_user(){
+    # ask to the user and parse a response among 'y', 'yes', 'n' or 'no'. Case insensitive
+    # Params: $1 text to ask;   $2 Action by default, can be 'y' for yes, 'n' for no, other or empty for not allowed
+    # Return: true(0) if user type 'yes'; false (1) if user type 'no'
+    read -e -p "$1" USER_CONFIRMATION
+    while true ; do
+        [ -z "$USER_CONFIRMATION" ] && [ "$2" == 'y' ] && return 0
+        [ -z "$USER_CONFIRMATION" ] && [ "$2" == 'n' ] && return 1
+        [ "${USER_CONFIRMATION,,}" == "yes" ] || [ "${USER_CONFIRMATION,,}" == "y" ] && return 0
+        [ "${USER_CONFIRMATION,,}" == "no" ]  || [ "${USER_CONFIRMATION,,}" == "n" ] && return 1
+        read -e -p "Please type 'yes' or 'no': " USER_CONFIRMATION
+    done
+}
 
 UNINSTALL=""
 DEVELOP=""
@@ -284,9 +297,7 @@ OSM_JENKINS="$TEMPDIR/jenkins"
 #Installation starts here
 echo -e "\nInstalling OSM from refspec: $COMMIT_ID"
 if [ -n "$INSTALL_FROM_SOURCE" ] && [ -z "$ASSUME_YES" ]; then 
-    read -e -p "The installation will take about 75-90 minutes. Continue (Y/n)?" USER_CONFIRMATION
-    [ -n "$USER_CONFIRMATION" ] && [ "$USER_CONFIRMATION" != "yes" ] && \
-        [ "$USER_CONFIRMATION" != "y" ] && echo "Cancelled!" && exit 0
+    ! ask_user "The installation will take about 75-90 minutes. Continue (Y/n)? " y && echo "Cancelled!" && exit 1
 fi
 
 echo -e "\nChecking required packages: wget, curl, tar"
