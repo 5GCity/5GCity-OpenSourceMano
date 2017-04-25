@@ -148,13 +148,13 @@ def start_service(mydb):
                 module_info=None
                 try:
                     module = "vimconn_" + vim["type"]
-                    module_info = imp.find_module(module)
+                    module_info = imp.find_module(module, [__file__[:__file__.rfind("/")]])
                     vim_conn = imp.load_module(vim["type"], *module_info)
                     vimconn_imported[vim["type"]] = vim_conn
                 except (IOError, ImportError) as e:
                     if module_info and module_info[0]:
                         file.close(module_info[0])
-                    raise NfvoException("Unknown vim type '{}'. Can not open file '{}.py'; {}: {}".format(
+                    raise NfvoException("Unknown vim type '{}'. Cannot open file '{}.py'; {}: {}".format(
                         vim["type"], module, type(e).__name__, str(e)), HTTP_Bad_Request)
 
             thread_id = vim['datacenter_tenant_id']
@@ -270,7 +270,7 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
                 module_info=None
                 try:
                     module = "vimconn_" + vim["type"]
-                    module_info = imp.find_module(module)
+                    module_info = imp.find_module(module, [__file__[:__file__.rfind("/")]])
                     vim_conn = imp.load_module(vim["type"], *module_info)
                     vimconn_imported[vim["type"]] = vim_conn
                 except (IOError, ImportError) as e:
@@ -2751,7 +2751,7 @@ def new_datacenter(mydb, datacenter_descriptor):
     module_info = None
     try:
         module = "vimconn_" + datacenter_type
-        module_info = imp.find_module(module)
+        module_info = imp.find_module(module, [__file__[:__file__.rfind("/")]])
     except (IOError, ImportError):
         if module_info and module_info[0]:
             file.close(module_info[0])
