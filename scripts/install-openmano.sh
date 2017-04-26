@@ -36,7 +36,8 @@ function usage(){
     echo -e "     -h --help:  show this help"
     echo -e "     --develop:  install last version for developers, and do not configure as a service"
     echo -e "     --forcedb:  reinstall mano_db DB, deleting previous database if exists and creating a new one"
-    echo -e "     --force:    makes idenpotent, delete previous installations folders if needed"
+    echo -e "     --updatedb: do not reinstall mano_db DB if exist, just update database"
+    echo -e "     --force:    makes idenpotent, delete previous installations folders if needed. It assumes --updatedb if --forcedb option is not provided"
     echo -e "     --noclone:  assumes that openmano was cloned previously and that this script is run from the local repo"
     echo -e "     --no-install-packages: use this option to skip updating and installing the requires packages. This avoid wasting time if you are sure requires packages are present e.g. because of a previous installation"
     echo -e "     --no-db: do not install mysql server"
@@ -67,7 +68,8 @@ DBPASSWD=""
 DBPASSWD_PARAM=""
 QUIET_MODE=""
 DEVELOP=""
-FORCEDB=""
+DB_FORCE_UPDATE=""
+UPDATEDB=""
 FORCE=""
 NOCLONE=""
 NO_PACKAGES=""
@@ -91,8 +93,9 @@ while getopts ":u:p:hiq-:" o; do
         -)
             [ "${OPTARG}" == "help" ] && usage && exit 0
             [ "${OPTARG}" == "develop" ] && DEVELOP="y" && continue
-            [ "${OPTARG}" == "forcedb" ] && FORCEDB="y" && continue
-            [ "${OPTARG}" == "force" ]   && FORCEDB="y" && FORCE="y" && continue
+            [ "${OPTARG}" == "forcedb" ] && DB_FORCE_UPDATE="${DB_FORCE_UPDATE}--forcedb" && continue
+            [ "${OPTARG}" == "updatedb" ] && DB_FORCE_UPDATE="${DB_FORCE_UPDATE}--updatedb" && continue
+            [ "${OPTARG}" == "force" ]   &&  FORCE="y" && continue
             [ "${OPTARG}" == "noclone" ] && NOCLONE="y" && continue
             [ "${OPTARG}" == "quiet" ] && export QUIET_MODE=yes && export DEBIAN_FRONTEND=noninteractive && continue
             [ "${OPTARG}" == "no-install-packages" ] && export NO_PACKAGES=yes && continue
@@ -114,6 +117,13 @@ while getopts ":u:p:hiq-:" o; do
             ;;
     esac
 done
+
+if [ "$DB_FORCE_UPDATE" == "--forcedb--updatedb" ] || [ "$DB_FORCE_UPDATE" == "--updatedb--forcedb" ] ; then
+    echo "Error: options --forcedb and --updatedb are mutually exclusive" >&2
+    exit 1
+elif [ -n "$FORCE" ] && [ -z "$DB_FORCE_UPDATE" ] ; then
+    DB_FORCE_UPDATE="--updatedb"
+fi
 
 #check root privileges and non a root user behind
 [ "$USER" != "root" ] && echo "Needed root privileges" >&2 && exit 1
@@ -238,7 +248,7 @@ if [[ -z $NOCLONE ]]; then
 #################################################################'
     su $SUDO_USER -c "git clone ${GIT_URL} ${OPENMANO_BASEFOLDER}"
     su $SUDO_USER -c "cp ${OPENMANO_BASEFOLDER}/.gitignore-common ${OPENMANO_BASEFOLDER}/.gitignore"
-    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER} checkout tags/v1.1.0"
+    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER} checkout v2.0"
 fi
 
 echo '
@@ -246,11 +256,13 @@ echo '
 #####        INSTALLING OVIM LIBRARY                        #####
 #################################################################'
 su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER} clone ${GIT_OVIM_URL} openvim"
-[[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER}/openvim checkout master"
+[[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER}/openvim checkout v2.0"
+
 # Install debian dependencies before setup.py
 [ "$_DISTRO" == "Ubuntu" ] && install_packages "libmysqlclient-dev"
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "libmysqlclient-dev"  #TODO check if that's the name in CentOS and RedHat
 make -C ${OPENMANO_BASEFOLDER}/openvim lite
+rm -rf "${OPENMANO_BASEFOLDER}/openvim"
 OSMLIBOVIM_PATH=`python -c 'import lib_osm_openvim; print lib_osm_openvim.__path__[0]'`
 
 if [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ]
@@ -297,7 +309,7 @@ then
     su $SUDO_USER -c 'rm -f ${HOME}/bin/service-openmano'
     su $SUDO_USER -c "ln -s '${OPENMANO_BASEFOLDER}/openmano' "'${HOME}/bin/openmano'
     su $SUDO_USER -c "ln -s '${OPENMANO_BASEFOLDER}/scripts/openmano-report.sh'   "'${HOME}/bin/openmano-report'
-    su $SUDO_USER -c "ln -s '${OPENMANO_BASEFOLDER}/scripts/service-openmano.sh'  "'${HOME}/bin/service-openmano'
+    su $SUDO_USER -c "ln -s '${OPENMANO_BASEFOLDER}/scripts/service-openmano'  "'${HOME}/bin/service-openmano'
 
     #insert /home/<user>/bin in the PATH
     #skiped because normally this is done authomatically when ~/bin exist
@@ -335,16 +347,13 @@ echo '
     if [ -n "$QUIET_MODE" ]; then
         DB_QUIET='-q'
     fi
-    if [ -n "$FORCEDB" ]; then
-        DB_FORCE='--forcedb'
-    fi
-    ${OPENMANO_BASEFOLDER}/database_utils/install-db-server.sh -u $DBUSER $DBPASSWD_PARAM $DB_QUIET $DB_FORCE || exit 1
+    ${OPENMANO_BASEFOLDER}/database_utils/install-db-server.sh -U $DBUSER ${DBPASSWD_PARAM/p/P} $DB_QUIET $DB_FORCE_UPDATE || exit 1
 echo '
 #################################################################
 #####        CREATE AND INIT MANO_VIM DATABASE              #####
 #################################################################'
 # Install mano_vim_db after setup
-    ${OSMLIBOVIM_PATH}/database_utils/install-db-server.sh -U $DBUSER ${DBPASSWD_PARAM/p/P} -u mano -p manopw -d mano_vim_db || exit 1
+    ${OSMLIBOVIM_PATH}/database_utils/install-db-server.sh -U $DBUSER ${DBPASSWD_PARAM/p/P} -u mano -p manopw -d mano_vim_db $DB_QUIET $DB_FORCE_UPDATE || exit 1
 
 fi
 
@@ -362,14 +371,14 @@ echo '
 
     echo
     echo "Done!  installed at /opt/openmano"
-    echo " Manage server with 'sudo service openmano start|stop|status|...' "
+    echo " Manage server with 'sudo service osm-ro start|stop|status|...' "
 
 
 else
 
     echo
     echo "Done!  you may need to logout and login again for loading client configuration"
-    echo " Run './${OPENMANO_BASEFOLDER}/scripts/service-openmano.sh start' for starting openmano in a screen"
+    echo " Run './${OPENMANO_BASEFOLDER}/scripts/service-openmano start' for starting openmano in a screen"
 
 fi
 

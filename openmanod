@@ -22,7 +22,7 @@
 # contact with: nfvlabs@tid.es
 ##
 
-'''
+"""
 openmano server.
 Main program that implements a reference NFVO (Network Functions Virtualisation Orchestrator).
 It interfaces with an NFV VIM through its API and offers a northbound interface, based on REST (openmano API),
@@ -30,12 +30,7 @@ where NFV services are offered including the creation and deletion of VNF templa
 network service templates and network service instances. 
 
 It loads the configuration file and launches the http_server thread that will listen requests using openmano API.
-'''
-__author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
-__date__ ="$26-aug-2014 11:09:29$"
-__version__="0.5.9-r519"
-version_date="Mar 2017"
-database_version="0.20"      #expected database schema version
+"""
 
 import time
 import sys
@@ -49,6 +44,12 @@ from osm_ro import httpserver, nfvo, nfvo_db
 from osm_ro.openmano_schemas import config_schema
 from osm_ro.db_base import db_base_Exception
 import osm_ro
+
+__author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
+__date__ ="$26-aug-2014 11:09:29$"
+__version__="0.5.11-r521"
+version_date="Apr 2017"
+database_version="0.20"      #expected database schema version
 
 global global_config
 global logger

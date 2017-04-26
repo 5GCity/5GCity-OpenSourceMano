@@ -65,14 +65,14 @@ echo "deleting deployed vm"
 openvim vm-delete -f | grep -q deleted && sleep 10 #give some time to get virtual machines deleted
 
 echo "Stopping openmano"
-$DIRscripts/service-openmano.sh stop
+$DIRscripts/service-openmano stop
 
 echo "Initializing databases"
 $DIRvim/database_utils/init_vim_db.sh -u vim -p vimpw
 $DIRmano/database_utils/init_mano_db.sh -u mano -p manopw
 
 echo "Starting openmano"
-$DIRscripts/service-openmano.sh start
+$DIRscripts/service-openmano start
 
 echo "Creating openmano tenant 'mytenant'"
 nfvotenant=`openmano tenant-create mytenant --description=mytenant |gawk '{print $1}'`

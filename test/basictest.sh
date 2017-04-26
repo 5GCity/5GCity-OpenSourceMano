@@ -133,11 +133,11 @@ then
     [[ $force_ != y ]] && [[ $force_ != yes ]] && echo "aborted!" && $_exit
 
     echo "Stopping openmano"
-    $DIRscript/service-openmano.sh mano stop${screen_mano_param}
+    $DIRscript/service-openmano mano stop${screen_mano_param}
     echo "Initializing openmano database"
     $DIRmano/database_utils/init_mano_db.sh -u mano -p manopw --createdb
     echo "Starting openmano"
-    $DIRscript/service-openmano.sh mano start${screen_mano_param}
+    $DIRscript/service-openmano mano start${screen_mano_param}
     echo
 
 elif [[ $action == "delete" ]]

@@ -27,8 +27,8 @@ NFVO engine, implementing all the methods for the creation, deletion and managem
 __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$16-sep-2014 22:05:01$"
 
-import imp
-#import json
+# import imp
+# import json
 import yaml
 import utils
 import vim_thread
@@ -148,13 +148,15 @@ def start_service(mydb):
                 module_info=None
                 try:
                     module = "vimconn_" + vim["type"]
-                    module_info = imp.find_module(module)
-                    vim_conn = imp.load_module(vim["type"], *module_info)
+                    pkg = __import__("osm_ro." + module)
+                    vim_conn = getattr(pkg, module)
+                    # module_info = imp.find_module(module, [__file__[:__file__.rfind("/")]])
+                    # vim_conn = imp.load_module(vim["type"], *module_info)
                     vimconn_imported[vim["type"]] = vim_conn
                 except (IOError, ImportError) as e:
-                    if module_info and module_info[0]:
-                        file.close(module_info[0])
-                    raise NfvoException("Unknown vim type '{}'. Can not open file '{}.py'; {}: {}".format(
+                    # if module_info and module_info[0]:
+                    #    file.close(module_info[0])
+                    raise NfvoException("Unknown vim type '{}'. Cannot open file '{}.py'; {}: {}".format(
                         vim["type"], module, type(e).__name__, str(e)), HTTP_Bad_Request)
 
             thread_id = vim['datacenter_tenant_id']
@@ -270,12 +272,14 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
                 module_info=None
                 try:
                     module = "vimconn_" + vim["type"]
-                    module_info = imp.find_module(module)
-                    vim_conn = imp.load_module(vim["type"], *module_info)
+                    pkg = __import__("osm_ro." + module)
+                    vim_conn = getattr(pkg, module)
+                    # module_info = imp.find_module(module, [__file__[:__file__.rfind("/")]])
+                    # vim_conn = imp.load_module(vim["type"], *module_info)
                     vimconn_imported[vim["type"]] = vim_conn
                 except (IOError, ImportError) as e:
-                    if module_info and module_info[0]:
-                        file.close(module_info[0])
+                    # if module_info and module_info[0]:
+                    #     file.close(module_info[0])
                     raise NfvoException("Unknown vim type '{}'. Can not open file '{}.py'; {}: {}".format(
                                             vim["type"], module, type(e).__name__, str(e)), HTTP_Bad_Request)
 
@@ -2751,10 +2755,12 @@ def new_datacenter(mydb, datacenter_descriptor):
     module_info = None
     try:
         module = "vimconn_" + datacenter_type
-        module_info = imp.find_module(module)
+        pkg = __import__("osm_ro." + module)
+        vim_conn = getattr(pkg, module)
+        # module_info = imp.find_module(module, [__file__[:__file__.rfind("/")]])
     except (IOError, ImportError):
-        if module_info and module_info[0]:
-            file.close(module_info[0])
+        # if module_info and module_info[0]:
+        #    file.close(module_info[0])
         raise NfvoException("Incorrect datacenter type '{}'. Plugin '{}'.py not installed".format(datacenter_type, module), HTTP_Bad_Request)
 
     datacenter_id = mydb.new_row("datacenters", datacenter_descriptor, add_uuid=True)
@@ -2855,18 +2861,22 @@ def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=
         datacenter_tenants_dict["uuid"] = id_
 
     #fill tenants_datacenters table
-    tenants_datacenter_dict["datacenter_tenant_id"]=datacenter_tenants_dict["uuid"]
+    datacenter_tenant_id = datacenter_tenants_dict["uuid"]
+    tenants_datacenter_dict["datacenter_tenant_id"] = datacenter_tenant_id
     mydb.new_row('tenants_datacenters', tenants_datacenter_dict)
     # create thread
     datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_dict['uuid'], datacenter_id)  # reload data
     thread_name = get_non_used_vim_name(datacenter_name, datacenter_id, tenant_dict['name'], tenant_dict['uuid'])
-    new_thread = vim_thread.vim_thread(myvim, task_lock, thread_name, datacenter_name, db=db, db_lock=db_lock, ovim=ovim)
+    new_thread = vim_thread.vim_thread(myvim, task_lock, thread_name, datacenter_name, datacenter_tenant_id,
+                                       db=db, db_lock=db_lock, ovim=ovim)
     new_thread.start()
     thread_id = datacenter_tenants_dict["uuid"]
     vim_threads["running"][thread_id] = new_thread
     return datacenter_id
 
-def edit_datacenter_to_tenant(mydb, nfvo_tenant, datacenter_id, vim_tenant_id=None, vim_tenant_name=None, vim_username=None, vim_password=None, config=None):
+
+def edit_datacenter_to_tenant(mydb, nfvo_tenant, datacenter_id, vim_tenant_id=None, vim_tenant_name=None,
+                              vim_username=None, vim_password=None, config=None):
     #Obtain the data of this datacenter_tenant_id
     vim_data = mydb.get_rows(
         SELECT=("datacenter_tenants.vim_tenant_name", "datacenter_tenants.vim_tenant_id", "datacenter_tenants.user",
