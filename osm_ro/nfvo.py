@@ -2861,18 +2861,22 @@ def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=
         datacenter_tenants_dict["uuid"] = id_
 
     #fill tenants_datacenters table
-    tenants_datacenter_dict["datacenter_tenant_id"]=datacenter_tenants_dict["uuid"]
+    datacenter_tenant_id = datacenter_tenants_dict["uuid"]
+    tenants_datacenter_dict["datacenter_tenant_id"] = datacenter_tenant_id
     mydb.new_row('tenants_datacenters', tenants_datacenter_dict)
     # create thread
     datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_dict['uuid'], datacenter_id)  # reload data
     thread_name = get_non_used_vim_name(datacenter_name, datacenter_id, tenant_dict['name'], tenant_dict['uuid'])
-    new_thread = vim_thread.vim_thread(myvim, task_lock, thread_name, datacenter_name, db=db, db_lock=db_lock, ovim=ovim)
+    new_thread = vim_thread.vim_thread(myvim, task_lock, thread_name, datacenter_name, datacenter_tenant_id,
+                                       db=db, db_lock=db_lock, ovim=ovim)
     new_thread.start()
     thread_id = datacenter_tenants_dict["uuid"]
     vim_threads["running"][thread_id] = new_thread
     return datacenter_id
 
-def edit_datacenter_to_tenant(mydb, nfvo_tenant, datacenter_id, vim_tenant_id=None, vim_tenant_name=None, vim_username=None, vim_password=None, config=None):
+
+def edit_datacenter_to_tenant(mydb, nfvo_tenant, datacenter_id, vim_tenant_id=None, vim_tenant_name=None,
+                              vim_username=None, vim_password=None, config=None):
     #Obtain the data of this datacenter_tenant_id
     vim_data = mydb.get_rows(
         SELECT=("datacenter_tenants.vim_tenant_name", "datacenter_tenants.vim_tenant_id", "datacenter_tenants.user",

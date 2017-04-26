@@ -21,12 +21,10 @@
 # contact with: nfvlabs@tid.es
 ##
 
-'''
+""""
 This is thread that interact with the host and the libvirt to manage VM
 One thread will be launched per host 
-'''
-__author__ = "Alfonso Tierno, Pablo Montes"
-__date__ = "$10-feb-2017 12:07:15$"
+"""
 
 import threading
 import time
@@ -36,18 +34,21 @@ import vimconn
 from db_base import db_base_Exception
 from lib_osm_openvim.ovim import ovimException
 
+__author__ = "Alfonso Tierno, Pablo Montes"
+__date__ = "$10-feb-2017 12:07:15$"
 
 # from logging import Logger
 # import auxiliary_functions as af
 
 
-def is_task_id(id):
-    return True if id[:5] == "TASK." else False
+def is_task_id(task_id):
+    return True if task_id[:5] == "TASK." else False
 
 
 class vim_thread(threading.Thread):
 
-    def __init__(self, vimconn, task_lock, name=None, datacenter_name=None, datacenter_tenant_id=None, db=None, db_lock=None, ovim=None):
+    def __init__(self, vimconn, task_lock, name=None, datacenter_name=None, datacenter_tenant_id=None,
+                 db=None, db_lock=None, ovim=None):
         """Init a thread.
         Arguments:
             'id' number of thead
@@ -147,7 +148,7 @@ class vim_thread(threading.Thread):
                                     self.logger.error("ovimException deleting external_port={} ".format(
                                         task_interface["sdn_port_id"]) + str(e), exc_info=True)
                                     # TODO Set error_msg at instance_nets
-                            vim_net_id = interface.pop("vim_net_id")
+                            vim_net_id = interface["vim_net_id"]
                             sdn_net_id = None
                             sdn_port_name = None
                             with self.db_lock:
@@ -195,10 +196,11 @@ class vim_thread(threading.Thread):
                                             exc_info=True)
                                         # TODO Set error_msg at instance_nets
                                 with self.db_lock:
+                                    vim_net_id = interface.pop("vim_net_id")
                                     self.db.update_rows('instance_interfaces', UPDATE=interface,
                                                     WHERE={'uuid': db_iface["iface_id"]})
+                                    interface["vim_net_id"] = vim_net_id
                                 # TODO insert instance_id
-                            interface["vim_net_id"] = vim_net_id
 
                     task["vim_info"] = vim_info
                     if task["vim_info"]["status"] == "BUILD":
