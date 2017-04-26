@@ -34,6 +34,20 @@ function usage(){
     echo -e "     --unistall: delete database"
 }
 
+function ask_user(){
+    # ask to the user and parse a response among 'y', 'yes', 'n' or 'no'. Case insensitive
+    # Params: $1 text to ask;   $2 Action by default, can be 'y' for yes, 'n' for no, other or empty for not allowed
+    # Return: true(0) if user type 'yes'; false (1) if user type 'no'
+    read -e -p "$1" USER_CONFIRMATION
+    while true ; do
+        [ -z "$USER_CONFIRMATION" ] && [ "$2" == 'y' ] && return 0
+        [ -z "$USER_CONFIRMATION" ] && [ "$2" == 'n' ] && return 1
+        [ "${USER_CONFIRMATION,,}" == "yes" ] || [ "${USER_CONFIRMATION,,}" == "y" ] && return 0
+        [ "${USER_CONFIRMATION,,}" == "no" ]  || [ "${USER_CONFIRMATION,,}" == "n" ] && return 1
+        read -e -p "Please type 'yes' or 'no': " USER_CONFIRMATION
+    done
+}
+
 function install_packages(){
     [ -x /usr/bin/apt-get ] && apt-get install -y $*
     [ -x /usr/bin/yum ]     && yum install     -y $*   
@@ -75,11 +89,10 @@ function _install_mysql_package(){
         service httpd   start
         systemctl enable mariadb
         systemctl enable httpd
-        read -e -p "Do you want to configure mariadb (recommended if not done before) (Y/n)" KK
-        [ "$KK" != "n" -a  "$KK" != "no" ] && mysql_secure_installation
+        ask_user "Do you want to configure mariadb (recommended if not done before) (Y/n)? " y &&
+            mysql_secure_installation
 
-        read -e -p "Do you want to set firewall to grant web access port 80,443  (Y/n)" KK
-        [ "$KK" != "n" -a  "$KK" != "no" ] &&
+        ask_user "Do you want to set firewall to grant web access port 80,443  (Y/n)? " y &&
             firewall-cmd --permanent --zone=public --add-service=http &&
             firewall-cmd --permanent --zone=public --add-service=https &&
             firewall-cmd --reload
@@ -267,8 +280,7 @@ if db_exists $DB_NAME $TEMPFILE ; then
         _update_db
     elif [[ -z $QUIET_MODE ]] ; then
         echo "database '$DB_NAME' exist. Reinstall it?"
-        read -e -p "Type 'y' to drop and reinstall exiting database (content will be lost), Type 'n' to update existing database (y/N)? " KK_
-        if [ "$KK_" == "yes" ] || [ "$KK_" != "y" ] ; then
+        if ask_user "Type 'y' to drop and reinstall existing database (content will be lost), Type 'n' to update existing database (y/N)? " n ; then
             _delete_db
             _create_db
         else

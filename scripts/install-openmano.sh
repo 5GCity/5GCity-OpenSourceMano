@@ -36,7 +36,7 @@ function usage(){
     echo -e "     -h --help:  show this help"
     echo -e "     --develop:  install last version for developers, and do not configure as a service"
     echo -e "     --forcedb:  reinstall mano_db DB, deleting previous database if exists and creating a new one"
-    echo -e "     --updatedb: do not reinstall mano_db DB if exist, just update database"
+    echo -e "     --updatedb: do not reinstall mano_db DB if it exists, just update database"
     echo -e "     --force:    makes idenpotent, delete previous installations folders if needed. It assumes --updatedb if --forcedb option is not provided"
     echo -e "     --noclone:  assumes that openmano was cloned previously and that this script is run from the local repo"
     echo -e "     --no-install-packages: use this option to skip updating and installing the requires packages. This avoid wasting time if you are sure requires packages are present e.g. because of a previous installation"
@@ -61,6 +61,20 @@ function install_packages(){
     done
 }
 
+function ask_user(){
+    # ask to the user and parse a response among 'y', 'yes', 'n' or 'no'. Case insensitive
+    # Params: $1 text to ask;   $2 Action by default, can be 'y' for yes, 'n' for no, other or empty for not allowed
+    # Return: true(0) if user type 'yes'; false (1) if user type 'no'
+    read -e -p "$1" USER_CONFIRMATION
+    while true ; do
+        [ -z "$USER_CONFIRMATION" ] && [ "$2" == 'y' ] && return 0
+        [ -z "$USER_CONFIRMATION" ] && [ "$2" == 'n' ] && return 1
+        [ "${USER_CONFIRMATION,,}" == "yes" ] || [ "${USER_CONFIRMATION,,}" == "y" ] && return 0
+        [ "${USER_CONFIRMATION,,}" == "no" ]  || [ "${USER_CONFIRMATION,,}" == "n" ] && return 1
+        read -e -p "Please type 'yes' or 'no': " USER_CONFIRMATION
+    done
+}
+
 GIT_URL=https://osm.etsi.org/gerrit/osm/RO.git
 GIT_OVIM_URL=https://osm.etsi.org/gerrit/osm/openvim.git
 DBUSER="root"
@@ -74,6 +88,7 @@ FORCE=""
 NOCLONE=""
 NO_PACKAGES=""
 NO_DB=""
+
 while getopts ":u:p:hiq-:" o; do
     case "${o}" in
         u)
@@ -100,9 +115,9 @@ while getopts ":u:p:hiq-:" o; do
             [ "${OPTARG}" == "quiet" ] && export QUIET_MODE=yes && export DEBIAN_FRONTEND=noninteractive && continue
             [ "${OPTARG}" == "no-install-packages" ] && export NO_PACKAGES=yes && continue
             [ "${OPTARG}" == "no-db" ] && NO_DB="y" && continue
-            echo -e "Invalid option: '--$OPTARG'\nTry $0 --help for more information" >&2 
+            echo -e "Invalid option: '--$OPTARG'\nTry $0 --help for more information" >&2
             exit 1
-            ;; 
+            ;;
         \?)
             echo -e "Invalid option: '-$OPTARG'\nTry $0 --help for more information" >&2
             exit 1
@@ -129,23 +144,23 @@ fi
 [ "$USER" != "root" ] && echo "Needed root privileges" >&2 && exit 1
 if [[ -z "$SUDO_USER" ]] || [[ "$SUDO_USER" = "root" ]]
 then
-    [[ -z $QUIET_MODE ]] && read -e -p "Install in the root user (y/N)?" KK
-    [[ -z $QUIET_MODE ]] && [[ "$KK" != "y" ]] && [[ "$KK" != "yes" ]] && echo "Cancelled" && exit 1
+    [[ -z $QUIET_MODE ]] && ! ask_user "Install in the root user (y/N)? " n  && echo "Cancelled" && exit 1
     export SUDO_USER=root
 fi
 
-#Discover Linux distribution
-#try redhat type
+# Discover Linux distribution
+# try redhat type
 [ -f /etc/redhat-release ] && _DISTRO=$(cat /etc/redhat-release 2>/dev/null | cut  -d" " -f1) 
-#else assuming ubuntu type
+# if not assuming ubuntu type
 [ -f /etc/redhat-release ] || _DISTRO=$(lsb_release -is  2>/dev/null)            
 if [ "$_DISTRO" == "Ubuntu" ]
 then
     _RELEASE=$(lsb_release -rs)
     if [[ ${_RELEASE%%.*} != 14 ]] && [[ ${_RELEASE%%.*} != 16 ]] 
     then 
-        [[ -z $QUIET_MODE ]] && read -e -p "WARNING! Not tested Ubuntu version. Continue assuming a trusty (14.XX)'? (y/N)" KK
-        [[ -z $QUIET_MODE ]] && [[ "$KK" != "y" ]] && [[ "$KK" != "yes" ]] && echo "Cancelled" && exit 1
+        [[ -z $QUIET_MODE ]] &&
+            ! ask_user "WARNING! Not tested Ubuntu version. Continue assuming a trusty (14.XX)' (y/N)? " n &&
+            echo "Cancelled" && exit 1
         _RELEASE = 14
     fi
 elif [ "$_DISTRO" == "CentOS" ]
@@ -153,29 +168,33 @@ then
     _RELEASE="7" 
     if ! cat /etc/redhat-release | grep -q "7."
     then
-        [[ -z $QUIET_MODE ]] && read -e -p "WARNING! Not tested CentOS version. Continue assuming a '_RELEASE' type? (y/N)" KK
-        [[ -z $QUIET_MODE ]] && [[ "$KK" != "y" ]] && [[ "$KK" != "yes" ]] && echo "Cancelled" && exit 1
+        [[ -z $QUIET_MODE ]] &&
+            ! ask_user "WARNING! Not tested CentOS version. Continue assuming a '$_RELEASE' type (y/N)? " n &&
+            echo "Cancelled" && exit 1
     fi
 elif [ "$_DISTRO" == "Red" ]
 then
     _RELEASE="7" 
     if ! cat /etc/redhat-release | grep -q "7."
     then
-        [[ -z $QUIET_MODE ]] && read -e -p "WARNING! Not tested Red Hat OS version. Continue assuming a '_RELEASE' type? (y/N)" KK
-        [[ -z $QUIET_MODE ]] && [[ "$KK" != "y" ]] && [[ "$KK" != "yes" ]] && echo "Cancelled" && exit 1
+        [[ -z $QUIET_MODE ]] &&
+            ! ask_user "WARNING! Not tested Red Hat OS version. Continue assuming a '$_RELEASE' type (y/N)? " n &&
+            echo "Cancelled" && exit 1
     fi
 else  #[ "$_DISTRO" != "Ubuntu" -a "$_DISTRO" != "CentOS" -a "$_DISTRO" != "Red" ] 
     _DISTRO_DISCOVER=$_DISTRO
     [ -x /usr/bin/apt-get ] && _DISTRO="Ubuntu" && _RELEASE="14"
     [ -x /usr/bin/yum ]     && _DISTRO="CentOS" && _RELEASE="7"
-    [[ -z $QUIET_MODE ]] && read -e -p "WARNING! Not tested Linux distribution '$_DISTRO_DISCOVER '. Continue assuming a '$_DISTRO $_RELEASE' type? (y/N)" KK
-    [[ -z $QUIET_MODE ]] && [[ "$KK" != "y" ]] && [[ "$KK" != "yes" ]] && echo "Cancelled" && exit 1
+    [[ -z $QUIET_MODE ]] &&
+        ! ask_user "WARNING! Not tested Linux distribution '$_DISTRO_DISCOVER '. Continue assuming a '$_DISTRO $_RELEASE' type (y/N)? " n &&
+        echo "Cancelled" && exit 1
 fi
 
 #check if installed as a service
 INSTALL_AS_A_SERVICE=""
 [[ "$_DISTRO" == "Ubuntu" ]] &&  [[ ${_RELEASE%%.*} == 16 ]] && [[ -z $DEVELOP ]] && INSTALL_AS_A_SERVICE="y"
-#Next operations require knowing OPENMANO_BASEFOLDER
+
+# Next operations require knowing BASEFOLDER
 if [[ -z "$NOCLONE" ]]; then
     if [[ -n "$INSTALL_AS_A_SERVICE" ]] ; then
         OPENMANO_BASEFOLDER=__openmano__${RANDOM}
@@ -188,73 +207,77 @@ else
     OPENMANO_BASEFOLDER=$(dirname $HERE)
 fi
 
-if [[ -z "$NO_PACKAGES" ]]  #if (UPDATE REPOS)
+if [[ -z "$NO_PACKAGES" ]]
 then
-echo '
-#################################################################
-#####        UPDATE REPOSITORIES                            #####
-#################################################################'
-[ "$_DISTRO" == "Ubuntu" ] && apt-get update -y
+    echo -e "\n"\
+        "#################################################################\n"\
+        "#####        UPDATE REPOSITORIES                            #####\n"\
+        "#################################################################"
+    [ "$_DISTRO" == "Ubuntu" ] && apt-get update -y
 
-[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && yum check-update -y
-[ "$_DISTRO" == "CentOS" ] && sudo yum install -y epel-release
-[ "$_DISTRO" == "Red" ] && wget http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm \
-  && sudo rpm -ivh epel-release-7-5.noarch.rpm && sudo yum install -y epel-release && rm -f epel-release-7-5.noarch.rpm
-[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && sudo yum repolist
+    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && yum check-update -y
+    [ "$_DISTRO" == "CentOS" ] && sudo yum install -y epel-release
+    [ "$_DISTRO" == "Red" ] && wget http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm \
+        && sudo rpm -ivh epel-release-7-5.noarch.rpm && sudo yum install -y epel-release && rm -f epel-release-7-5.noarch.rpm
+    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && sudo yum repolist
 
-fi #if (UPDATE REPOS)
+    echo -e "\n"\
+        "#################################################################\n"\
+        "#####        INSTALL REQUIRED PACKAGES                      #####\n"\
+        "#################################################################"
+    [ "$_DISTRO" == "Ubuntu" ] && install_packages "git make screen wget mysql-client"
+    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "git make screen wget mariadb-client"
 
-if [[ -z "$NO_PACKAGES" ]] #if (INSTALL DEPENDENCIES)
-then
-echo '
-#################################################################
-#####               INSTALL REQUIRED PACKAGES               #####
-#################################################################'
-[ "$_DISTRO" == "Ubuntu" ] && install_packages "git make screen wget mysql-client"
-[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "git make screen wget mariadb-client"
-fi #if (INSTALL DEPENDENCIES)
+    echo -e "\n"\
+        "#################################################################\n"\
+        "#####        INSTALL PYTHON PACKAGES                        #####\n"\
+        "#################################################################"
+    [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-yaml python-bottle python-mysqldb python-jsonschema python-paramiko python-argcomplete python-requests python-logutils libxml2-dev libxslt-dev python-dev python-pip"
+    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "PyYAML MySQL-python python-jsonschema python-paramiko python-argcomplete python-requests python-logutils libxslt-devel libxml2-devel python-devel python-pip"
+    # The only way to install python-bottle on Centos7 is with easy_install or pip
+    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && easy_install -U bottle
 
-if [[ -z "$NO_PACKAGES" ]] #if (PYTHON PACKAGES AND PIP PACKAGES)
-then
-echo '
-#################################################################
-#####        INSTALL PYTHON PACKAGES                        #####
-#################################################################'
-[ "$_DISTRO" == "Ubuntu" ] && install_packages "python-yaml python-bottle python-mysqldb python-jsonschema python-paramiko python-argcomplete python-requests python-logutils libxml2-dev libxslt-dev python-dev python-pip"
-[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "PyYAML MySQL-python python-jsonschema python-paramiko python-argcomplete python-requests python-logutils libxslt-devel libxml2-devel python-devel python-pip"
-#The only way to install python-bottle on Centos7 is with easy_install or pip
-[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && easy_install -U bottle
+    # required for vmware connector TODO move that to separete opt in install script
+    sudo pip install --upgrade pip
+    sudo pip install pyvcloud
+    sudo pip install progressbar
+    sudo pip install prettytable
+    sudo pip install pyvmomi
 
-#required for vmware connector TODO move that to separete opt in install script
-sudo pip install --upgrade pip
-sudo pip install pyvcloud
-sudo pip install progressbar
-sudo pip install prettytable
-sudo pip install pyvmomi
+    # required for AWS connector
+    [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-boto"
+    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-boto"  #TODO check if at Centos it exists with this name, or PIP should be used
 
-#required for AWS connector
-[ "$_DISTRO" == "Ubuntu" ] && install_packages "python-boto"
-[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-boto"  #TODO check if at Centos it exist with this name, or PIP should be used
-
-#install openstack client needed for using openstack as a VIM
-[ "$_DISTRO" == "Ubuntu" ] && install_packages "python-novaclient python-keystoneclient python-glanceclient python-neutronclient python-cinderclient"
-[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-devel" && easy_install python-novaclient python-keystoneclient python-glanceclient python-neutronclient python-cinderclient #TODO revise if gcc python-pip is needed
-fi #if (PYTHON PACKAGES AND PIP PACKAGES)
+    # install openstack client needed for using openstack as a VIM
+    [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-novaclient python-keystoneclient python-glanceclient python-neutronclient python-cinderclient"
+    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-devel" && easy_install python-novaclient python-keystoneclient python-glanceclient python-neutronclient python-cinderclient #TODO revise if gcc python-pip is needed
+fi  # [[ -z "$NO_PACKAGES" ]]
 
 if [[ -z $NOCLONE ]]; then
-    echo '
-#################################################################
-#####        DOWNLOAD SOURCE                                #####
-#################################################################'
+    echo -e "\n"\
+        "#################################################################\n"\
+        "#####        DOWNLOAD SOURCE                                #####\n"\
+        "#################################################################"
+    if [[ -d "${OPENMANO_BASEFOLDER}" ]] ; then
+        if [[ -n "$FORCE" ]] ; then
+            echo "deleting '${OPENMANO_BASEFOLDER}' folder"
+            rm -rf "$OPENMANO_BASEFOLDER" #make idempotent
+        elif [[ -z "$QUIET_MODE" ]] ; then
+            ! ask_user "folder '${OPENMANO_BASEFOLDER}' exists, overwrite (y/N)? " n && echo "Cancelled!" && exit 1
+            rm -rf "$OPENMANO_BASEFOLDER"
+        else
+            echo "'${OPENMANO_BASEFOLDER}' folder exists. Use "--force" to overwrite" >&2 && exit 1
+        fi
+    fi
     su $SUDO_USER -c "git clone ${GIT_URL} ${OPENMANO_BASEFOLDER}"
     su $SUDO_USER -c "cp ${OPENMANO_BASEFOLDER}/.gitignore-common ${OPENMANO_BASEFOLDER}/.gitignore"
     [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER} checkout v2.0"
 fi
 
-echo '
-#################################################################
-#####        INSTALLING OVIM LIBRARY                        #####
-#################################################################'
+echo -e "\n"\
+    "#################################################################\n"\
+    "#####        INSTALLING OVIM LIBRARY                        #####\n"\
+    "#################################################################"
 su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER} clone ${GIT_OVIM_URL} openvim"
 [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER}/openvim checkout v2.0"
 
@@ -267,13 +290,11 @@ OSMLIBOVIM_PATH=`python -c 'import lib_osm_openvim; print lib_osm_openvim.__path
 
 if [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ]
 then
-    echo '
-#################################################################
-#####        CONFIGURE firewalld                            #####
-#################################################################'
-    KK=yes
-    [[ -z $QUIET_MODE ]] && read -e -p "Configure firewalld for openmanod port 9090? (Y/n)" KK
-    if [ "$KK" != "n" -a  "$KK" != "no" ]
+    echo -e "\n"\
+        "#################################################################\n"\
+        "#####        CONFIGURE firewalld                            #####\n"\
+        "#################################################################"
+    if [[ -z $QUIET_MODE ]] || ask_user "Configure firewalld for openmanod port 9090 (Y/n)? " y
     then
         #Creates a service file for openmano
         echo '<?xml version="1.0" encoding="utf-8"?>
@@ -296,10 +317,10 @@ then
     fi
 fi
 
-echo '
-#################################################################
-#####             CONFIGURE OPENMANO CLIENT                 #####
-#################################################################'
+echo -e "\n"\
+    "#################################################################n"\
+    "#####        CONFIGURE OPENMANO CLIENT                      #####n"\
+    "#################################################################"
 #creates a link at ~/bin if not configured as a service
 if [[ -z "$INSTALL_AS_A_SERVICE" ]]
 then
@@ -312,7 +333,7 @@ then
     su $SUDO_USER -c "ln -s '${OPENMANO_BASEFOLDER}/scripts/service-openmano'  "'${HOME}/bin/service-openmano'
 
     #insert /home/<user>/bin in the PATH
-    #skiped because normally this is done authomatically when ~/bin exist
+    #skiped because normally this is done authomatically when ~/bin exists
     #if ! su $SUDO_USER -c 'echo $PATH' | grep -q "${HOME}/bin"
     #then
     #    echo "    inserting /home/$SUDO_USER/bin in the PATH at .bashrc"
@@ -339,46 +360,39 @@ then
 fi
 
 if [ -z "$NO_DB" ]; then
-echo '
-#################################################################
-#####               INSTALL DATABASE SERVER                 #####
-#################################################################'
+    echo -e "\n"\
+        "#################################################################"\n"\
+        "#####               INSTALL DATABASE SERVER                 #####"\n"\
+        "#################################################################"
 
     if [ -n "$QUIET_MODE" ]; then
         DB_QUIET='-q'
     fi
     ${OPENMANO_BASEFOLDER}/database_utils/install-db-server.sh -U $DBUSER ${DBPASSWD_PARAM/p/P} $DB_QUIET $DB_FORCE_UPDATE || exit 1
-echo '
-#################################################################
-#####        CREATE AND INIT MANO_VIM DATABASE              #####
-#################################################################'
-# Install mano_vim_db after setup
-    ${OSMLIBOVIM_PATH}/database_utils/install-db-server.sh -U $DBUSER ${DBPASSWD_PARAM/p/P} -u mano -p manopw -d mano_vim_db $DB_QUIET $DB_FORCE_UPDATE || exit 1
-
-fi
+    echo -e "\n"\
+        "#################################################################"\n"\
+        "#####        CREATE AND INIT MANO_VIM DATABASE              #####"\n"\
+        "#################################################################"
+    # Install mano_vim_db after setup
+    ${OSMLIBOVIM_PATH}/database_utils/install-db-server.sh -U $DBUSER ${DBPASSWD_PARAM/p/P} -u mano -p manopw -d mano_vim_db --no-install-packages $DB_QUIET $DB_FORCE_UPDATE || exit 1
+fi   # [ -z "$NO_DB" ]
 
 if [[ -n "$INSTALL_AS_A_SERVICE"  ]]
 then
-echo '
-#################################################################
-#####             CONFIGURE OPENMANO SERVICE                #####
-#################################################################'
+    echo -e "\n"\
+        "#################################################################"\n"\
+        "#####        CONFIGURE OPENMANO SERVICE                     #####"\n"\
+        "#################################################################"
 
     ${OPENMANO_BASEFOLDER}/scripts/install-openmano-service.sh -f ${OPENMANO_BASEFOLDER} `[[ -z "$NOCLONE" ]] && echo "-d"`
-#    rm -rf ${OPENMANO_BASEFOLDER}
-#    alias service-openmano="service openmano"
-#    echo 'alias service-openmano="service openmano"' >> ${HOME}/.bashrc
-
+    # rm -rf ${OPENMANO_BASEFOLDER}
+    # alias service-openmano="service openmano"
+    # echo 'alias service-openmano="service openmano"' >> ${HOME}/.bashrc
     echo
     echo "Done!  installed at /opt/openmano"
     echo " Manage server with 'sudo service osm-ro start|stop|status|...' "
-
-
 else
-
     echo
     echo "Done!  you may need to logout and login again for loading client configuration"
     echo " Run './${OPENMANO_BASEFOLDER}/scripts/service-openmano start' for starting openmano in a screen"
-
 fi
-
