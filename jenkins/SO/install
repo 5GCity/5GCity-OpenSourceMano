@@ -42,13 +42,13 @@ INFO "starting install $MDG"
 #pip3 install lxml==3.4.0
 
 #Release ONE
-curl https://osm-download.etsi.org/repository/osm/debian/ReleaseONE/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
-add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseONE unstable SO UI RO openvim"
+#curl https://osm-download.etsi.org/repository/osm/debian/ReleaseONE/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
+#add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseONE unstable SO UI RO openvim"
 #add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseONE stable SO UI RO openvim"
 
 #Release TWO
-#curl https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
-#add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO stable SO UI RO openvim"
+curl https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
+add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO stable SO UI RO openvim"
 
 apt-get update
 apt-get install -y \

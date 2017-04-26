@@ -43,13 +43,13 @@ pip install pyvmomi
 #apt-get -y install python-boto
 
 #Release ONE
-curl https://osm-download.etsi.org/repository/osm/debian/ReleaseONE/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
-add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseONE unstable RO openvim"
+#curl https://osm-download.etsi.org/repository/osm/debian/ReleaseONE/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
+#add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseONE unstable RO openvim"
 #add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseONE stable RO openvim"
 
 #Release TWO
-#curl https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
-#add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO stable RO openvim"
+curl https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
+add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO stable RO openvim"
 
 apt-get update
 apt-get -y install python-lib-osm-openvim
