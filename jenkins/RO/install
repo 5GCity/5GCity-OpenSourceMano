@@ -30,6 +30,7 @@ OSM_load_config
 
 #Release TWO
 curl https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
+sleep 5
 add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO stable RO openvim"
 
 apt-get update
