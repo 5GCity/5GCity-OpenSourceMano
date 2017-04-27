@@ -115,7 +115,6 @@ apt-get install -y \
 	     rw.core.mano-rwmon_yang_ylib-1.0 \
 	     rw.core.mano-rwcm-1.0 \
 	     rw.core.mano-rwcal-mock-1.0 \
-#	     rw.core.mano-rwmano_examples-1.0 \
 	     rw.core.mano-rwcal-cloudsimproxy-1.0 \
 	     rw.core.mano-models-1.0 \
 	     rw.core.mano-rwcal-aws-1.0
