@@ -55,7 +55,7 @@ fi
 # Set up repo and version
 
 PLATFORM_REPOSITORY=${1:-OSM}
-PLATFORM_VERSION=${2:-4.4.2.1.60497}
+PLATFORM_VERSION=${2:-4.4.2.1.60552}
 
 ###############################################################################
 # Main block
