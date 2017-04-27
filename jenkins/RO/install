@@ -27,25 +27,6 @@ export OSM_MDG=RO
 OSM_load_config
 
 # Installation starts here
-apt-get update
-
-apt-get -y install python-pip
-pip install --upgrade pip
-pip install pyvcloud
-pip install progressbar
-pip install prettytable
-pip install pyvmomi
-
-#Dependencies below will be installed directly from packages and must be removed
-#apt-get -y install libmysqlclient-dev libssl-dev libffi-dev mysql-client
-#apt-get -y install python-yaml python-bottle python-mysqldb python-jsonschema python-paramiko python-argcomplete python-requests python-logutils
-#apt-get -y install python-cinderclient python-glanceclient python-keystoneclient python-neutronclient python-novaclient python-mysqldb python-yaml
-#apt-get -y install python-boto
-
-#Release ONE
-#curl https://osm-download.etsi.org/repository/osm/debian/ReleaseONE/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
-#add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseONE unstable RO openvim"
-#add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseONE stable RO openvim"
 
 #Release TWO
 curl https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
@@ -55,10 +36,17 @@ apt-get update
 apt-get -y install python-lib-osm-openvim
 apt-get -y install python-osm-ro
 
-OSMLIBOVIM_PATH=`python -c 'import lib_osm_openvim; print lib_osm_openvim.__path__[0]'` || FATAL "lib-osm-openvim was not properly installed" 
+OSMLIBOVIM_PATH=`python -c 'import lib_osm_openvim; print lib_osm_openvim.__path__[0]'` || FATAL "lib-osm-openvim was not properly installed"
 OSMRO_PATH=`python -c 'import osm_ro; print osm_ro.__path__[0]'` || FATAL "osm-ro was not properly installed"
+sed -i "s/\${DIRNAME}\/\.\.\/openmanod\ -v/openmanod\ -v/g" /usr/lib/python2.7/dist-packages/osm_ro/database_utils/migrate_mano_db.sh
+systemctl disable osm-ro.service
+sed -i "/User=/d" /etc/systemd/system/osm-ro.service
+sed -i "s/ExecStart=openmanod/ExecStart=\/usr\/bin\/openmanod/" /etc/systemd/system/osm-ro.service
+systemctl enable osm-ro.service
 
-${OSMRO_PATH}/database_utils/install-db-server.sh --updatedb || FATAL "osm-ro db installation failed"
+DEBIAN_FRONTEND=noninteractive apt-get -y install mysql-server
+
+${OSMRO_PATH}/database_utils/install-db-server.sh --updatedb --no-install-packages || FATAL "osm-ro db installation failed"
 ${OSMLIBOVIM_PATH}/database_utils/install-db-server.sh -u mano -p manopw -d mano_vim_db --updatedb || FATAL "lib-osm-openvim db installation failed"
 service osm-ro restart
 
