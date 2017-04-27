@@ -1,5 +1,6 @@
-#!/bin/bash
-#   Copyright 2016 RIFT.IO Inc
+#!/usr/bin/env bash
+# 
+#   Copyright 2017 RIFT.IO Inc
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -12,76 +13,110 @@
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
-# 
-# TEMPLATE script to start a build. This is run inside a container
 #
-# 6 July 2016 -- Jeremy.Mordkoff@riftio.com -- adapted from the riftware version
+# Author(s): Jeremy Mordkoff
+# Creation Date: 26 April 2017
 # 
+#
 
-HERE=$(realpath $(dirname $0))
-OSM_JENKINS=$(dirname $HERE)
-. $OSM_JENKINS/common/all_funcs
+# INSTALL.sh
+# install launchpad SO and all of its dependencies
+#
 
-# SET YOU MDG repository name here
-export OSM_MDG=SO
-OSM_load_config
+# Defensive bash programming flags
+set -o errexit    # Exit on any error
+trap 'echo ERROR: Command failed: \"$BASH_COMMAND\"' ERR
+set -o nounset    # Expanding an unset variable is an error.  Variables must be
+                  # set before they can be used.
 
-#OSM_git_checkout "$@"
+if [ $# -gt 0 ]; then
+    case "$1" in
+	-h|--help)
+	    echo
+	    echo "NAME:"
+	    echo "  $0"
+	    echo
+	    echo "SYNOPSIS:"
+	    echo "  $0 -h|--help"
+	    echo "  $0 [PLATFORM_REPOSITORY] [PLATFORM_VERSION]"
+	    echo
+	    echo "DESCRIPTION:"
+	    echo "  Prepare current system to run SO and UI."
+	    echo
+	    echo "  PLATFORM_REPOSITORY (optional): name of the RIFT.ware repository."
+	    echo "  PLATFORM_VERSION (optional): version of the platform packages to be installed."
+	    echo
+	    exit 0;;
+    esac
+fi
 
-#trap 'WARNING "INTERRUPT"; exit 1' INT
 
-#./BUILD.sh -s
+###############################################################################
+# Set up repo and version
 
-INFO "starting install $MDG"
+PLATFORM_REPOSITORY=${1:-OSM}
+PLATFORM_VERSION=${2:-4.4.2.1.60497}
 
-#curl http://repos.riftio.com/public/xenial-riftware-public-key | sudo apt-key add -
-#curl -o /etc/apt/sources.list.d/RIFT.list http://buildtracker.riftio.com/repo_file/ub16/OSM/
-#apt-get update
-#apt-get install -y libxml2-dev libxslt-dev
-#/usr/rift/container_tools/mkcontainer --modes build --modes ext --repo OSM
-#pip3 install lxml==3.4.0
+###############################################################################
+# Main block
 
-#Release ONE
-#curl https://osm-download.etsi.org/repository/osm/debian/ReleaseONE/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
-#add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseONE unstable SO UI RO openvim"
-#add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseONE stable SO UI RO openvim"
+# Disable apt-daily.service and apt-daily.timer
 
-#Release TWO
+DAILY_TIMER='apt-daily.timer'
+DAILY_SERVICE='apt-daily.service'
+if [ $(systemctl is-active $DAILY_TIMER) = "active" ]
+then
+    systemctl stop $DAILY_TIMER
+    systemctl disable $DAILY_TIMER
+    systemctl disable $DAILY_SERVICE
+fi
+
+# enable the right repos
+curl http://repos.riftio.com/public/xenial-riftware-public-key | apt-key add -
+curl -o /etc/apt/sources.list.d/RIFT.list http://buildtracker.riftio.com/repo_file/ub16/${PLATFORM_REPOSITORY}/ 
+apt-get update
+        
+# and install the tools
+apt remove -y rw.toolchain-rwbase tcpdump
+apt-get install -y --allow-downgrades rw.tools-container-tools=${PLATFORM_VERSION} rw.tools-scripts=${PLATFORM_VERSION} python 
+/usr/rift/container_tools/mkcontainer --modes ext --modes platform --rw-version ${PLATFORM_VERSION}
+pip3 install lxml==3.4.0
+
+
+chmod 777 /usr/rift /usr/rift/usr/share
+
+# now disable the RIFT OSM repo so that we'll get MANO from 
+# the OSM repos
+rm -f /etc/apt/sources.list.d/RIFT.list 
 curl https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
 add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO stable SO UI RO openvim"
-
 apt-get update
+    
 apt-get install -y \
-    rw.core.mano-rwcal_yang_ylib-1.0 \
-    rw.core.mano-rwconfig_agent_yang_ylib-1.0 \
-    rw.core.mano-rwlaunchpad_yang_ylib-1.0 \
-    rw.core.mano-mano_yang_ylib-1.0 \
-    rw.core.mano-common-1.0 \
-    rw.core.mano-rwsdn_yang_ylib-1.0 \
-    rw.core.mano-rwsdnal_yang_ylib-1.0 \
-    rw.core.mano-rwsdn-1.0 \
-    rw.core.mano-mano-types_yang_ylib-1.0 \
-    rw.core.mano-rwcal-cloudsim-1.0 \
-    rw.core.mano-rwcal-1.0 \
-    rw.core.mano-rw_conman_yang_ylib-1.0 \
-    rw.core.mano-rwcalproxytasklet-1.0 \
-    rw.core.mano-rwlaunchpad-1.0 \
-    rw.core.mano-rwcal-openmano-vimconnector-1.0 \
-    rw.core.mano-rwcal-propcloud1-1.0 \
-    rw.core.mano-lpmocklet_yang_ylib-1.0 \
-    rw.core.mano-rwmon-1.0 \
-    rw.core.mano-rwcloud_yang_ylib-1.0 \
-    rw.core.mano-rwcal-openstack-1.0 \
-    rw.core.mano-rw.core.mano_foss \
-    rw.core.mano-rwmon_yang_ylib-1.0 \
-    rw.core.mano-rwcm-1.0 \
-    rw.core.mano-rwcal-mock-1.0 \
-    rw.core.mano-rwcal-cloudsimproxy-1.0 \
-    rw.core.mano-models-1.0 \
-    rw.core.mano-rwcal-aws-1.0
-
-RC=$?
-
-INFO "done, RC=$RC"
-exit $RC
-
+	     rw.core.mano-rwcal_yang_ylib-1.0 \
+	     rw.core.mano-rwconfig_agent_yang_ylib-1.0 \
+	     rw.core.mano-rwlaunchpad_yang_ylib-1.0 \
+	     rw.core.mano-mano_yang_ylib-1.0 \
+	     rw.core.mano-common-1.0 \
+	     rw.core.mano-rwsdn_yang_ylib-1.0 \
+	     rw.core.mano-rwsdnal_yang_ylib-1.0 \
+	     rw.core.mano-mano-types_yang_ylib-1.0 \
+	     rw.core.mano-rwcal-cloudsim-1.0 \
+	     rw.core.mano-rwcal-1.0 \
+	     rw.core.mano-rw_conman_yang_ylib-1.0 \
+	     rw.core.mano-rwcalproxytasklet-1.0 \
+	     rw.core.mano-rwlaunchpad-1.0 \
+	     rw.core.mano-rwcal-openmano-vimconnector-1.0 \
+	     rw.core.mano-lpmocklet_yang_ylib-1.0 \
+	     rw.core.mano-rwmon-1.0 \
+	     rw.core.mano-rwcloud_yang_ylib-1.0 \
+	     rw.core.mano-rwcal-openstack-1.0 \
+	     rw.core.mano-rw.core.mano_foss \
+	     rw.core.mano-rwmon_yang_ylib-1.0 \
+	     rw.core.mano-rwcm-1.0 \
+	     rw.core.mano-rwcal-mock-1.0 \
+	     rw.core.mano-rwmano_examples-1.0 \
+	     rw.core.mano-rwcal-cloudsimproxy-1.0 \
+	     rw.core.mano-models-1.0 \
+	     rw.core.mano-rwcal-aws-1.0
+    

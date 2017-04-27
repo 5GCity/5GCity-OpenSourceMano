@@ -1,5 +1,6 @@
-#!/bin/bash
-#   Copyright 2016 RIFT.IO Inc
+#!/usr/bin/env bash
+# 
+#   Copyright 2017 RIFT.IO Inc
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -12,51 +13,23 @@
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
-# 
-# TEMPLATE script to start a build. This is run inside a container
 #
-# 6 July 2016 -- Jeremy.Mordkoff@riftio.com -- adapted from the riftware version
+# Author(s): Jeremy Mordkoff
+# Creation Date: 26 April 2017
 # 
+#
 
-HERE=$(realpath $(dirname $0))
-OSM_JENKINS=$(dirname $HERE)
-. $OSM_JENKINS/common/all_funcs
+# INSTALL.sh
+# install launchpad UI and create the service
+#
 
-# SET YOU MDG repository name here
-export OSM_MDG=UI
-OSM_load_config
-
-#OSM_git_checkout "$@"
-
-#trap 'WARNING "INTERRUPT"; exit 1' INT
-
-#./BUILD.sh -u
-
-INFO "starting install $MDG"
-
-#Release ONE
-#curl https://osm-download.etsi.org/repository/osm/debian/ReleaseONE/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
-#add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseONE unstable SO UI RO openvim"
-#add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseONE stable SO UI RO openvim"
-
-#Release TWO
 curl https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
 add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO stable SO UI RO openvim"
-
+rm -f /etc/apt/sources.list.d/RIFT.list 
 apt-get update
-apt-get install -y \
-    rw.ui-about \
-    rw.ui-logging \
-    rw.ui-skyquake \
-    rw.ui-accounts \
-    rw.ui-composer \
-    rw.ui-launchpad \
-    rw.ui-debug \
-    rw.ui-config \
-    rw.ui-dummy_component
 
-RC=$?
+apt-get install -y rw.ui-skyquake
 
-INFO "done, RC=$RC"
-exit $RC
+echo "Creating Service ...."
+/usr/rift/bin/create_launchpad_service
 
