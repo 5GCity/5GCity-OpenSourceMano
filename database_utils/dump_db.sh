@@ -23,7 +23,7 @@
 
 
 LICENSE_HEAD='/**
-* Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+* Copyright 2017 Telefónica Investigación y Desarrollo, S.A.U.
 * This file is part of openmano
 * All Rights Reserved.
 *
@@ -54,7 +54,7 @@ DBNAME="mano_db"
 MYSQL=$(which mysql)
 AWK=$(which awk)
 GREP=$(which grep)
-DIRNAME=`dirname $0`
+DIRNAME=`dirname $(readlink -f $0)`
  
 function usage(){
     echo -e "Usage: $0 OPTIONS"
@@ -127,6 +127,7 @@ do
         echo
 done
 
+ 
 #echo structure, including the content of schema_version
 echo "$LICENSE_HEAD" > ${DIRNAME}/${DBNAME}_structure.sql
 mysqldump $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_ --no-data --add-drop-table --add-drop-database --routines --databases $DBNAME >> ${DIRNAME}/${DBNAME}_structure.sql

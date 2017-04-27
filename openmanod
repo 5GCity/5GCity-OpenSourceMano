@@ -36,6 +36,7 @@ import time
 import sys
 import getopt
 import yaml
+import os.path
 from jsonschema import validate as js_v, exceptions as js_e
 import logging
 import logging.handlers as log_handlers
@@ -45,11 +46,11 @@ from osm_ro.openmano_schemas import config_schema
 from osm_ro.db_base import db_base_Exception
 import osm_ro
 
-__author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
-__date__ ="$26-aug-2014 11:09:29$"
-__version__="0.5.11-r521"
-version_date="Apr 2017"
-database_version="0.20"      #expected database schema version
+__author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
+__date__ = "$26-aug-2014 11:09:29$"
+__version__ = "0.5.12-r522"
+version_date = "May 2017"
+database_version = 20      #expected database schema version
 
 global global_config
 global logger
@@ -264,16 +265,19 @@ if __name__=="__main__":
         # Initialize DB connection
         mydb = nfvo_db.nfvo_db();
         mydb.connect(global_config['db_host'], global_config['db_user'], global_config['db_passwd'], global_config['db_name'])
+        db_path = osm_ro.__path__[0] + "/database_utils"
+        if not os.path.exists(db_path + "/migrate_mano_db.sh"):
+            db_path = osm_ro.__path__[0] + "/../database_utils"
         try:
             r = mydb.get_db_version()
-            if r[1] != database_version:
-                logger.critical("DATABASE wrong version '%s'. \
-                                Try to upgrade/downgrade to version '%s' with '%s/database_utils/migrate_mano_db.sh'",
-                                r[1], database_version, osm_ro.__path__[0])
+            if r[0] != database_version:
+                logger.critical("DATABASE wrong version '{current}'. Try to upgrade/downgrade to version '{target}'"
+                                " with '{db_path}/migrate_mano_db.sh {target}'".format(
+                                current=r[0], target=database_version,  db_path=db_path))
                 exit(-1)
         except db_base_Exception as e:
-            logger.critical("DATABASE is not a MANO one or it is a '0.0' version. Try to upgrade to version '%s' with \
-                            './database_utils/migrate_mano_db.sh'", database_version)
+            logger.critical("DATABASE is not valid. If you think it is corrupted, you can init it with"
+                            " '{db_path}/init_mano_db.sh' script".format(db_path=db_path))
             exit(-1)
 
         nfvo.global_config=global_config

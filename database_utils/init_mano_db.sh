@@ -23,31 +23,36 @@
 
 DBUSER="mano"
 DBPASS=""
-DBHOST="localhost"
+DEFAULT_DBPASS="manopw"
+DBHOST=""
 DBPORT="3306"
 DBNAME="mano_db"
+QUIET_MODE=""
 CREATEDB=""
 
 # Detect paths
 MYSQL=$(which mysql)
 AWK=$(which awk)
 GREP=$(which grep)
-DIRNAME=`dirname $0`
+DIRNAME=`dirname $(readlink -f $0)`
 
 function usage(){
-    echo -e "Usage: $0 OPTIONS"
-    echo -e "  Inits openmano database; deletes previous one and loads from ${DBNAME}_structure.sql"
+    echo -e "Usage: $0 OPTIONS [version]"
+    echo -e "  Inits openmano database; deletes previous one and loads from ${DBNAME}_structure.sql"\
+    echo -e "   and data from host_ranking.sql, nets.sql, of_ports_pci_correspondece*.sql"
+            "If [version]  is not provided, it is upgraded to the last version"
     echo -e "  OPTIONS"
     echo -e "     -u USER  database user. '$DBUSER' by default. Prompts if DB access fails"
-    echo -e "     -p PASS  database password. 'No password' or 'manopw' by default. Prompts if DB access fails"
+    echo -e "     -p PASS  database password. If missing it tries without and '$DEFAULT_DBPASS' password before prompting"
     echo -e "     -P PORT  database port. '$DBPORT' by default"
-    echo -e "     -h HOST  database host. '$DBHOST' by default"
+    echo -e "     -h HOST  database host. 'localhost' by default"
     echo -e "     -d NAME  database name. '$DBNAME' by default.  Prompts if DB access fails"
-    echo -e "     --help   shows this help"
+    echo -e "     -q --quiet: Do not prompt for credentials and exit if cannot access to database"
     echo -e "     --createdb   forces the deletion and creation of the database"
+    echo -e "     --help   shows this help"
 }
 
-while getopts ":u:p:P:d:h:-:" o; do
+while getopts ":u:p:P:h:d:q-:" o; do
     case "${o}" in
         u)
             DBUSER="$OPTARG"
@@ -64,80 +69,101 @@ while getopts ":u:p:P:d:h:-:" o; do
         h)
             DBHOST="$OPTARG"
             ;;
+        q)
+            export QUIET_MODE="-q"
+            ;;
         -)
-            if [ "${OPTARG}" == "help" ]; then
-                usage && exit 0
-            elif [ "${OPTARG}" == "createdb" ]; then
-                CREATEDB="yes"
-            else
-                echo "Invalid option: --$OPTARG" >&2 && usage  >&2
-                exit 1
-            fi
+            [ "${OPTARG}" == "help" ] && usage && exit 0
+            [ "${OPTARG}" == "quiet" ] && export QUIET_MODE="-q" && continue
+            [ "${OPTARG}" == "createdb" ] && export CREATEDB=yes && continue
+            echo "Invalid option: '--$OPTARG'. Type --help for more information" >&2
+            exit 1
             ;;
         \?)
-            echo "Invalid option: -$OPTARG" >&2 && usage  >&2
+            echo "Invalid option: '-$OPTARG'. Type --help for more information" >&2
             exit 1
             ;;
         :)
-            echo "Option -$OPTARG requires an argument." >&2 && usage  >&2
+            echo "Option '-$OPTARG' requires an argument. Type --help for more information" >&2
             exit 1
             ;;
         *)
             usage >&2
-            exit -1
+            exit 1
             ;;
     esac
 done
 shift $((OPTIND-1))
 
-#check and ask for database user password
-DBUSER_="-u$DBUSER"
-DBPASS_=""
-[ -n "$DBPASS" ] && DBPASS_="-p$DBPASS"
-DBHOST_="-h$DBHOST"
-DBPORT_="-P$DBPORT"
+DB_VERSION=$1
 
-TEMPFILE="$(mktemp -q --tmpdir "initmanodb.XXXXXX")"
+if [ -n "$DB_VERSION" ] ; then
+    # check it is a number and an allowed one
+    [ "$DB_VERSION" -eq "$DB_VERSION" ] 2>/dev/null || 
+        ! echo "parameter 'version' requires a integer value" >&2 || exit 1
+fi
+
+# Creating temporary file
+TEMPFILE="$(mktemp -q --tmpdir "initdb.XXXXXX")"
 trap 'rm -f "$TEMPFILE"' EXIT
 chmod 0600 "$TEMPFILE"
 DEF_EXTRA_FILE_PARAM="--defaults-extra-file=$TEMPFILE"
-if [ -z "${DBPASS}" ]
-then
-    password_ok=""
-    echo -e "[client]\nuser='${DBUSER}'\npassword='manopw'" > "$TEMPFILE"
-    mysql --defaults-extra-file="$TEMPFILE" $DBHOST_ $DBPORT_ $DBNAME -e "quit" >/dev/null 2>&1 && DBPASS="manopw"
-    echo -e "[client]\nuser='${DBUSER}'\npassword=''" > "$TEMPFILE"
-    mysql --defaults-extra-file="$TEMPFILE" $DBHOST_ $DBPORT_ $DBNAME -e "quit" >/dev/null 2>&1 && DBPASS=""
-fi
-echo -e "[client]\nuser='${DBUSER}'\npassword='${DBPASS}'" > "$TEMPFILE"
+echo -e "[client]\n user='${DBUSER}'\n password='$DBPASS'\n host='$DBHOST'\n port='$DBPORT'" > "$TEMPFILE"
 
-while !  mysql $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_ -e "quit" >/dev/null 2>&1
-do
-        [ -n "$logintry" ] &&  echo -e "\nInvalid database credentials!!!. Try again (Ctrl+c to abort)"
-        [ -z "$logintry" ] &&  echo -e "\nProvide database credentials"
-#        read -e -p "mysql database name($DBNAME): " KK
-#        [ -n "$KK" ] && DBNAME="$KK"
-        read -e -p "mysql user($DBUSER): " KK
+if [ -n "${CREATEDB}" ] ; then
+    FIRST_TRY="yes"
+    while ! DB_ERROR=`mysqladmin "$DEF_EXTRA_FILE_PARAM" -s status 2>&1 >/dev/null` ; do
+        # if password is not provided, try silently with $DEFAULT_DBPASS before exit or prompt for credentials
+        [[ -n "$FIRST_TRY" ]] && [[ -z "$DBPASS" ]] && DBPASS="$DEFAULT_DBPASS" &&
+            echo -e "[client]\n user='${DBUSER}'\n password='$DBPASS'\n host='$DBHOST'\n port='$DBPORT'" > "$TEMPFILE" &&
+            continue
+        echo "$DB_ERROR"
+        [[ -n "$QUIET_MODE" ]] && echo -e "Invalid admin database credentials!!!" >&2 && exit 1
+        echo -e "Provide database credentials (Ctrl+c to abort):"
+        read -e -p "    mysql user($DBUSER): " KK
         [ -n "$KK" ] && DBUSER="$KK"
-        read -e -s -p "mysql password: " DBPASS
-        echo -e "[client]\nuser='${DBUSER}'\npassword='${DBPASS}'" > "$TEMPFILE"
-        logintry="yes"
+        read -e -s -p "    mysql password: " DBPASS
+        echo -e "[client]\n user='${DBUSER}'\n password='$DBPASS'\n host='$DBHOST'\n port='$DBPORT'" > "$TEMPFILE"
+        FIRST_TRY=""
         echo
-done
-[ -z "${DBPASS}" ] && DBPASS_=""
-[ -n "${DBPASS}" ] && DBPASS_="-p${DBPASS}"
-
-if [ -n "${CREATEDB}" ]; then
-    echo "    deleting previous database ${DBNAME}"
-    echo "DROP DATABASE IF EXISTS ${DBNAME}" | mysql $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_
+    done
+    # echo "    deleting previous database ${DBNAME} if it exists"
+    mysqladmin $DEF_EXTRA_FILE_PARAM DROP "${DBNAME}" ${QUIET_MODE/q/f} && echo "Previous database deleted"
     echo "    creating database ${DBNAME}"
-    mysqladmin $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_ -s create ${DBNAME} || exit 1
+    mysqladmin $DEF_EXTRA_FILE_PARAM create "${DBNAME}" || exit 1
 fi
 
-echo "    loading ${DIRNAME}/${DBNAME}_structure.sql"
-#echo 'mysql '$DEF_EXTRA_FILE_PARAM' '$DBHOST_' '$DBPORT_' '$DBNAME' < '${DIRNAME}'/mano_db_structure.sql'
-mysql $DEF_EXTRA_FILE_PARAM $DBHOST_ $DBPORT_ $DBNAME < ${DIRNAME}/mano_db_structure.sql
+# Check and ask for database user password
+FIRST_TRY="yes"
+while ! DB_ERROR=`mysql "$DEF_EXTRA_FILE_PARAM" $DBNAME -e "quit" 2>&1 >/dev/null`
+do
+    # if password is not provided, try silently with $DEFAULT_DBPASS before exit or prompt for credentials
+    [[ -n "$FIRST_TRY" ]] && [[ -z "$DBPASS" ]] && DBPASS="$DEFAULT_DBPASS" &&
+        echo -e "[client]\n user='${DBUSER}'\n password='$DBPASS'\n host='$DBHOST'\n port='$DBPORT'" > "$TEMPFILE" &&
+        continue
+    echo "$DB_ERROR"
+    [[ -n "$QUIET_MODE" ]] && echo -e "Invalid database credentials!!!" >&2 && exit 1
+    echo -e "Provide database name and credentials (Ctrl+c to abort):"
+    read -e -p "    mysql database name($DBNAME): " KK
+    [ -n "$KK" ] && DBNAME="$KK"
+    read -e -p "    mysql user($DBUSER): " KK
+    [ -n "$KK" ] && DBUSER="$KK"
+    read -e -s -p "    mysql password: " DBPASS
+    echo -e "[client]\n user='${DBUSER}'\n password='$DBPASS'\n host='$DBHOST'\n port='$DBPORT'" > "$TEMPFILE"
+    FIRST_TRY=""
+    echo
+done
+
+DBCMD="mysql $DEF_EXTRA_FILE_PARAM $DBNAME"
+DBUSER_="" && [ -n "$DBUSER" ] && DBUSER_="-u$DBUSER"
+DBPASS_="" && [ -n "$DBPASS" ] && DBPASS_="-p$DBPASS"
+DBHOST_="" && [ -n "$DBHOST" ] && DBHOST_="-h$DBHOST"
+DBPORT_="-P$DBPORT"
+
+echo "    loading ${DIRNAME}/mano_db_structure.sql"
+sed -e "s/{{mano_db}}/$DBNAME/" ${DIRNAME}/mano_db_structure.sql |  mysql $DEF_EXTRA_FILE_PARAM
 
 echo "    migrage database version"
-${DIRNAME}/migrate_mano_db.sh $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_ -d$DBNAME
+# echo "${DIRNAME}/migrate_mano_db.sh $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_ -d$DBNAME $QUIET_MODE $DB_VERSION"
+${DIRNAME}/migrate_mano_db.sh $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_ -d$DBNAME $QUIET_MODE $DB_VERSION
 
