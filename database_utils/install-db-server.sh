@@ -218,6 +218,12 @@ fi
 # if not assuming ubuntu type
 [ -f /etc/redhat-release ] || _DISTRO=$(lsb_release -is  2>/dev/null)
 
+if [[ -z "$NO_PACKAGES" ]]
+then
+    [ "$USER" != "root" ] && echo "Needed root privileges" >&2 && exit 1
+    _install_mysql_package || exit 1
+fi
+
 # Creating temporary file for MYSQL installation and initialization"
 TEMPFILE="$(mktemp -q --tmpdir "installdb.XXXXXX")"
 trap 'rm -f "$TEMPFILE"' EXIT
@@ -247,12 +253,6 @@ if [[ ! -z "$UNINSTALL" ]]
 then
     _uninstall_db
     exit
-fi
-
-if [[ -z "$NO_PACKAGES" ]]
-then
-    [ "$USER" != "root" ] && echo "Needed root privileges" >&2 && exit 1
-    _install_mysql_package || exit 1
 fi
 
 # Create or update database
