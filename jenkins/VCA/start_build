@@ -56,6 +56,16 @@ EOF
 systemctl enable lxd-bridge
 systemctl start lxd-bridge
 
+DEFAULT_INTERFACE=$(route -n | awk '$1~/^0.0.0.0/ {print $8}')
+DEFAULT_MTU=$( ip addr show $DEFAULT_INTERFACE | perl -ne 'if (/mtu\s(\d+)/) {print $1;}')
+
+INFO "Setting lxdbr0 MTU to $DEFAULT_MTU"
+ifconfig lxdbr0 mtu $DEFAULT_MTU
+
+# Make the MTU change persistent between reboots
+sed -i '/ifconfig lxdbr0 mtu/d' /etc/rc.local
+sed -i "$ i ifconfig lxdbr0 mtu $DEFAULT_MTU" /etc/rc.local
+
 INFO "Pre-caching Ubuntu:16.04 image (this may take several minutes)..."
 
 # Setup a daily cron to update the cached image
