@@ -28,7 +28,7 @@ vnfd:vnfd-catalog:
                 storage-gb: 1
 
             # Image including the full path
-            image: '/mnt/powervault/virtualization/osm/CirrOS/cirros-0.3.4-x86_64-disk.img'
+            image: 'cirros034'
 
             external-interface:
             # Specify the external interfaces
