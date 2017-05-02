@@ -1133,15 +1133,22 @@ class vimconnector(vimconn.vimconnector):
                         interface["mac_address"] = port.get("mac_address")
                         interface["vim_net_id"] = port["network_id"]
                         interface["vim_interface_id"] = port["id"]
-                        interface["compute_node"] = vm_vim['OS-EXT-SRV-ATTR:host']
+                        # check if OS-EXT-SRV-ATTR:host is there, 
+                        # in case of non-admin credentials, it will be missing
+                        if vm_vim.get('OS-EXT-SRV-ATTR:host'):
+                            interface["compute_node"] = vm_vim['OS-EXT-SRV-ATTR:host']
                         interface["pci"] = None
-                        if port['binding:profile'].get('pci_slot'):
-                            # TODO: At the moment sr-iov pci addresses are converted to PF pci addresses by setting the slot to 0x00
-                            # TODO: This is just a workaround valid for niantinc. Find a better way to do so
-                            #   CHANGE DDDD:BB:SS.F to DDDD:BB:00.(F%2)   assuming there are 2 ports per nic
-                            pci = port['binding:profile']['pci_slot']
-                            # interface["pci"] = pci[:-4] + "00." + str(int(pci[-1]) % 2)
-                            interface["pci"] = pci
+
+                        # check if binding:profile is there, 
+                        # in case of non-admin credentials, it will be missing
+                        if port.get('binding:profile'):
+                            if port['binding:profile'].get('pci_slot'):
+                                # TODO: At the moment sr-iov pci addresses are converted to PF pci addresses by setting the slot to 0x00
+                                # TODO: This is just a workaround valid for niantinc. Find a better way to do so
+                                #   CHANGE DDDD:BB:SS.F to DDDD:BB:00.(F%2)   assuming there are 2 ports per nic
+                                pci = port['binding:profile']['pci_slot']
+                                # interface["pci"] = pci[:-4] + "00." + str(int(pci[-1]) % 2)
+                                interface["pci"] = pci
                         interface["vlan"] = None
                         #if network is of type vlan and port is of type direct (sr-iov) then set vlan id
                         network = self.neutron.show_network(port["network_id"])
