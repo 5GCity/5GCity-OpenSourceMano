@@ -1,3 +1,4 @@
+# Copyright 2017 Sandvine
 #
 # All Rights Reserved.
 #
@@ -12,3 +13,20 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+
+import time
+
+
+def wait_for_value(func, result=True, wait_time=10, catch_exception = None ):
+    maxtime = time.time() + wait_time
+    while time.time() < maxtime:
+        try:
+            if func() == result:
+                return True 
+        except catch_exception as inst:
+            pass
+        time.sleep(1)
+    try:
+        return func() == result
+    except catch_exception as inst:
+        return False

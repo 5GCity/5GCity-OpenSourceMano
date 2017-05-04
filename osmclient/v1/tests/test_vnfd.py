@@ -13,3 +13,26 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+
+import unittest
+from mock import Mock
+from osmclient.v1 import vnfd
+from osmclient.common.exceptions import NotFound
+
+
+class TestVnfd(unittest.TestCase):
+
+   def test_list_empty(self):
+       mock=Mock()
+       mock.get_cmd.return_value=list()
+       assert len(vnfd.Vnfd(mock).list()) == 0
+
+   def test_get_notfound(self):
+       mock=Mock()
+       mock.get_cmd.return_value='foo'
+       self.assertRaises(NotFound,vnfd.Vnfd(mock).get,'bar')
+
+   def test_get_found(self):
+       mock=Mock()
+       mock.get_cmd.return_value={'vnfd:vnfd': [{'name': 'foo' }]}
+       assert vnfd.Vnfd(mock).get('foo')

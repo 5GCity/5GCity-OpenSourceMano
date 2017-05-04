@@ -1,3 +1,4 @@
+# Copyright 2017 Sandvine
 #
 # All Rights Reserved.
 #
@@ -12,3 +13,18 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+
+"""
+OSM utils
+"""
+
+class Utils(object):
+    def __init__(self,http=None):
+        self._http=http
+
+    def get_vcs_info(self):
+        resp=self._http.get_cmd('api/operational/vcs/info')
+        if resp:
+            return resp['rw-base:info']['components']['component_info']
+        return list()
+
