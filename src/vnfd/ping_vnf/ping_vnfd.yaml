@@ -59,7 +59,6 @@ vnfd:vnfd-catalog:
                 vnfd-connection-point-ref: ping_vnfd/cp1
             id: iovdu_0
             image: Fedora-x86_64-20-20131211.1-sda-ping.qcow2
-            image-checksum: a6ffaa77f949a9e4ebb082c6147187cf
             name: iovdu_0
             vm-flavor:
                 memory-mb: '512'

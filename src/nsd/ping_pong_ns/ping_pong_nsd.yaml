@@ -71,7 +71,6 @@ nsd:nsd-catalog:
             nsd:strategy: COLOCATION
         nsd:vld:
         -   nsd:id: mgmt_vl
-            nsd:vim-network-name: mgmt
             nsd:description: Management VL
             nsd:name: mgmt_vl
             nsd:short-name: mgmt_vl
