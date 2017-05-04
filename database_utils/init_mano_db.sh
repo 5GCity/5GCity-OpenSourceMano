@@ -128,7 +128,7 @@ if [ -n "${CREATEDB}" ] ; then
         echo
     done
     # echo "    deleting previous database ${DBNAME} if it exists"
-    mysqladmin $DEF_EXTRA_FILE_PARAM DROP "${DBNAME}" ${QUIET_MODE/q/f} && echo "Previous database deleted"
+    mysqladmin $DEF_EXTRA_FILE_PARAM DROP "${DBNAME}" -f && echo "Previous database deleted"
     echo "    creating database ${DBNAME}"
     mysqladmin $DEF_EXTRA_FILE_PARAM create "${DBNAME}" || exit 1
 fi
