@@ -1,0 +1,5 @@
+pytest-output.xml
+*.pyc
+.cache
+descriptor-packages/
+*.xml
