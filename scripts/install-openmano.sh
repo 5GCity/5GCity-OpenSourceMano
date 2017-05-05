@@ -156,8 +156,8 @@ fi
 if [ "$_DISTRO" == "Ubuntu" ]
 then
     _RELEASE=$(lsb_release -rs)
-    if [[ ${_RELEASE%%.*} != 14 ]] && [[ ${_RELEASE%%.*} != 16 ]] 
-    then 
+    if [[ ${_RELEASE%%.*} != 14 ]] && [[ ${_RELEASE%%.*} != 16 ]]
+    then
         [[ -z $QUIET_MODE ]] &&
             ! ask_user "WARNING! Not tested Ubuntu version. Continue assuming a trusty (14.XX)' (y/N)? " n &&
             echo "Cancelled" && exit 1
@@ -197,14 +197,14 @@ INSTALL_AS_A_SERVICE=""
 # Next operations require knowing BASEFOLDER
 if [[ -z "$NOCLONE" ]]; then
     if [[ -n "$INSTALL_AS_A_SERVICE" ]] ; then
-        OPENMANO_BASEFOLDER=__openmano__${RANDOM}
+        BASEFOLDER=__openmano__${RANDOM}
     else
-        OPENMANO_BASEFOLDER="${PWD}/openmano"
+        BASEFOLDER="${PWD}/openmano"
     fi
-    [[ -n "$FORCE" ]] && rm -rf $OPENMANO_BASEFOLDER #make idempotent
+    [[ -n "$FORCE" ]] && rm -rf $BASEFOLDER #make idempotent
 else
-    HERE=$(realpath $(dirname $0))
-    OPENMANO_BASEFOLDER=$(dirname $HERE)
+    HERE=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
+    BASEFOLDER=$(dirname $HERE)
 fi
 
 if [[ -z "$NO_PACKAGES" ]]
@@ -258,34 +258,34 @@ if [[ -z $NOCLONE ]]; then
         "#################################################################\n"\
         "#####        DOWNLOAD SOURCE                                #####\n"\
         "#################################################################"
-    if [[ -d "${OPENMANO_BASEFOLDER}" ]] ; then
+    if [[ -d "${BASEFOLDER}" ]] ; then
         if [[ -n "$FORCE" ]] ; then
-            echo "deleting '${OPENMANO_BASEFOLDER}' folder"
-            rm -rf "$OPENMANO_BASEFOLDER" #make idempotent
+            echo "deleting '${BASEFOLDER}' folder"
+            rm -rf "$BASEFOLDER" #make idempotent
         elif [[ -z "$QUIET_MODE" ]] ; then
-            ! ask_user "folder '${OPENMANO_BASEFOLDER}' exists, overwrite (y/N)? " n && echo "Cancelled!" && exit 1
-            rm -rf "$OPENMANO_BASEFOLDER"
+            ! ask_user "folder '${BASEFOLDER}' exists, overwrite (y/N)? " n && echo "Cancelled!" && exit 1
+            rm -rf "$BASEFOLDER"
         else
-            echo "'${OPENMANO_BASEFOLDER}' folder exists. Use "--force" to overwrite" >&2 && exit 1
+            echo "'${BASEFOLDER}' folder exists. Use "--force" to overwrite" >&2 && exit 1
         fi
     fi
-    su $SUDO_USER -c "git clone ${GIT_URL} ${OPENMANO_BASEFOLDER}"
-    su $SUDO_USER -c "cp ${OPENMANO_BASEFOLDER}/.gitignore-common ${OPENMANO_BASEFOLDER}/.gitignore"
-    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER} checkout v2.0"
+    su $SUDO_USER -c "git clone ${GIT_URL} ${BASEFOLDER}"
+    su $SUDO_USER -c "cp ${BASEFOLDER}/.gitignore-common ${BASEFOLDER}/.gitignore"
+    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER} checkout v2.0"
 fi
 
 echo -e "\n"\
     "#################################################################\n"\
     "#####        INSTALLING OVIM LIBRARY                        #####\n"\
     "#################################################################"
-su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER} clone ${GIT_OVIM_URL} openvim"
-[[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${OPENMANO_BASEFOLDER}/openvim checkout v2.0"
+su $SUDO_USER -c "git -C ${BASEFOLDER} clone ${GIT_OVIM_URL} openvim"
+[[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER}/openvim checkout v2.0"
 
 # Install debian dependencies before setup.py
 [ "$_DISTRO" == "Ubuntu" ] && install_packages "libmysqlclient-dev"
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "libmysqlclient-dev"  #TODO check if that's the name in CentOS and RedHat
-make -C ${OPENMANO_BASEFOLDER}/openvim lite
-rm -rf "${OPENMANO_BASEFOLDER}/openvim"
+make -C ${BASEFOLDER}/openvim lite
+rm -rf "${BASEFOLDER}/openvim"
 OSMLIBOVIM_PATH=`python -c 'import lib_osm_openvim; print lib_osm_openvim.__path__[0]'`
 
 if [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ]
@@ -318,8 +318,8 @@ then
 fi
 
 echo -e "\n"\
-    "#################################################################n"\
-    "#####        CONFIGURE OPENMANO CLIENT                      #####n"\
+    "#################################################################\n"\
+    "#####        CONFIGURE OPENMANO CLIENT                      #####\n"\
     "#################################################################"
 #creates a link at ~/bin if not configured as a service
 if [[ -z "$INSTALL_AS_A_SERVICE" ]]
@@ -328,9 +328,9 @@ then
     su $SUDO_USER -c 'rm -f ${HOME}/bin/openmano'
     su $SUDO_USER -c 'rm -f ${HOME}/bin/openmano-report'
     su $SUDO_USER -c 'rm -f ${HOME}/bin/service-openmano'
-    su $SUDO_USER -c "ln -s '${OPENMANO_BASEFOLDER}/openmano' "'${HOME}/bin/openmano'
-    su $SUDO_USER -c "ln -s '${OPENMANO_BASEFOLDER}/scripts/openmano-report.sh'   "'${HOME}/bin/openmano-report'
-    su $SUDO_USER -c "ln -s '${OPENMANO_BASEFOLDER}/scripts/service-openmano'  "'${HOME}/bin/service-openmano'
+    su $SUDO_USER -c "ln -s '${BASEFOLDER}/openmano' "'${HOME}/bin/openmano'
+    su $SUDO_USER -c "ln -s '${BASEFOLDER}/scripts/openmano-report.sh'   "'${HOME}/bin/openmano-report'
+    su $SUDO_USER -c "ln -s '${BASEFOLDER}/scripts/service-openmano'  "'${HOME}/bin/service-openmano'
 
     #insert /home/<user>/bin in the PATH
     #skiped because normally this is done authomatically when ~/bin exists
@@ -339,13 +339,14 @@ then
     #    echo "    inserting /home/$SUDO_USER/bin in the PATH at .bashrc"
     #    su $SUDO_USER -c 'echo "PATH=\$PATH:\${HOME}/bin" >> ~/.bashrc'
     #fi
-    if [[ $SUDO_USER == root ]] 
+    
+    if [[ $SUDO_USER == root ]]
     then
         if ! echo $PATH | grep -q "${HOME}/bin"
         then
             echo "PATH=\$PATH:\${HOME}/bin" >> ${HOME}/.bashrc
         fi
-    fi 
+    fi
 fi
 
 #configure arg-autocomplete for this user
@@ -361,17 +362,17 @@ fi
 
 if [ -z "$NO_DB" ]; then
     echo -e "\n"\
-        "#################################################################"\n"\
-        "#####               INSTALL DATABASE SERVER                 #####"\n"\
+        "#################################################################\n"\
+        "#####               INSTALL DATABASE SERVER                 #####\n"\
         "#################################################################"
 
     if [ -n "$QUIET_MODE" ]; then
         DB_QUIET='-q'
     fi
-    ${OPENMANO_BASEFOLDER}/database_utils/install-db-server.sh -U $DBUSER ${DBPASSWD_PARAM/p/P} $DB_QUIET $DB_FORCE_UPDATE || exit 1
+    ${BASEFOLDER}/database_utils/install-db-server.sh -U $DBUSER ${DBPASSWD_PARAM/p/P} $DB_QUIET $DB_FORCE_UPDATE || exit 1
     echo -e "\n"\
-        "#################################################################"\n"\
-        "#####        CREATE AND INIT MANO_VIM DATABASE              #####"\n"\
+        "#################################################################\n"\
+        "#####        CREATE AND INIT MANO_VIM DATABASE              #####\n"\
         "#################################################################"
     # Install mano_vim_db after setup
     ${OSMLIBOVIM_PATH}/database_utils/install-db-server.sh -U $DBUSER ${DBPASSWD_PARAM/p/P} -u mano -p manopw -d mano_vim_db --no-install-packages $DB_QUIET $DB_FORCE_UPDATE || exit 1
@@ -380,12 +381,12 @@ fi   # [ -z "$NO_DB" ]
 if [[ -n "$INSTALL_AS_A_SERVICE"  ]]
 then
     echo -e "\n"\
-        "#################################################################"\n"\
-        "#####        CONFIGURE OPENMANO SERVICE                     #####"\n"\
+        "#################################################################\n"\
+        "#####        CONFIGURE OPENMANO SERVICE                     #####\n"\
         "#################################################################"
 
-    ${OPENMANO_BASEFOLDER}/scripts/install-openmano-service.sh -f ${OPENMANO_BASEFOLDER} `[[ -z "$NOCLONE" ]] && echo "-d"`
-    # rm -rf ${OPENMANO_BASEFOLDER}
+    ${BASEFOLDER}/scripts/install-openmano-service.sh -f ${BASEFOLDER} `[[ -z "$NOCLONE" ]] && echo "-d"`
+    # rm -rf ${BASEFOLDER}
     # alias service-openmano="service openmano"
     # echo 'alias service-openmano="service openmano"' >> ${HOME}/.bashrc
     echo
@@ -394,5 +395,5 @@ then
 else
     echo
     echo "Done!  you may need to logout and login again for loading client configuration"
-    echo " Run './${OPENMANO_BASEFOLDER}/scripts/service-openmano start' for starting openmano in a screen"
+    echo " Run './${BASEFOLDER}/scripts/service-openmano start' for starting openmano in a screen"
 fi
