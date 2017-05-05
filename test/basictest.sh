@@ -29,19 +29,21 @@ function usage(){
     echo -e "usage: ${BASH_SOURCE[0]} [OPTIONS] <action>\n  test openmano using openvim as a VIM"
     echo -e "           the OPENVIM_HOST, OPENVIM_PORT shell variables indicate openvim location"
     echo -e "           by default localhost:9080"
-    echo -e "  <action> is a list of the following items (by default 'reset create delete')"
-    echo -e "    reset     reset the openmano database content"
-    echo -e "    create    creates items"
-    echo -e "    delete    delete created items"
+    echo -e "  <action> is a list of the following items (by default 'reset add-openvim create delete del-openvim')"
+    echo -e "    reset       resets the openmano database content and creates osm tenant"
+    echo -e "    add-openvim adds and attaches a local openvim datacenter"
+    echo -e "    del-openvim detaches and deletes the local openvim datacenter"
+    echo -e "    create      creates VNFs, scenarios and instances"
+    echo -e "    delete      deletes the created instances, scenarios and VNFs"
     echo -e "  OPTIONS:"
     echo -e "    -f --force       does not prompt for confirmation"
     echo -e "    -h --help        shows this help"
     echo -e "    --screen         forces to run openmano (and openvim) service in a screen"
     echo -e "    --insert-bashrc  insert the created tenant,datacenter variables at"
     echo -e "                     ~/.bashrc to be available by openmano CLI"
-    echo -e "    --install-openvim   install openvim in test mode"
-    echo -e "    --init-openvim   if openvim runs locally, an init is called to clean openvim"
-    echo -e "                      database and add fake hosts"
+    echo -e "    --install-openvim   installs openvim in test mode"
+    echo -e "    --init-openvim --initopenvim    if openvim runs locally, initopenvim is called to clean openvim"\
+            "database, create osm tenant and add fake hosts"
 }
 
 function is_valid_uuid(){
@@ -54,11 +56,19 @@ DIRNAME=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
 DIRmano=$(dirname $DIRNAME)
 DIRscript=${DIRmano}/scripts
 
+#detect paths of executables, preceding the relative paths
+openmano=openmano && [[ -x "${DIRmano}/openmano" ]] && openmano="${DIRmano}/openmano"
+service_openmano=service-openmano && [[ -x "$DIRscript/service-openmano" ]] &&
+    service_openmano="$DIRscript/service-openmano"
+initopenvim="initopenvim"
+openvim="openvim"
+
 [[ ${BASH_SOURCE[0]} != $0 ]] && _exit="return" || _exit="exit"
 
 
 #process options
-source ${DIRscript}/get-options.sh "force:f help:h insert-bashrc init-openvim install-openvim screen" $* || $_exit 1
+source ${DIRscript}/get-options.sh "force:f help:h insert-bashrc init-openvim:initopenvim install-openvim screen" \
+                $* || $_exit 1
 
 #help
 [ -n "$option_help" ] && usage && $_exit 0
@@ -73,7 +83,8 @@ action_list=""
 
 for argument in $params
 do
-    if [[ $argument == reset ]] || [[ $argument == create ]] || [[ $argument == delete ]] || [[ -z "$argument" ]]
+    if [[ $argument == reset ]] || [[ $argument == create ]] || [[ $argument == delete ]] ||
+       [[ $argument == add-openvim ]] || [[ $argument == del-openvim ]] || [[ -z "$argument" ]]
     then
         action_list="$action_list $argument"
         continue
@@ -88,24 +99,34 @@ export OPENMANO_PORT=9090
 
 
 #by default action should be reset and create
-[[ -z $action_list ]]  && action_list="reset create delete"
+[[ -z $action_list ]]  && action_list="reset add-openvim create delete del-openvim"
 
 if [[ -n "$option_install_openvim" ]] 
 then
+    echo
+    echo "action: install openvim"
+    echo "################################"
     mkdir -p ${DIRNAME}/local
     pushd ${DIRNAME}/local
     echo "installing openvim at  ${DIRNAME}/openvim ... "
     wget -O install-openvim.sh "https://osm.etsi.org/gitweb/?p=osm/openvim.git;a=blob_plain;f=scripts/install-openvim.sh"
     chmod +x install-openvim.sh
     sudo ./install-openvim.sh --no-install-packages --force --quiet --develop
-    export alias initopenvim="${PWD}/openvim/scripts/initopenvim.sh"
-    export alias openvim="${PWD}/openvim/scripts/openvim"
-    option_init_openvim=""
-    ${DIRNAME}/local/openvim/scripts/initopenvim.sh${force_param}${insert_bashrc_param}${screen_vim_param} || echo "WARNING openvim cannot be initialized. The rest of test can fail!"
-
+    openvim="${DIRNAME}/local/openvim/openvim"
+    #force inito-penvim
+    option_init_openvim="-"
+    initopenvim="${DIRNAME}/local/openvim/scripts/initopenvim"
     popd
 fi
-[[ -z "$option_init_openvim" ]] || initopenvim${force_param}${insert_bashrc_param}${screen_vim_param} || echo "WARNING openvim cannot be initialized. The rest of test can fail!"
+
+if [[ -n "$option_init_openvim" ]]
+then
+    echo
+    echo "action: init openvim"
+    echo "################################"
+    ${initopenvim} ${force_param}${insert_bashrc_param}${screen_vim_param} || \
+        echo "WARNING openvim cannot be initialized. The rest of test can fail!"
+fi
 
 #check openvim client variables are set
 #fail=""
@@ -116,6 +137,9 @@ fi
 
 for action in $action_list
 do
+    echo
+    echo "action: $action"
+    echo "################################"
 #if [[ $action == "install-openvim" ]]
     #echo "Installing and starting openvim"
     #mkdir -p temp
@@ -133,84 +157,88 @@ then
     [[ $force_ != y ]] && [[ $force_ != yes ]] && echo "aborted!" && $_exit
 
     echo "Stopping openmano"
-    $DIRscript/service-openmano mano stop${screen_mano_param}
+    $service_openmano mano stop${screen_mano_param}
     echo "Initializing openmano database"
-    $DIRmano/database_utils/init_mano_db.sh -u mano -p manopw --createdb
+    $DIRmano/database_utils/init_mano_db.sh -u mano -p manopw
     echo "Starting openmano"
-    $DIRscript/service-openmano mano start${screen_mano_param}
+    $service_openmano mano start${screen_mano_param}
     echo
-
-elif [[ $action == "delete" ]]
-then
-    result=`openmano tenant-list TEST-tenant`
-    nfvotenant=`echo $result |gawk '{print $1}'`
-    #check a valid uuid is obtained
-    is_valid_uuid $nfvotenant || ! echo "Tenant TEST-tenant not found. Already delete?" >&2 || $_exit 1
-    export OPENMANO_TENANT=$nfvotenant
-    ${DIRmano}/openmano instance-scenario-delete -f simple-instance     || echo "fail"
-    ${DIRmano}/openmano instance-scenario-delete -f complex-instance    || echo "fail"
-    ${DIRmano}/openmano instance-scenario-delete -f complex2-instance   || echo "fail"
-    ${DIRmano}/openmano instance-scenario-delete -f complex3-instance   || echo "fail"
-    ${DIRmano}/openmano instance-scenario-delete -f complex4-instance   || echo "fail"
-    ${DIRmano}/openmano instance-scenario-delete -f complex5-instance   || echo "fail"
-    ${DIRmano}/openmano scenario-delete -f simple           || echo "fail"
-    ${DIRmano}/openmano scenario-delete -f complex          || echo "fail"
-    ${DIRmano}/openmano scenario-delete -f complex2         || echo "fail"
-    ${DIRmano}/openmano scenario-delete -f complex3         || echo "fail"
-    ${DIRmano}/openmano scenario-delete -f complex4         || echo "fail"
-    ${DIRmano}/openmano scenario-delete -f complex5         || echo "fail"
-    ${DIRmano}/openmano vnf-delete -f linux                 || echo "fail"
-    ${DIRmano}/openmano vnf-delete -f linux_2VMs_v02        || echo "fail"
-    ${DIRmano}/openmano vnf-delete -f dataplaneVNF_2VMs     || echo "fail"
-    ${DIRmano}/openmano vnf-delete -f dataplaneVNF_2VMs_v02 || echo "fail"
-    ${DIRmano}/openmano vnf-delete -f dataplaneVNF4 || echo "fail"
-    ${DIRmano}/openmano vnf-delete -f dataplaneVNF2         || echo "fail"
-    ${DIRmano}/openmano vnf-delete -f dataplaneVNF3         || echo "fail"
-    ${DIRmano}/openmano datacenter-detach TEST-dc           || echo "fail"
-    ${DIRmano}/openmano datacenter-delete -f TEST-dc        || echo "fail"
-    ${DIRmano}/openmano tenant-delete -f TEST-tenant        || echo "fail"
-    echo
-
-elif [[ $action == "create" ]]
-then
-    printf "%-50s" "Creating openmano tenant 'TEST-tenant': "
-    result=`${DIRmano}/openmano tenant-create TEST-tenant --description="created by basictest.sh"`
+    printf "%-50s" "Creating openmano tenant 'osm': "
+    result=`$openmano tenant-create osm --description="created by basictest.sh"`
     nfvotenant=`echo $result |gawk '{print $1}'`
     #check a valid uuid is obtained
     ! is_valid_uuid $nfvotenant && echo "FAIL" && echo "    $result" && $_exit 1
-    export OPENMANO_TENANT=$nfvotenant
-    [[ -n "$option_insert_bashrc" ]] && echo -e "\nexport OPENMANO_TENANT=$nfvotenant"  >> ~/.bashrc
+    export OPENMANO_TENANT=osm
+    [[ -n "$option_insert_bashrc" ]] && echo -e "\nexport OPENMANO_TENANT=osm"  >> ~/.bashrc
     echo $nfvotenant
 
-    printf "%-50s" "Creating datacenter 'TEST-dc' in openmano:"
+elif [[ $action == "delete" ]]
+then
+    result=`openmano tenant-list osm`
+    nfvotenant=`echo $result |gawk '{print $1}'`
+    #check a valid uuid is obtained
+    is_valid_uuid $nfvotenant || ! echo "Tenant osm not found. Already delete?" >&2 || $_exit 1
+    export OPENMANO_TENANT=$nfvotenant
+    $openmano instance-scenario-delete -f simple-instance     || echo "fail"
+    $openmano instance-scenario-delete -f complex-instance    || echo "fail"
+    $openmano instance-scenario-delete -f complex2-instance   || echo "fail"
+    $openmano instance-scenario-delete -f complex3-instance   || echo "fail"
+    $openmano instance-scenario-delete -f complex4-instance   || echo "fail"
+    $openmano instance-scenario-delete -f complex5-instance   || echo "fail"
+    $openmano scenario-delete -f simple           || echo "fail"
+    $openmano scenario-delete -f complex          || echo "fail"
+    $openmano scenario-delete -f complex2         || echo "fail"
+    $openmano scenario-delete -f complex3         || echo "fail"
+    $openmano scenario-delete -f complex4         || echo "fail"
+    $openmano scenario-delete -f complex5         || echo "fail"
+    $openmano vnf-delete -f linux                 || echo "fail"
+    $openmano vnf-delete -f linux_2VMs_v02        || echo "fail"
+    $openmano vnf-delete -f dataplaneVNF_2VMs     || echo "fail"
+    $openmano vnf-delete -f dataplaneVNF_2VMs_v02 || echo "fail"
+    $openmano vnf-delete -f dataplaneVNF4         || echo "fail"
+    $openmano vnf-delete -f dataplaneVNF2         || echo "fail"
+    $openmano vnf-delete -f dataplaneVNF3         || echo "fail"
+
+elif [[ $action == "del-openvim" ]]
+then
+    $openmano datacenter-detach local-openvim           || echo "fail"
+    $openmano datacenter-delete -f local-openvim        || echo "fail"
+
+elif [[ $action == "add-openvim" ]]
+then
+
+    printf "%-50s" "Creating datacenter 'local-openvim' at openmano:"
     [[ -z $OPENVIM_HOST ]] && OPENVIM_HOST=localhost
     [[ -z $OPENVIM_PORT ]] && OPENVIM_PORT=9080
     URL_ADMIN_PARAM=""
     [[ -n $OPENVIM_ADMIN_PORT ]] && URL_ADMIN_PARAM=" --url_admin=http://${OPENVIM_HOST}:${OPENVIM_ADMIN_PORT}/openvim"
-    result=`${DIRmano}/openmano datacenter-create TEST-dc "http://${OPENVIM_HOST}:${OPENVIM_PORT}/openvim" --type=openvim${URL_ADMIN_PARAM} --config="{test: no use just for test}"`
+    result=`$openmano datacenter-create local-openvim "http://${OPENVIM_HOST}:${OPENVIM_PORT}/openvim" \
+            --type=openvim${URL_ADMIN_PARAM} --config="{test: no use just for test}"`
     datacenter=`echo $result |gawk '{print $1}'`
     #check a valid uuid is obtained
     ! is_valid_uuid $datacenter && echo "FAIL" && echo "    $result" && $_exit 1
     echo $datacenter
-    export OPENMANO_DATACENTER=$datacenter
-    [[ -n "$option_insert_bashrc" ]] && echo -e "\nexport OPENMANO_DATACENTER=$datacenter"  >> ~/.bashrc
+    export OPENMANO_DATACENTER=local-openvim
+    [[ -n "$option_insert_bashrc" ]] && echo -e "\nexport OPENMANO_DATACENTER=local-openvim"  >> ~/.bashrc
 
     printf "%-50s" "Attaching openmano tenant to the datacenter:"
-    result=`${DIRmano}/openmano datacenter-attach TEST-dc --config="{test: no use just for test}"`
+    result=`$openmano datacenter-attach local-openvim --vim-tenant-name=osm --config="{test: no use just for test}"`
     [[ $? != 0 ]] && echo  "FAIL" && echo "    $result" && $_exit 1
     echo OK
 
     printf "%-50s" "Updating external nets in openmano: "
-    result=`${DIRmano}/openmano datacenter-netmap-delete -f --all`
+    result=`$openmano datacenter-netmap-delete -f --all`
     [[ $? != 0 ]] && echo  "FAIL" && echo "    $result"  && $_exit 1
-    result=`${DIRmano}/openmano datacenter-netmap-import -f`
+    result=`$openmano datacenter-netmap-import -f`
     [[ $? != 0 ]] && echo  "FAIL" && echo "    $result"  && $_exit 1
     echo OK
 
+elif [[ $action == "create" ]]
+then
     for VNF in linux dataplaneVNF1 dataplaneVNF2 dataplaneVNF_2VMs dataplaneVNF_2VMs_v02 dataplaneVNF3 linux_2VMs_v02 dataplaneVNF4
     do    
         printf "%-50s" "Creating VNF '${VNF}': "
-        result=`$DIRmano/openmano vnf-create $DIRmano/vnfs/examples/${VNF}.yaml`
+        result=`$openmano vnf-create $DIRmano/vnfs/examples/${VNF}.yaml`
         vnf=`echo $result |gawk '{print $1}'`
         #check a valid uuid is obtained
         ! is_valid_uuid $vnf && echo FAIL && echo "    $result" &&  $_exit 1
@@ -219,7 +247,7 @@ then
     for NS in simple complex complex2 complex3 complex4 complex5
     do
         printf "%-50s" "Creating scenario '${NS}':"
-        result=`$DIRmano/openmano scenario-create $DIRmano/scenarios/examples/${NS}.yaml`
+        result=`$openmano scenario-create $DIRmano/scenarios/examples/${NS}.yaml`
         scenario=`echo $result |gawk '{print $1}'`
         ! is_valid_uuid $scenario && echo FAIL && echo "    $result" &&  $_exit 1
         echo $scenario
@@ -228,14 +256,14 @@ then
     for IS in simple complex complex2 complex3 complex5
     do
         printf "%-50s" "Creating instance-scenario '${IS}':"
-        result=`$DIRmano/openmano instance-scenario-create  --scenario ${IS} --name ${IS}-instance`
+        result=`$openmano instance-scenario-create  --scenario ${IS} --name ${IS}-instance`
         instance=`echo $result |gawk '{print $1}'`
         ! is_valid_uuid $instance && echo FAIL && echo "    $result" &&  $_exit 1
         echo $instance
     done
 
     printf "%-50s" "Creating instance-scenario 'complex4':"
-    result=`$DIRmano/openmano instance-scenario-create $DIRmano/instance-scenarios/examples/instance-creation-complex4.yaml`
+    result=`$openmano instance-scenario-create $DIRmano/instance-scenarios/examples/instance-creation-complex4.yaml`
     instance=`echo $result |gawk '{print $1}'`
     ! is_valid_uuid $instance && echo FAIL && echo "    $result" &&  $_exit 1
     echo $instance
