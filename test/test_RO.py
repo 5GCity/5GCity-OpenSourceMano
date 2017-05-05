@@ -25,10 +25,10 @@
 '''
 Module for testing openmano functionality. It uses openmanoclient.py for invoking openmano
 '''
-__author__="Pablo Montes"
+__author__="Pablo Montes, Alfonso Tierno"
 __date__ ="$16-Feb-2017 17:08:16$"
-__version__="0.0.1"
-version_date="Feb 2017"
+__version__="0.0.2"
+version_date="May 2017"
 
 import logging
 import imp
@@ -48,6 +48,7 @@ global test_number
 global test_directory
 global scenario_test_folder
 global test_image_name
+global timeout
 global management_network
 global manual
 
@@ -461,9 +462,9 @@ class descriptor_based_scenario_test(unittest.TestCase):
             raw_input('Scenario has been deployed. Perform manual check and press any key to resume')
             return
 
-        keep_waiting = 50
+        keep_waiting = timeout
         instance_active = False
-        while(keep_waiting):
+        while True:
             result = check_instance_scenario_active(self.__class__.instance_scenario_uuid)
             if result[0]:
                 break
@@ -472,13 +473,16 @@ class descriptor_based_scenario_test(unittest.TestCase):
                 logging.error(msg)
                 raise Exception(msg)
 
-            keep_waiting -= 1
-            time.sleep(5)
-
-        if keep_waiting == 0:
-            msg = 'Timeout reached while waiting instance scenario to get active'
-            logging.error(msg)
-            raise Exception(msg)
+            if keep_waiting >= 5:
+                time.sleep(5)
+                keep_waiting -= 5
+            elif keep_waiting > 0:
+                time.sleep(keep_waiting)
+                keep_waiting = 0
+            else:
+                msg = 'Timeout reached while waiting instance scenario to get active'
+                logging.error(msg)
+                raise Exception(msg)
 
     def test_030_clean_deployment(self):
         self.__class__.test_text = "{}.{}. TEST {} {}".format(test_number, self.__class__.test_index,
@@ -505,34 +509,40 @@ def _get_random_string(maxLength):
     return 'testing_'+"".join([random.choice(string.letters+string.digits) for i in xrange(length)])
 
 if __name__=="__main__":
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/osm_ro")
     import openmanoclient
 
     parser = OptionParser()
 
-    #Optional arguments
-    parser.add_option("-v",'--version', help='Show current version', dest='version', action="store_true", default=False)
-    parser.add_option('--debug', help='Set logs to debug level', dest='debug', action="store_true", default=False)
-    parser.add_option('--failed', help='Set logs to show only failed tests. --debug disables this option',
-                      dest='failed', action="store_true", default=False)
-    parser.add_option('-u', '--url', dest='endpoint_url', help='Set the openmano server url. By default '
-                                                      'http://localhost:9090/openmano',
-                      default='http://localhost:9090/openmano')
-    default_logger_file = os.path.dirname(__file__)+'/'+os.path.splitext(os.path.basename(__file__))[0]+'.log'
-    parser.add_option('--logger_file', dest='logger_file', help='Set the logger file. By default '+default_logger_file,
-                      default=default_logger_file)
-    parser.add_option('--list-tests', help='List all available tests', dest='list-tests', action="store_true",
-                      default=False)
-    parser.add_option('-m', '--manual-check', help='Pause execution once deployed to allow manual checking of the deployed instance scenario', dest='manual', action="store_true", default=False)
-    parser.add_option('--test', '--tests', help='Specify the tests to run', dest='tests', default=None)
-
     #Mandatory arguments
-    parser.add_option("-t", '--tenant', dest='tenant_name', help='MANDATORY. Set the tenant name to test')
     parser.add_option('-d', '--datacenter', dest='datacenter_name', help='MANDATORY, Set the datacenter name to test')
     parser.add_option("-i", '--image-name', dest='image-name', help='MANDATORY. Image name of an Ubuntu 16.04 image '
                                                                     'that will be used for testing available in the '
                                                                     'datacenter.')
-    parser.add_option("-n", '--mgmt-net-name', dest='mgmt-net', help='MANDATORY. Set the tenant name to test')
+    parser.add_option("-n", '--mgmt-net-name', dest='mgmt-net', help='MANDATORY. Set the vim management network to use')
+    parser.add_option("-t", '--tenant', dest='tenant_name', help='MANDATORY. Set the tenant name to test')
+
+    #Optional arguments
+    parser.add_option('--debug', help='Set logs to debug level', dest='debug', action="store_true", default=False)
+    parser.add_option('--failfast', help='Stop when a test fails rather than execute all tests',
+                      dest='failfast', action="store_true", default=False)
+    parser.add_option('--failed', help='Set logs to show only failed tests. --debug disables this option',
+                      dest='failed', action="store_true", default=False)
+    default_logger_file = os.path.dirname(__file__)+'/'+os.path.splitext(os.path.basename(__file__))[0]+'.log'
+    parser.add_option('--list-tests', help='List all available tests', dest='list-tests', action="store_true",
+                      default=False)
+    parser.add_option('--logger_file', dest='logger_file', help='Set the logger file. By default '+default_logger_file,
+                      default=default_logger_file)
+    parser.add_option('-m', '--manual-check', help='Pause execution once deployed to allow manual checking of the '
+                                                    'deployed instance scenario',
+                      dest='manual', action="store_true", default=False)
+    parser.add_option('--timeout', help='Specify the instantiation timeout in seconds. By default 300',
+                      dest='timeout', type='int', default=300)
+    parser.add_option('--test', '--tests', help='Specify the tests to run', dest='tests', default=None)
+    parser.add_option('-u', '--url', dest='endpoint_url', help='Set the openmano server url. By default '
+                                                      'http://localhost:9090/openmano',
+                      default='http://localhost:9090/openmano')
+    parser.add_option("-v",'--version', help='Show current version', dest='version', action="store_true", default=False)
 
     (options, args) = parser.parse_args()
 
@@ -545,6 +555,7 @@ if __name__=="__main__":
     logger_name = os.path.basename(__file__)
     logger = logging.getLogger(logger_name)
     logger.setLevel(logger_level)
+    failfast = options.__dict__['failfast']
 
     # Configure a logging handler to store in a logging file
     fileHandler = logging.FileHandler(options.__dict__['logger_file'])
@@ -560,10 +571,10 @@ if __name__=="__main__":
 
     logger.debug('Program started with the following arguments: ' + str(options.__dict__))
 
-    #If version is required print it and exit
+    # If version is required print it and exit
     if options.__dict__['version']:
         logger.info("{}".format((sys.argv[0], __version__+" version", version_date)))
-        logger.info ("(c) Copyright Telefonica")
+        logger.info("(c) Copyright Telefonica")
         sys.exit(0)
 
     test_directory = os.path.dirname(__file__) + "/RO_tests"
@@ -577,20 +588,20 @@ if __name__=="__main__":
             if cls[0].startswith('test_'):
                 tests_names.append(cls[0])
 
-        msg = "The code based tests are:\n\t" + ', '.join(sorted(tests_names))+'\n'+\
-              "The descriptor based tests are:\n\t"+ ', '.join(sorted(test_directory_content))+'\n'+\
-              "NOTE: The test test_VIM_tenant_operations will fail in case the used datacenter is type OpenStack " \
+        msg = "The code based tests are:\n\t" + ', '.join(sorted(tests_names)) + \
+              "\nThe descriptor based tests are:\n\t" + ', '.join(sorted(test_directory_content)) + \
+              "\nNOTE: The test test_VIM_tenant_operations will fail in case the used datacenter is type OpenStack " \
               "unless RO has access to the admin endpoint. Therefore this test is excluded by default"
 
         logger.info(msg)
         sys.exit(0)
 
-    #Make sure required arguments are present
+    # Make sure required arguments are present
     required = "tenant_name datacenter_name image-name mgmt-net".split()
     error = False
     for r in required:
         if options.__dict__[r] is None:
-            print "ERROR: parameter "+r+" is required"
+            print ("ERROR: parameter "+r+" is required")
             error = True
     if error:
         parser.print_help()
@@ -600,11 +611,12 @@ if __name__=="__main__":
     test_image_name = options.__dict__['image-name']
     management_network = options.__dict__['mgmt-net']
     manual = options.__dict__['manual']
+    timeout = options.__dict__['timeout']
 
-    #Create the list of tests to be run
+    # Create the list of tests to be run
     descriptor_based_tests = []
     code_based_tests = []
-    if options.__dict__['tests'] != None:
+    if options.__dict__['tests'] is not None:
         tests = sorted(options.__dict__['tests'].split(','))
         for test in tests:
             matches_code_based_tests = [item for item in clsmembers if item[0] == test]
@@ -616,10 +628,10 @@ if __name__=="__main__":
                 logger.critical("Test {} is not among the possible ones".format(test))
                 sys.exit(1)
     else:
-        #include all tests
+        # include all tests
         descriptor_based_tests = test_directory_content
         for cls in clsmembers:
-            #We exclude 'test_VIM_tenant_operations' unless it is specifically requested by the user
+            # We exclude 'test_VIM_tenant_operations' unless it is specifically requested by the user
             if cls[0].startswith('test_') and cls[0] != 'test_VIM_tenant_operations':
                 code_based_tests.append(cls[1])
 
@@ -630,23 +642,25 @@ if __name__=="__main__":
     client = openmanoclient.openmanoclient(
                             endpoint_url=options.__dict__['endpoint_url'],
                             tenant_name=options.__dict__['tenant_name'],
-                            datacenter_name = options.__dict__['datacenter_name'],
-                            debug = options.__dict__['debug'], logger = logger_name)
+                            datacenter_name=options.__dict__['datacenter_name'],
+                            debug=options.__dict__['debug'], logger=logger_name)
 
     # TextTestRunner stream is set to /dev/null in order to avoid the method to directly print the result of tests.
     # This is handled in the tests using logging.
     stream = open('/dev/null', 'w')
-    test_number=1
+    test_number = 1
     executed = 0
     failed = 0
 
-    #Run code based tests
+    # Run code based tests
     basic_tests_suite = unittest.TestSuite()
     for test in code_based_tests:
         basic_tests_suite.addTest(unittest.makeSuite(test))
-    result = unittest.TextTestRunner(stream=stream).run(basic_tests_suite)
+    result = unittest.TextTestRunner(stream=stream, failfast=failfast).run(basic_tests_suite)
     executed += result.testsRun
     failed += len(result.failures) + len(result.errors)
+    if failfast and failed:
+        sys.exit(1)
     if len(result.failures) > 0:
         logger.debug("failures : {}".format(result.failures))
     if len(result.errors) > 0:
@@ -658,15 +672,16 @@ if __name__=="__main__":
         scenario_test_folder = test
         test_suite = unittest.TestSuite()
         test_suite.addTest(unittest.makeSuite(descriptor_based_scenario_test))
-        result = unittest.TextTestRunner(stream=stream).run(test_suite)
+        result = unittest.TextTestRunner(stream=stream, failfast=False).run(test_suite)
         executed += result.testsRun
         failed += len(result.failures) + len(result.errors)
+        if failfast and failed:
+            sys.exit(1)
         if len(result.failures) > 0:
             logger.debug("failures : {}".format(result.failures))
         if len(result.errors) > 0:
             logger.debug("errors : {}".format(result.errors))
 
-    #Log summary
+    # Log summary
     logger.warning("Total number of tests: {}; Total number of failures/errors: {}".format(executed, failed))
-
-    sys.exit(0)
+    sys.exit(1 if failed else 0)

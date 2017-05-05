@@ -31,4 +31,5 @@ scenario:
       external:  true
       interfaces: 
       - linux1:  control0       # Node and its interface
+      - linux1:  control1       # Node and its interface
 
