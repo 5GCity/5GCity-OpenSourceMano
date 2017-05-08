@@ -17,7 +17,18 @@ nsd:nsd-catalog:
             # Multiple constituent VNFDs can be specified
         -   member-vnf-index: 1
             vnfd-id-ref: cirros_vnfd
-
+        scaling-group-descriptor:
+        -   name: "scaling_cirros"
+            vnfd-member:
+            -   count: 1
+                member-vnf-index-ref: 1
+            min-instance-count: 0
+            max-instance-count: 10
+            scaling-policy:
+            -   scaling-type: "manual"
+                cooldown-time: 10
+                threshold-time: 10
+                name: manual_scale
         vld:
         # Networks for the VNFs
             -   id: cirros_nsd_vld1
