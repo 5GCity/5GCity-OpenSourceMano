@@ -22,13 +22,14 @@ vnfd:vnfd-catalog:
             count: 1
 
             # Flavour of the VM to be instantiated for the VDU
+            # flavor below can fit into m1.micro
             vm-flavor:
                 vcpu-count: 1
-                memory-mb: 512
-                storage-gb: 1
+                memory-mb: 256
+                storage-gb: 2
 
             # Image/checksum or image including the full path
-            image: cirros034
+            image: 'CirrOS 0.3.4 64-bit'
             #checksum: 
 
             external-interface:
