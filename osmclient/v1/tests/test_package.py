@@ -22,15 +22,19 @@ from osmclient.common.exceptions import ClientException
 
 class TestPackage(unittest.TestCase):
 
-   def test_upload_fail(self):
-       mock=Mock()
-       mock.post_cmd.return_value='foo'
-       self.assertRaises(ClientException,package.Package(upload_http=mock).upload,'bar')
+    def test_upload_fail(self):
+        mock = Mock()
+        mock.post_cmd.return_value = 'foo'
+        self.assertRaises(ClientException,
+                          package.Package(upload_http=mock).upload, 'bar')
 
-       mock.post_cmd.return_value=None
-       self.assertRaises(ClientException,package.Package(upload_http=mock).upload,'bar')
+        mock.post_cmd.return_value = None
+        self.assertRaises(ClientException,
+                          package.Package(upload_http=mock).upload, 'bar')
 
-   def test_wait_for_upload_bad_file(self):
-       mock=Mock()
-       mock.post_cmd.return_value='foo'
-       self.assertRaises(IOError,package.Package(upload_http=mock).wait_for_upload,'invalidfile')
+    def test_wait_for_upload_bad_file(self):
+        mock = Mock()
+        mock.post_cmd.return_value = 'foo'
+        self.assertRaises(IOError,
+                          package.Package(upload_http=mock).wait_for_upload,
+                          'invalidfile')

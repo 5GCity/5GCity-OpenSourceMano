@@ -21,62 +21,70 @@ import json
 
 class Http(object):
 
-    def __init__(self,url,user='admin',password='admin'):
+    def __init__(self, url, user='admin', password='admin'):
         self._url = url
         self._user = user
         self._password = password
         self._http_header = None
 
-    def set_http_header(self,header):
+    def set_http_header(self, header):
         self._http_header = header
 
-    def _get_curl_cmd(self,endpoint):
+    def _get_curl_cmd(self, endpoint):
         curl_cmd = pycurl.Curl()
-        curl_cmd.setopt(pycurl.URL, self._url + endpoint )
-        curl_cmd.setopt(pycurl.SSL_VERIFYPEER,0)
-        curl_cmd.setopt(pycurl.SSL_VERIFYHOST,0)
-        curl_cmd.setopt(pycurl.USERPWD, '{}:{}'.format(self._user,self._password))
+        curl_cmd.setopt(pycurl.URL, self._url + endpoint)
+        curl_cmd.setopt(pycurl.SSL_VERIFYPEER, 0)
+        curl_cmd.setopt(pycurl.SSL_VERIFYHOST, 0)
+        curl_cmd.setopt(
+            pycurl.USERPWD,
+            '{}:{}'.format(
+                self._user,
+                self._password))
         if self._http_header:
             curl_cmd.setopt(pycurl.HTTPHEADER, self._http_header)
         return curl_cmd
 
-    def get_cmd( self, endpoint ):
+    def get_cmd(self, endpoint):
 
         data = BytesIO()
-        curl_cmd=self._get_curl_cmd(endpoint)
-        curl_cmd.setopt(pycurl.HTTPGET,1)
+        curl_cmd = self._get_curl_cmd(endpoint)
+        curl_cmd.setopt(pycurl.HTTPGET, 1)
         curl_cmd.setopt(pycurl.WRITEFUNCTION, data.write)
-        curl_cmd.perform() 
+        curl_cmd.perform()
         curl_cmd.close()
         if data.getvalue():
             return json.loads(data.getvalue().decode())
         return None
 
-    def delete_cmd( self, endpoint ):
+    def delete_cmd(self, endpoint):
         data = BytesIO()
-        curl_cmd=self._get_curl_cmd(endpoint)
+        curl_cmd = self._get_curl_cmd(endpoint)
         curl_cmd.setopt(pycurl.CUSTOMREQUEST, "DELETE")
         curl_cmd.setopt(pycurl.WRITEFUNCTION, data.write)
-        curl_cmd.perform() 
+        curl_cmd.perform()
         curl_cmd.close()
         if data.getvalue():
             return json.loads(data.getvalue().decode())
         return None
 
-    def post_cmd( self, endpoint='', postfields_dict=None, formfile=None, ):
+    def post_cmd(self, endpoint='', postfields_dict=None, formfile=None, ):
         data = BytesIO()
-        curl_cmd=self._get_curl_cmd(endpoint)
-        curl_cmd.setopt(pycurl.POST,1)
+        curl_cmd = self._get_curl_cmd(endpoint)
+        curl_cmd.setopt(pycurl.POST, 1)
         curl_cmd.setopt(pycurl.WRITEFUNCTION, data.write)
 
         if postfields_dict is not None:
-            jsondata=json.dumps(postfields_dict)
-            curl_cmd.setopt(pycurl.POSTFIELDS,jsondata)
+            jsondata = json.dumps(postfields_dict)
+            curl_cmd.setopt(pycurl.POSTFIELDS, jsondata)
 
         if formfile is not None:
-            curl_cmd.setopt(pycurl.HTTPPOST,[((formfile[0],(pycurl.FORM_FILE,formfile[1])))])
+            curl_cmd.setopt(
+                pycurl.HTTPPOST,
+                [((formfile[0],
+                           (pycurl.FORM_FILE,
+                            formfile[1])))])
 
-        curl_cmd.perform() 
+        curl_cmd.perform()
         curl_cmd.close()
         if data.getvalue():
             return json.loads(data.getvalue().decode())

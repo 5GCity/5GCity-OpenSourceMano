@@ -1,1 +1,9 @@
 *.pyc
+.cache
+deb_dist/
+dist/
+*.gz
+*egg-info/
+.eggs
+*venv/
+*venv3/

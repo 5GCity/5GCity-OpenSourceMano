@@ -18,5 +18,6 @@
 class ClientException(Exception):
     pass
 
+
 class NotFound(ClientException):
     pass

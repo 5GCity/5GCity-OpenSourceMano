@@ -17,16 +17,16 @@
 import time
 
 
-def wait_for_value(func, result=True, wait_time=10, catch_exception = None ):
+def wait_for_value(func, result=True, wait_time=10, catch_exception=None):
     maxtime = time.time() + wait_time
     while time.time() < maxtime:
         try:
             if func() == result:
-                return True 
-        except catch_exception as inst:
+                return True
+        except catch_exception:
             pass
         time.sleep(1)
     try:
         return func() == result
-    except catch_exception as inst:
+    except catch_exception:
         return False

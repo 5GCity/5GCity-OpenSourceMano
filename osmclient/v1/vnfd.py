@@ -18,14 +18,14 @@
 OSM vnfd API handling
 """
 
-from osmclient.common.exceptions import NotFound 
+from osmclient.common.exceptions import NotFound
 from osmclient.common.exceptions import ClientException
 
 
 class Vnfd(object):
 
-    def __init__(self,http=None):
-        self._http=http
+    def __init__(self, http=None):
+        self._http = http
 
     def list(self):
         resp = self._http.get_cmd('api/running/vnfd-catalog/vnfd')
@@ -33,14 +33,15 @@ class Vnfd(object):
             return resp['vnfd:vnfd']
         return list()
 
-    def get(self,name):
+    def get(self, name):
         for vnfd in self.list():
-           if name == vnfd['name']:
-               return vnfd
+            if name == vnfd['name']:
+                return vnfd
         raise NotFound("vnfd {} not found".format(name))
 
-    def delete(self,vnfd_name):
-        vnfd=self.get(vnfd_name)
-        resp=self._http.delete_cmd('api/running/vnfd-catalog/vnfd/{}'.format(vnfd['id']))
+    def delete(self, vnfd_name):
+        vnfd = self.get(vnfd_name)
+        resp = self._http.delete_cmd('api/running/vnfd-catalog/vnfd/{}'
+                                     .format(vnfd['id']))
         if 'success' not in resp:
             raise ClientException("failed to delete vnfd {}".format(vnfd_name))

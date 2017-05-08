@@ -18,21 +18,21 @@
 OSM vnf API handling
 """
 
-from osmclient.common.exceptions import NotFound 
+from osmclient.common.exceptions import NotFound
 
 
 class Vnf(object):
-    def __init__(self,http=None):
-        self._http=http
+    def __init__(self, http=None):
+        self._http = http
 
     def list(self):
         resp = self._http.get_cmd('v1/api/operational/vnfr-catalog/vnfr')
         if resp and 'vnfr:vnfr' in resp:
             return resp['vnfr:vnfr']
-        return list() 
+        return list()
 
-    def get(self,vnf_name):
-        vnfs=self.list()
+    def get(self, vnf_name):
+        vnfs = self.list()
         for vnf in vnfs:
             if vnf_name == vnf['name']:
                 return vnf
@@ -40,8 +40,8 @@ class Vnf(object):
                 return vnf
         raise NotFound("vnf {} not found".format(vnf_name))
 
-    def get_monitoring(self,vnf_name):
-        vnf=self.get(vnf_name)
+    def get_monitoring(self, vnf_name):
+        vnf = self.get(vnf_name)
         if vnf and 'monitoring-param' in vnf:
             return vnf['monitoring-param']
         return None

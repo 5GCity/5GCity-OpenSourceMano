@@ -21,7 +21,7 @@ OSM client entry point
 from osmclient.v1 import client
 
 
-def Client(version=1, host = None, *args, **kwargs):
+def Client(version=1, host=None, *args, **kwargs):
     if version == 1:
         return client.Client(host, *args, **kwargs)
     else:

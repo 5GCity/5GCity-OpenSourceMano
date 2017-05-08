@@ -22,22 +22,23 @@ from osmclient.common.exceptions import NotFound
 
 class TestNs(unittest.TestCase):
 
-   def test_list_empty(self):
-       mock=Mock()
-       mock.get_cmd.return_value=list()
-       assert len(ns.Ns(mock).list()) == 0
+    def test_list_empty(self):
+        mock = Mock()
+        mock.get_cmd.return_value = list()
+        assert len(ns.Ns(mock).list()) == 0
 
-   def test_get_notfound(self):
-       mock=Mock()
-       mock.get_cmd.return_value='foo'
-       self.assertRaises(NotFound,ns.Ns(mock).get,'bar')
+    def test_get_notfound(self):
+        mock = Mock()
+        mock.get_cmd.return_value = 'foo'
+        self.assertRaises(NotFound, ns.Ns(mock).get, 'bar')
 
-   def test_get_found(self):
-       mock=Mock()
-       mock.get_cmd.return_value={'nsr:ns-instance-config': { 'nsr': [{'name': 'foo' }]}}
-       assert ns.Ns(mock).get('foo')
+    def test_get_found(self):
+        mock = Mock()
+        mock.get_cmd.return_value = {'nsr:ns-instance-config':
+                                     {'nsr': [{'name': 'foo'}]}}
+        assert ns.Ns(mock).get('foo')
 
-   def test_get_monitoring_notfound(self):
-       mock=Mock()
-       mock.get_cmd.return_value='foo'
-       self.assertRaises(NotFound,ns.Ns(mock).get_monitoring,'bar')
+    def test_get_monitoring_notfound(self):
+        mock = Mock()
+        mock.get_cmd.return_value = 'foo'
+        self.assertRaises(NotFound, ns.Ns(mock).get_monitoring, 'bar')

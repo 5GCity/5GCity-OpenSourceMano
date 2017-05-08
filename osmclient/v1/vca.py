@@ -20,10 +20,11 @@ OSM VCA API handling
 
 from osmclient.common.exceptions import ClientException
 
+
 class Vca(object):
 
-    def __init__(self,http=None):
-        self._http=http
+    def __init__(self, http=None):
+        self._http = http
 
     def list(self):
         resp = self._http.get_cmd('api/config/config-agent')
@@ -31,22 +32,27 @@ class Vca(object):
             return resp['rw-config-agent:config-agent']['account']
         return list()
 
-    def delete(self,name):
-        if 'success' not in self._http.delete_cmd('api/config/config-agent/account/{}'.format(name)):
-            raise ClientException("failed to delete config agent {}".format(name))
+    def delete(self, name):
+        if ('success' not in
+            self._http.delete_cmd('api/config/config-agent/account/{}'
+                                  .format(name))):
+            raise ClientException("failed to delete config agent {}"
+                                  .format(name))
 
-    def create(self,name,account_type,server,user,secret):
-        postdata={}
+    def create(self, name, account_type, server, user, secret):
+        postdata = {}
         postdata['account'] = list()
 
-        account={}
+        account = {}
         account['name'] = name
         account['account-type'] = account_type
         account['juju'] = {}
-        account['juju']['user'] = user 
+        account['juju']['user'] = user
         account['juju']['secret'] = secret
         account['juju']['ip-address'] = server
         postdata['account'].append(account)
 
-        if 'success' not in self._http.post_cmd('api/config/config-agent',postdata):
-            raise ClientException("failed to create config agent {}".format(name))
+        if 'success' not in self._http.post_cmd('api/config/config-agent',
+                                                postdata):
+            raise ClientException("failed to create config agent {}"
+                                  .format(name))

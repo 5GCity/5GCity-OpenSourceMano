@@ -18,13 +18,13 @@
 OSM utils
 """
 
+
 class Utils(object):
-    def __init__(self,http=None):
-        self._http=http
+    def __init__(self, http=None):
+        self._http = http
 
     def get_vcs_info(self):
-        resp=self._http.get_cmd('api/operational/vcs/info')
+        resp = self._http.get_cmd('api/operational/vcs/info')
         if resp:
             return resp['rw-base:info']['components']['component_info']
         return list()
-

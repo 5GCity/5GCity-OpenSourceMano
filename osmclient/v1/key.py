@@ -25,13 +25,13 @@ from io import BytesIO
 
 class Key(object):
 
-    def __init__(self,client=None):
-        self._client=client
+    def __init__(self, client=None):
+        self._client = client
 
     def list(self):
         data = BytesIO()
-        curl_cmd=self._client.get_curl_cmd('v1/api/config/key-pair?deep')
-        curl_cmd.setopt(pycurl.HTTPGET,1)
+        curl_cmd = self._client.get_curl_cmd('v1/api/config/key-pair?deep')
+        curl_cmd.setopt(pycurl.HTTPGET, 1)
         curl_cmd.setopt(pycurl.WRITEFUNCTION, data.write)
         curl_cmd.perform()
         curl_cmd.close()

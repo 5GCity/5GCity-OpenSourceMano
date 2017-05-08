@@ -22,27 +22,28 @@ from osmclient.common.exceptions import NotFound
 
 class TestVnf(unittest.TestCase):
 
-   def test_list_empty(self):
-       mock=Mock()
-       mock.get_cmd.return_value=list()
-       assert len(vnf.Vnf(mock).list()) == 0
+    def test_list_empty(self):
+        mock = Mock()
+        mock.get_cmd.return_value = list()
+        assert len(vnf.Vnf(mock).list()) == 0
 
-   def test_get_notfound(self):
-       mock=Mock()
-       mock.get_cmd.return_value='foo'
-       self.assertRaises(NotFound,vnf.Vnf(mock).get,'bar')
+    def test_get_notfound(self):
+        mock = Mock()
+        mock.get_cmd.return_value = 'foo'
+        self.assertRaises(NotFound, vnf.Vnf(mock).get, 'bar')
 
-   def test_get_found(self):
-       mock=Mock()
-       mock.get_cmd.return_value={'vnfr:vnfr': [{'name': 'foo' }]}
-       assert vnf.Vnf(mock).get('foo')
+    def test_get_found(self):
+        mock = Mock()
+        mock.get_cmd.return_value = {'vnfr:vnfr': [{'name': 'foo'}]}
+        assert vnf.Vnf(mock).get('foo')
 
-   def test_get_monitoring_notfound(self):
-       mock=Mock()
-       mock.get_cmd.return_value='foo'
-       self.assertRaises(NotFound,vnf.Vnf(mock).get_monitoring,'bar')
+    def test_get_monitoring_notfound(self):
+        mock = Mock()
+        mock.get_cmd.return_value = 'foo'
+        self.assertRaises(NotFound, vnf.Vnf(mock).get_monitoring, 'bar')
 
-   def test_get_monitoring_found(self):
-       mock=Mock()
-       mock.get_cmd.return_value={'vnfr:vnfr': [{'name': 'foo', 'monitoring-param': True }]}
-       assert vnf.Vnf(mock).get_monitoring('foo')
+    def test_get_monitoring_found(self):
+        mock = Mock()
+        mock.get_cmd.return_value = {'vnfr:vnfr': [{'name': 'foo',
+                                                    'monitoring-param': True}]}
+        assert vnf.Vnf(mock).get_monitoring('foo')

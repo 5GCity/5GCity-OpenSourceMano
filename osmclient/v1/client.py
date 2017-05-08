@@ -27,30 +27,64 @@ from osmclient.v1 import package
 from osmclient.v1 import vca
 from osmclient.v1 import utils
 from osmclient.common import http
-import pycurl
 
 
 class Client(object):
 
-    def __init__(self, host=None,ro_port=9090,upload_port=8443,**kwargs):
-        self._user='admin'
-        self._password='admin'
-        self._host = host.split(':')[0]
-        self._so_port = host.split(':')[1]
+    def __init__(
+        self,
+        host=None,
+        so_port=8008,
+        ro_host=None,
+        ro_port=9090,
+        upload_port=8443,
+            **kwargs):
+        self._user = 'admin'
+        self._password = 'admin'
 
-        http_client    = http.Http('https://{}:{}/'.format(self._host,self._so_port))
-        http_client.set_http_header( ['Accept: application/vnd.yand.data+json','Content-Type: application/json'])
+        if len(host.split(':')) > 1:
+            # backwards compatible, port provided as part of host
+            self._host = host.split(':')[0]
+            self._so_port = host.split(':')[1]
+        else:
+            self._host = host
+            self._so_port = so_port
 
-        ro_http_client = http.Http('http://{}:{}/'.format(self._host,ro_port))
-        ro_http_client.set_http_header( ['Accept: application/vnd.yand.data+json','Content-Type: application/json'])
+        http_client = http.Http(
+            'https://{}:{}/'.format(
+                self._host,
+                self._so_port))
+        http_client.set_http_header(
+            ['Accept: application/vnd.yand.data+json',
+             'Content-Type: application/json'])
 
-        upload_client  = http.Http('https://{}:{}/composer/upload?api_server=https://localhost&upload_server=https://{}'.format(self._host,upload_port,self._host))
+        if ro_host is None:
+            ro_host = host
+        ro_http_client = http.Http('http://{}:{}/'.format(ro_host, ro_port))
+        ro_http_client.set_http_header(
+            ['Accept: application/vnd.yand.data+json',
+             'Content-Type: application/json'])
 
-        self.vnf  = vnf.Vnf(http_client,**kwargs)
-        self.vnfd = vnfd.Vnfd(http_client,**kwargs)
-        self.ns   = ns.Ns(http=http_client,client=self,**kwargs)
-        self.nsd  = nsd.Nsd(http_client,**kwargs)
-        self.vim  = vim.Vim(http=http_client,ro_http=ro_http_client,client=self,**kwargs)
-        self.package = package.Package(http=http_client,upload_http=upload_client,client=self,**kwargs)
-        self.vca     = vca.Vca(http_client,**kwargs)
-        self.utils   = utils.Utils(http_client,**kwargs)
+        upload_client = http.Http(
+            'https://{}:{}/composer/upload?api_server={}{}'.format(
+                self._host,
+                upload_port,
+                'https://localhost&upload_server=https://',
+                self._host))
+
+        self.vnf = vnf.Vnf(http_client, **kwargs)
+        self.vnfd = vnfd.Vnfd(http_client, **kwargs)
+        self.ns = ns.Ns(http=http_client, client=self, **kwargs)
+        self.nsd = nsd.Nsd(http_client, **kwargs)
+        self.vim = vim.Vim(
+            http=http_client,
+            ro_http=ro_http_client,
+            client=self,
+            **kwargs)
+        self.package = package.Package(
+            http=http_client,
+            upload_http=upload_client,
+            client=self,
+            **kwargs)
+        self.vca = vca.Vca(http_client, **kwargs)
+        self.utils = utils.Utils(http_client, **kwargs)

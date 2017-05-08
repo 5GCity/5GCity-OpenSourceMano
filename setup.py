@@ -1,4 +1,4 @@
-from setuptools import setup,find_packages
+from setuptools import setup, find_packages
 
 setup(
     name='osmclient',
@@ -8,7 +8,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        'Click','prettytable'
+        'Click', 'prettytable', 'pyyaml', 'pycurl'
     ],
     entry_points='''
         [console_scripts]

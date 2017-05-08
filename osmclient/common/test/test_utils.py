@@ -18,43 +18,50 @@
 import unittest
 from osmclient.common import utils
 
+
 class TestUtil(unittest.TestCase):
 
-   def test_wait_for_method_basic(self):
-       def foobar():
-           return True
-       assert utils.wait_for_value(lambda: foobar())
+    def test_wait_for_method_basic(self):
+        def foobar():
+            return True
+        assert utils.wait_for_value(lambda: foobar())
 
-   def test_wait_for_method_timeout(self):
-       def foobar():
-           return False 
-       assert not utils.wait_for_value(lambda: foobar(),wait_time=0)
+    def test_wait_for_method_timeout(self):
+        def foobar():
+            return False
+        assert not utils.wait_for_value(lambda: foobar(), wait_time=0)
 
-   def test_wait_for_method_paramter(self):
-       def foobar(input):
-           return input
-       assert not utils.wait_for_value(lambda: foobar(False),wait_time=0)
-       assert utils.wait_for_value(lambda: foobar(True),wait_time=0)
+    def test_wait_for_method_paramter(self):
+        def foobar(input):
+            return input
+        assert not utils.wait_for_value(lambda: foobar(False), wait_time=0)
+        assert utils.wait_for_value(lambda: foobar(True), wait_time=0)
 
-   def test_wait_for_method_wait_for_change(self):
-       def foobar():
-           if foobar.counter == 0:
-               return True
-           foobar.counter -=1
-           return False
-       foobar.counter=1
-       assert utils.wait_for_value(lambda: foobar(),wait_time=1)
+    def test_wait_for_method_wait_for_change(self):
+        def foobar():
+            if foobar.counter == 0:
+                return True
+            foobar.counter -= 1
+            return False
+        foobar.counter = 1
+        assert utils.wait_for_value(lambda: foobar(), wait_time=1)
 
-   def test_wait_for_method_exception(self):
-       def foobar():
-           raise Exception('send exception')
-       assert not utils.wait_for_value(lambda: foobar(),wait_time=0,catch_exception=Exception)
+    def test_wait_for_method_exception(self):
+        def foobar():
+            raise Exception('send exception')
+        assert not utils.wait_for_value(
+            lambda: foobar(),
+            wait_time=0,
+            catch_exception=Exception)
 
-   def test_wait_for_method_first_exception(self):
-       def foobar():
-           if foobar.counter == 0:
-               return True
-           foobar.counter -=1
-           raise Exception('send exception')
-       foobar.counter=1
-       assert utils.wait_for_value(lambda: foobar(),wait_time=1,catch_exception=Exception)
+    def test_wait_for_method_first_exception(self):
+        def foobar():
+            if foobar.counter == 0:
+                return True
+            foobar.counter -= 1
+            raise Exception('send exception')
+        foobar.counter = 1
+        assert utils.wait_for_value(
+            lambda: foobar(),
+            wait_time=1,
+            catch_exception=Exception)

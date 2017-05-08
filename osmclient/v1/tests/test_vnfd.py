@@ -22,17 +22,17 @@ from osmclient.common.exceptions import NotFound
 
 class TestVnfd(unittest.TestCase):
 
-   def test_list_empty(self):
-       mock=Mock()
-       mock.get_cmd.return_value=list()
-       assert len(vnfd.Vnfd(mock).list()) == 0
+    def test_list_empty(self):
+        mock = Mock()
+        mock.get_cmd.return_value = list()
+        assert len(vnfd.Vnfd(mock).list()) == 0
 
-   def test_get_notfound(self):
-       mock=Mock()
-       mock.get_cmd.return_value='foo'
-       self.assertRaises(NotFound,vnfd.Vnfd(mock).get,'bar')
+    def test_get_notfound(self):
+        mock = Mock()
+        mock.get_cmd.return_value = 'foo'
+        self.assertRaises(NotFound, vnfd.Vnfd(mock).get, 'bar')
 
-   def test_get_found(self):
-       mock=Mock()
-       mock.get_cmd.return_value={'vnfd:vnfd': [{'name': 'foo' }]}
-       assert vnfd.Vnfd(mock).get('foo')
+    def test_get_found(self):
+        mock = Mock()
+        mock.get_cmd.return_value = {'vnfd:vnfd': [{'name': 'foo'}]}
+        assert vnfd.Vnfd(mock).get('foo')

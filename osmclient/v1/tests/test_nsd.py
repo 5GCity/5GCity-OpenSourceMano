@@ -19,19 +19,20 @@ from mock import Mock
 from osmclient.v1 import nsd
 from osmclient.common.exceptions import NotFound
 
+
 class TestNsd(unittest.TestCase):
 
-   def test_list_empty(self):
-       mock=Mock()
-       mock.get_cmd.return_value=list()
-       assert len(nsd.Nsd(mock).list()) == 0
+    def test_list_empty(self):
+        mock = Mock()
+        mock.get_cmd.return_value = list()
+        assert len(nsd.Nsd(mock).list()) == 0
 
-   def test_get_notfound(self):
-       mock=Mock()
-       mock.get_cmd.return_value='foo'
-       self.assertRaises(NotFound,nsd.Nsd(mock).get,'bar')
+    def test_get_notfound(self):
+        mock = Mock()
+        mock.get_cmd.return_value = 'foo'
+        self.assertRaises(NotFound, nsd.Nsd(mock).get, 'bar')
 
-   def test_get_found(self):
-       mock=Mock()
-       mock.get_cmd.return_value={'nsd:nsd': [{'name': 'foo' }]}
-       assert nsd.Nsd(mock).get('foo')
+    def test_get_found(self):
+        mock = Mock()
+        mock.get_cmd.return_value = {'nsd:nsd': [{'name': 'foo'}]}
+        assert nsd.Nsd(mock).get('foo')
