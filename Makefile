@@ -44,7 +44,7 @@ $(VENV3)/bin/activate: test_requirements.txt
 build_tools:
 	sudo apt-get -y install $(BUILD_TOOLS)
 
-package: build_tools
+package:
 	$(VENV_BIN) setup.py --command-packages=stdeb.command bdist_deb
 
 test_flake8: venv

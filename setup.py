@@ -10,6 +10,7 @@ setup(
     install_requires=[
         'Click', 'prettytable', 'pyyaml', 'pycurl'
     ],
+    test_suite='nose.collector',
     entry_points='''
         [console_scripts]
         osm=osmclient.scripts.osm:cli
