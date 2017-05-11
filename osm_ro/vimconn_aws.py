@@ -471,17 +471,17 @@ class vimconnector(vimconn.vimconnector):
         try:
             flavor = None
             for key, values in self.flavor_info.iteritems():
-                if (values["memory"], values["cores"], values["disk"]) == (
-                flavor_dict["ram"], flavor_dict["cpus"], flavor_dict["disk"]):
+                if (values["ram"], values["cpus"], values["disk"]) == (
+                flavor_dict["ram"], flavor_dict["vcpus"], flavor_dict["disk"]):
                     flavor = (key, values)
                     break
-                elif (values["memory"], values["cores"], values["disk"]) >= (
-                flavor_dict["ram"], flavor_dict["cpus"], flavor_dict["disk"]):
+                elif (values["ram"], values["cpus"], values["disk"]) >= (
+                flavor_dict["ram"], flavor_dict["vcpus"], flavor_dict["disk"]):
                     if not flavor:
                         flavor = (key, values)
                     else:
-                        if (flavor[1]["memory"], flavor[1]["cores"], flavor[1]["disk"]) >= (
-                        values["memory"], values["cores"], values["disk"]):
+                        if (flavor[1]["ram"], flavor[1]["cpus"], flavor[1]["disk"]) >= (
+                        values["ram"], values["cpus"], values["disk"]):
                             flavor = (key, values)
             if flavor:
                 return flavor[0]
