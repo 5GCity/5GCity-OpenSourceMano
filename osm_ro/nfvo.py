@@ -2807,7 +2807,7 @@ def delete_datacenter(mydb, datacenter):
 
 def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=None, vim_tenant_name=None, vim_username=None, vim_password=None, config=None):
     #get datacenter info
-    datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, None, datacenter)
+    datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, None, datacenter, vim_user=vim_username, vim_passwd=vim_password)
     datacenter_name = myvim["name"]
 
     create_vim_tenant = True if not vim_tenant_id and not vim_tenant_name else False
