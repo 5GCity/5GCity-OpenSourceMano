@@ -44,7 +44,7 @@ except:
 
 class vimconnector(vimconn.vimconnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None,
-                 config={}):
+                 config={}, persistent_info={}):
         """ Params: uuid - id asigned to this VIM
                 name - name assigned to this VIM, can be used for logging
                 tenant_id - ID to be used for tenant
@@ -57,10 +57,15 @@ class vimconnector(vimconn.vimconnector):
                     region_name - name of region to deploy the instances
                     vpc_cidr_block - default CIDR block for VPC
                     security_groups - default security group to specify this instance
+                persistent_info - dict where the class can store information that will be available among class
+                    destroy/creation cycles. This info is unique per VIM/credential. At first call it will contain an
+                    empty dict. Useful to store login/tokens information for speed up communication
         """
 
         vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
-                                      config)
+                                      config, persistent_info)
+
+        self.persistent_info = persistent_info
         self.a_creds = {}
         if user:
             self.a_creds['aws_access_key_id'] = user
