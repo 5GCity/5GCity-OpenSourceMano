@@ -1590,13 +1590,11 @@ if __name__=="__main__":
     tenant_list_parser.add_argument("name", nargs='?', help="name or uuid of the tenant")
     tenant_list_parser.set_defaults(func=tenant_list)
 
-    item_list=('tenant') #put tenant before so that help appear in order
-    for item in item_list:
-        element_edit_parser = subparsers.add_parser(item+'-edit', parents=[parent_parser], help="edits one "+item)
-        element_edit_parser.add_argument("name", help="name or uuid of the "+item)
-        element_edit_parser.add_argument("file", help="json/yaml text or file with the changes").completer = FilesCompleter
-        element_edit_parser.add_argument("-f","--force", action="store_true", help="do not prompt for confirmation")
-        element_edit_parser.set_defaults(func=element_edit, element=item + 's')
+    element_edit_parser = subparsers.add_parser('tenant-edit', parents=[parent_parser], help="edits one tenant")
+    element_edit_parser.add_argument("name", help="name or uuid of the tenant")
+    element_edit_parser.add_argument("file", help="json/yaml text or file with the changes").completer = FilesCompleter
+    element_edit_parser.add_argument("-f","--force", action="store_true", help="do not prompt for confirmation")
+    element_edit_parser.set_defaults(func=element_edit, element='tenants')
 
     datacenter_create_parser = subparsers.add_parser('datacenter-create', parents=[parent_parser], help="creates a new datacenter")
     datacenter_create_parser.add_argument("name", action="store", help="name for the datacenter")
