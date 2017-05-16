@@ -186,6 +186,8 @@ if __name__=="__main__":
             else:
                 assert False, "Unhandled option"
         global_config = load_configuration(config_file)
+        global_config["version"] = __version__
+        global_config["version_date"] = version_date
         #print global_config
         # Override parameters obtained by command line
         if port:

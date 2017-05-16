@@ -305,6 +305,9 @@ def enable_cors():
     '''Don't know yet if really needed. Keep it just in case'''
     bottle.response.headers['Access-Control-Allow-Origin'] = '*'
 
+@bottle.route(url_base + '/version', method='GET')
+def http_get_version():
+    return nfvo.get_version()
 #
 # VNFs
 #

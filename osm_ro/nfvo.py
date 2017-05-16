@@ -194,6 +194,10 @@ def stop_service():
         for thread in global_config["console_thread"]:
             thread.terminate = True
 
+def get_version():
+    return  ("openmanod version {} {}\n(c) Copyright Telefonica".format(global_config["version"],
+                                                                        global_config["version_date"] ))
+
 
 def get_flavorlist(mydb, vnf_id, nfvo_tenant=None):
     '''Obtain flavorList

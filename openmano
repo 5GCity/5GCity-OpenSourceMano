@@ -1462,6 +1462,15 @@ def datacenter_edit(args):
         args.verbose += 1
     return _print_verbose(mano_response, args.verbose)
 
+def version(args):
+    headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
+    URLrequest = "http://%s:%s/openmano/version" % (mano_host, mano_port)
+
+    mano_response = requests.get(URLrequest, headers=headers_req)
+    logger.debug("openmano response: %s", mano_response.text)
+    print mano_response.text
+
+
 global mano_host
 global mano_port
 global mano_tenant
@@ -1474,8 +1483,10 @@ if __name__=="__main__":
     mano_datacenter = os.getenv('OPENMANO_DATACENTER',None)
     
     main_parser = ThrowingArgumentParser(description='User program to interact with OPENMANO-SERVER (openmanod)')
-    main_parser.add_argument('--version', action='version', version='%(prog)s ' + __version__ )
-    
+    main_parser.add_argument('--version', action='version', help="get version of this client",
+                            version='%(prog)s client version ' + __version__ +
+                                    " (Note: use '%(prog)s version' to get server version)")
+
     subparsers = main_parser.add_subparsers(help='commands')
     
     parent_parser = argparse.ArgumentParser(add_help=False)
@@ -1485,6 +1496,9 @@ if __name__=="__main__":
     config_parser = subparsers.add_parser('config', parents=[parent_parser], help="prints configuration values")
     config_parser.add_argument("-n", action="store_true", help="resolves tenant and datacenter names")
     config_parser.set_defaults(func=config)
+
+    version_parser = subparsers.add_parser('version', parents=[parent_parser], help="get server version")
+    version_parser.set_defaults(func=version)
 
     vnf_create_parser = subparsers.add_parser('vnf-create', parents=[parent_parser], help="adds a vnf into the catalogue")
     vnf_create_parser.add_argument("file", action="store", help="location of the JSON file describing the VNF").completer = FilesCompleter
