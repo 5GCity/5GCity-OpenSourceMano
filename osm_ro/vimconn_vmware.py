@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
-# This file is part of openmano
+# Copyright 2016-2017 VMware Inc.
+# This file is part of ETSI OSM
 # All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -18,7 +18,7 @@
 # under the License.
 #
 # For those usages not covered by the Apache License, Version 2.0 please
-# contact with: nfvlabs@tid.es
+# contact:  osslegalrouting@vmware.com
 ##
 
 """
