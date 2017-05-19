@@ -1444,7 +1444,12 @@ class vimconnector(vimconn.vimconnector):
         if disk_list:
             added_existing_disk = False
             for disk in disk_list:
-                if "image_id" in disk and disk["image_id"] is not None:
+                if 'device_type' in disk and disk['device_type'] == 'cdrom':
+                    image_id = disk['image_id']
+                    # Adding CD-ROM to VM
+                    # will revisit code once specification ready to support this feature
+                    self.insert_media_to_vm(vapp, image_id)
+                elif "image_id" in disk and disk["image_id"] is not None:
                     self.logger.debug("Adding existing disk from image {} to vm {} ".format(
                                                                     disk["image_id"] , vapp_uuid))
                     self.add_existing_disk(catalogs=catalogs,
@@ -4787,4 +4792,115 @@ class vimconnector(vimconn.vimconnector):
                 obj = item
                 break
         return obj
+
+
+    def insert_media_to_vm(self, vapp, image_id):
+        """
+        Method to insert media CD-ROM (ISO image) from catalog to vm.
+        vapp - vapp object to get vm id
+        Image_id - image id for cdrom to be inerted to vm
+        """
+        # create connection object
+        vca = self.connect()
+        try:
+            # fetching catalog details
+            rest_url = "{}/api/catalog/{}".format(vca.host,image_id)
+            response = Http.get(url=rest_url,
+                                headers=vca.vcloud_session.get_vcloud_headers(),
+                                verify=vca.verify,
+                                logger=vca.logger)
+
+            if response.status_code != 200:
+                self.logger.error("REST call {} failed reason : {}"\
+                             "status code : {}".format(url_rest_call,
+                                                    response.content,
+                                               response.status_code))
+                raise vimconn.vimconnException("insert_media_to_vm(): Failed to get "\
+                                                                    "catalog details")
+            # searching iso name and id
+            iso_name,media_id = self.get_media_details(vca, response.content)
+
+            if iso_name and media_id:
+                data ="""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                     <ns6:MediaInsertOrEjectParams
+                     xmlns="http://www.vmware.com/vcloud/versions" xmlns:ns2="http://schemas.dmtf.org/ovf/envelope/1" xmlns:ns3="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData" xmlns:ns4="http://schemas.dmtf.org/wbem/wscim/1/common" xmlns:ns5="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData" xmlns:ns6="http://www.vmware.com/vcloud/v1.5" xmlns:ns7="http://www.vmware.com/schema/ovf" xmlns:ns8="http://schemas.dmtf.org/ovf/environment/1" xmlns:ns9="http://www.vmware.com/vcloud/extension/v1.5">
+                     <ns6:Media
+                        type="application/vnd.vmware.vcloud.media+xml"
+                        name="{}.iso"
+                        id="urn:vcloud:media:{}"
+                        href="https://{}/api/media/{}"/>
+                     </ns6:MediaInsertOrEjectParams>""".format(iso_name, media_id,
+                                                                vca.host,media_id)
+
+                for vms in vapp._get_vms():
+                    vm_id = (vms.id).split(':')[-1]
+
+                    headers = vca.vcloud_session.get_vcloud_headers()
+                    headers['Content-Type'] = 'application/vnd.vmware.vcloud.mediaInsertOrEjectParams+xml'
+                    rest_url = "{}/api/vApp/vm-{}/media/action/insertMedia".format(vca.host,vm_id)
+
+                    response = Http.post(url=rest_url,
+                                      headers=headers,
+                                            data=data,
+                                    verify=vca.verify,
+                                    logger=vca.logger)
+
+                    if response.status_code != 202:
+                        self.logger.error("Failed to insert CD-ROM to vm")
+                        raise vimconn.vimconnException("insert_media_to_vm() : Failed to insert"\
+                                                                                    "ISO image to vm")
+                    else:
+                        task = taskType.parseString(response.content, True)
+                        if isinstance(task, GenericTask):
+                            vca.block_until_completed(task)
+                            self.logger.info("insert_media_to_vm(): Sucessfully inserted media ISO"\
+                                                                    " image to vm {}".format(vm_id))
+        except Exception as exp:
+            self.logger.error("insert_media_to_vm() : exception occurred "\
+                                            "while inserting media CD-ROM")
+            raise vimconn.vimconnException(message=exp)
+
+
+    def get_media_details(self, vca, content):
+        """
+        Method to get catalog item details
+        vca - connection object
+        content - Catalog details
+        Return - Media name, media id
+        """
+        cataloghref_list = []
+        try:
+            if content:
+                vm_list_xmlroot = XmlElementTree.fromstring(content)
+                for child in vm_list_xmlroot.iter():
+                    if 'CatalogItem' in child.tag:
+                        cataloghref_list.append(child.attrib.get('href'))
+                if cataloghref_list is not None:
+                    for href in cataloghref_list:
+                        if href:
+                            response = Http.get(url=href,
+                                        headers=vca.vcloud_session.get_vcloud_headers(),
+                                        verify=vca.verify,
+                                        logger=vca.logger)
+                            if response.status_code != 200:
+                                self.logger.error("REST call {} failed reason : {}"\
+                                             "status code : {}".format(href,
+                                                           response.content,
+                                                      response.status_code))
+                                raise vimconn.vimconnException("get_media_details : Failed to get "\
+                                                                         "catalogitem details")
+                            list_xmlroot = XmlElementTree.fromstring(response.content)
+                            for child in list_xmlroot.iter():
+                                if 'Entity' in child.tag:
+                                    if 'media' in child.attrib.get('href'):
+                                        name = child.attrib.get('name')
+                                        media_id = child.attrib.get('href').split('/').pop()
+                                        return name,media_id
+                            else:
+                                self.logger.debug("Media name and id not found")
+                                return False,False
+        except Exception as exp:
+            self.logger.error("get_media_details : exception occurred "\
+                                               "getting media details")
+            raise vimconn.vimconnException(message=exp)
 
