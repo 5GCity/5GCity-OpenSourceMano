@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 
+#
 #   Copyright 2017 RIFT.IO Inc
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 #
 # Author(s): Jeremy Mordkoff
 # Creation Date: 26 April 2017
-# 
+#
 #
 
 # INSTALL.sh
@@ -60,38 +60,35 @@ PLATFORM_VERSION=${2:-4.4.2.1.61839}
 ###############################################################################
 # Main block
 
-# Disable apt-daily.service and apt-daily.timer
-
-DAILY_TIMER='apt-daily.timer'
-DAILY_SERVICE='apt-daily.service'
-if [ $(systemctl is-active $DAILY_TIMER) = "active" ]
-then
-    systemctl stop $DAILY_TIMER
-    systemctl disable $DAILY_TIMER
-    systemctl disable $DAILY_SERVICE
-fi
-
 # enable the right repos
 curl http://repos.riftio.com/public/xenial-riftware-public-key | apt-key add -
-curl -o /etc/apt/sources.list.d/RIFT.list http://buildtracker.riftio.com/repo_file/ub16/${PLATFORM_REPOSITORY}/ 
+curl -o /etc/apt/sources.list.d/RIFT.list http://buildtracker.riftio.com/repo_file/ub16/${PLATFORM_REPOSITORY}/
+
+# Make the Rift repo a higher priority to work around version conflicts.
+cat <<EOF > /etc/apt/preferences.d/rift
+Package: *
+Pin: origin repos.riftio.com
+Pin-Priority: 600
+EOF
+
 apt-get update
-        
+
 # and install the tools
 apt remove -y rw.toolchain-rwbase tcpdump
-apt-get install -y --allow-downgrades rw.tools-container-tools=${PLATFORM_VERSION} rw.tools-scripts=${PLATFORM_VERSION} python 
+apt-get install -y --allow-downgrades rw.tools-container-tools=${PLATFORM_VERSION} rw.tools-scripts=${PLATFORM_VERSION} python
 /usr/rift/container_tools/mkcontainer --modes ext --modes platform --rw-version ${PLATFORM_VERSION}
 pip3 install lxml==3.4.0
 
 
 chmod 777 /usr/rift /usr/rift/usr/share
 
-# now disable the RIFT OSM repo so that we'll get MANO from 
+# now disable the RIFT OSM repo so that we'll get MANO from
 # the OSM repos
-rm -f /etc/apt/sources.list.d/RIFT.list 
+rm -f /etc/apt/sources.list.d/RIFT.list
 curl https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
 add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO stable SO UI RO openvim"
 apt-get update
-    
+
 apt-get install -y \
 	     rw.core.mano-rwcal_yang_ylib-1.0 \
 	     rw.core.mano-rwconfig_agent_yang_ylib-1.0 \
@@ -118,4 +115,3 @@ apt-get install -y \
 	     rw.core.mano-rwcal-cloudsimproxy-1.0 \
 	     rw.core.mano-models-1.0 \
 	     rw.core.mano-rwcal-aws-1.0
-    
