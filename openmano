@@ -141,6 +141,9 @@ def _print_verbose(mano_response, verbose_level=0):
             if verbose_level >=1:
                 if content.get('created_at'):
                     myoutput += " " + content['created_at'].ljust(20)
+                if content.get('sdn_attached_ports'):
+                    #myoutput += " " + str(content['sdn_attached_ports']).ljust(20)
+                    myoutput += "\nsdn_attached_ports:\n" + yaml.safe_dump(content['sdn_attached_ports'], indent=4, default_flow_style=False)
                 if verbose_level >=2:
                     new_line='\n'
                     if content.get('type'):
@@ -1057,6 +1060,8 @@ def datacenter_sdn_port_mapping_set(args):
             "No yaml/json has been provided specifying the SDN port mapping")
 
     port_mapping = yaml.load(datacenter_sdn_port_mapping_list(args))
+    if 'error' in port_mapping:
+        raise OpenmanoCLIError("openmano client error: {}".format(port_mapping['error']['description']))
     if len(port_mapping["sdn_port_mapping"]["ports_mapping"]) > 0:
         if not args.force:
             r = raw_input("Datacenter %s already contains a port mapping. Overwrite? (y/N)? " % (datacenter))
@@ -1279,6 +1284,82 @@ def vim_action(args):
             args.verbose=0
         return _print_verbose(mano_response, args.verbose)
 
+def _get_items(item, item_name_id=None, datacenter=None, tenant=None):
+    URLrequest = "http://%s:%s/openmano" %(mano_host, mano_port)
+    if tenant:
+        URLrequest += "/" + tenant
+    if datacenter:
+        URLrequest += "/vim/" + datacenter
+    if item:
+        URLrequest += "/" + item +"s"
+    if item_name_id:
+        URLrequest += "/" + item_name_id
+    mano_response = requests.get(URLrequest)
+    logger.debug("openmano response: %s", mano_response.text )
+
+    return mano_response
+
+def vim_net_sdn_attach(args):
+    #Verify the network exists in the vim
+    tenant = _get_tenant()
+    datacenter = _get_datacenter(args.datacenter, tenant)
+    result = _get_items('network', item_name_id=args.vim_net, datacenter=datacenter, tenant=tenant)
+    content = yaml.load(result.content)
+    if 'networks' in content:
+        raise OpenmanoCLIError('More than one network in the vim named ' + args.vim_net + '. Use uuid instead')
+    if 'error' in content:
+        raise OpenmanoCLIError(yaml.safe_dump(content))
+    network_uuid = content['network']['id']
+
+    #Make call to attach the dataplane port to the SND network associated to the vim network
+    headers_req = {'content-type': 'application/yaml'}
+    payload_req = {'port': args.port}
+    if args.vlan:
+        payload_req['vlan'] = int(args.vlan)
+    if args.mac:
+        payload_req['mac'] = args.mac
+
+    URLrequest = "http://%s:%s/openmano/%s/vim/%s/network/%s/attach" % (mano_host, mano_port, tenant, datacenter, network_uuid)
+    logger.debug("openmano request: %s", payload_req)
+    mano_response = requests.post(URLrequest, headers=headers_req, data=json.dumps(payload_req))
+    logger.debug("openmano response: %s", mano_response.text)
+    result = _print_verbose(mano_response, args.verbose)
+
+    return
+
+
+def vim_net_sdn_detach(args):
+    if not args.all and not args.id:
+        print "--all or --id must be used"
+        return 1
+
+    # Verify the network exists in the vim
+    tenant = _get_tenant()
+    datacenter = _get_datacenter(args.datacenter, tenant)
+    result = _get_items('network', item_name_id=args.vim_net, datacenter=datacenter, tenant=tenant)
+    content = yaml.load(result.content)
+    if 'networks' in content:
+        raise OpenmanoCLIError('More than one network in the vim named ' + args.vim_net + '. Use uuid instead')
+    if 'error' in content:
+        raise OpenmanoCLIError(yaml.safe_dump(content))
+    network_uuid = content['network']['id']
+
+    if not args.force:
+        r = raw_input("Confirm action' (y/N)? ")
+        if len(r) == 0 or r[0].lower() != "y":
+            return 0
+
+    if args.id:
+        URLrequest = "http://%s:%s/openmano/%s/vim/%s/network/%s/detach/%s" % (
+            mano_host, mano_port, tenant, datacenter, network_uuid, args.id)
+    else:
+        URLrequest = "http://%s:%s/openmano/%s/vim/%s/network/%s/detach" % (
+            mano_host, mano_port, tenant, datacenter, network_uuid)
+    mano_response = requests.delete(URLrequest)
+    logger.debug("openmano response: %s", mano_response.text)
+    result = _print_verbose(mano_response, args.verbose)
+
+    return
 
 def datacenter_net_action(args):
     if args.action == "net-update":
@@ -1798,24 +1879,50 @@ if __name__=="__main__":
         if item=='netmap-import':
             datacenter_action_parser.add_argument("-f","--force", action="store_true", help="do not prompt for confirmation")
         datacenter_action_parser.set_defaults(func=datacenter_netmap_action, action=item)
-    
+
+    # =======================vim_net_sdn_xxx section=======================
+    # vim_net_sdn_attach
+    vim_net_sdn_attach_parser = subparsers.add_parser('vim-net-sdn-attach',
+                                                      parents=[parent_parser],
+                                                      help="Specify the port to access to an external network using SDN")
+    vim_net_sdn_attach_parser.add_argument("vim_net", action="store",
+                                                help="Name/id of the network in the vim that will be used to connect to the external network")
+    vim_net_sdn_attach_parser.add_argument("port", action="store", help="Specifies the port in the dataplane switch to access to the external network")
+    vim_net_sdn_attach_parser.add_argument("--vlan", action="store", help="Specifies the vlan (if any) to use in the defined port")
+    vim_net_sdn_attach_parser.add_argument("--mac", action="store", help="Specifies the MAC (if known) of the physical device that will be reachable by this external port")
+    vim_net_sdn_attach_parser.add_argument("--datacenter", action="store", help="specifies the datacenter")
+    vim_net_sdn_attach_parser.set_defaults(func=vim_net_sdn_attach)
+
+    # vim_net_sdn_detach
+    vim_net_sdn_detach_parser = subparsers.add_parser('vim-net-sdn-detach',
+                                                           parents=[parent_parser],
+                                                           help="Remove the port information to access to an external network using SDN")
+
+    vim_net_sdn_detach_parser.add_argument("vim_net", action="store", help="Name/id of the vim network")
+    vim_net_sdn_detach_parser.add_argument("--id", action="store",help="Specify the uuid of the external ports from this network to be detached")
+    vim_net_sdn_detach_parser.add_argument("--all", action="store_true", help="Detach all external ports from this network")
+    vim_net_sdn_detach_parser.add_argument("-f", "--force", action="store_true", help="forces clearing without asking")
+    vim_net_sdn_detach_parser.add_argument("--datacenter", action="store", help="specifies the datacenter")
+    vim_net_sdn_detach_parser.set_defaults(func=vim_net_sdn_detach)
+    # =======================
+
     for item in ("network", "tenant", "image"):
         if item=="network":
-            commnad_name = 'vim-net'
+            command_name = 'vim-net'
         else:
-            commnad_name = 'vim-'+item
-        vim_item_list_parser = subparsers.add_parser(commnad_name + '-list', parents=[parent_parser], help="list the vim " + item + "s")
+            command_name = 'vim-'+item
+        vim_item_list_parser = subparsers.add_parser(command_name + '-list', parents=[parent_parser], help="list the vim " + item + "s")
         vim_item_list_parser.add_argument("name", nargs='?', help="name or uuid of the " + item + "s")
         vim_item_list_parser.add_argument("--datacenter", action="store", help="specifies the datacenter")
         vim_item_list_parser.set_defaults(func=vim_action, item=item, action="list")
 
-        vim_item_del_parser = subparsers.add_parser(commnad_name + '-delete', parents=[parent_parser], help="list the vim " + item + "s")
+        vim_item_del_parser = subparsers.add_parser(command_name + '-delete', parents=[parent_parser], help="list the vim " + item + "s")
         vim_item_del_parser.add_argument("name", help="name or uuid of the " + item + "s")
         vim_item_del_parser.add_argument("--datacenter", action="store", help="specifies the datacenter")
         vim_item_del_parser.set_defaults(func=vim_action, item=item, action="delete")
 
         if item == "network" or item == "tenant":
-            vim_item_create_parser = subparsers.add_parser(commnad_name + '-create', parents=[parent_parser], help="create a "+item+" at vim")
+            vim_item_create_parser = subparsers.add_parser(command_name + '-create', parents=[parent_parser], help="create a "+item+" at vim")
             vim_item_create_parser.add_argument("file", nargs='?', help="descriptor of the %s. Must be a file or yaml/json text" % item).completer = FilesCompleter
             vim_item_create_parser.add_argument("--name", action="store", help="name of the %s" % item  )
             vim_item_create_parser.add_argument("--datacenter", action="store", help="specifies the datacenter")

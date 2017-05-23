@@ -1104,7 +1104,7 @@ instance_scenario_action_schema = {
 
 sdn_controller_properties={
     "name": name_schema,
-    "dpid": {"type":"string", "pattern":"^[0-9a-fA-F][02468aceACE](:[0-9a-fA-F]{2}){7}$"},
+    "dpid": {"type":"string", "pattern":"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){7}$"},
     "ip": ip_schema,
     "port": port_schema,
     "type": {"type": "string", "enum": ["opendaylight","floodlight","onos"]},
@@ -1172,4 +1172,16 @@ sdn_port_mapping_schema  = {
         }
     },
     "required": ["sdn_port_mapping"]
+}
+
+sdn_external_port_schema = {
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title":"External port ingformation",
+    "type": "object",
+    "properties": {
+        "port": {"type" : "string", "minLength":1, "maxLength":60},
+        "vlan": vlan_schema,
+        "mac": mac_schema
+    },
+    "required": ["port"]
 }

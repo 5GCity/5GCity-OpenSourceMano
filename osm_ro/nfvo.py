@@ -44,6 +44,7 @@ import nfvo_db
 from threading import Lock
 from time import time
 from lib_osm_openvim import ovim as ovim_module
+from lib_osm_openvim.ovim import ovimException
 
 global global_config
 global vimconn_imported
@@ -3075,6 +3076,137 @@ def datacenter_new_netmap(mydb, tenant_id, datacenter, action_dict=None):
         net_list.append(net_nfvo)
     return net_list
 
+def get_sdn_net_id(mydb, tenant_id, datacenter, network_id):
+    # obtain all network data
+    try:
+        if utils.check_valid_uuid(network_id):
+            filter_dict = {"id": network_id}
+        else:
+            filter_dict = {"name": network_id}
+
+        datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_id, datacenter)
+        network = myvim.get_network_list(filter_dict=filter_dict)
+    except vimconn.vimconnException as e:
+        print "vim_action Not possible to get_%s_list from VIM: %s " % (item, str(e))
+        raise NfvoException("Not possible to get_{}_list from VIM: {}".format(item, str(e)), e.http_code)
+
+    # ensure the network is defined
+    if len(network) == 0:
+        raise NfvoException("Network {} is not present in the system".format(network_id),
+                            HTTP_Bad_Request)
+
+    # ensure there is only one network with the provided name
+    if len(network) > 1:
+        raise NfvoException("Multiple networks present in vim identified by {}".format(network_id), HTTP_Bad_Request)
+
+    # ensure it is a dataplane network
+    if network[0]['type'] != 'data':
+        return None
+
+    # ensure we use the id
+    network_id = network[0]['id']
+
+    # search in dabase mano_db in table instance nets for the sdn_net_id that corresponds to the vim_net_id==network_id
+    # and with instance_scenario_id==NULL
+    #search_dict = {'vim_net_id': network_id, 'instance_scenario_id': None}
+    search_dict = {'vim_net_id': network_id}
+
+    try:
+        #sdn_network_id = mydb.get_rows(SELECT=('sdn_net_id',), FROM='instance_nets', WHERE=search_dict)[0]['sdn_net_id']
+        result =  mydb.get_rows(SELECT=('sdn_net_id',), FROM='instance_nets', WHERE=search_dict)
+    except db_base_Exception as e:
+        raise NfvoException("db_base_Exception obtaining SDN network to associated to vim network {}".format(
+            network_id) + str(e), HTTP_Internal_Server_Error)
+
+    sdn_net_counter = 0
+    for net in result:
+        if net['sdn_net_id'] != None:
+            sdn_net_counter+=1
+            sdn_net_id = net['sdn_net_id']
+
+    if sdn_net_counter == 0:
+        return None
+    elif sdn_net_counter == 1:
+        return sdn_net_id
+    else:
+        raise NfvoException("More than one SDN network is associated to vim network {}".format(
+            network_id), HTTP_Internal_Server_Error)
+
+def get_sdn_controller_id(mydb, datacenter):
+    # Obtain sdn controller id
+    config = mydb.get_rows(SELECT=('config',), FROM='datacenters', WHERE={'uuid': datacenter})[0].get('config', '{}')
+    if not config:
+        return None
+
+    return yaml.load(config).get('sdn-controller')
+
+def vim_net_sdn_attach(mydb, tenant_id, datacenter, network_id, descriptor):
+    try:
+        sdn_network_id = get_sdn_net_id(mydb, tenant_id, datacenter, network_id)
+        if not sdn_network_id:
+            raise NfvoException("No SDN network is associated to vim-network {}".format(network_id), HTTP_Internal_Server_Error)
+
+        #Obtain sdn controller id
+        controller_id = get_sdn_controller_id(mydb, datacenter)
+        if not controller_id:
+            raise NfvoException("No SDN controller is set for datacenter {}".format(datacenter), HTTP_Internal_Server_Error)
+
+        #Obtain sdn controller info
+        sdn_controller = ovim.show_of_controller(controller_id)
+
+        port_data = {
+            'name': 'external_port',
+            'net_id': sdn_network_id,
+            'ofc_id': controller_id,
+            'switch_dpid': sdn_controller['dpid'],
+            'switch_port': descriptor['port']
+        }
+
+        if 'vlan' in descriptor:
+            port_data['vlan'] = descriptor['vlan']
+        if 'mac' in descriptor:
+            port_data['mac'] = descriptor['mac']
+
+        result = ovim.new_port(port_data)
+    except ovimException as e:
+        raise NfvoException("ovimException attaching SDN network {} to vim network {}".format(
+            sdn_network_id, network_id) + str(e), HTTP_Internal_Server_Error)
+    except db_base_Exception as e:
+        raise NfvoException("db_base_Exception attaching SDN network to vim network {}".format(
+            network_id) + str(e), HTTP_Internal_Server_Error)
+
+    return 'Port uuid: '+ result
+
+def vim_net_sdn_detach(mydb, tenant_id, datacenter, network_id, port_id=None):
+    if port_id:
+        filter = {'uuid': port_id}
+    else:
+        sdn_network_id = get_sdn_net_id(mydb, tenant_id, datacenter, network_id)
+        if not sdn_network_id:
+            raise NfvoException("No SDN network is associated to vim-network {}".format(network_id),
+                                HTTP_Internal_Server_Error)
+        #in case no port_id is specified only ports marked as 'external_port' will be detached
+        filter = {'name': 'external_port', 'net_id': sdn_network_id}
+
+    try:
+        port_list = ovim.get_ports(columns={'uuid'}, filter=filter)
+    except ovimException as e:
+        raise NfvoException("ovimException obtaining external ports for net {}. ".format(network_id) + str(e),
+                            HTTP_Internal_Server_Error)
+
+    if len(port_list) == 0:
+        raise NfvoException("No ports attached to the network {} were found with the requested criteria".format(network_id),
+                            HTTP_Bad_Request)
+
+    port_uuid_list = []
+    for port in port_list:
+        try:
+            port_uuid_list.append(port['uuid'])
+            ovim.delete_port(port['uuid'])
+        except ovimException as e:
+            raise NfvoException("ovimException deleting port {} for net {}. ".format(port['uuid'], network_id) + str(e), HTTP_Internal_Server_Error)
+
+    return 'Detached ports uuid: {}'.format(','.join(port_uuid_list))
 
 def vim_action_get(mydb, tenant_id, datacenter, item, name):
     #get datacenter info
@@ -3089,9 +3221,32 @@ def vim_action_get(mydb, tenant_id, datacenter, item, name):
         if item=="networks":
             #filter_dict['tenant_id'] = myvim['tenant_id']
             content = myvim.get_network_list(filter_dict=filter_dict)
+
+            if len(content) == 0:
+                raise NfvoException("Network {} is not present in the system. ".format(name),
+                                    HTTP_Bad_Request)
+
+            #Update the networks with the attached ports
+            for net in content:
+                sdn_network_id = get_sdn_net_id(mydb, tenant_id, datacenter, net['id'])
+                if sdn_network_id != None:
+                    try:
+                        #port_list = ovim.get_ports(columns={'uuid', 'switch_port', 'vlan'}, filter={'name': 'external_port', 'net_id': sdn_network_id})
+                        port_list = ovim.get_ports(columns={'uuid', 'switch_port', 'vlan','name'}, filter={'net_id': sdn_network_id})
+                    except ovimException as e:
+                        raise NfvoException("ovimException obtaining external ports for net {}. ".format(network_id) + str(e), HTTP_Internal_Server_Error)
+                    #Remove field name and if port name is external_port save it as 'type'
+                    for port in port_list:
+                        if port['name'] == 'external_port':
+                            port['type'] = "External"
+                        del port['name']
+                    net['sdn_network_id'] = sdn_network_id
+                    net['sdn_attached_ports'] = port_list
+
         elif item=="tenants":
             content = myvim.get_tenant_list(filter_dict=filter_dict)
         elif item == "images":
+
             content = myvim.get_image_list(filter_dict=filter_dict)
         else:
             raise NfvoException(item + "?", HTTP_Method_Not_Allowed)
@@ -3128,6 +3283,36 @@ def vim_action_delete(mydb, tenant_id, datacenter, item, name):
 
     try:
         if item=="networks":
+            # If there is a SDN network associated to the vim-network, proceed to clear the relationship and delete it
+            sdn_network_id = get_sdn_net_id(mydb, tenant_id, datacenter, item_id)
+            if sdn_network_id != None:
+                #Delete any port attachment to this network
+                try:
+                    port_list = ovim.get_ports(columns={'uuid'}, filter={'net_id': sdn_network_id})
+                except ovimException as e:
+                    raise NfvoException(
+                        "ovimException obtaining external ports for net {}. ".format(network_id) + str(e),
+                        HTTP_Internal_Server_Error)
+
+                # By calling one by one all ports to be detached we ensure that not only the external_ports get detached
+                for port in port_list:
+                    vim_net_sdn_detach(mydb, tenant_id, datacenter, item_id, port['uuid'])
+
+                #Delete from 'instance_nets' the correspondence between the vim-net-id and the sdn-net-id
+                try:
+                    mydb.delete_row(FROM='instance_nets', WHERE={'instance_scenario_id': None, 'sdn_net_id': sdn_network_id, 'vim_net_id': item_id})
+                except db_base_Exception as e:
+                    raise NfvoException("Error deleting correspondence for VIM/SDN dataplane networks{}: ".format(correspondence) +
+                                        str(e), HTTP_Internal_Server_Error)
+
+                #Delete the SDN network
+                try:
+                    ovim.delete_network(sdn_network_id)
+                except ovimException as e:
+                    logger.error("ovimException deleting SDN network={} ".format(sdn_network_id) + str(e), exc_info=True)
+                    raise NfvoException("ovimException deleting SDN network={} ".format(sdn_network_id) + str(e),
+                                        HTTP_Internal_Server_Error)
+
             content = myvim.delete_network(item_id)
         elif item=="tenants":
             content = myvim.delete_tenant(item_id)
@@ -3157,6 +3342,32 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
             net_ipprofile = net.pop("ip_profile", None)
             net_vlan = net.pop("vlan", None)
             content = myvim.new_network(net_name, net_type, net_ipprofile, shared=net_public, vlan=net_vlan) #, **net)
+
+            #If the datacenter has a SDN controller defined and the network is of dataplane type, then create the sdn network
+            if get_sdn_controller_id(mydb, datacenter) != None and (net_type == 'data' or net_type == 'ptp'):
+                try:
+                    sdn_network = {}
+                    sdn_network['vlan'] = net_vlan
+                    sdn_network['type'] = net_type
+                    sdn_network['name'] = net_name
+                    ovim_content = ovim.new_network(sdn_network)
+                except ovimException as e:
+                    self.logger.error("ovimException creating SDN network={} ".format(
+                        sdn_network) + str(e), exc_info=True)
+                    raise NfvoException("ovimException creating SDN network={} ".format(sdn_network) + str(e),
+                                        HTTP_Internal_Server_Error)
+
+                # Save entry in in dabase mano_db in table instance_nets to stablish a dictionary  vim_net_id <->sdn_net_id
+                # use instance_scenario_id=None to distinguish from real instaces of nets
+                correspondence = {'instance_scenario_id': None, 'sdn_net_id': ovim_content, 'vim_net_id': content}
+                #obtain datacenter_tenant_id
+                correspondence['datacenter_tenant_id'] = mydb.get_rows(SELECT=('uuid',), FROM='datacenter_tenants', WHERE={'datacenter_id': datacenter})[0]['uuid']
+
+                try:
+                    mydb.new_row('instance_nets', correspondence, add_uuid=True)
+                except db_base_Exception as e:
+                    raise NfvoException("Error saving correspondence for VIM/SDN dataplane networks{}: ".format(correspondence) +
+                                        str(e), HTTP_Internal_Server_Error)
         elif item=="tenants":
             tenant = descriptor["tenant"]
             content = myvim.new_tenant(tenant["name"], tenant.get("description"))
@@ -3250,9 +3461,11 @@ def datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id):
             result["sdn-controller"] = controller_id
             result["dpid"] = sdn_controller["dpid"]
 
-    if result["sdn-controller"] == None or result["dpid"] == None:
-        raise NfvoException("Not all SDN controller information for datacenter {} could be found: {}".format(datacenter_id, result),
-                            HTTP_Internal_Server_Error)
+    if result["sdn-controller"] == None:
+        raise NfvoException("SDN controller is not defined for datacenter {}".format(datacenter_id), HTTP_Bad_Request)
+    if result["dpid"] == None:
+        raise NfvoException("It was not possible to determine DPID for SDN controller {}".format(result["sdn-controller"]),
+                        HTTP_Internal_Server_Error)
 
     if len(maps) == 0:
         return result

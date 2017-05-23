@@ -33,7 +33,7 @@ DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=20
+LAST_DB_VERSION=21
  
 # Detect paths
 MYSQL=$(which mysql)
@@ -188,6 +188,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5004 ] && DB_VERSION=18  #0.5.4 =>  18
 #[ $OPENMANO_VER_NUM -ge 5005 ] && DB_VERSION=19  #0.5.5 =>  19
 #[ $OPENMANO_VER_NUM -ge 5009 ] && DB_VERSION=20  #0.5.9 =>  20
+#[ $OPENMANO_VER_NUM -ge 5015 ] && DB_VERSION=21  #0.5.15 =>  21
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -749,6 +750,26 @@ function downgrade_from_20(){
     echo "ALTER TABLE instance_interfaces DROP COLUMN compute_node;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "ALTER TABLE instance_interfaces DROP COLUMN sdn_port_id;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "DELETE FROM schema_version WHERE version_int='20';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+
+function upgrade_to_21(){
+    # echo "    upgrade database from version 0.20 to version 0.21"
+    echo "      edit 'instance_nets' to allow instance_scenario_id=None"
+    echo "ALTER TABLE instance_nets MODIFY COLUMN instance_scenario_id varchar(36) NULL;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "      enlarge column 'dns_address' at table 'ip_profiles'"
+    echo "ALTER TABLE ip_profiles MODIFY dns_address varchar(255) DEFAULT NULL NULL "\
+         "comment 'dns ip list separated by semicolon';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (21, '0.21', '0.5.15', 'Edit instance_nets to allow instance_scenario_id=None and enlarge column dns_address at table ip_profiles', '2017-06-02');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+function downgrade_from_21(){
+    # echo "    downgrade database from version 0.21 to version 0.20"
+    echo "      edit 'instance_nets' to disallow instance_scenario_id=None"
+    #Delete all lines with a instance_scenario_id=NULL in order to disable this option
+    echo "DELETE FROM instance_nets WHERE instance_scenario_id IS NULL;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "ALTER TABLE instance_nets MODIFY COLUMN instance_scenario_id varchar(36) NOT NULL;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "      shorten column 'dns_address' at table 'ip_profiles'"
+    echo "ALTER TABLE ip_profiles MODIFY dns_address varchar(64) DEFAULT NULL NULL;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "DELETE FROM schema_version WHERE version_int='21';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
 
 function upgrade_to_X(){

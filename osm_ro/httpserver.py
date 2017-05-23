@@ -43,7 +43,7 @@ from openmano_schemas import vnfd_schema_v01, vnfd_schema_v02, \
                             tenant_schema, tenant_edit_schema,\
                             datacenter_schema, datacenter_edit_schema, datacenter_action_schema, datacenter_associate_schema,\
                             object_schema, netmap_new_schema, netmap_edit_schema, sdn_controller_schema, sdn_controller_edit_schema, \
-                            sdn_port_mapping_schema
+                            sdn_port_mapping_schema, sdn_external_port_schema
 
 import nfvo
 import utils
@@ -915,6 +915,33 @@ def http_deassociate_datacenters(tenant_id, datacenter_id):
         logger.error("Unexpected exception: ", exc_info=True)
         bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
+@bottle.route(url_base + '/<tenant_id>/vim/<datacenter_id>/network/<network_id>/attach', method='POST')
+def http_post_vim_net_sdn_attach(tenant_id, datacenter_id, network_id):
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    http_content, _ = format_in(sdn_external_port_schema)
+    try:
+        data = nfvo.vim_net_sdn_attach(mydb, tenant_id, datacenter_id, network_id, http_content)
+        return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_vim_net_sdn_attach error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
+@bottle.route(url_base + '/<tenant_id>/vim/<datacenter_id>/network/<network_id>/detach', method='DELETE')
+@bottle.route(url_base + '/<tenant_id>/vim/<datacenter_id>/network/<network_id>/detach/<port_id>', method='DELETE')
+def http_delete_vim_net_sdn_detach(tenant_id, datacenter_id, network_id, port_id=None):
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        data = nfvo.vim_net_sdn_detach(mydb, tenant_id, datacenter_id, network_id, port_id)
+        return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_delete_vim_net_sdn_detach error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
        
 @bottle.route(url_base + '/<tenant_id>/vim/<datacenter_id>/<item>', method='GET')
 @bottle.route(url_base + '/<tenant_id>/vim/<datacenter_id>/<item>/<name>', method='GET')
