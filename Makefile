@@ -23,42 +23,27 @@ BUILD_TOOLS=python python3 virtualenv \
             libcurl4-gnutls-dev python-pip \
             python3-pip libgnutls-dev debhelper
 
-VENV=osmclient-venv
-VENV3=osmclient-venv3
-VENV_BIN=$(VENV)/bin/python
-VENV3_BIN=$(VENV3)/bin/python
-
-venv: $(VENV)/bin/activate
-venv3: $(VENV3)/bin/activate
-
-$(VENV)/bin/activate: test_requirements.txt
-	test -d $(VENV) || virtualenv $(VENV)
-	$(VENV)/bin/pip install -Ur test_requirements.txt
-	touch $(VENV)/bin/activate
-
-$(VENV3)/bin/activate: test_requirements.txt
-	test -d $(VENV3) || virtualenv -p python3 $(VENV3)
-	$(VENV3)/bin/pip3 install -Ur test_requirements.txt
-	touch $(VENV3)/bin/activate
-
 build_tools:
 	sudo apt-get -y install $(BUILD_TOOLS)
 
 package:
-	$(VENV_BIN) setup.py --command-packages=stdeb.command bdist_deb
+	python setup.py --command-packages=stdeb.command bdist_deb
 
-test_flake8: venv
-	$(VENV_BIN) setup.py flake8
+test_flake8:
+	pip install -Ur test_requirements.txt
+	python setup.py flake8
 
-test_nose: venv
-	$(VENV_BIN) setup.py test
+test_nose: test_requirements.txt
+	pip install -Ur test_requirements.txt
+	python setup.py test
 
-test_nose3: venv3
-	$(VENV3_BIN) setup.py test
+test_nose3: test_requirements.txt
+	pip3 install -Ur test_requirements.txt
+	python3 setup.py test
 
 test: test_flake8 test_nose test_nose3
 
 .PHONY: package build_tools test test_flake8 test_nose test_nose3
 
 clean:
-	rm -rf $(VENV) $(VENV3) deb_dist dist osmclient.egg-info
+	rm -rf deb_dist dist osmclient.egg-info

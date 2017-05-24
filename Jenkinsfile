@@ -10,7 +10,7 @@ pipeline {
         }
         stage("Test") {
             steps {
-                sh 'make -j4 test'
+                sh 'make test'
             }
         }
         stage("Build") {
