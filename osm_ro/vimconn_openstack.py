@@ -543,15 +543,22 @@ class vimconnector(vimconn.vimconnector):
                         for numa in numas:
                             #overwrite ram and vcpus
                             ram = numa['memory']*1024
+                            #See for reference: https://specs.openstack.org/openstack/nova-specs/specs/mitaka/implemented/virt-driver-cpu-thread-pinning.html
                             if 'paired-threads' in numa:
                                 vcpus = numa['paired-threads']*2
-                                numa_properties["hw:cpu_threads_policy"] = "prefer"
+                                #cpu_thread_policy "require" implies that the compute node must have an STM architecture
+                                numa_properties["hw:cpu_thread_policy"] = "require"
+                                numa_properties["hw:cpu_policy"] = "dedicated"
                             elif 'cores' in numa:
                                 vcpus = numa['cores']
-                                #numa_properties["hw:cpu_threads_policy"] = "prefer"
+                                # cpu_thread_policy "prefer" implies that the host must not have an SMT architecture, or a non-SMT architecture will be emulated
+                                numa_properties["hw:cpu_thread_policy"] = "isolate"
+                                numa_properties["hw:cpu_policy"] = "dedicated"
                             elif 'threads' in numa:
                                 vcpus = numa['threads']
-                                numa_properties["hw:cpu_policy"] = "isolated"
+                                # cpu_thread_policy "prefer" implies that the host may or may not have an SMT architecture
+                                numa_properties["hw:cpu_thread_policy"] = "prefer"
+                                numa_properties["hw:cpu_policy"] = "dedicated"
                             # for interface in numa.get("interfaces",() ):
                             #     if interface["dedicated"]=="yes":
                             #         raise vimconn.vimconnException("Passthrough interfaces are not supported for the openstack connector", http_code=vimconn.HTTP_Service_Unavailable)
