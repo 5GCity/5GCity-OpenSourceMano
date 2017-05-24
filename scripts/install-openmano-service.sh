@@ -36,11 +36,15 @@ function usage(){
 }
 
 function uninstall(){
-    echo "systemctl disable openmano.service " &&  systemctl disable openmano.service 2>/dev/null || echo "  Already done"
-    echo "systemctl disable osm-ro.service " &&  systemctl disable osm-ro.service 2>/dev/null || echo "  Already done"
+    echo "systemctl disable openmano.service " &&  systemctl disable openmano.service 2>/dev/null ||
+        echo "  Already done"
+    echo "systemctl disable osm-ro.service " &&  systemctl disable osm-ro.service 2>/dev/null ||
+        echo "  Already done"
     echo "service openmano stop " && service openmano stop 2>/dev/null || echo "  Already done"
     echo "service osm-ro stop " && service osm-ro stop 2>/dev/null || echo "  Already done"
-    for file in /opt/openmano /etc/default/openmanod.cfg /etc/osm/openmanod.cfg /var/log/openmano /var/log/osm/openmano* /etc/systemd/system/openmano.service /etc/systemd/system/osm-ro.service /usr/bin/openmano /usr/sbin/service-openmano /usr/bin/openmano-report
+    for file in /opt/openmano /etc/default/openmanod.cfg /etc/osm/openmanod.cfg /var/log/openmano /var/log/osm/openmano* \
+        /etc/systemd/system/openmano.service /etc/systemd/system/osm-ro.service /usr/bin/openmano /usr/sbin/service-openmano \
+        /usr/bin/openmano-report
     do
         echo rm $file
         rm -rf $file || ! echo "Can not delete '$file'. Needed root privileges?" >&2 || exit 1
@@ -131,7 +135,8 @@ uninstall
 #copy files
 cp -r "$FILE" /opt/openmano         || ! echo $BAD_PATH_ERROR >&2 || exit 1
 mkdir -p /etc/osm  || echo "warning cannot create config folder '/etc/osm'"
-cp /opt/openmano/osm_ro/openmanod.cfg /etc/osm/openmanod.cfg  || echo "warning cannot create file '/etc/osm/openmanod.cfg'"
+cp /opt/openmano/osm_ro/openmanod.cfg /etc/osm/openmanod.cfg  ||
+    echo "warning cannot create file '/etc/osm/openmanod.cfg'"
 mkdir -p /var/log/osm  || echo "warning cannot create log folder '/var/log/osm'"
 #makes links
 ln -s -v /opt/openmano/openmano /usr/bin/openmano
@@ -154,7 +159,7 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
-[[ -n $DELETE ]] && rm -rf ${FILE}
+[[ -n $DELETE ]] && rm -rf "${FILE}"
 
 service osm-ro start
 systemctl enable osm-ro.service
