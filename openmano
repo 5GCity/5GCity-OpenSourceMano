@@ -26,10 +26,10 @@
 '''
 openmano client used to interact with openmano-server (openmanod) 
 '''
-__author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
-__date__ ="$09-oct-2014 09:09:48$"
-__version__="0.4.13-r519"
-version_date="Mar 2017"
+__author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
+__date__ = "$09-oct-2014 09:09:48$"
+__version__ = "0.4.14-r521"
+version_date = "May 2017"
 
 from argcomplete.completers import FilesCompleter
 import os
@@ -556,6 +556,7 @@ def scenario_deploy(args):
 
 def scenario_verify(args):
     #print "scenario-verify",args
+    tenant = _get_tenant()
     headers_req = {'content-type': 'application/json'}
     action = {}
     action["verify"] = {}
@@ -563,7 +564,7 @@ def scenario_verify(args):
     payload_req = json.dumps(action, indent=4)
     #print payload_req
 
-    URLrequest = "http://%s:%s/openmano/%s/scenarios/%s/action" %(mano_host, mano_port, mano_tenant, args.scenario)
+    URLrequest = "http://%s:%s/openmano/%s/scenarios/%s/action" %(mano_host, mano_port, tenant, args.scenario)
     logger.debug("openmano request: %s", payload_req)
     mano_response = requests.post(URLrequest, headers = headers_req, data=payload_req)
     logger.debug("openmano response: %s", mano_response.text )
@@ -1271,7 +1272,7 @@ def vim_action(args):
             return
         payload_req = yaml.safe_dump(create_dict, explicit_start=True, indent=4, default_flow_style=False, tags=False, encoding='utf-8', allow_unicode=True)
         logger.debug("openmano request: %s", payload_req)
-        URLrequest = "http://%s:%s/openmano/%s/vim/%s/%ss" %(mano_host, mano_port, mano_tenant, datacenter, args.item)
+        URLrequest = "http://%s:%s/openmano/%s/vim/%s/%ss" %(mano_host, mano_port, tenant, datacenter, args.item)
         mano_response = requests.post(URLrequest, headers = headers_req, data=payload_req)
         logger.debug("openmano response: %s", mano_response.text )
         if args.verbose==None:
