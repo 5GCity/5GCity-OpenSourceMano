@@ -1,4 +1,0 @@
-flake8
-mock
-stdeb
-nose

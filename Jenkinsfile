@@ -1,21 +1,27 @@
 pipeline {
     agent {
-        dockerfile true
+        dockerfile {
+            label 'osm3'
+        }
     }
     stages {
         stage("Checkout") {
             steps {
                 checkout scm
+                sh '''
+                   groupadd -o -g $(id -g) -r jenkins
+                   useradd -o -u $(id -u) --create-home -r -g  jenkins jenkins
+                   '''
             }
         }
         stage("Test") {
             steps {
-                sh 'make test'
+                sh 'tox'
             }
         }
         stage("Build") {
             steps {
-                sh 'make package'
+                sh 'tox -e build'
                 stash name: "deb-files", includes: "deb_dist/*.deb"
             }
         }

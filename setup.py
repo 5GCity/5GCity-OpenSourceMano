@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='osmclient',
-    version='0.1',
+    version_command=('git describe --tags --long --dirty', 'pep440-git'),
     author='Mike Marchetti',
     author_email='mmarchetti@sandvine.com',
     packages=find_packages(),
@@ -10,6 +10,7 @@ setup(
     install_requires=[
         'Click', 'prettytable', 'pyyaml', 'pycurl'
     ],
+    setup_requires=['setuptools-version-command'],
     test_suite='nose.collector',
     entry_points='''
         [console_scripts]
