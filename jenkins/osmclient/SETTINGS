@@ -24,3 +24,5 @@ export OSM_BUILD_CONTAINER=osmclient
 # this variable holds the name of the container to be used to run a package
 # if this container already exists, the run processes can skip the container build
 export OSM_RUNTIME_CONTAINER=osmclient
+
+export OSM_BUILD_CONTAINER_ALLOW_DOCKER=yes

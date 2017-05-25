@@ -34,6 +34,7 @@ if ! container_exists $OSM_BUILD_CONTAINER; then
 	CONTAINER_OPTS=""
 	[[ "$OSM_BUILD_CONTAINER_PRIVILEGED" == yes ]] && CONTAINER_OPTS="$CONTAINER_OPTS -c security.privileged=true"
 	[[ "$OSM_BUILD_CONTAINER_ALLOW_NESTED" == yes ]] && CONTAINER_OPTS="$CONTAINER_OPTS -c security.nesting=true"
+	[[ "$OSM_BUILD_CONTAINER_ALLOW_DOCKER" == yes ]] && CONTAINER_OPTS="$CONTAINER_OPTS -p docker -p default"
 	create_container $OSM_BASE_IMAGE $OSM_BUILD_CONTAINER $CONTAINER_OPTS
 	wait_container_up $OSM_BUILD_CONTAINER
 	RE="fedora|fc[0-9]"

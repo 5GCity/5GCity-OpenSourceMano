@@ -34,11 +34,17 @@ fi
 
 OSM_git_checkout "$@"
 
-apt-get update
-apt-get install -y make
-make build_tools
-make test
-make package
+apt update
+apt install -y docker.io
+
+docker build -t $OSM_MDG .
+DOCKER_ARGS="-v $(pwd):$(pwd) -w $(pwd) -u $(id -u):$(id -g) $OSM_MDG"
+
+if [ -n "$NOTEST" ]; then
+    docker run $DOCKER_ARGS /bin/bash -c "./docker_command.sh $(id -u -n) $(id -g -n) tox"
+fi
+
+docker run $DOCKER_ARGS /bin/bash -c "./docker_command.sh $(id -u -n) $(id -g -n) tox -e build"
 
 RC=$?
 INFO "done, RC=$RC"
