@@ -128,14 +128,16 @@ def start_service(mydb):
         #TODO: log_level_of should not be needed. To be modified in ovim
         'log_level_of': 'DEBUG'
     }
-    ovim = ovim_module.ovim(ovim_configuration)
-    ovim.start_service()
-
-    from_= 'tenants_datacenters as td join datacenters as d on td.datacenter_id=d.uuid join datacenter_tenants as dt on td.datacenter_tenant_id=dt.uuid'
-    select_ = ('type','d.config as config','d.uuid as datacenter_id', 'vim_url', 'vim_url_admin', 'd.name as datacenter_name',
-                   'dt.uuid as datacenter_tenant_id','dt.vim_tenant_name as vim_tenant_name','dt.vim_tenant_id as vim_tenant_id',
-                   'user','passwd', 'dt.config as dt_config', 'nfvo_tenant_id')
     try:
+        ovim = ovim_module.ovim(ovim_configuration)
+        ovim.start_service()
+
+        from_= 'tenants_datacenters as td join datacenters as d on td.datacenter_id=d.uuid join '\
+                'datacenter_tenants as dt on td.datacenter_tenant_id=dt.uuid'
+        select_ = ('type', 'd.config as config', 'd.uuid as datacenter_id', 'vim_url', 'vim_url_admin',
+                   'd.name as datacenter_name', 'dt.uuid as datacenter_tenant_id',
+                   'dt.vim_tenant_name as vim_tenant_name', 'dt.vim_tenant_id as vim_tenant_id',
+                   'user', 'passwd', 'dt.config as dt_config', 'nfvo_tenant_id')
         vims = mydb.get_rows(FROM=from_, SELECT=select_)
         for vim in vims:
             extra={'datacenter_tenant_id': vim.get('datacenter_tenant_id'),
@@ -172,14 +174,25 @@ def start_service(mydb):
                     config=extra, persistent_info=vim_persistent_info[thread_id]
                 )
             except Exception as e:
-                raise NfvoException("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, str(e)), HTTP_Internal_Server_Error)
-            thread_name = get_non_used_vim_name(vim['datacenter_name'], vim['vim_tenant_id'], vim['vim_tenant_name'], vim['vim_tenant_id'])
+                raise NfvoException("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, e),
+                                    HTTP_Internal_Server_Error)
+            thread_name = get_non_used_vim_name(vim['datacenter_name'], vim['vim_tenant_id'], vim['vim_tenant_name'],
+                                                vim['vim_tenant_id'])
             new_thread = vim_thread.vim_thread(myvim, task_lock, thread_name, vim['datacenter_name'],
                                                vim['datacenter_tenant_id'], db=db, db_lock=db_lock, ovim=ovim)
             new_thread.start()
             vim_threads["running"][thread_id] = new_thread
     except db_base_Exception as e:
         raise NfvoException(str(e) + " at nfvo.get_vim", e.http_code)
+    except ovim_module.ovimException as e:
+        message = str(e)
+        if message[:22] == "DATABASE wrong version":
+            message = "DATABASE wrong version of lib_osm_openvim {msg} -d{dbname} -u{dbuser} -p{dbpass} {ver}' "\
+                      "at host {dbhost}".format(
+                            msg=message[22:-3], dbname=global_config["db_ovim_name"],
+                            dbuser=global_config["db_ovim_user"], dbpass=global_config["db_ovim_passwd"],
+                            ver=message[-3:-1], dbhost=global_config["db_ovim_host"])
+        raise NfvoException(message, HTTP_Bad_Request)
 
 
 def stop_service():

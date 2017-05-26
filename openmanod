@@ -48,7 +48,7 @@ import osm_ro
 
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ = "$26-aug-2014 11:09:29$"
-__version__ = "0.5.12-r522"
+__version__ = "0.5.14-r523"
 version_date = "May 2017"
 database_version = 20      #expected database schema version
 
@@ -77,27 +77,30 @@ def load_configuration(configuration_file):
         config = yaml.load(config_str)
         #Validate configuration file with the config_schema
         js_v(config, config_schema)
-        
+
         #Add default values tokens
         for k,v in default_tokens.items():
             if k not in config:
                 config[k]=v
         return config
-    
+
     except yaml.YAMLError as e:
         error_pos = ""
         if hasattr(e, 'problem_mark'):
             mark = e.problem_mark
             error_pos = " at line:{} column:{}".format(mark.line+1, mark.column+1)
-        raise LoadConfigurationException("Bad YAML format at configuration file '{file}'{pos}".format(file=configuration_file, pos=error_pos) )
+        raise LoadConfigurationException("Bad YAML format at configuration file '{file}'{pos}: {message}".format(
+            file=configuration_file, pos=error_pos, message=e))
     except js_e.ValidationError as e:
         error_pos = ""
         if e.path:
             error_pos=" at '" + ":".join(map(str, e.path))+"'"
-        raise LoadConfigurationException("Invalid field at configuration file '{file}'{pos} {message}".format(file=configuration_file, pos=error_pos, message=str(e)) ) 
+        raise LoadConfigurationException("Invalid field at configuration file '{file}'{pos} {message}".format(
+            file=configuration_file, pos=error_pos, message=e))
     except Exception as e:
-        raise LoadConfigurationException("Cannot load configuration file '{file}' {message}".format(file=configuration_file, message=str(e) ) )
-                
+        raise LoadConfigurationException("Cannot load configuration file '{file}' {message}".format(
+            file=configuration_file, message=e))
+
 
 def console_port_iterator():
     '''this iterator deals with the http_console_ports 
@@ -117,8 +120,8 @@ def console_port_iterator():
                 yield port2
                 port2 += 1
         index += 1
-    
-    
+
+
 def usage():
     print("Usage: ", sys.argv[0], "[options]")
     print( "      -v|--version: prints current version")
@@ -131,23 +134,37 @@ def usage():
     print( "      --log-socket-port PORT: send logs using this port (default: 9022)")
     print( "      --log-file FILE: send logs to this file")
     return
-    
+
+
+def set_logging_file(log_file):
+    try:
+        file_handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=100e6, backupCount=9, delay=0)
+        file_handler.setFormatter(log_formatter_simple)
+        logger.addHandler(file_handler)
+        # logger.debug("moving logs to '%s'", global_config["log_file"])
+        # remove initial stream handler
+        logging.root.removeHandler(logging.root.handlers[0])
+        print ("logging on '{}'".format(log_file))
+    except IOError as e:
+        raise LoadConfigurationException(
+            "Cannot open logging file '{}': {}. Check folder exist and permissions".format(log_file, e))
+
+
 if __name__=="__main__":
-    #Configure logging step 1
+    # Configure logging step 1
     hostname = socket.gethostname()
-    #streamformat = "%(levelname)s (%(module)s:%(lineno)d) %(message)s"
+    # streamformat = "%(levelname)s (%(module)s:%(lineno)d) %(message)s"
     # "%(asctime)s %(name)s %(levelname)s %(filename)s:%(lineno)d %(funcName)s %(process)d: %(message)s"
-    log_formatter_complete = logging.Formatter(
-        '%(asctime)s.%(msecs)03d00Z[{host}@openmanod] %(filename)s:%(lineno)s severity:%(levelname)s logger:%(name)s log:%(message)s'.format(host=hostname),
-        datefmt='%Y-%m-%dT%H:%M:%S',
-    )
+    log_formatter_complete = logging.Formatter('%(asctime)s.%(msecs)03d00Z[{host}@openmanod] %(filename)s:%(lineno)s '
+                                               'severity:%(levelname)s logger:%(name)s log:%(message)s'.format(
+                                                    host=hostname),
+                                               datefmt='%Y-%m-%dT%H:%M:%S')
     log_format_simple =  "%(asctime)s %(levelname)s  %(name)s %(filename)s:%(lineno)s %(message)s"
     log_formatter_simple = logging.Formatter(log_format_simple, datefmt='%Y-%m-%dT%H:%M:%S')
     logging.basicConfig(format=log_format_simple, level= logging.DEBUG)
     logger = logging.getLogger('openmano')
     logger.setLevel(logging.DEBUG)
     socket_handler = None
-    file_handler = None
     # Read parameters and configuration file
     httpthread = None
     try:
@@ -160,7 +177,7 @@ if __name__=="__main__":
         log_file = None
         log_socket_host = None
         log_socket_port = None
-        
+
         for o, a in opts:
             if o in ("-v", "--version"):
                 print ("openmanod version " + __version__ + ' ' + version_date)
@@ -185,6 +202,8 @@ if __name__=="__main__":
                 log_file = a
             else:
                 assert False, "Unhandled option"
+        if log_file:
+            set_logging_file(log_file)
         global_config = load_configuration(config_file)
         global_config["version"] = __version__
         global_config["version_date"] = version_date
@@ -198,12 +217,10 @@ if __name__=="__main__":
             global_config['log_socket_host'] = log_socket_host
         if log_socket_port:
             global_config['log_socket_port'] = log_socket_port
-        if log_file:
-            global_config['log_file'] = log_file
 #         if vnf_repository is not None:
 #             global_config['vnf_repository'] = vnf_repository
 #         else:
-#             if not 'vnf_repository' in global_config:  
+#             if not 'vnf_repository' in global_config:
 #                 logger.error( os.getcwd() )
 #                 global_config['vnf_repository'] = os.getcwd()+'/vnfrepo'
 #         #print global_config
@@ -214,7 +231,7 @@ if __name__=="__main__":
 #             except Exception as e:
 #                 logger.error( "Error '%s'. Ensure the path 'vnf_repository' is properly set at %s",e.args[1], config_file)
 #                 exit(-1)
-        
+
         global_config["console_port_iterator"] = console_port_iterator
         global_config["console_thread"]={}
         global_config["console_ports"]={}
@@ -222,31 +239,26 @@ if __name__=="__main__":
             global_config["http_console_host"] = global_config["http_host"]
             if global_config["http_host"]=="0.0.0.0":
                 global_config["http_console_host"] = socket.gethostname()
-        
-        #Configure logging STEP 2
+
+        # Configure logging STEP 2
         if "log_host" in global_config:
             socket_handler= log_handlers.SocketHandler(global_config["log_socket_host"], global_config["log_socket_port"])
             socket_handler.setFormatter(log_formatter_complete)
-            if global_config.get("log_socket_level") and global_config["log_socket_level"] != global_config["log_level"]: 
+            if global_config.get("log_socket_level") and global_config["log_socket_level"] != global_config["log_level"]:
                 socket_handler.setLevel(global_config["log_socket_level"])
             logger.addHandler(socket_handler)
-        #logger.addHandler(log_handlers.SysLogHandler())
-        if "log_file" in global_config:
-            try:
-                file_handler= logging.handlers.RotatingFileHandler(global_config["log_file"], maxBytes=100e6, backupCount=9, delay=0)
-                file_handler.setFormatter(log_formatter_simple)
-                logger.addHandler(file_handler)
-                #logger.debug("moving logs to '%s'", global_config["log_file"])
-                #remove initial stream handler
-                logging.root.removeHandler(logging.root.handlers[0])
-                print ("logging on '{}'".format(global_config["log_file"]))
-            except IOError as e:
-                raise LoadConfigurationException("Cannot open logging file '{}': {}. Check folder exist and permissions".format(global_config["log_file"], str(e)) ) 
-        #logging.basicConfig(level = getattr(logging, global_config.get('log_level',"debug")))
+
+        # logger.addHandler(log_handlers.SysLogHandler())
+        if log_file:
+            global_config['log_file'] = log_file
+        elif global_config.get('log_file'):
+            set_logging_file(global_config['log_file'])
+
+        # logging.basicConfig(level = getattr(logging, global_config.get('log_level',"debug")))
         logger.setLevel(getattr(logging, global_config['log_level']))
-        logger.critical("Starting openmano server version: '%s %s' command: '%s'",  
+        logger.critical("Starting openmano server version: '%s %s' command: '%s'",
                          __version__, version_date, " ".join(sys.argv))
-        
+
         for log_module in ("nfvo", "http", "vim", "db", "console", "ovim"):
             log_level_module = "log_level_" + log_module
             log_file_module = "log_file_" + log_module
@@ -255,15 +267,18 @@ if __name__=="__main__":
                 logger_module.setLevel(global_config[log_level_module])
             if log_file_module in global_config:
                 try:
-                    file_handler= logging.handlers.RotatingFileHandler(global_config[log_file_module], maxBytes=100e6, backupCount=9, delay=0)
+                    file_handler = logging.handlers.RotatingFileHandler(global_config[log_file_module],
+                                                                        maxBytes=100e6, backupCount=9, delay=0)
                     file_handler.setFormatter(log_formatter_simple)
                     logger_module.addHandler(file_handler)
                 except IOError as e:
-                    raise LoadConfigurationException("Cannot open logging file '{}': {}. Check folder exist and permissions".format(global_config[log_file_module], str(e)) ) 
+                    raise LoadConfigurationException(
+                        "Cannot open logging file '{}': {}. Check folder exist and permissions".format(
+                            global_config[log_file_module], str(e)) )
             global_config["logger_"+log_module] = logger_module
         #httpserver.logger = global_config["logger_http"]
         #nfvo.logger = global_config["logger_nfvo"]
-        
+
         # Initialize DB connection
         mydb = nfvo_db.nfvo_db();
         mydb.connect(global_config['db_host'], global_config['db_user'], global_config['db_passwd'], global_config['db_name'])
@@ -284,14 +299,14 @@ if __name__=="__main__":
 
         nfvo.global_config=global_config
         nfvo.start_service(mydb)
-        
+
         httpthread = httpserver.httpserver(mydb, False, global_config['http_host'], global_config['http_port'])
-        
+
         httpthread.start()
-        if 'http_admin_port' in global_config: 
+        if 'http_admin_port' in global_config:
             httpthreadadmin = httpserver.httpserver(mydb, True, global_config['http_host'], global_config['http_admin_port'])
             httpthreadadmin.start()
-        time.sleep(1)      
+        time.sleep(1)
         logger.info('Waiting for http clients')
         print('Waiting for http clients')
         print('openmanod ready')
@@ -320,6 +335,9 @@ if __name__=="__main__":
         exit(-1)
     except db_base_Exception as e:
         logger.critical(str(e))
+        exit(-1)
+    except nfvo.NfvoException as e:
+        logger.critical(str(e), exc_info=True)
         exit(-1)
     nfvo.stop_service()
     if httpthread:
