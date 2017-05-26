@@ -270,8 +270,9 @@ if [[ -z $NOCLONE ]]; then
         fi
     fi
     su $SUDO_USER -c "git clone ${GIT_URL} ${BASEFOLDER}"
+    LATEST_STABLE_TAG=`git -C "${BASEFOLDER}" tag -l v[0-9].* | tail -n1`
+    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER} checkout tags/${LATEST_STABLE_TAG}"
     su $SUDO_USER -c "cp ${BASEFOLDER}/.gitignore-common ${BASEFOLDER}/.gitignore"
-    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER} checkout v2.0"
 fi
 
 echo -e "\n"\
