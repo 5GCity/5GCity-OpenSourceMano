@@ -470,11 +470,19 @@ class vimconnector(vimconn.vimconnector):
     def get_flavor_id_from_data(self, flavor_dict):
         """Obtain flavor id that match the flavor description
            Returns the flavor_id or raises a vimconnNotFoundException
+           flavor_dict: contains the required ram, vcpus, disk
+           If 'use_existing_flavors' is set to True at config, the closer flavor that provides same or more ram, vcpus
+                and disk is returned. Otherwise a flavor with exactly same ram, vcpus and disk is returned or a
+                vimconnNotFoundException is raised
         """
+        exact_match = False if self.config.get('use_existing_flavors') else True
         try:
             self._reload_connection()
-            numa=None
-            numas = flavor_dict.get("extended",{}).get("numas")
+            flavor_candidate_id = None
+            flavor_candidate_data = (10000, 10000, 10000)
+            flavor_target = (flavor_dict["ram"], flavor_dict["vcpus"], flavor_dict["disk"])
+            # numa=None
+            numas = flavor_dict.get("extended", {}).get("numas")
             if numas:
                 #TODO
                 raise vimconn.vimconnNotFoundException("Flavor with EPA still not implemted")
@@ -486,14 +494,15 @@ class vimconnector(vimconn.vimconnector):
                 epa = flavor.get_keys()
                 if epa:
                     continue
-                    #TODO 
-                if flavor.ram != flavor_dict["ram"]:
-                    continue
-                if flavor.vcpus != flavor_dict["vcpus"]:
-                    continue
-                if flavor.disk != flavor_dict["disk"]:
-                    continue
-                return flavor.id
+                    # TODO
+                flavor_data = (flavor.ram, flavor.vcpus, flavor.disk)
+                if flavor_data == flavor_target:
+                    return flavor.id
+                elif not exact_match and flavor_target < flavor_data < flavor_candidate_data:
+                    flavor_candidate_id = flavor.id
+                    flavor_candidate_data = flavor_data
+            if not exact_match and flavor_candidate_id:
+                return flavor_candidate_id
             raise vimconn.vimconnNotFoundException("Cannot find any flavor matching '{}'".format(str(flavor_dict)))
         except (nvExceptions.NotFound, nvExceptions.ClientException, ksExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)
