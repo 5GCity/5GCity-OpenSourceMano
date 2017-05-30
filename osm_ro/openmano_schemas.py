@@ -316,10 +316,11 @@ ip_profile_schema = {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type":"object",
     "properties":{
-        "ip-version": {"type":"string", "enum":["IPv4","IPv6"]},
+        "ip-version": {"type": "string", "enum": ["IPv4","IPv6"]},
         "subnet-address": ip_prefix_schema,
         "gateway-address": ip_schema,
-        "dns-address": ip_schema,
+        "dns-address": {"oneOf": [ip_schema,     # for backward compatibility
+                                  {"type": "array", "items": ip_schema}]},
         "dhcp": dhcp_schema
     },
 }

@@ -2041,20 +2041,23 @@ def create_instance(mydb, tenant_id, instance_dict):
             for scenario_net in scenarioDict['nets']:
                 if net_name == scenario_net["name"]:
                     if 'ip-profile' in net_instance_desc:
-                        ipprofile = net_instance_desc['ip-profile']
-                        ipprofile['subnet_address'] = ipprofile.pop('subnet-address',None)
-                        ipprofile['ip_version'] = ipprofile.pop('ip-version','IPv4')
-                        ipprofile['gateway_address'] = ipprofile.pop('gateway-address',None)
-                        ipprofile['dns_address'] = ipprofile.pop('dns-address',None)
-                        if 'dhcp' in ipprofile:
-                            ipprofile['dhcp_start_address'] = ipprofile['dhcp'].get('start-address',None)
-                            ipprofile['dhcp_enabled'] = ipprofile['dhcp'].get('enabled',True)
-                            ipprofile['dhcp_count'] = ipprofile['dhcp'].get('count',None)
-                            del ipprofile['dhcp']
+                        # translate from input format to database format
+                        ipprofile_in = net_instance_desc['ip-profile']
+                        ipprofile_db = {}
+                        ipprofile_db['subnet_address'] = ipprofile_in.get('subnet-address')
+                        ipprofile_db['ip_version'] = ipprofile_in.get('ip-version', 'IPv4')
+                        ipprofile_db['gateway_address'] = ipprofile_in.get('gateway-address')
+                        ipprofile_db['dns_address'] = ipprofile_in.get('dns-address')
+                        if isinstance(ipprofile_db['dns_address'], (list, tuple)):
+                            ipprofile_db['dns_address'] = ";".join(ipprofile_db['dns_address'])
+                        if 'dhcp' in ipprofile_in:
+                            ipprofile_db['dhcp_start_address'] = ipprofile_in['dhcp'].get('start-address')
+                            ipprofile_db['dhcp_enabled'] = ipprofile_in['dhcp'].get('enabled', True)
+                            ipprofile_db['dhcp_count'] = ipprofile_in['dhcp'].get('count' )
                         if 'ip_profile' not in scenario_net:
-                            scenario_net['ip_profile'] = ipprofile
+                            scenario_net['ip_profile'] = ipprofile_db
                         else:
-                            update(scenario_net['ip_profile'],ipprofile)
+                            update(scenario_net['ip_profile'], ipprofile_db)
             for interface in net_instance_desc.get('interfaces', () ):
                 if 'ip_address' in interface:
                     for vnf in scenarioDict['vnfs']:

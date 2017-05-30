@@ -2751,6 +2751,11 @@ class vimconnector(vimconn.vimconnector):
             #Unused in case of Underlay (data/ptp) network interface.
             fence_mode="bridged"
             is_inherited='false'
+            dns_list = dns_address.split(";")
+            dns1 = dns_list[0]
+            dns2_text = ""
+            if len(dns_list) >= 2:
+                dns2_text = "\n                                                <Dns2>{}</Dns2>\n".format(dns_list[1])
             data = """ <OrgVdcNetwork name="{0:s}" xmlns="http://www.vmware.com/vcloud/v1.5">
                             <Description>Openmano created</Description>
                                     <Configuration>
@@ -2759,22 +2764,22 @@ class vimconnector(vimconn.vimconnector):
                                                 <IsInherited>{1:s}</IsInherited>
                                                 <Gateway>{2:s}</Gateway>
                                                 <Netmask>{3:s}</Netmask>
-                                                <Dns1>{4:s}</Dns1>
-                                                <IsEnabled>{5:s}</IsEnabled>
+                                                <Dns1>{4:s}</Dns1>{5:s}
+                                                <IsEnabled>{6:s}</IsEnabled>
                                                 <IpRanges>
                                                     <IpRange>
-                                                        <StartAddress>{6:s}</StartAddress>
-                                                        <EndAddress>{7:s}</EndAddress>
+                                                        <StartAddress>{7:s}</StartAddress>
+                                                        <EndAddress>{8:s}</EndAddress>
                                                     </IpRange>
                                                 </IpRanges>
                                             </IpScope>
                                         </IpScopes>
-                                        <ParentNetwork href="{8:s}"/>
-                                        <FenceMode>{9:s}</FenceMode>
+                                        <ParentNetwork href="{9:s}"/>
+                                        <FenceMode>{10:s}</FenceMode>
                                     </Configuration>
-                                    <IsShared>{10:s}</IsShared>
+                                    <IsShared>{11:s}</IsShared>
                         </OrgVdcNetwork> """.format(escape(network_name), is_inherited, gateway_address,
-                                                    subnet_address, dns_address, dhcp_enabled,
+                                                    subnet_address, dns1, dns2_text, dhcp_enabled,
                                                     dhcp_start_address, dhcp_end_address, available_networks,
                                                     fence_mode, isshared)
 

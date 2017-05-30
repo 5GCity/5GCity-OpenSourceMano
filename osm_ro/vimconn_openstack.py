@@ -322,9 +322,7 @@ class vimconnector(vimconn.vimconnector):
             if 'gateway_address' in ip_profile:
                 subnet['gateway_ip'] = ip_profile['gateway_address']
             if ip_profile.get('dns_address'):
-                #TODO: manage dns_address as a list of addresses separated by commas 
-                subnet['dns_nameservers'] = []
-                subnet['dns_nameservers'].append(ip_profile['dns_address'])
+                subnet['dns_nameservers'] = ip_profile['dns_address'].split(";")
             if 'dhcp_enabled' in ip_profile:
                 subnet['enable_dhcp'] = False if ip_profile['dhcp_enabled']=="false" else True
             if 'dhcp_start_address' in ip_profile:
