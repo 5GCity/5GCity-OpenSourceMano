@@ -412,7 +412,7 @@ class vim_thread(threading.Thread):
             sdn_net_id = None
             sdn_controller = self.vim.config.get('sdn-controller')
             if sdn_controller and (net_type == "data" or net_type == "ptp"):
-                network = {"name": net_name, "type": net_type}
+                network = {"name": net_name, "type": net_type, "region": self.vim["config"]["datacenter_id"]}
 
                 vim_net = self.vim.get_network(net_id)
                 if vim_net.get('encapsulation') != 'vlan':
