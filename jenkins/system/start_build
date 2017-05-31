@@ -1,0 +1,77 @@
+#!/bin/bash
+#   Copyright 2017
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# 01 May 2017 -- Michael Marchetti -- adapted from template
+#
+
+HERE=$(realpath $(dirname $0))
+OSM_JENKINS=$(dirname $HERE)
+. $OSM_JENKINS/common/all_funcs
+
+INFO "Installing packages"
+apt-get update
+
+INFO "Configuring LXD"
+# ZFS doesn't work inside a nested container. ZFS should be configured in the host LXD.
+lxd init --auto
+lxd waitready
+systemctl stop lxd-bridge
+systemctl --system daemon-reload
+cat <<EOF > /etc/default/lxd-bridge
+USE_LXD_BRIDGE="true"
+LXD_BRIDGE="lxdbr0"
+UPDATE_PROFILE="true"
+LXD_CONFILE=""
+LXD_DOMAIN="lxd"
+LXD_IPV4_ADDR="10.44.126.1"
+LXD_IPV4_NETMASK="255.255.255.0"
+LXD_IPV4_NETWORK="10.44.126.1/24"
+LXD_IPV4_DHCP_RANGE="10.44.126.2,10.44.126.254"
+LXD_IPV4_DHCP_MAX="252"
+LXD_IPV4_NAT="true"
+LXD_IPV6_ADDR=""
+LXD_IPV6_MASK=""
+LXD_IPV6_NETWORK=""
+LXD_IPV6_NAT="false"
+LXD_IPV6_PROXY="false"
+EOF
+
+systemctl enable lxd-bridge
+systemctl start lxd-bridge
+
+apt-get install -y python-pip python python-pycurl charm-tools python-pytest
+
+# TODO: use package when available on osm repo
+git clone https://osm.etsi.org/gerrit/osm/osmclient
+pip install osmclient/.
+
+devops/installers/install_osm.sh $*
+RC=$?
+
+# workaround.  for upload packages, lxdbr0 needs to be promiscuous
+# as the upload calls back to the UI server so the lxdbr0 needs
+# to operate as a bridge
+ifconfig lxdbr0 promisc
+
+if [ $RC == 0 ]; then
+   # success. find all the resulting containers
+   . devops/installers/export_ips
+
+   TO_ADD="export OSM_HOSTNAME=$SO_CONTAINER_IP"
+   grep -q OSM_HOSTNAME ~/.bashrc && sed -i "s/.*OSM_HOSTNAME.*/$TO_ADD/" ~/.bashrc || echo -e "$TO_ADD\n$(cat ~/.bashrc)" > ~/.bashrc
+fi
+
+INFO "done, RC=$RC"
+exit $RC

@@ -30,6 +30,13 @@ export OSM_MDG=$1
 shift
 OSM_load_config
 
+if [ "$1" = "--build-container" ]; then
+    shift
+    [ $# -lt 1 ] && FATAL "missing container name with option --build-container"
+    export OSM_BUILD_CONTAINER=$1
+    shift
+fi
+
 if ! container_exists $OSM_BUILD_CONTAINER; then
 	CONTAINER_OPTS=""
 	[[ "$OSM_BUILD_CONTAINER_PRIVILEGED" == yes ]] && CONTAINER_OPTS="$CONTAINER_OPTS -c security.privileged=true"

@@ -129,6 +129,32 @@ function update(){
     echo
 }
 
+function so_is_up(){
+    SO_IP=$1
+    time=0
+    step=5
+    timelength=300
+    while [ $time -le $timelength ]
+    do
+        curl -k https://$SO_IP:8008/api/operational/vcs/info \
+              --header 'accept: application/vnd.yang.data+json' \
+              --header 'authorization: Basic YWRtaW46YWRtaW4=' \
+              --header 'cache-control: no-cache' \
+              --header 'content-type: application/vnd.yang.data+json' &> /dev/null
+        RET=$?
+        if [ "$RET" == 0 ]; then
+            break
+        fi
+        sleep $step
+        echo -n "."
+        time=$((time+step))
+    done
+    if [ "$RET" != 0 ]; then
+        FATAL "OSM Failed to startup"
+    fi
+    echo
+}
+
 #Configure VCA, SO and RO with the initial configuration:
 #  RO -> tenant:osm, logs to be sent to SO
 #  VCA -> juju-password
@@ -141,7 +167,9 @@ function configure(){
     echo -e "       Configuring RO"
     lxc exec RO -- sed -i -e "s/^\#\?log_socket_host:.*/log_socket_host: $SO_CONTAINER_IP/g" /etc/osm/openmanod.cfg
     lxc exec RO -- service osm-ro restart
+
     time=0; step=2; timelength=20; while [ $time -le $timelength ]; do sleep $step; echo -n "."; time=$((time+step)); done; echo
+
     lxc exec RO -- openmano tenant-delete -f osm >/dev/null
     RO_TENANT_ID=`lxc exec RO -- openmano tenant-create osm |awk '{print $1}'`
 
@@ -153,25 +181,35 @@ function configure(){
     echo -e "       Configuring SO"
     sudo route add -host $JUJU_CONTROLLER_IP gw $VCA_CONTAINER_IP
     sudo sed -i "$ i route add -host $JUJU_CONTROLLER_IP gw $VCA_CONTAINER_IP" /etc/rc.local
-    lxc exec SO-ub -- nohup sudo -b -H /usr/rift/rift-shell -r -i /usr/rift -a /usr/rift/.artifacts -- ./demos/launchpad.py --use-xml-mode &
-    time=0; step=30; timelength=300; while [ $time -le $timelength ]; do sleep $step; echo -n "."; time=$((time+step)); done; echo
+    lxc exec SO-ub -- systemctl restart launchpad
 
-    curl -k --request POST \
+    so_is_up $SO_CONTAINER_IP
+
+    #delete existing config agent (could be there on reconfigure)
+    curl -k --request DELETE \
+      --url https://$SO_CONTAINER_IP:8008/api/config/config-agent/account/osmjuju \
+      --header 'accept: application/vnd.yang.data+json' \
+      --header 'authorization: Basic YWRtaW46YWRtaW4=' \
+      --header 'cache-control: no-cache' \
+      --header 'content-type: application/vnd.yang.data+json' &> /dev/null
+
+    result=$(curl -k --request POST \
       --url https://$SO_CONTAINER_IP:8008/api/config/config-agent \
       --header 'accept: application/vnd.yang.data+json' \
       --header 'authorization: Basic YWRtaW46YWRtaW4=' \
       --header 'cache-control: no-cache' \
       --header 'content-type: application/vnd.yang.data+json' \
-      --data '{"account": [ { "name": "osmjuju", "account-type": "juju", "juju": { "ip-address": "'$JUJU_CONTROLLER_IP'", "port": "17070", "user": "admin", "secret": "'$JUJU_PASSWD'" }  }  ]}'
+      --data '{"account": [ { "name": "osmjuju", "account-type": "juju", "juju": { "ip-address": "'$JUJU_CONTROLLER_IP'", "port": "17070", "user": "admin", "secret": "'$JUJU_PASSWD'" }  }  ]}')
+    [[ $result =~ .*success.* ]] || FATAL "Failed config-agent configuration: $result"
 
-    curl -k --request PUT \
+    result=$(curl -k --request PUT \
       --url https://$SO_CONTAINER_IP:8008/api/config/resource-orchestrator \
       --header 'accept: application/vnd.yang.data+json' \
       --header 'authorization: Basic YWRtaW46YWRtaW4=' \
       --header 'cache-control: no-cache' \
       --header 'content-type: application/vnd.yang.data+json' \
-      --data '{ "openmano": { "host": "'$RO_CONTAINER_IP'", "port": "9090", "tenant-id": "'$RO_TENANT_ID'" }, "name": "osmopenmano", "account-type": "openmano" }'
-
+      --data '{ "openmano": { "host": "'$RO_CONTAINER_IP'", "port": "9090", "tenant-id": "'$RO_TENANT_ID'" }, "name": "osmopenmano", "account-type": "openmano" }')
+    [[ $result =~ .*success.* ]] || FATAL "Failed resource-orchestrator configuration: $result"
 }
 
 function install_lxd() {
@@ -258,8 +296,11 @@ if [ -n "$SHOWOPTS" ]; then
     exit 0
 fi
 
+# if develop, we force master
 [ -z "$COMMIT_ID" ] && [ -n "$DEVELOP" ] && COMMIT_ID="master"
-[ -n "$COMMIT_ID" ] && INSTALL_FROM_SOURCE="y"
+
+# if master, force install from source
+[ -n "$COMMIT_ID" ] && [ "$COMMIT_ID" == "master" ] && INSTALL_FROM_SOURCE="y"
 
 if [ -n "$TEST_INSTALLER" ]; then
     echo -e "\nUsing local devops repo for OSM installation"
