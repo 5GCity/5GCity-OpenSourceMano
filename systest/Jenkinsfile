@@ -20,7 +20,6 @@ node("${params.NODE}") {
         // get the IP of the osm container
         OSM_IP = sh(returnStdout: true, script: "lxc list ${container_name} -c 4|grep eth0 |awk '{print \$2}'").trim()
     }
-
     stage("checkout") {
         checkout scm
     }
