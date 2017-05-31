@@ -21,7 +21,10 @@ pipeline {
         }
         stage("Build") {
             steps {
-                sh 'tox -e build'
+                sh '''
+                    rm -rf deb_dist
+                    tox -e build
+                   '''
                 stash name: "deb-files", includes: "deb_dist/*.deb"
             }
         }
@@ -29,6 +32,8 @@ pipeline {
             steps {
                 unstash "deb-files"
                 sh '''
+                    rm -rf pool
+                    rm -rf dists
                     mkdir -p pool/osmclient
                     mv deb_dist/*.deb pool/osmclient/
                     mkdir -p dists/unstable/osmclient/binary-amd64/
