@@ -46,6 +46,8 @@ def is_task_id(task_id):
 
 
 class vim_thread(threading.Thread):
+    REFRESH_BUILD = 5      # 5 seconds
+    REFRESH_ACTIVE = 60    # 1 minute
 
     def __init__(self, vimconn, task_lock, name=None, datacenter_name=None, datacenter_tenant_id=None,
                  db=None, db_lock=None, ovim=None):
@@ -212,12 +214,12 @@ class vim_thread(threading.Thread):
 
                     task["vim_info"] = vim_info
                     if task["vim_info"]["status"] == "BUILD":
-                        self._insert_refresh(task, now+5)  # 5seconds
+                        self._insert_refresh(task, now + self.REFRESH_BUILD)
                     else:
-                        self._insert_refresh(task, now+300) # 5minutes
+                        self._insert_refresh(task, now + self.REFRESH_ACTIVE)
             except vimconn.vimconnException as e:
                 self.logger.error("vimconnException Exception when trying to refresh vms " + str(e))
-                self._insert_refresh(task, now + 300)  # 5minutes
+                self._insert_refresh(task, now + self.REFRESH_ACTIVE)
 
         if net_to_refresh_list:
             try:
@@ -279,12 +281,12 @@ class vim_thread(threading.Thread):
 
                     task["vim_info"] = vim_info
                     if task["vim_info"]["status"] == "BUILD":
-                        self._insert_refresh(task, now+5)    # 5seconds
+                        self._insert_refresh(task, now + self.REFRESH_BUILD)
                     else:
-                        self._insert_refresh(task, now+300)  # 5minutes
+                        self._insert_refresh(task, now + self.REFRESH_ACTIVE)
             except vimconn.vimconnException as e:
                 self.logger.error("vimconnException Exception when trying to refresh nets " + str(e))
-                self._insert_refresh(task, now + 300)  # 5minutes
+                self._insert_refresh(task, now + self.REFRESH_ACTIVE)
 
         if not items_to_refresh:
             time.sleep(1)
