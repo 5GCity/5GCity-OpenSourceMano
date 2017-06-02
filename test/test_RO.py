@@ -42,6 +42,7 @@ import yaml
 import sys
 import time
 from pyvcloud.vcloudair import VCA
+import uuid
 
 global test_config   #  used for global variables with the test configuration
 test_config = {}
@@ -713,6 +714,200 @@ class test_vimconn_get_network_list(unittest.TestCase):
 
         network_list = test_config["vim_conn"].get_network_list({'name': 'unknown_name'})
         self.assertEqual(network_list, [])
+
+class test_vimconn_get_network(unittest.TestCase):
+    test_index = 1
+    network_name = None
+    test_text = None
+
+    @classmethod
+    def setUpClass(cls):
+        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+
+    @classmethod
+    def tearDownClass(cls):
+        test_config["test_number"] += 1
+
+    def setUp(self):
+        # creating new network
+        self.__class__.network_name = _get_random_string(20)
+        self.__class__.net_type = 'bridge'
+        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+                                                          net_type=self.__class__.net_type)
+        self.__class__.network_id = network
+        logger.debug("{}".format(network))
+
+    def tearDown(self):
+        exec_info = sys.exc_info()
+        if exec_info == (None, None, None):
+            logger.info(self.__class__.test_text+" -> TEST OK")
+        else:
+            logger.warning(self.__class__.test_text+" -> TEST NOK")
+            logger.critical("Traceback error",exc_info=True)
+
+        # Deleting created network
+        result = test_config["vim_conn"].delete_network(self.__class__.network_id)
+        if result:
+            logger.info("Network id {} sucessfully deleted".format(self.__class__.network_id))
+        else:
+            logger.info("Failed to delete network id {}".format(self.__class__.network_id))
+
+    def test_000_get_network(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        network_info = test_config["vim_conn"].get_network(self.__class__.network_id)
+        self.assertEqual(network_info.get('status'), 'ACTIVE')
+        self.assertIn(self.__class__.network_name, network_info.get('name'))
+        self.assertEqual(network_info.get('type'), self.__class__.net_type)
+        self.assertEqual(network_info.get('id'), self.__class__.network_id)
+
+    def test_010_get_network_negative(self):
+        Non_exist_id = str(uuid.uuid4())
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        network_info = test_config["vim_conn"].get_network(Non_exist_id)
+        self.assertEqual(network_info, {})
+
+class test_vimconn_delete_network(unittest.TestCase):
+    test_index = 1
+    network_name = None
+    test_text = None
+
+    @classmethod
+    def setUpClass(cls):
+        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+
+    @classmethod
+    def tearDownClass(cls):
+        test_config["test_number"] += 1
+
+    def tearDown(self):
+        exec_info = sys.exc_info()
+        if exec_info == (None, None, None):
+            logger.info(self.__class__.test_text+" -> TEST OK")
+        else:
+            logger.warning(self.__class__.test_text+" -> TEST NOK")
+            logger.critical("Traceback error",exc_info=True)
+
+    def test_000_delete_network(self):
+        # Creating network
+        self.__class__.network_name = _get_random_string(20)
+        self.__class__.net_type = 'bridge'
+        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+                                                          net_type=self.__class__.net_type)
+        self.__class__.network_id = network
+        logger.debug("{}".format(network))
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        result = test_config["vim_conn"].delete_network(self.__class__.network_id)
+        if result:
+            logger.info("Network id {} sucessfully deleted".format(self.__class__.network_id))
+        else:
+            logger.info("Failed to delete network id {}".format(self.__class__.network_id))
+        time.sleep(5)
+        # after deleting network we check in network list
+        network_list = test_config["vim_conn"].get_network_list({ 'id':self.__class__.network_id })
+        self.assertEqual(network_list, [])
+
+    def test_010_delete_network_negative(self):
+        Non_exist_id = str(uuid.uuid4())
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        with self.assertRaises(Exception) as context:
+            test_config["vim_conn"].delete_network(Non_exist_id)
+
+        self.assertEqual((context.exception).http_code, 400)
+
+class test_vimconn_get_flavor(unittest.TestCase):
+    test_index = 1
+    test_text = None
+
+    @classmethod
+    def setUpClass(cls):
+        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+
+    @classmethod
+    def tearDownClass(cls):
+        test_config["test_number"] += 1
+
+    def tearDown(self):
+        exec_info = sys.exc_info()
+        if exec_info == (None, None, None):
+            logger.info(self.__class__.test_text+" -> TEST OK")
+        else:
+            logger.warning(self.__class__.test_text+" -> TEST NOK")
+            logger.critical("Traceback error",exc_info=True)
+
+    def test_000_get_flavor(self):
+        test_directory_content = os.listdir(test_config["test_directory"])
+
+        for dir_name in test_directory_content:
+            if dir_name == 'simple_linux':
+                self.__class__.scenario_test_path = test_config["test_directory"] + '/'+ dir_name
+                vnfd_files = glob.glob(self.__class__.scenario_test_path+'/vnfd_*.yaml')
+                break
+
+        for vnfd in vnfd_files:
+            with open(vnfd, 'r') as stream:
+                vnf_descriptor = yaml.load(stream)
+
+            vnfc_list = vnf_descriptor['vnf']['VNFC']
+            for item in vnfc_list:
+                if 'ram' in item and 'vcpus' in item and 'disk' in item:
+                    ram = item['ram']
+                    vcpus = item['vcpus']
+                    disk = item['disk']
+
+        flavor_data = {'ram': ram,
+                      'vcpus': vcpus,
+                      'disk': disk
+                      }
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+        # get flavor by id
+        result = test_config["vim_conn"].get_flavor(flavor_id)
+        self.assertEqual(ram, result['ram'])
+        self.assertEqual(vcpus, result['vcpus'])
+        self.assertEqual(disk, result['disk'])
+
+        # delete flavor
+        result = test_config["vim_conn"].delete_flavor(flavor_id)
+        if result:
+            logger.info("Flavor id {} sucessfully deleted".format(result))
+        else:
+            logger.info("Failed to delete flavor id {}".format(result))
+
+    def test_010_get_flavor_negative(self):
+        Non_exist_flavor_id = str(uuid.uuid4())
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        with self.assertRaises(Exception) as context:
+            test_config["vim_conn"].get_flavor(Non_exist_flavor_id)
+
+        self.assertEqual((context.exception).http_code, 404)
 
 
 '''
