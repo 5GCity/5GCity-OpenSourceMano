@@ -754,6 +754,13 @@ class vimconnector(vimconn.vimconnector):
         cpu = flavor_data.get(FLAVOR_VCPUS_KEY, 1)
         disk = flavor_data.get(FLAVOR_DISK_KEY, 1)
 
+        if not isinstance(ram, int):
+            raise vimconn.vimconnException("Non-integer value for ram")
+        elif not isinstance(cpu, int):
+            raise vimconn.vimconnException("Non-integer value for cpu")
+        elif not isinstance(disk, int):
+            raise vimconn.vimconnException("Non-integer value for disk")
+
         extended_flv = flavor_data.get("extended")
         if extended_flv:
             numas=extended_flv.get("numas")

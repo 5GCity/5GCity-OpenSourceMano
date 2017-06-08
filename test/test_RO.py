@@ -825,6 +825,90 @@ class test_vimconn_get_flavor(test_base):
 
         self.assertEqual((context.exception).http_code, 404)
 
+class test_vimconn_new_flavor(test_base):
+    flavor_id = None
+
+    def test_000_new_flavor(self):
+        flavor_data = {'ram': 1024, 'vpcus': 1, 'disk': 10}
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+        self.assertEqual(type(flavor_id),str)
+        self.assertIsInstance(uuid.UUID(flavor_id),uuid.UUID)
+
+    def test_010_delete_flavor(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        # delete flavor
+        result = test_config["vim_conn"].delete_flavor(self.__class__.flavor_id)
+        if result:
+            logger.info("Flavor id {} sucessfully deleted".format(result))
+        else:
+            logger.error("Failed to delete flavor id {}".format(result))
+            raise Exception ("Failed to delete created flavor")
+
+    def test_020_new_flavor_negative(self):
+        Invalid_flavor_data = {'ram': '1024', 'vcpus': 2.0, 'disk': 2.0}
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        with self.assertRaises(Exception) as context:
+            test_config["vim_conn"].new_flavor(Invalid_flavor_data)
+
+        self.assertEqual((context.exception).http_code, 400)
+
+    def test_030_delete_flavor_negative(self):
+        Non_exist_flavor_id = str(uuid.uuid4())
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        with self.assertRaises(Exception) as context:
+            test_config["vim_conn"].delete_flavor(Non_exist_flavor_id)
+
+        self.assertEqual((context.exception).http_code, 404)
+
+class test_vimconn_new_image(test_base):
+
+    def test_000_new_image(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        image_path = test_config['image_path']
+        if image_path:
+            image_id = test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : image_path })
+            self.assertEqual(type(image_id),str)
+            self.assertIsInstance(uuid.UUID(image_id),uuid.UUID)
+        else:
+            self.skipTest("Skipping test as image file not present at RO container")
+
+    def test_010_new_image_negative(self):
+        Non_exist_image_path = '/temp1/cirros.ovf'
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        with self.assertRaises(Exception) as context:
+            test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : Non_exist_image_path })
+
+        self.assertEqual((context.exception).http_code, 400)
 
 '''
 IMPORTANT NOTE
@@ -978,6 +1062,7 @@ def test_vimconnector(args):
         org_user = config_params.get('user')
         org_passwd = config_params.get('passwd')
         vim_url = args.endpoint_url
+        test_config['image_path'] = args.image_path
 
         # vmware connector obj
         test_config['vim_conn'] = vim.vimconnector(name=org_name, tenant_name=tenant_name, user=org_user,passwd=org_passwd, url=vim_url, config=config_params)
@@ -1233,6 +1318,7 @@ if __name__=="__main__":
                                     help='Set the vimconnector specific config parameters in dictionary format')
     mandatory_arguments.add_argument('-u', '--url', dest='endpoint_url',required=True, help="Set the vim connector url or Host IP")
     # Optional arguments
+    vimconn_parser.add_argument('-i', '--image-path', dest='image_path', help="Provide image path present at RO container")
     # TODO add optional arguments for vimconn tests
     # vimconn_parser.add_argument("-i", '--image-name', dest='image_name', help='<HELP>'))
 
