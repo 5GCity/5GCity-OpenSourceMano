@@ -172,6 +172,9 @@ function configure(){
 
     lxc exec RO -- openmano tenant-delete -f osm >/dev/null
     RO_TENANT_ID=`lxc exec RO -- openmano tenant-create osm |awk '{print $1}'`
+    lxc exec RO -- sed -i '/export OPENMANO_TENANT=osm/d' .bashrc 
+    lxc exec RO -- sed -i '$ i export OPENMANO_TENANT=osm' .bashrc
+    #lxc exec RO -- sh -c 'echo "export OPENMANO_TENANT=osm" >> .bashrc'
 
     echo -e "       Configuring VCA"
     JUJU_PASSWD=`date +%s | sha256sum | base64 | head -c 32`
