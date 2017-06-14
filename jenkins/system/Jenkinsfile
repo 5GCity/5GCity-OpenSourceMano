@@ -1,0 +1,30 @@
+// input parameters:
+//   boolean: BUILD_FROM_SOURCE
+//   boolean: COMMIT_ID
+//   string:  NODE
+
+node("${params.NODE}") {
+
+    stage("Setup") {
+        tag_or_branch = params.COMMIT_ID.replaceAll(/\./,"")
+        container_name_prefix = "osm-${tag_or_branch}"
+        container_name = "${container_name_prefix}-${BUILD_NUMBER}"
+    }
+
+    stage("Cleanup") {
+        // check for previous containers and clean them up
+        sh "jenkins/system/delete_old_containers.sh ${container_name_prefix}"
+    }
+
+    stage("Build") {
+        from_source = ''
+        if ( params.BUILD_FROM_SOURCE )
+        {
+            from_source = '--source'
+        }
+
+        sh "jenkins/host/start_build system --build-container ${container_name} -b ${params.COMMIT_ID} ${from_source}"
+        sh "echo ${container_name} > build_version.txt"
+        archiveArtifacts artifacts: "build_version.txt"
+    }
+}

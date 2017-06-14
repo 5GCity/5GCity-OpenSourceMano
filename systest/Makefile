@@ -18,18 +18,18 @@
 # the make invocation.
 # eg. 
 #    export OSM_HOSTNAME=1.2.3.4:8008
-#    export OS_URL=https://<keystoneserver>:5000/v2.0
+#    export OS_AUTH_URL=https://<keystoneserver>:5000/v2.0
 #    export OS_USERNAME=admin
 #    export OS_PASSWORD=admin
 #    export OS_PROJECT_NAME=admin
 OSM_HOSTNAME ?=
-OS_URL ?=
+OS_AUTH_URL ?=
 OS_USERNAME ?=
 OS_PASSWORD_NAME ?=
 OS_PROJECT_NAME ?=
 
-ifdef OS_URL
-    OPTION_OS_URL=--os-url $(OS_URL)
+ifdef OS_AUTH_URL
+    OPTION_OS_AUTH_URL=--os-url $(OS_AUTH_URL)
 endif
 ifdef OS_USERNAME
     OPTION_OS_USERNAME=--os-username $(OS_USERNAME)
@@ -48,8 +48,9 @@ ifdef TEST_NSD_DESCRIPTORS
     OPTION_TEST_NSD_DESCRIPTORS=--osm-nsd-descriptor-packages $(TEST_NSD_DESCRIPTORS)
 endif
 
-DESCRIPTOR_REPO_NAME=descriptor-packages
-DESCRIPTOR_BUILD_DIR := $(shell pwd)/$(DESCRIPTOR_REPO_NAME)/build
+DESCRIPTOR_REPO_NAME = descriptor-packages
+DESCRIPTOR_REPO_DIR ?= $(shell pwd)/descriptor-packages
+DESCRIPTOR_BUILD_DIR := $(DESCRIPTOR_REPO_DIR)/build
 OPTION_DESCRIPTOR_BUILD_DIR=--osm-descriptor-packages $(DESCRIPTOR_BUILD_DIR)
 
 TEST_OSM_NS_NAME_PREFIX=pytest-$(shell date +%D-%T)-
@@ -79,24 +80,24 @@ check_OSM_HOSTNAME:
 	$(call check_env_var,OSM_HOSTNAME)
 
 check_openstack_env:
-	$(call check_env_var,OS_URL)
+	$(call check_env_var,OS_AUTH_URL)
 	$(call check_env_var,OS_USERNAME)
 	$(call check_env_var,OS_PASSWORD)
 	$(call check_env_var,OS_PROJECT_NAME)
 
 .PHONY: check_openstack_env check_OSM_HOSTNAME
 
-$(DESCRIPTOR_REPO_NAME):
-	@test -e $(DESCRIPTOR_REPO_NAME) || git clone $(DESCRIPTOR_REPO)
-	make -C $(DESCRIPTOR_REPO_NAME)
+descriptors:
+	test -e $(DESCRIPTOR_REPO_NAME) || git clone $(DESCRIPTOR_REPO)
+	$(MAKE) -C $(DESCRIPTOR_REPO_NAME)
 
 report_dir:
 	@mkdir -p reports
 
-_run_test: $(DESCRIPTOR_REPO_NAME) report_dir
+_run_test: report_dir
 	$(Q)py.test \
         --osmhost $(OSM_HOSTNAME) \
-        $(OPTION_OS_URL) \
+        $(OPTION_OS_AUTH_URL) \
         $(OPTION_OS_USERNAME) \
         $(OPTION_OS_PASSWORD) \
         $(OPTION_OS_PROJECT_NAME) \
