@@ -24,6 +24,7 @@ _requirements = [
     "argcomplete",
     "requests",
     "logutils",
+    "python-openstackclient",
     "python-novaclient",
     "python-keystoneclient",
     "python-glanceclient",

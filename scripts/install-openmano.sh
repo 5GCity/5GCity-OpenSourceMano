@@ -249,8 +249,11 @@ then
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-boto"  #TODO check if at Centos it exists with this name, or PIP should be used
 
     # install openstack client needed for using openstack as a VIM
-    [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-novaclient python-keystoneclient python-glanceclient python-neutronclient python-cinderclient"
-    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-devel" && easy_install python-novaclient python-keystoneclient python-glanceclient python-neutronclient python-cinderclient #TODO revise if gcc python-pip is needed
+    [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-novaclient python-keystoneclient python-glanceclient "\
+                                                   "python-neutronclient python-cinderclient python-openstackclient"
+    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-devel" && easy_install \
+        python-novaclient python-keystoneclient python-glanceclient python-neutronclient python-cinderclient \
+        python-openstackclient #TODO revise if gcc python-pip is needed
 fi  # [[ -z "$NO_PACKAGES" ]]
 
 if [[ -z $NOCLONE ]]; then
