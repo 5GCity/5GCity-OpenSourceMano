@@ -1,7 +1,13 @@
 // input parameters:
 //   boolean: BUILD_FROM_SOURCE
+//   boolean: REPO_DISTRO
 //   boolean: COMMIT_ID
+//   boolean: UPSTREAM_SUFFIX
 //   string:  NODE
+//   string: RSYNC_DESTINATION
+//   string: REPO_BASE_URL
+//   string: REPO_KEY_NAME
+//   string: RELEASE
 
 node("${params.NODE}") {
 
@@ -9,6 +15,42 @@ node("${params.NODE}") {
         tag_or_branch = params.COMMIT_ID.replaceAll(/\./,"")
         container_name_prefix = "osm-${tag_or_branch}"
         container_name = "${container_name_prefix}-${BUILD_NUMBER}"
+    }
+
+    stage("Checkout") {
+        checkout scm
+    }
+
+    // Copy the artifacts from the upstream jobs
+    stage("Copy Artifacts") {
+        // cleanup any previous repo
+        sh 'rm -rf repo'
+
+        dir('repo') {
+            // grab all stable upstream builds based on the
+            // given target UPSTREAM_SUFFIX
+
+            def list = ["SO", "UI", "RO", "openvim", "osmclient"]
+            for (component in list) {
+                step ([$class: 'CopyArtifact',
+                       projectName: "${component}_${params.UPSTREAM_SUFFIX}"])
+                sh "dpkg-sig --sign builder -k dpkg1 pool/${component}/*"
+                // cleanup any prevously defined dists
+                sh "rm -rf dists"
+            }
+
+            // now create the distro
+            for (component in list) {
+                sh "mkdir -p dists/${params.REPO_DISTRO}/${component}/binary-amd64/"
+                sh "apt-ftparchive packages pool/${component} > dists/${params.REPO_DISTRO}/${component}/binary-amd64/Packages"
+                sh "gzip -9fk dists/${params.REPO_DISTRO}/${component}/binary-amd64/Packages"
+            }
+
+            // create and sign the release file
+            sh "apt-ftparchive release dists/${params.REPO_DISTRO} > dists/${params.REPO_DISTRO}/Release"
+            sh "gpg --yes -abs -u dpkg1 -o dists/${params.REPO_DISTRO}/Release.gpg dists/${params.REPO_DISTRO}/Release"
+            sh "rsync -avz . ${params.RSYNC_DESTINATION}/${params.RELEASE}"
+        }
     }
 
     stage("Cleanup") {
@@ -22,9 +64,22 @@ node("${params.NODE}") {
         {
             from_source = '--source'
         }
+ 
+        sh """
+            export OSM_USE_LOCAL_DEVOPS=true
+            jenkins/host/start_build system --build-container ${container_name} \
+                                            -b ${params.COMMIT_ID} \
+                                            -r ${params.REPO_DISTRO} \
+                                            -u ${params.REPO_BASE_URL} \
+                                            -k ${params.REPO_KEY_NAME} \
+                                            -R ${params.RELEASE} \
+                                            ${from_source}
+           """
+    }
 
-        sh "jenkins/host/start_build system --build-container ${container_name} -b ${params.COMMIT_ID} ${from_source}"
+    stage("Archive Artifacts") {
         sh "echo ${container_name} > build_version.txt"
-        archiveArtifacts artifacts: "build_version.txt"
+        sh "tar -zcvf repo.tar.gz repo"
+        archiveArtifacts artifacts: "build_version.txt, repo.tar.gz"
     }
 }

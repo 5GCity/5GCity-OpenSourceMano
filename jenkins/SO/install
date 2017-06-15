@@ -23,39 +23,57 @@
 # install launchpad SO and all of its dependencies
 #
 
+HERE=$(realpath $(dirname $0))
+OSM_JENKINS=$(dirname $HERE)
+. $OSM_JENKINS/common/install_common
+
 # Defensive bash programming flags
 set -o errexit    # Exit on any error
 trap 'echo ERROR: Command failed: \"$BASH_COMMAND\"' ERR
 set -o nounset    # Expanding an unset variable is an error.  Variables must be
                   # set before they can be used.
 
-if [ $# -gt 0 ]; then
-    case "$1" in
-	-h|--help)
-	    echo
-	    echo "NAME:"
-	    echo "  $0"
-	    echo
-	    echo "SYNOPSIS:"
-	    echo "  $0 -h|--help"
-	    echo "  $0 [PLATFORM_REPOSITORY] [PLATFORM_VERSION]"
-	    echo
-	    echo "DESCRIPTION:"
-	    echo "  Prepare current system to run SO and UI."
-	    echo
-	    echo "  PLATFORM_REPOSITORY (optional): name of the RIFT.ware repository."
-	    echo "  PLATFORM_VERSION (optional): version of the platform packages to be installed."
-	    echo
-	    exit 0;;
-    esac
-fi
-
-
 ###############################################################################
 # Set up repo and version
+PLATFORM_REPOSITORY=OSM
+PLATFORM_VERSION=4.4.2.1.61839
 
-PLATFORM_REPOSITORY=${1:-OSM}
-PLATFORM_VERSION=${2:-4.4.2.1.61839}
+while getopts ":P:V:h" o; do
+    case "${o}" in
+        P)
+            PLATFORM_REPOSITORY=${OPTARG}
+            ;;
+        V)
+            PLATFORM_VERSION=${OPTARG}
+            ;;
+        h)
+            usage
+            exit 0
+            ;;
+        *)
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+function usage() {
+    echo
+    echo "NAME:"
+    echo "  $0"
+    echo
+    echo "SYNOPSIS:"
+    echo "  $0 -h|--help"
+    echo "  $0 -P <PLATFORM_REPOSITORY> -V <PLATFORM_VERSION>"
+    echo
+    echo "DESCRIPTION:"
+    echo "  Prepare current system to run SO and UI."
+    echo
+    echo "  PLATFORM_REPOSITORY (optional): name of the RIFT.ware repository."
+    echo "  PLATFORM_VERSION (optional): version of the platform packages to be installed."
+    echo
+}
+
 
 ###############################################################################
 # Main block
@@ -79,14 +97,12 @@ apt-get install -y --allow-downgrades rw.tools-container-tools=${PLATFORM_VERSIO
 /usr/rift/container_tools/mkcontainer --modes ext --modes platform --rw-version ${PLATFORM_VERSION}
 pip3 install lxml==3.4.0
 
-
 chmod 777 /usr/rift /usr/rift/usr/share
 
 # now disable the RIFT OSM repo so that we'll get MANO from
 # the OSM repos
 rm -f /etc/apt/sources.list.d/RIFT.list
-curl https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
-add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO stable SO UI RO openvim"
+
 apt-get update
 
 apt-get install -y \

@@ -57,7 +57,8 @@ apt-get install -y python-pip python python-pycurl charm-tools python-pytest
 git clone https://osm.etsi.org/gerrit/osm/osmclient
 pip install osmclient/.
 
-devops/installers/install_osm.sh $*
+export OSM_USE_LOCAL_DEVOPS=true
+devops/installers/install_osm.sh --test $*
 RC=$?
 
 # workaround.  for upload packages, lxdbr0 needs to be promiscuous

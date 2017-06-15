@@ -23,8 +23,10 @@
 # install launchpad UI and create the service
 #
 
-curl https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
-add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO stable SO UI RO openvim"
+HERE=$(realpath $(dirname $0))
+OSM_JENKINS=$(dirname $HERE)
+. $OSM_JENKINS/common/install_common
+
 rm -f /etc/apt/sources.list.d/RIFT.list 
 apt-get update
 

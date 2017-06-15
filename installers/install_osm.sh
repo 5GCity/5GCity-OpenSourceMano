@@ -19,6 +19,10 @@ function usage(){
     echo -e "  OPTIONS"
     echo -e "     --uninstall:   uninstall OSM: remove the containers and delete NAT rules"
     echo -e "     --source:      install OSM from source code using the latest stable tag"
+    echo -e "     -r <repo>:      use specified repository name for osm packages"
+    echo -e "     -R <release>:   use specified release for osm packages"
+    echo -e "     -u <repo base>: use specified repository url for osm packages"
+    echo -e "     -k <repo key>:  use specified repository public key url"
     echo -e "     -b <refspec>:  install OSM from source code using a specific branch (master, v2.0, ...) or tag"
     echo -e "                    -b master          (main dev branch)"
     echo -e "                    -b v2.0            (v2.0 branch)"
@@ -250,13 +254,25 @@ COMMIT_ID=""
 ASSUME_YES=""
 INSTALL_FROM_SOURCE=""
 
-while getopts ":hy-:b:" o; do
+while getopts ":hy-:b:r:k:u:R:" o; do
     case "${o}" in
         h)
             usage && exit 0
             ;;
         b)
             COMMIT_ID=${OPTARG}
+            ;;
+        r)
+            REPOSITORY="-r ${OPTARG}"
+            ;;
+        R)
+            RELEASE="-R ${OPTARG}"
+            ;;
+        k)
+            REPOSITORY_KEY="-k ${OPTARG}"
+            ;;
+        u)
+            REPOSITORY_BASE="-u ${OPTARG}"
             ;;
         -)
             [ "${OPTARG}" == "help" ] && usage && exit 0
@@ -355,10 +371,10 @@ wget -q -O- https://osm-download.etsi.org/ftp/osm-2.0-two/README.txt &> /dev/nul
 
 if [ -z "$INSTALL_FROM_SOURCE" ]; then
     echo -e "\nCreating the containers and installing from binaries ..."
-    $OSM_DEVOPS/jenkins/host/install RO || FATAL "RO install failed"
+    $OSM_DEVOPS/jenkins/host/install RO $REPOSITORY $RELEASE $REPOSITORY_KEY $REPOSITORY_BASE || FATAL "RO install failed"
     $OSM_DEVOPS/jenkins/host/start_build VCA || FATAL "VCA install failed"
-    $OSM_DEVOPS/jenkins/host/install SO || FATAL "SO install failed"
-    $OSM_DEVOPS/jenkins/host/install UI || FATAL "UI install failed"
+    $OSM_DEVOPS/jenkins/host/install SO $REPOSITORY $RELEASE $REPOSITORY_KEY $REPOSITORY_BASE || FATAL "SO install failed"
+    $OSM_DEVOPS/jenkins/host/install UI $REPOSITORY $RELEASE $REPOSITORY_KEY $REPOSITORY_BASE || FATAL "UI install failed"
 else #install from source
     echo -e "\nCreating the containers and building from source ..."
     $OSM_DEVOPS/jenkins/host/start_build RO --notest checkout $COMMIT_ID || FATAL "RO container build failed (refspec: '$COMMIT_ID')"

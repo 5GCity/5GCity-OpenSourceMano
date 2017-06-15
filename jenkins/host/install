@@ -32,13 +32,13 @@ if ! container_exists $OSM_BUILD_CONTAINER; then
 	[[ "$OSM_BUILD_CONTAINER_ALLOW_NESTED" == yes ]] && CONTAINER_OPTS="$CONTAINER_OPTS -c security.nesting=true"
 	create_container $OSM_BASE_IMAGE $OSM_BUILD_CONTAINER $CONTAINER_OPTS
 	wait_container_up $OSM_BUILD_CONTAINER
-	if [ ${OSM_USE_LOCAL_DEVOPS:-false} ]; then
+	if [ ${OSM_USE_LOCAL_DEVOPS:-false} != false ]; then
 		container_push_devops $OSM_BUILD_CONTAINER
 	else
 		container_exec $OSM_BUILD_CONTAINER git clone ${OSM_GIT_URL}/devops
 	fi
 else
-	if [ ${OSM_USE_LOCAL_DEVOPS:-false} ]; then
+	if [ ${OSM_USE_LOCAL_DEVOPS:-false} != false ]; then
 		container_push_devops $OSM_BUILD_CONTAINER
 	else
 		container_exec $OSM_BUILD_CONTAINER git -C devops pull

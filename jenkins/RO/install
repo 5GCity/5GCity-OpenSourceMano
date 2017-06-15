@@ -26,12 +26,11 @@ OSM_JENKINS=$(dirname $HERE)
 export OSM_MDG=RO
 OSM_load_config
 
+. $OSM_JENKINS/common/install_common
+
 # Installation starts here
 
 #Release TWO
-curl https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO/OSM%20ETSI%20Release%20Key.gpg |apt-key add -
-sleep 5
-add-apt-repository -y "deb https://osm-download.etsi.org/repository/osm/debian/ReleaseTWO stable RO openvim"
 
 apt-get update
 apt-get -y install python-lib-osm-openvim
