@@ -115,6 +115,13 @@ cirros: check_OSM_HOSTNAME check_openstack_env
         JUNITXML=pytest-$@.xml \
         PYTEST_OPTIONS="$(PYTEST_OPTIONS) -m vnf" _run_test
 
+ns_scale: check_OSM_HOSTNAME check_openstack_env
+	$(Q)$(MAKE) \
+        TEST_VNFD_DESCRIPTORS=$(DESCRIPTOR_BUILD_DIR)/vnfd_pkgs/cirros_vnf.tar.gz \
+        TEST_NSD_DESCRIPTORS=$(DESCRIPTOR_BUILD_DIR)/nsd_pkgs/cirros_ns.tar.gz \
+        JUNITXML=pytest-$@.xml \
+        PYTEST_OPTIONS="$(PYTEST_OPTIONS) -m ns_scale" _run_test
+
 smoke: check_OSM_HOSTNAME
 	$(Q)$(MAKE) \
         JUNITXML=pytest-$@.xml \
