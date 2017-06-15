@@ -54,7 +54,7 @@ class Package(object):
 
     # method opens up a package and finds the name of the resulting
     # descriptor (vnfd or nsd name)
-    def get_descriptor_type_from_pkg(self, descriptor_file):
+    def get_key_val_from_pkg(self, descriptor_file):
         tar = tarfile.open(descriptor_file)
         yamlfile = None
         for member in tar.getmembers():
@@ -81,17 +81,18 @@ class Package(object):
 
                 for entry in v2:
                     for k3, v3 in entry.items():
-                        if k3 == 'name' or k3.endswith(':name'):
-                            result['name'] = v3
-                            return result
+                        # strip off preceeding chars before :
+                        key_name = k3.split(':').pop()             
+                        
+                        result[key_name] = v3
         tar.close()
-        return None
+        return result
 
     def wait_for_upload(self, filename):
         """wait(block) for an upload to succeed.
            The filename passed is assumed to be a descriptor tarball.
         """
-        pkg_type = self.get_descriptor_type_from_pkg(filename)
+        pkg_type = self.get_key_val_from_pkg(filename)
 
         if pkg_type is None:
             raise ClientException("Cannot determine package type")
