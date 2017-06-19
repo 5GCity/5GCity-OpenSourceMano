@@ -40,7 +40,7 @@ pipeline {
                     apt-ftparchive packages pool/osmclient > dists/unstable/osmclient/binary-amd64/Packages
                     gzip -9fk dists/unstable/osmclient/binary-amd64/Packages
                     '''
-                archiveArtifacts artifacts: "dists/**,pool/osmclient/*.deb"
+                archiveArtifacts artifacts: "dists/**,pool/osmclient/*.deb", fingerprint: true
             }
         }
     }
