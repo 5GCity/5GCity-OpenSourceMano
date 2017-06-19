@@ -43,8 +43,6 @@ done
 
 key_location=$REPOSITORY_BASE/$RELEASE/$REPOSITORY_KEY
 
-# key pulled from https
-[[ "$key_location" =~ https ]] || key_location=${key_location/http/https}
 curl $key_location | apt-key add -
 
 add-apt-repository -y "deb $REPOSITORY_BASE/$RELEASE $REPOSITORY SO UI RO osmclient openvim"

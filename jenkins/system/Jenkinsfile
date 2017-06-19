@@ -80,6 +80,6 @@ node("${params.NODE}") {
     stage("Archive Artifacts") {
         sh "echo ${container_name} > build_version.txt"
         sh "tar -zcvf repo.tar.gz repo"
-        archiveArtifacts artifacts: "build_version.txt, repo.tar.gz"
+        archiveArtifacts artifacts: "build_version.txt, repo.tar.gz", fingerprint: true
     }
 }
