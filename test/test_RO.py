@@ -23,10 +23,10 @@
 '''
 Module for testing openmano functionality. It uses openmanoclient.py for invoking openmano
 '''
-__author__="Pablo Montes, Alfonso Tierno"
-__date__ ="$16-Feb-2017 17:08:16$"
-__version__="0.0.3"
-version_date="May 2017"
+__author__ = "Pablo Montes, Alfonso Tierno"
+__date__ = "$16-Feb-2017 17:08:16$"
+__version__ = "0.0.4"
+version_date = "Jun 2017"
 
 import logging
 import os
@@ -46,6 +46,26 @@ import uuid
 
 global test_config   #  used for global variables with the test configuration
 test_config = {}
+
+class test_base(unittest.TestCase):
+    test_index = 1
+    test_text = None
+
+    @classmethod
+    def setUpClass(cls):
+        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+
+    @classmethod
+    def tearDownClass(cls):
+        test_config["test_number"] += 1
+
+    def tearDown(self):
+        exec_info = sys.exc_info()
+        if exec_info == (None, None, None):
+            logger.info(self.__class__.test_text+" -> TEST OK")
+        else:
+            logger.warning(self.__class__.test_text+" -> TEST NOK")
+            logger.critical("Traceback error",exc_info=True)
 
 
 def check_instance_scenario_active(uuid):
@@ -69,30 +89,8 @@ def check_instance_scenario_active(uuid):
 IMPORTANT NOTE
 All unittest classes for code based tests must have prefix 'test_' in order to be taken into account for tests
 '''
-class test_VIM_datacenter_tenant_operations(unittest.TestCase):
-    test_index = 1
+class test_VIM_datacenter_tenant_operations(test_base):
     tenant_name = None
-    test_text = None
-
-    @classmethod
-    def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
-
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
-
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text+" -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text+" -> TEST NOK")
-            error_trace = traceback.format_exception(exec_info[0], exec_info[1], exec_info[2])
-            msg = ""
-            for line in error_trace:
-                msg = msg + line
-            logger.critical("{}".format(msg))
 
     def test_000_create_RO_tenant(self):
         self.__class__.tenant_name = _get_random_string(20)
@@ -121,30 +119,8 @@ class test_VIM_datacenter_tenant_operations(unittest.TestCase):
         assert('deleted' in tenant.get('result',""))
 
 
-class test_VIM_datacenter_operations(unittest.TestCase):
-    test_index = 1
+class test_VIM_datacenter_operations(test_base):
     datacenter_name = None
-    test_text = None
-
-    @classmethod
-    def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
-
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
-
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text+" -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text+" -> TEST NOK")
-            error_trace = traceback.format_exception(exec_info[0], exec_info[1], exec_info[2])
-            msg = ""
-            for line in error_trace:
-                msg = msg + line
-            logger.critical("{}".format(msg))
 
     def test_000_create_datacenter(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"], self.__class__.test_index,
@@ -203,31 +179,9 @@ class test_VIM_datacenter_operations(unittest.TestCase):
         assert('deleted' in self.datacenter.get('result',""))
 
 
-class test_VIM_network_operations(unittest.TestCase):
-    test_index = 1
+class test_VIM_network_operations(test_base):
     vim_network_name = None
-    test_text = None
     vim_network_uuid = None
-
-    @classmethod
-    def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
-
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
-
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text + " -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text + " -> TEST NOK")
-            error_trace = traceback.format_exception(exec_info[0], exec_info[1], exec_info[2])
-            msg = ""
-            for line in error_trace:
-                msg = msg + line
-            logger.critical("{}".format(msg))
 
     def test_000_create_VIM_network(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"], self.__class__.test_index,
@@ -265,29 +219,7 @@ class test_VIM_network_operations(unittest.TestCase):
         assert ('deleted' in network.get('result', ""))
 
 
-class test_VIM_image_operations(unittest.TestCase):
-    test_index = 1
-    test_text = None
-
-    @classmethod
-    def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
-
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
-
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text + " -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text + " -> TEST NOK")
-            error_trace = traceback.format_exception(exec_info[0], exec_info[1], exec_info[2])
-            msg = ""
-            for line in error_trace:
-                msg = msg + line
-            logger.critical("{}".format(msg))
+class test_VIM_image_operations(test_base):
 
     def test_000_list_VIM_images(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"], self.__class__.test_index,
@@ -301,33 +233,15 @@ The following is a non critical test that will fail most of the times.
 In case of OpenStack datacenter these tests will only success if RO has access to the admin endpoint
 This test will only be executed in case it is specifically requested by the user
 '''
-class test_VIM_tenant_operations(unittest.TestCase):
-    test_index = 1
+class test_VIM_tenant_operations(test_base):
     vim_tenant_name = None
-    test_text = None
     vim_tenant_uuid = None
 
     @classmethod
     def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+        test_base.setUpClass(cls)
         logger.warning("In case of OpenStack datacenter these tests will only success "
                        "if RO has access to the admin endpoint")
-
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
-
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text + " -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text + " -> TEST NOK")
-            error_trace = traceback.format_exception(exec_info[0], exec_info[1], exec_info[2])
-            msg = ""
-            for line in error_trace:
-                msg = msg + line
-            logger.critical("{}".format(msg))
 
     def test_000_create_VIM_tenant(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"], self.__class__.test_index,
@@ -364,25 +278,25 @@ class test_VIM_tenant_operations(unittest.TestCase):
         logger.debug("{}".format(tenant))
         assert ('deleted' in tenant.get('result', ""))
 
-class test_vimconn_connect(unittest.TestCase):
-    test_index = 1
-    test_text = None
+class test_vimconn_connect(test_base):
+    # test_index = 1
+    # test_text = None
 
-    @classmethod
-    def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+    # @classmethod
+    # def setUpClass(cls):
+    #     logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
 
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
+    # @classmethod
+    # def tearDownClass(cls):
+    #     test_config["test_number"] += 1
 
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text+" -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text+" -> TEST NOK")
-            logger.critical("Traceback error",exc_info=True)
+    # def tearDown(self):
+    #     exec_info = sys.exc_info()
+    #     if exec_info == (None, None, None):
+    #         logger.info(self.__class__.test_text+" -> TEST OK")
+    #     else:
+    #         logger.warning(self.__class__.test_text+" -> TEST NOK")
+    #         logger.critical("Traceback error",exc_info=True)
 
     def test_000_connect(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
@@ -396,26 +310,26 @@ class test_vimconn_connect(unittest.TestCase):
             self.assertIsInstance(vca_object, VCA)
 
 
-class test_vimconn_new_network(unittest.TestCase):
-    test_index = 1
+class test_vimconn_new_network(test_base):
+    # test_index = 1
     network_name = None
-    test_text = None
+    # test_text = None
 
-    @classmethod
-    def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+    # @classmethod
+    # def setUpClass(cls):
+    #     logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
 
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
+    # @classmethod
+    # def tearDownClass(cls):
+    #     test_config["test_number"] += 1
 
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text+" -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text+" -> TEST NOK")
-            logger.critical("Traceback error",exc_info=True)
+    # def tearDown(self):
+    #     exec_info = sys.exc_info()
+    #     if exec_info == (None, None, None):
+    #         logger.info(self.__class__.test_text+" -> TEST OK")
+    #     else:
+    #         logger.warning(self.__class__.test_text+" -> TEST NOK")
+    #         logger.critical("Traceback error",exc_info=True)
 
     def test_000_new_network(self):
         self.__class__.network_name = _get_random_string(20)
@@ -570,18 +484,18 @@ class test_vimconn_new_network(unittest.TestCase):
         else:
             logger.info("Failed to delete network id {}".format(self.__class__.network_id))
 
-class test_vimconn_get_network_list(unittest.TestCase):
-    test_index = 1
+class test_vimconn_get_network_list(test_base):
+    # test_index = 1
     network_name = None
-    test_text = None
 
-    @classmethod
-    def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+    # test_text = None
+    # @classmethod
+    # def setUpClass(cls):
+    #     logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
 
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
+    # @classmethod
+    # def tearDownClass(cls):
+    #     test_config["test_number"] += 1
 
     def setUp(self):
         # creating new network
@@ -593,12 +507,13 @@ class test_vimconn_get_network_list(unittest.TestCase):
         logger.debug("{}".format(network))
 
     def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text+" -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text+" -> TEST NOK")
-            logger.critical("Traceback error",exc_info=True)
+        test_base.tearDown(self)
+        # exec_info = sys.exc_info()
+        # if exec_info == (None, None, None):
+        #     logger.info(self.__class__.test_text+" -> TEST OK")
+        # else:
+        #     logger.warning(self.__class__.test_text+" -> TEST NOK")
+        #     logger.critical("Traceback error",exc_info=True)
 
         # Deleting created network
         result = test_config["vim_conn"].delete_network(self.__class__.network_id)
@@ -715,18 +630,18 @@ class test_vimconn_get_network_list(unittest.TestCase):
         network_list = test_config["vim_conn"].get_network_list({'name': 'unknown_name'})
         self.assertEqual(network_list, [])
 
-class test_vimconn_get_network(unittest.TestCase):
-    test_index = 1
+class test_vimconn_get_network(test_base):
+    # test_index = 1
     network_name = None
-    test_text = None
+    # test_text = None
 
-    @classmethod
-    def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+    # @classmethod
+    # def setUpClass(cls):
+    #     logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
 
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
+    # @classmethod
+    # def tearDownClass(cls):
+    #     test_config["test_number"] += 1
 
     def setUp(self):
         # creating new network
@@ -738,12 +653,13 @@ class test_vimconn_get_network(unittest.TestCase):
         logger.debug("{}".format(network))
 
     def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text+" -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text+" -> TEST NOK")
-            logger.critical("Traceback error",exc_info=True)
+        test_base.tearDown(self)
+        # exec_info = sys.exc_info()
+        # if exec_info == (None, None, None):
+        #     logger.info(self.__class__.test_text+" -> TEST OK")
+        # else:
+        #     logger.warning(self.__class__.test_text+" -> TEST NOK")
+        #     logger.critical("Traceback error",exc_info=True)
 
         # Deleting created network
         result = test_config["vim_conn"].delete_network(self.__class__.network_id)
@@ -774,26 +690,26 @@ class test_vimconn_get_network(unittest.TestCase):
         network_info = test_config["vim_conn"].get_network(Non_exist_id)
         self.assertEqual(network_info, {})
 
-class test_vimconn_delete_network(unittest.TestCase):
-    test_index = 1
+class test_vimconn_delete_network(test_base):
+    # test_index = 1
     network_name = None
-    test_text = None
+    # test_text = None
 
-    @classmethod
-    def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+    # @classmethod
+    # def setUpClass(cls):
+    #     logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
 
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
+    # @classmethod
+    # def tearDownClass(cls):
+    #     test_config["test_number"] += 1
 
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text+" -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text+" -> TEST NOK")
-            logger.critical("Traceback error",exc_info=True)
+    # def tearDown(self):
+    #     exec_info = sys.exc_info()
+    #     if exec_info == (None, None, None):
+    #         logger.info(self.__class__.test_text+" -> TEST OK")
+    #     else:
+    #         logger.warning(self.__class__.test_text+" -> TEST NOK")
+    #         logger.critical("Traceback error",exc_info=True)
 
     def test_000_delete_network(self):
         # Creating network
@@ -832,25 +748,25 @@ class test_vimconn_delete_network(unittest.TestCase):
 
         self.assertEqual((context.exception).http_code, 400)
 
-class test_vimconn_get_flavor(unittest.TestCase):
-    test_index = 1
-    test_text = None
+class test_vimconn_get_flavor(test_base):
+    # test_index = 1
+    # test_text = None
 
-    @classmethod
-    def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+    # @classmethod
+    # def setUpClass(cls):
+    #     logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
 
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
+    # @classmethod
+    # def tearDownClass(cls):
+    #     test_config["test_number"] += 1
 
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text+" -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text+" -> TEST NOK")
-            logger.critical("Traceback error",exc_info=True)
+    # def tearDown(self):
+    #     exec_info = sys.exc_info()
+    #     if exec_info == (None, None, None):
+    #         logger.info(self.__class__.test_text+" -> TEST OK")
+    #     else:
+    #         logger.warning(self.__class__.test_text+" -> TEST NOK")
+    #         logger.critical("Traceback error",exc_info=True)
 
     def test_000_get_flavor(self):
         test_directory_content = os.listdir(test_config["test_directory"])
@@ -915,9 +831,8 @@ IMPORTANT NOTE
 The following unittest class does not have the 'test_' on purpose. This test is the one used for the
 scenario based tests.
 '''
-class descriptor_based_scenario_test(unittest.TestCase):
+class descriptor_based_scenario_test(test_base):
     test_index = 0
-    test_text = None
     scenario_test_path = None
     scenario_uuid = None
     instance_scenario_uuid = None
@@ -933,19 +848,6 @@ class descriptor_based_scenario_test(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
          test_config["test_number"] += 1
-
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text + " -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text + " -> TEST NOK")
-            error_trace = traceback.format_exception(exec_info[0], exec_info[1], exec_info[2])
-            msg = ""
-            for line in error_trace:
-                msg = msg + line
-            logger.critical("{}".format(msg))
-
 
     def test_000_load_scenario(self):
         self.__class__.test_text = "{}.{}. TEST {} {}".format(test_config["test_number"], self.__class__.test_index,
@@ -1223,9 +1125,9 @@ def test_deploy(args):
     test_directory_content = os.listdir(test_config["test_directory"])
     # If only want to obtain a tests list print it and exit
     if args.list_tests:
-        msg = "he 'deploy' set tests are:\n\t" + ', '.join(sorted(test_directory_content))
+        msg = "the 'deploy' set tests are:\n\t" + ', '.join(sorted(test_directory_content))
         print(msg)
-        logger.info(msg)
+        # logger.info(msg)
         sys.exit(0)
 
     descriptor_based_tests = []
