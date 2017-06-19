@@ -37,6 +37,10 @@ OSM_git_checkout "$@"
 apt update
 apt install -y docker.io
 
+# cleanup all pre-existing builds.
+# deb pkg build fails if previous build image is present
+rm -rf deb_dist dist
+
 docker build -t $OSM_MDG .
 DOCKER_ARGS="-v $(pwd):$(pwd) -w $(pwd) -u $(id -u):$(id -g) $OSM_MDG"
 
