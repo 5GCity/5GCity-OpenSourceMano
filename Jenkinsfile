@@ -1,7 +1,6 @@
 pipeline {
     agent {
         dockerfile {
-            label 'osm3'
         }
     }
     stages {
