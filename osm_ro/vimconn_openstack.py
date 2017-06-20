@@ -892,6 +892,11 @@ class vimconnector(vimconn.vimconnector):
                     raise vimconn.vimconnException('Timeout creating volumes for instance ' + name,
                                                    http_code=vimconn.HTTP_Request_Timeout)
 
+            self.logger.debug("nova.servers.create({}, {}, {}, nics={}, meta={}, security_groups={}," \
+                                              "availability_zone={}, key_name={}, userdata={}, config_drive={}, " \
+                                              "block_device_mapping={})".format(name, image_id, flavor_id, net_list_vim,
+                                                metadata, security_groups, self.config.get('availability_zone'),
+                                                self.config.get('keypair'), userdata, config_drive, block_device_mapping))
             server = self.nova.servers.create(name, image_id, flavor_id, nics=net_list_vim, meta=metadata,
                                               security_groups=security_groups,
                                               availability_zone=self.config.get('availability_zone'),
