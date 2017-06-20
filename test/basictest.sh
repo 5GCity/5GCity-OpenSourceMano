@@ -35,6 +35,7 @@ function usage(){
     echo -e "    del-openvim detaches and deletes the local openvim datacenter"
     echo -e "    create      creates VNFs, scenarios and instances"
     echo -e "    delete      deletes the created instances, scenarios and VNFs"
+    echo -e "    delete-all  deletes ALL the existing instances, scenarios and vnf at the current tenant"
     echo -e "  OPTIONS:"
     echo -e "    -f --force       does not prompt for confirmation"
     echo -e "    -h --help        shows this help"
@@ -84,7 +85,8 @@ action_list=""
 for argument in $params
 do
     if [[ $argument == reset ]] || [[ $argument == create ]] || [[ $argument == delete ]] ||
-       [[ $argument == add-openvim ]] || [[ $argument == del-openvim ]] || [[ -z "$argument" ]]
+       [[ $argument == add-openvim ]] || [[ $argument == del-openvim ]] ||  [[ $argument == delete-all ]] ||
+       [[ -z "$argument" ]]
     then
         action_list="$action_list $argument"
         continue
@@ -195,9 +197,20 @@ then
     $openmano vnf-delete -f linux_2VMs_v02        || echo "fail"
     $openmano vnf-delete -f dataplaneVNF_2VMs     || echo "fail"
     $openmano vnf-delete -f dataplaneVNF_2VMs_v02 || echo "fail"
-    $openmano vnf-delete -f dataplaneVNF4         || echo "fail"
+    $openmano vnf-delete -f dataplaneVNF1         || echo "fail"
     $openmano vnf-delete -f dataplaneVNF2         || echo "fail"
     $openmano vnf-delete -f dataplaneVNF3         || echo "fail"
+    $openmano vnf-delete -f dataplaneVNF4         || echo "fail"
+
+elif [[ $action == "delete-all" ]]
+then
+    for i in instance-scenario scenario vnf
+    do
+        for f in `$openmano $i-list | awk '{print $1}'`
+        do
+            [[ -n "$f" ]] && [[ "$f" != No ]] && $openmano ${i}-delete -f ${f}
+        done
+    done
 
 elif [[ $action == "del-openvim" ]]
 then

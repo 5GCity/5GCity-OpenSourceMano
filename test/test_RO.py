@@ -23,10 +23,10 @@
 '''
 Module for testing openmano functionality. It uses openmanoclient.py for invoking openmano
 '''
-__author__="Pablo Montes, Alfonso Tierno"
-__date__ ="$16-Feb-2017 17:08:16$"
-__version__="0.0.3"
-version_date="May 2017"
+__author__ = "Pablo Montes, Alfonso Tierno"
+__date__ = "$16-Feb-2017 17:08:16$"
+__version__ = "0.0.4"
+version_date = "Jun 2017"
 
 import logging
 import os
@@ -41,9 +41,31 @@ import glob
 import yaml
 import sys
 import time
+from pyvcloud.vcloudair import VCA
+import uuid
 
 global test_config   #  used for global variables with the test configuration
 test_config = {}
+
+class test_base(unittest.TestCase):
+    test_index = 1
+    test_text = None
+
+    @classmethod
+    def setUpClass(cls):
+        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+
+    @classmethod
+    def tearDownClass(cls):
+        test_config["test_number"] += 1
+
+    def tearDown(self):
+        exec_info = sys.exc_info()
+        if exec_info == (None, None, None):
+            logger.info(self.__class__.test_text+" -> TEST OK")
+        else:
+            logger.warning(self.__class__.test_text+" -> TEST NOK")
+            logger.critical("Traceback error",exc_info=True)
 
 
 def check_instance_scenario_active(uuid):
@@ -67,30 +89,8 @@ def check_instance_scenario_active(uuid):
 IMPORTANT NOTE
 All unittest classes for code based tests must have prefix 'test_' in order to be taken into account for tests
 '''
-class test_VIM_datacenter_tenant_operations(unittest.TestCase):
-    test_index = 1
+class test_VIM_datacenter_tenant_operations(test_base):
     tenant_name = None
-    test_text = None
-
-    @classmethod
-    def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
-
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
-
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text+" -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text+" -> TEST NOK")
-            error_trace = traceback.format_exception(exec_info[0], exec_info[1], exec_info[2])
-            msg = ""
-            for line in error_trace:
-                msg = msg + line
-            logger.critical("{}".format(msg))
 
     def test_000_create_RO_tenant(self):
         self.__class__.tenant_name = _get_random_string(20)
@@ -119,30 +119,8 @@ class test_VIM_datacenter_tenant_operations(unittest.TestCase):
         assert('deleted' in tenant.get('result',""))
 
 
-class test_VIM_datacenter_operations(unittest.TestCase):
-    test_index = 1
+class test_VIM_datacenter_operations(test_base):
     datacenter_name = None
-    test_text = None
-
-    @classmethod
-    def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
-
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
-
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text+" -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text+" -> TEST NOK")
-            error_trace = traceback.format_exception(exec_info[0], exec_info[1], exec_info[2])
-            msg = ""
-            for line in error_trace:
-                msg = msg + line
-            logger.critical("{}".format(msg))
 
     def test_000_create_datacenter(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"], self.__class__.test_index,
@@ -201,31 +179,9 @@ class test_VIM_datacenter_operations(unittest.TestCase):
         assert('deleted' in self.datacenter.get('result',""))
 
 
-class test_VIM_network_operations(unittest.TestCase):
-    test_index = 1
+class test_VIM_network_operations(test_base):
     vim_network_name = None
-    test_text = None
     vim_network_uuid = None
-
-    @classmethod
-    def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
-
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
-
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text + " -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text + " -> TEST NOK")
-            error_trace = traceback.format_exception(exec_info[0], exec_info[1], exec_info[2])
-            msg = ""
-            for line in error_trace:
-                msg = msg + line
-            logger.critical("{}".format(msg))
 
     def test_000_create_VIM_network(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"], self.__class__.test_index,
@@ -263,29 +219,7 @@ class test_VIM_network_operations(unittest.TestCase):
         assert ('deleted' in network.get('result', ""))
 
 
-class test_VIM_image_operations(unittest.TestCase):
-    test_index = 1
-    test_text = None
-
-    @classmethod
-    def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
-
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
-
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text + " -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text + " -> TEST NOK")
-            error_trace = traceback.format_exception(exec_info[0], exec_info[1], exec_info[2])
-            msg = ""
-            for line in error_trace:
-                msg = msg + line
-            logger.critical("{}".format(msg))
+class test_VIM_image_operations(test_base):
 
     def test_000_list_VIM_images(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"], self.__class__.test_index,
@@ -299,33 +233,15 @@ The following is a non critical test that will fail most of the times.
 In case of OpenStack datacenter these tests will only success if RO has access to the admin endpoint
 This test will only be executed in case it is specifically requested by the user
 '''
-class test_VIM_tenant_operations(unittest.TestCase):
-    test_index = 1
+class test_VIM_tenant_operations(test_base):
     vim_tenant_name = None
-    test_text = None
     vim_tenant_uuid = None
 
     @classmethod
     def setUpClass(cls):
-        logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+        test_base.setUpClass(cls)
         logger.warning("In case of OpenStack datacenter these tests will only success "
                        "if RO has access to the admin endpoint")
-
-    @classmethod
-    def tearDownClass(cls):
-        test_config["test_number"] += 1
-
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text + " -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text + " -> TEST NOK")
-            error_trace = traceback.format_exception(exec_info[0], exec_info[1], exec_info[2])
-            msg = ""
-            for line in error_trace:
-                msg = msg + line
-            logger.critical("{}".format(msg))
 
     def test_000_create_VIM_tenant(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"], self.__class__.test_index,
@@ -362,14 +278,561 @@ class test_VIM_tenant_operations(unittest.TestCase):
         logger.debug("{}".format(tenant))
         assert ('deleted' in tenant.get('result', ""))
 
+class test_vimconn_connect(test_base):
+    # test_index = 1
+    # test_text = None
+
+    # @classmethod
+    # def setUpClass(cls):
+    #     logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+
+    # @classmethod
+    # def tearDownClass(cls):
+    #     test_config["test_number"] += 1
+
+    # def tearDown(self):
+    #     exec_info = sys.exc_info()
+    #     if exec_info == (None, None, None):
+    #         logger.info(self.__class__.test_text+" -> TEST OK")
+    #     else:
+    #         logger.warning(self.__class__.test_text+" -> TEST NOK")
+    #         logger.critical("Traceback error",exc_info=True)
+
+    def test_000_connect(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+
+        self.__class__.test_index += 1
+        if test_config['vimtype'] == 'vmware':
+            vca_object = test_config["vim_conn"].connect()
+            logger.debug("{}".format(vca_object))
+            self.assertIsInstance(vca_object, VCA)
+
+
+class test_vimconn_new_network(test_base):
+    # test_index = 1
+    network_name = None
+    # test_text = None
+
+    # @classmethod
+    # def setUpClass(cls):
+    #     logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+
+    # @classmethod
+    # def tearDownClass(cls):
+    #     test_config["test_number"] += 1
+
+    # def tearDown(self):
+    #     exec_info = sys.exc_info()
+    #     if exec_info == (None, None, None):
+    #         logger.info(self.__class__.test_text+" -> TEST OK")
+    #     else:
+    #         logger.warning(self.__class__.test_text+" -> TEST NOK")
+    #         logger.critical("Traceback error",exc_info=True)
+
+    def test_000_new_network(self):
+        self.__class__.network_name = _get_random_string(20)
+        network_type = 'bridge'
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                     self.__class__.test_index, inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+                                                          net_type=network_type)
+        self.__class__.network_id = network
+        logger.debug("{}".format(network))
+
+        network_list = test_config["vim_conn"].get_vcd_network_list()
+        for net in network_list:
+            if self.__class__.network_name in net.get('name'):
+                self.assertIn(self.__class__.network_name, net.get('name'))
+                self.assertEqual(net.get('type'), network_type)
+
+        # Deleting created network
+        result = test_config["vim_conn"].delete_network(self.__class__.network_id)
+        if result:
+            logger.info("Network id {} sucessfully deleted".format(self.__class__.network_id))
+        else:
+            logger.info("Failed to delete network id {}".format(self.__class__.network_id))
+
+    def test_010_new_network_by_types(self):
+        delete_net_ids = []
+        network_types = ['data','bridge','mgmt']
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+        for net_type in network_types:
+            self.__class__.network_name = _get_random_string(20)
+            network_id = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+                                                                                net_type=net_type)
+
+            delete_net_ids.append(network_id)
+            logger.debug("{}".format(network_id))
+
+            network_list = test_config["vim_conn"].get_vcd_network_list()
+            for net in network_list:
+                if self.__class__.network_name in net.get('name'):
+                    self.assertIn(self.__class__.network_name, net.get('name'))
+                if net_type in net.get('type'):
+                    self.assertEqual(net.get('type'), net_type)
+                else:
+                    self.assertNotEqual(net.get('type'), net_type)
+
+        # Deleting created network
+        for net_id in delete_net_ids:
+            result = test_config["vim_conn"].delete_network(net_id)
+            if result:
+                logger.info("Network id {} sucessfully deleted".format(net_id))
+            else:
+                logger.info("Failed to delete network id {}".format(net_id))
+
+    def test_020_new_network_by_ipprofile(self):
+        test_directory_content = os.listdir(test_config["test_directory"])
+
+        for dir_name in test_directory_content:
+            if dir_name == 'simple_multi_vnfc':
+                self.__class__.scenario_test_path = test_config["test_directory"] + '/'+ dir_name
+                vnfd_files = glob.glob(self.__class__.scenario_test_path+'/vnfd_*.yaml')
+                break
+
+        for vnfd in vnfd_files:
+            with open(vnfd, 'r') as stream:
+                vnf_descriptor = yaml.load(stream)
+
+            internal_connections_list = vnf_descriptor['vnf']['internal-connections']
+            for item in internal_connections_list:
+                if 'ip-profile' in item:
+                    version = item['ip-profile']['ip-version']
+                    dhcp_count = item['ip-profile']['dhcp']['count']
+                    dhcp_enabled = item['ip-profile']['dhcp']['enabled']
+
+        self.__class__.network_name = _get_random_string(20)
+        ip_profile = {'dhcp_count': dhcp_count,
+                      'dhcp_enabled': dhcp_enabled,
+                      'ip_version': version
+                     }
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+                                                                           net_type='mgmt',
+                                                                     ip_profile=ip_profile)
+        self.__class__.network_id = network
+        logger.debug("{}".format(network))
+
+        network_list = test_config["vim_conn"].get_vcd_network_list()
+        for net in network_list:
+            if self.__class__.network_name in net.get('name'):
+                self.assertIn(self.__class__.network_name, net.get('name'))
+
+        # Deleting created network
+        result = test_config["vim_conn"].delete_network(self.__class__.network_id)
+        if result:
+            logger.info("Network id {} sucessfully deleted".format(self.__class__.network_id))
+        else:
+            logger.info("Failed to delete network id {}".format(self.__class__.network_id))
+
+    def test_030_new_network_by_isshared(self):
+        self.__class__.network_name = _get_random_string(20)
+        shared = True
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+                                                                         net_type='bridge',
+                                                                             shared=shared)
+        self.__class__.network_id = network
+        logger.debug("{}".format(network))
+
+        network_list = test_config["vim_conn"].get_vcd_network_list()
+        for net in network_list:
+            if self.__class__.network_name in net.get('name'):
+                self.assertIn(self.__class__.network_name, net.get('name'))
+                self.assertEqual(net.get('shared'), shared)
+
+        # Deleting created network
+        result = test_config["vim_conn"].delete_network(self.__class__.network_id)
+        if result:
+            logger.info("Network id {} sucessfully deleted".format(self.__class__.network_id))
+        else:
+            logger.info("Failed to delete network id {}".format(self.__class__.network_id))
+
+    def test_040_new_network_by_negative(self):
+        self.__class__.network_name = _get_random_string(20)
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+                                                                    net_type='unknowntype')
+        self.__class__.network_id = network
+        logger.debug("{}".format(network))
+        network_list = test_config["vim_conn"].get_vcd_network_list()
+        for net in network_list:
+            if self.__class__.network_name in net.get('name'):
+                self.assertIn(self.__class__.network_name, net.get('name'))
+
+        # Deleting created network
+        result = test_config["vim_conn"].delete_network(self.__class__.network_id)
+        if result:
+            logger.info("Network id {} sucessfully deleted".format(self.__class__.network_id))
+        else:
+            logger.info("Failed to delete network id {}".format(self.__class__.network_id))
+
+class test_vimconn_get_network_list(test_base):
+    # test_index = 1
+    network_name = None
+
+    # test_text = None
+    # @classmethod
+    # def setUpClass(cls):
+    #     logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+
+    # @classmethod
+    # def tearDownClass(cls):
+    #     test_config["test_number"] += 1
+
+    def setUp(self):
+        # creating new network
+        self.__class__.network_name = _get_random_string(20)
+        self.__class__.net_type = 'bridge'
+        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+                                                          net_type=self.__class__.net_type)
+        self.__class__.network_id = network
+        logger.debug("{}".format(network))
+
+    def tearDown(self):
+        test_base.tearDown(self)
+        # exec_info = sys.exc_info()
+        # if exec_info == (None, None, None):
+        #     logger.info(self.__class__.test_text+" -> TEST OK")
+        # else:
+        #     logger.warning(self.__class__.test_text+" -> TEST NOK")
+        #     logger.critical("Traceback error",exc_info=True)
+
+        # Deleting created network
+        result = test_config["vim_conn"].delete_network(self.__class__.network_id)
+        if result:
+            logger.info("Network id {} sucessfully deleted".format(self.__class__.network_id))
+        else:
+            logger.info("Failed to delete network id {}".format(self.__class__.network_id))
+
+    def test_000_get_network_list(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        network_list = test_config["vim_conn"].get_network_list()
+        for net in network_list:
+            if self.__class__.network_name in net.get('name'):
+                self.assertIn(self.__class__.network_name, net.get('name'))
+                self.assertEqual(net.get('type'), self.__class__.net_type)
+                self.assertEqual(net.get('status'), 'ACTIVE')
+                self.assertEqual(net.get('shared'), False)
+
+    def test_010_get_network_list_by_name(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
+
+        # find network from list by it's name
+        new_network_list = test_config["vim_conn"].get_network_list({'name': network_name})
+        for list_item in new_network_list:
+            if self.__class__.network_name in list_item.get('name'):
+                self.assertEqual(network_name, list_item.get('name'))
+                self.assertEqual(list_item.get('type'), self.__class__.net_type)
+                self.assertEqual(list_item.get('status'), 'ACTIVE')
+
+    def test_020_get_network_list_by_id(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        # find network from list by it's id
+        new_network_list = test_config["vim_conn"].get_network_list({'id':self.__class__.network_id})
+        for list_item in new_network_list:
+            if self.__class__.network_id in list_item.get('id'):
+                self.assertEqual(self.__class__.network_id, list_item.get('id'))
+                self.assertEqual(list_item.get('type'), self.__class__.net_type)
+                self.assertEqual(list_item.get('status'), 'ACTIVE')
+
+    def test_030_get_network_list_by_shared(self):
+        Shared = False
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
+        # find network from list by it's shared value
+        new_network_list = test_config["vim_conn"].get_network_list({'shared':Shared,
+                                                                'name':network_name})
+        for list_item in new_network_list:
+            if list_item.get('shared') == Shared:
+                self.assertEqual(list_item.get('shared'), Shared)
+                self.assertEqual(list_item.get('type'), self.__class__.net_type)
+                self.assertEqual(network_name, list_item.get('name'))
+
+    def test_040_get_network_list_by_tenant_id(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        tenant_list = test_config["vim_conn"].get_tenant_list()
+        network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
+
+        for tenant_item in tenant_list:
+            if test_config['tenant'] == tenant_item.get('name'):
+                # find network from list by it's tenant id
+                tenant_id = tenant_item.get('id')
+                new_network_list = test_config["vim_conn"].get_network_list({'tenant_id':tenant_id,
+                                                                              'name':network_name})
+                for list_item in new_network_list:
+                    self.assertEqual(tenant_id, list_item.get('tenant_id'))
+                    self.assertEqual(network_name, list_item.get('name'))
+                    self.assertEqual(list_item.get('type'), self.__class__.net_type)
+                    self.assertEqual(list_item.get('status'), 'ACTIVE')
+
+    def test_050_get_network_list_by_status(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+        status = 'ACTIVE'
+
+        network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
+
+        # find network from list by it's status
+        new_network_list = test_config["vim_conn"].get_network_list({'status':status,
+                                                               'name': network_name})
+        for list_item in new_network_list:
+            self.assertIn(self.__class__.network_name, list_item.get('name'))
+            self.assertEqual(list_item.get('type'), self.__class__.net_type)
+            self.assertEqual(list_item.get('status'), status)
+
+    def test_060_get_network_list_by_negative(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        network_list = test_config["vim_conn"].get_network_list({'name': 'unknown_name'})
+        self.assertEqual(network_list, [])
+
+class test_vimconn_get_network(test_base):
+    # test_index = 1
+    network_name = None
+    # test_text = None
+
+    # @classmethod
+    # def setUpClass(cls):
+    #     logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+
+    # @classmethod
+    # def tearDownClass(cls):
+    #     test_config["test_number"] += 1
+
+    def setUp(self):
+        # creating new network
+        self.__class__.network_name = _get_random_string(20)
+        self.__class__.net_type = 'bridge'
+        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+                                                          net_type=self.__class__.net_type)
+        self.__class__.network_id = network
+        logger.debug("{}".format(network))
+
+    def tearDown(self):
+        test_base.tearDown(self)
+        # exec_info = sys.exc_info()
+        # if exec_info == (None, None, None):
+        #     logger.info(self.__class__.test_text+" -> TEST OK")
+        # else:
+        #     logger.warning(self.__class__.test_text+" -> TEST NOK")
+        #     logger.critical("Traceback error",exc_info=True)
+
+        # Deleting created network
+        result = test_config["vim_conn"].delete_network(self.__class__.network_id)
+        if result:
+            logger.info("Network id {} sucessfully deleted".format(self.__class__.network_id))
+        else:
+            logger.info("Failed to delete network id {}".format(self.__class__.network_id))
+
+    def test_000_get_network(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        network_info = test_config["vim_conn"].get_network(self.__class__.network_id)
+        self.assertEqual(network_info.get('status'), 'ACTIVE')
+        self.assertIn(self.__class__.network_name, network_info.get('name'))
+        self.assertEqual(network_info.get('type'), self.__class__.net_type)
+        self.assertEqual(network_info.get('id'), self.__class__.network_id)
+
+    def test_010_get_network_negative(self):
+        Non_exist_id = str(uuid.uuid4())
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        network_info = test_config["vim_conn"].get_network(Non_exist_id)
+        self.assertEqual(network_info, {})
+
+class test_vimconn_delete_network(test_base):
+    # test_index = 1
+    network_name = None
+    # test_text = None
+
+    # @classmethod
+    # def setUpClass(cls):
+    #     logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+
+    # @classmethod
+    # def tearDownClass(cls):
+    #     test_config["test_number"] += 1
+
+    # def tearDown(self):
+    #     exec_info = sys.exc_info()
+    #     if exec_info == (None, None, None):
+    #         logger.info(self.__class__.test_text+" -> TEST OK")
+    #     else:
+    #         logger.warning(self.__class__.test_text+" -> TEST NOK")
+    #         logger.critical("Traceback error",exc_info=True)
+
+    def test_000_delete_network(self):
+        # Creating network
+        self.__class__.network_name = _get_random_string(20)
+        self.__class__.net_type = 'bridge'
+        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+                                                          net_type=self.__class__.net_type)
+        self.__class__.network_id = network
+        logger.debug("{}".format(network))
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        result = test_config["vim_conn"].delete_network(self.__class__.network_id)
+        if result:
+            logger.info("Network id {} sucessfully deleted".format(self.__class__.network_id))
+        else:
+            logger.info("Failed to delete network id {}".format(self.__class__.network_id))
+        time.sleep(5)
+        # after deleting network we check in network list
+        network_list = test_config["vim_conn"].get_network_list({ 'id':self.__class__.network_id })
+        self.assertEqual(network_list, [])
+
+    def test_010_delete_network_negative(self):
+        Non_exist_id = str(uuid.uuid4())
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        with self.assertRaises(Exception) as context:
+            test_config["vim_conn"].delete_network(Non_exist_id)
+
+        self.assertEqual((context.exception).http_code, 400)
+
+class test_vimconn_get_flavor(test_base):
+    # test_index = 1
+    # test_text = None
+
+    # @classmethod
+    # def setUpClass(cls):
+    #     logger.info("{}. {}".format(test_config["test_number"], cls.__name__))
+
+    # @classmethod
+    # def tearDownClass(cls):
+    #     test_config["test_number"] += 1
+
+    # def tearDown(self):
+    #     exec_info = sys.exc_info()
+    #     if exec_info == (None, None, None):
+    #         logger.info(self.__class__.test_text+" -> TEST OK")
+    #     else:
+    #         logger.warning(self.__class__.test_text+" -> TEST NOK")
+    #         logger.critical("Traceback error",exc_info=True)
+
+    def test_000_get_flavor(self):
+        test_directory_content = os.listdir(test_config["test_directory"])
+
+        for dir_name in test_directory_content:
+            if dir_name == 'simple_linux':
+                self.__class__.scenario_test_path = test_config["test_directory"] + '/'+ dir_name
+                vnfd_files = glob.glob(self.__class__.scenario_test_path+'/vnfd_*.yaml')
+                break
+
+        for vnfd in vnfd_files:
+            with open(vnfd, 'r') as stream:
+                vnf_descriptor = yaml.load(stream)
+
+            vnfc_list = vnf_descriptor['vnf']['VNFC']
+            for item in vnfc_list:
+                if 'ram' in item and 'vcpus' in item and 'disk' in item:
+                    ram = item['ram']
+                    vcpus = item['vcpus']
+                    disk = item['disk']
+
+        flavor_data = {'ram': ram,
+                      'vcpus': vcpus,
+                      'disk': disk
+                      }
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+        # get flavor by id
+        result = test_config["vim_conn"].get_flavor(flavor_id)
+        self.assertEqual(ram, result['ram'])
+        self.assertEqual(vcpus, result['vcpus'])
+        self.assertEqual(disk, result['disk'])
+
+        # delete flavor
+        result = test_config["vim_conn"].delete_flavor(flavor_id)
+        if result:
+            logger.info("Flavor id {} sucessfully deleted".format(result))
+        else:
+            logger.info("Failed to delete flavor id {}".format(result))
+
+    def test_010_get_flavor_negative(self):
+        Non_exist_flavor_id = str(uuid.uuid4())
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        with self.assertRaises(Exception) as context:
+            test_config["vim_conn"].get_flavor(Non_exist_flavor_id)
+
+        self.assertEqual((context.exception).http_code, 404)
+
+
 '''
 IMPORTANT NOTE
 The following unittest class does not have the 'test_' on purpose. This test is the one used for the
 scenario based tests.
 '''
-class descriptor_based_scenario_test(unittest.TestCase):
+class descriptor_based_scenario_test(test_base):
     test_index = 0
-    test_text = None
     scenario_test_path = None
     scenario_uuid = None
     instance_scenario_uuid = None
@@ -385,19 +848,6 @@ class descriptor_based_scenario_test(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
          test_config["test_number"] += 1
-
-    def tearDown(self):
-        exec_info = sys.exc_info()
-        if exec_info == (None, None, None):
-            logger.info(self.__class__.test_text + " -> TEST OK")
-        else:
-            logger.warning(self.__class__.test_text + " -> TEST NOK")
-            error_trace = traceback.format_exception(exec_info[0], exec_info[1], exec_info[2])
-            msg = ""
-            for line in error_trace:
-                msg = msg + line
-            logger.critical("{}".format(msg))
-
 
     def test_000_load_scenario(self):
         self.__class__.test_text = "{}.{}. TEST {} {}".format(test_config["test_number"], self.__class__.test_index,
@@ -515,8 +965,23 @@ def _get_random_string(maxLength):
 def test_vimconnector(args):
     global test_config
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/osm_ro")
+    test_config['vimtype'] = args.vimtype
     if args.vimtype == "vmware":
         import vimconn_vmware as vim
+
+        test_config["test_directory"] = os.path.dirname(__file__) + "/RO_tests"
+
+        tenant_name = args.tenant_name
+        test_config['tenant'] = tenant_name
+        config_params = json.loads(args.config_param)
+        org_name = config_params.get('orgname')
+        org_user = config_params.get('user')
+        org_passwd = config_params.get('passwd')
+        vim_url = args.endpoint_url
+
+        # vmware connector obj
+        test_config['vim_conn'] = vim.vimconnector(name=org_name, tenant_name=tenant_name, user=org_user,passwd=org_passwd, url=vim_url, config=config_params)
+
     elif args.vimtype == "aws":
         import vimconn_aws as vim
     elif args.vimtype == "openstack":
@@ -660,9 +1125,9 @@ def test_deploy(args):
     test_directory_content = os.listdir(test_config["test_directory"])
     # If only want to obtain a tests list print it and exit
     if args.list_tests:
-        msg = "he 'deploy' set tests are:\n\t" + ', '.join(sorted(test_directory_content))
+        msg = "the 'deploy' set tests are:\n\t" + ', '.join(sorted(test_directory_content))
         print(msg)
-        logger.info(msg)
+        # logger.info(msg)
         sys.exit(0)
 
     descriptor_based_tests = []
@@ -764,9 +1229,9 @@ if __name__=="__main__":
     mandatory_arguments = vimconn_parser.add_argument_group('mandatory arguments')
     mandatory_arguments.add_argument('--vimtype', choices=['vmware', 'aws', 'openstack', 'openvim'], required=True,
                                      help='Set the vimconnector type to test')
-    # TODO add mandatory arguments for vimconn test
-    # mandatory_arguments.add_argument('-c', '--config', dest='config_param', required=True, help='<HELP>')
-
+    mandatory_arguments.add_argument('-c', '--config', dest='config_param', required=True,
+                                    help='Set the vimconnector specific config parameters in dictionary format')
+    mandatory_arguments.add_argument('-u', '--url', dest='endpoint_url',required=True, help="Set the vim connector url or Host IP")
     # Optional arguments
     # TODO add optional arguments for vimconn tests
     # vimconn_parser.add_argument("-i", '--image-name', dest='image_name', help='<HELP>'))

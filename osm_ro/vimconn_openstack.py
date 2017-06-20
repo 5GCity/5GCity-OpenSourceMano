@@ -36,19 +36,16 @@ import time
 import yaml
 import random
 
-from novaclient import client as nClient_v2, exceptions as nvExceptions
-from novaclient import api_versions
-import keystoneclient.v2_0.client as ksClient_v2
-from novaclient.v2.client import Client as nClient
-import keystoneclient.v3.client as ksClient
+from novaclient import client as nClient, exceptions as nvExceptions
+from keystoneauth1.identity import v2, v3
+from keystoneauth1 import session
 import keystoneclient.exceptions as ksExceptions
-import glanceclient.v2.client as glClient
+from glanceclient import client as glClient
 import glanceclient.client as gl1Client
 import glanceclient.exc as gl1Exceptions
-import cinderclient.v2.client as cClient_v2
+from  cinderclient import client as cClient
 from httplib import HTTPException
-from neutronclient.neutron import client as neClient_v2
-from neutronclient.v2_0 import client as neClient
+from neutronclient.neutron import client as neClient
 from neutronclient.common import exceptions as neExceptions
 from requests.exceptions import ConnectionError
 
@@ -74,137 +71,67 @@ class vimconnector(vimconn.vimconnector):
         'url' is the keystone authorization url,
         'url_admin' is not use
         '''
-        self.osc_api_version = 'v2.0'
-        if config.get('APIversion') == 'v3.3':
-            self.osc_api_version = 'v3.3'
-        vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level, config)
+        self.osc_api_version = config.get('APIversion')
+        if self.osc_api_version != 'v3.3' and self.osc_api_version != 'v2.0' and self.osc_api_version:
+            raise vimconn.vimconnException("Invalid value '{}' for config:APIversion. "
+                "Allowed values are 'v3.3' or 'v2.0'".format(self.osc_api_version))
+        vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
+                                      config)
 
-        self.persistent_info = persistent_info
-        self.k_creds={}
-        self.n_creds={}
-        if self.config.get("insecure"):
-            self.k_creds["insecure"] = True
-            self.n_creds["insecure"] = True
+        self.insecure = self.config.get("insecure", False)
         if not url:
             raise TypeError, 'url param can not be NoneType'
-        self.k_creds['auth_url'] = url
-        self.n_creds['auth_url'] = url
-        if tenant_name:
-            self.k_creds['tenant_name'] = tenant_name
-            self.n_creds['project_id']  = tenant_name
-        if tenant_id:
-            self.k_creds['tenant_id'] = tenant_id
-            self.n_creds['tenant_id']  = tenant_id
-        if user:
-            self.k_creds['username'] = user
-            self.n_creds['username'] = user
-        if passwd:
-            self.k_creds['password'] = passwd
-            self.n_creds['api_key']  = passwd
-        if self.osc_api_version == 'v3.3':
-            self.k_creds['project_name'] = tenant_name
-            self.k_creds['project_id'] = tenant_id
-        if config.get('region_name'):
-            self.k_creds['region_name'] = config.get('region_name')
-            self.n_creds['region_name'] = config.get('region_name')
+        self.auth_url = url
+        self.tenant_name = tenant_name
+        self.tenant_id = tenant_id
+        self.user = user
+        self.passwd = passwd
+        self.persistent_info = persistent_info
+        self.session = persistent_info.get('session', {'reload_client': True})
+        self.nova = self.session.get('nova')
+        self.neutron = self.session.get('neutron')
+        self.cinder = self.session.get('cinder')
+        self.glance = self.session.get('glance')
 
-        self.reload_client       = True
         self.logger = logging.getLogger('openmano.vim.openstack')
         if log_level:
             self.logger.setLevel( getattr(logging, log_level) )
     
     def __setitem__(self,index, value):
-        '''Set individuals parameters 
+        '''Set individuals parameters
         Throw TypeError, KeyError
         '''
-        if index=='tenant_id':
-            self.reload_client=True
-            self.tenant_id = value
-            if self.osc_api_version == 'v3.3':
-                if value:
-                    self.k_creds['project_id'] = value
-                    self.n_creds['project_id']  = value
-                else:
-                    del self.k_creds['project_id']
-                    del self.n_creds['project_id']
-            else:
-                if value:
-                    self.k_creds['tenant_id'] = value
-                    self.n_creds['tenant_id']  = value
-                else:
-                    del self.k_creds['tenant_id']
-                    del self.n_creds['tenant_id']
-        elif index=='tenant_name':
-            self.reload_client=True
-            self.tenant_name = value
-            if self.osc_api_version == 'v3.3':
-                if value:
-                    self.k_creds['project_name'] = value
-                    self.n_creds['project_name']  = value
-                else:
-                    del self.k_creds['project_name']
-                    del self.n_creds['project_name']
-            else:
-                if value:
-                    self.k_creds['tenant_name'] = value
-                    self.n_creds['project_id']  = value
-                else:
-                    del self.k_creds['tenant_name']
-                    del self.n_creds['project_id']
-        elif index=='user':
-            self.reload_client=True
-            self.user = value
-            if value:
-                self.k_creds['username'] = value
-                self.n_creds['username'] = value
-            else:
-                del self.k_creds['username']
-                del self.n_creds['username']
-        elif index=='passwd':
-            self.reload_client=True
-            self.passwd = value
-            if value:
-                self.k_creds['password'] = value
-                self.n_creds['api_key']  = value
-            else:
-                del self.k_creds['password']
-                del self.n_creds['api_key']
-        elif index=='url':
-            self.reload_client=True
-            self.url = value
-            if value:
-                self.k_creds['auth_url'] = value
-                self.n_creds['auth_url'] = value
-            else:
-                raise TypeError, 'url param can not be NoneType'
-        else:
-            vimconn.vimconnector.__setitem__(self,index, value)
+        self.session['reload_client'] = True
+        vimconn.vimconnector.__setitem__(self,index, value)
      
     def _reload_connection(self):
         '''Called before any operation, it check if credentials has changed
         Throw keystoneclient.apiclient.exceptions.AuthorizationFailure
         '''
         #TODO control the timing and possible token timeout, but it seams that python client does this task for us :-) 
-        if self.reload_client:
-            #test valid params
-            if len(self.n_creds) <4:
-                raise ksExceptions.ClientException("Not enough parameters to connect to openstack")
-            if self.osc_api_version == 'v3.3':
-                self.nova = nClient(api_version=api_versions.APIVersion(version_str='2.0'), **self.n_creds)
-                #TODO To be updated for v3
-                #self.cinder = cClient.Client(**self.n_creds)
-                self.keystone = ksClient.Client(**self.k_creds)
-                self.ne_endpoint=self.keystone.service_catalog.url_for(service_type='network', endpoint_type='publicURL')
-                self.neutron = neClient.Client(api_version=api_versions.APIVersion(version_str='2.0'), endpoint_url=self.ne_endpoint, token=self.keystone.auth_token, **self.k_creds)
+        if self.session['reload_client']:
+            if self.osc_api_version == 'v3.3' or self.osc_api_version == '3' or \
+                    (not self.osc_api_version and self.auth_url.split("/")[-1] == "v3"):
+                auth = v3.Password(auth_url=self.auth_url,
+                                   username=self.user,
+                                   password=self.passwd,
+                                   project_name=self.tenant_name,
+                                   project_id=self.tenant_id,
+                                   project_domain_id=self.config.get('project_domain_id', 'default'),
+                                   user_domain_id=self.config.get('user_domain_id', 'default'))
             else:
-                self.nova = nClient_v2.Client(version='2', **self.n_creds)
-                self.cinder = cClient_v2.Client(**self.n_creds)
-                self.keystone = ksClient_v2.Client(**self.k_creds)
-                self.ne_endpoint=self.keystone.service_catalog.url_for(service_type='network', endpoint_type='publicURL')
-                self.neutron = neClient_v2.Client('2.0', endpoint_url=self.ne_endpoint, token=self.keystone.auth_token, **self.k_creds)
-            self.glance_endpoint = self.keystone.service_catalog.url_for(service_type='image', endpoint_type='publicURL')
-            self.glance = glClient.Client(self.glance_endpoint, token=self.keystone.auth_token, **self.k_creds)  #TODO check k_creds vs n_creds
-            self.reload_client = False
+                auth = v2.Password(auth_url=self.auth_url,
+                                   username=self.user,
+                                   password=self.passwd,
+                                   tenant_name=self.tenant_name,
+                                   tenant_id=self.tenant_id)
+            sess = session.Session(auth=auth, verify=not self.insecure)
+            self.nova = self.session['nova'] = nClient.Client("2.1", session=sess)
+            self.neutron = self.session['neutron'] = neClient.Client('2.0', session=sess)
+            self.cinder = self.session['cinder'] = cClient.Client(2, session=sess)
+            self.glance = self.session['glance'] = glClient.Client(2, session=sess)
+            self.session['reload_client'] = False
+            self.persistent_info['session'] = self.session
 
     def __net_os2mano(self, net_list_dict):
         '''Transform the net openstack format to mano format
@@ -322,9 +249,7 @@ class vimconnector(vimconn.vimconnector):
             if 'gateway_address' in ip_profile:
                 subnet['gateway_ip'] = ip_profile['gateway_address']
             if ip_profile.get('dns_address'):
-                #TODO: manage dns_address as a list of addresses separated by commas 
-                subnet['dns_nameservers'] = []
-                subnet['dns_nameservers'].append(ip_profile['dns_address'])
+                subnet['dns_nameservers'] = ip_profile['dns_address'].split(";")
             if 'dhcp_enabled' in ip_profile:
                 subnet['enable_dhcp'] = False if ip_profile['dhcp_enabled']=="false" else True
             if 'dhcp_start_address' in ip_profile:
@@ -472,11 +397,19 @@ class vimconnector(vimconn.vimconnector):
     def get_flavor_id_from_data(self, flavor_dict):
         """Obtain flavor id that match the flavor description
            Returns the flavor_id or raises a vimconnNotFoundException
+           flavor_dict: contains the required ram, vcpus, disk
+           If 'use_existing_flavors' is set to True at config, the closer flavor that provides same or more ram, vcpus
+                and disk is returned. Otherwise a flavor with exactly same ram, vcpus and disk is returned or a
+                vimconnNotFoundException is raised
         """
+        exact_match = False if self.config.get('use_existing_flavors') else True
         try:
             self._reload_connection()
-            numa=None
-            numas = flavor_dict.get("extended",{}).get("numas")
+            flavor_candidate_id = None
+            flavor_candidate_data = (10000, 10000, 10000)
+            flavor_target = (flavor_dict["ram"], flavor_dict["vcpus"], flavor_dict["disk"])
+            # numa=None
+            numas = flavor_dict.get("extended", {}).get("numas")
             if numas:
                 #TODO
                 raise vimconn.vimconnNotFoundException("Flavor with EPA still not implemted")
@@ -488,14 +421,15 @@ class vimconnector(vimconn.vimconnector):
                 epa = flavor.get_keys()
                 if epa:
                     continue
-                    #TODO 
-                if flavor.ram != flavor_dict["ram"]:
-                    continue
-                if flavor.vcpus != flavor_dict["vcpus"]:
-                    continue
-                if flavor.disk != flavor_dict["disk"]:
-                    continue
-                return flavor.id
+                    # TODO
+                flavor_data = (flavor.ram, flavor.vcpus, flavor.disk)
+                if flavor_data == flavor_target:
+                    return flavor.id
+                elif not exact_match and flavor_target < flavor_data < flavor_candidate_data:
+                    flavor_candidate_id = flavor.id
+                    flavor_candidate_data = flavor_data
+            if not exact_match and flavor_candidate_id:
+                return flavor_candidate_id
             raise vimconn.vimconnNotFoundException("Cannot find any flavor matching '{}'".format(str(flavor_dict)))
         except (nvExceptions.NotFound, nvExceptions.ClientException, ksExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)
@@ -543,15 +477,22 @@ class vimconnector(vimconn.vimconnector):
                         for numa in numas:
                             #overwrite ram and vcpus
                             ram = numa['memory']*1024
+                            #See for reference: https://specs.openstack.org/openstack/nova-specs/specs/mitaka/implemented/virt-driver-cpu-thread-pinning.html
                             if 'paired-threads' in numa:
                                 vcpus = numa['paired-threads']*2
-                                numa_properties["hw:cpu_threads_policy"] = "prefer"
+                                #cpu_thread_policy "require" implies that the compute node must have an STM architecture
+                                numa_properties["hw:cpu_thread_policy"] = "require"
+                                numa_properties["hw:cpu_policy"] = "dedicated"
                             elif 'cores' in numa:
                                 vcpus = numa['cores']
-                                #numa_properties["hw:cpu_threads_policy"] = "prefer"
+                                # cpu_thread_policy "prefer" implies that the host must not have an SMT architecture, or a non-SMT architecture will be emulated
+                                numa_properties["hw:cpu_thread_policy"] = "isolate"
+                                numa_properties["hw:cpu_policy"] = "dedicated"
                             elif 'threads' in numa:
                                 vcpus = numa['threads']
-                                numa_properties["hw:cpu_policy"] = "isolated"
+                                # cpu_thread_policy "prefer" implies that the host may or may not have an SMT architecture
+                                numa_properties["hw:cpu_thread_policy"] = "prefer"
+                                numa_properties["hw:cpu_policy"] = "dedicated"
                             # for interface in numa.get("interfaces",() ):
                             #     if interface["dedicated"]=="yes":
                             #         raise vimconn.vimconnException("Passthrough interfaces are not supported for the openstack connector", http_code=vimconn.HTTP_Service_Unavailable)
@@ -597,6 +538,7 @@ class vimconnector(vimconn.vimconnector):
             metadata: metadata of the image
         Returns the image_id
         '''
+        # ALF TODO: revise and change for the new method or session
         #using version 1 of glance client
         glancev1 = gl1Client.Client('1',self.glance_endpoint, token=self.keystone.auth_token, **self.k_creds)  #TODO check k_creds vs n_creds
         retry=0

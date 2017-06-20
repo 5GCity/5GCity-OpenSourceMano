@@ -249,8 +249,11 @@ then
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-boto"  #TODO check if at Centos it exists with this name, or PIP should be used
 
     # install openstack client needed for using openstack as a VIM
-    [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-novaclient python-keystoneclient python-glanceclient python-neutronclient python-cinderclient"
-    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-devel" && easy_install python-novaclient python-keystoneclient python-glanceclient python-neutronclient python-cinderclient #TODO revise if gcc python-pip is needed
+    [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-novaclient python-keystoneclient python-glanceclient "\
+                                                   "python-neutronclient python-cinderclient python-openstackclient"
+    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-devel" && easy_install \
+        python-novaclient python-keystoneclient python-glanceclient python-neutronclient python-cinderclient \
+        python-openstackclient #TODO revise if gcc python-pip is needed
 fi  # [[ -z "$NO_PACKAGES" ]]
 
 if [[ -z $NOCLONE ]]; then
@@ -270,8 +273,9 @@ if [[ -z $NOCLONE ]]; then
         fi
     fi
     su $SUDO_USER -c "git clone ${GIT_URL} ${BASEFOLDER}"
+    LATEST_STABLE_TAG=`git -C "${BASEFOLDER}" tag -l v[0-9].* | tail -n1`
+    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER} checkout tags/${LATEST_STABLE_TAG}"
     su $SUDO_USER -c "cp ${BASEFOLDER}/.gitignore-common ${BASEFOLDER}/.gitignore"
-    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER} checkout v2.0"
 fi
 
 echo -e "\n"\

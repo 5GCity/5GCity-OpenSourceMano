@@ -316,10 +316,11 @@ ip_profile_schema = {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type":"object",
     "properties":{
-        "ip-version": {"type":"string", "enum":["IPv4","IPv6"]},
+        "ip-version": {"type": "string", "enum": ["IPv4","IPv6"]},
         "subnet-address": ip_prefix_schema,
         "gateway-address": ip_schema,
-        "dns-address": ip_schema,
+        "dns-address": {"oneOf": [ip_schema,     # for backward compatibility
+                                  {"type": "array", "items": ip_schema}]},
         "dhcp": dhcp_schema
     },
 }
@@ -1104,7 +1105,7 @@ instance_scenario_action_schema = {
 
 sdn_controller_properties={
     "name": name_schema,
-    "dpid": {"type":"string", "pattern":"^[0-9a-fA-F][02468aceACE](:[0-9a-fA-F]{2}){7}$"},
+    "dpid": {"type":"string", "pattern":"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){7}$"},
     "ip": ip_schema,
     "port": port_schema,
     "type": {"type": "string", "enum": ["opendaylight","floodlight","onos"]},
@@ -1172,4 +1173,16 @@ sdn_port_mapping_schema  = {
         }
     },
     "required": ["sdn_port_mapping"]
+}
+
+sdn_external_port_schema = {
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title":"External port ingformation",
+    "type": "object",
+    "properties": {
+        "port": {"type" : "string", "minLength":1, "maxLength":60},
+        "vlan": vlan_schema,
+        "mac": mac_schema
+    },
+    "required": ["port"]
 }

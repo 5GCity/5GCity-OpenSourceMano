@@ -46,6 +46,8 @@ def is_task_id(task_id):
 
 
 class vim_thread(threading.Thread):
+    REFRESH_BUILD = 5      # 5 seconds
+    REFRESH_ACTIVE = 60    # 1 minute
 
     def __init__(self, vimconn, task_lock, name=None, datacenter_name=None, datacenter_tenant_id=None,
                  db=None, db_lock=None, ovim=None):
@@ -161,7 +163,7 @@ class vim_thread(threading.Thread):
                                     FROM="instance_interfaces as ii left join instance_nets as ine on "
                                          "ii.instance_net_id=ine.uuid left join instance_vms as iv on "
                                          "ii.instance_vm_id=iv.uuid",
-                                    SELECT=("ii.uuid as iface_id", "ine.uuid as net_id", "iv.uuid as vm_id", "sdn_net_id"),
+                                    SELECT=("ii.uuid as iface_id", "ine.uuid as net_id", "iv.uuid as vm_id", "sdn_net_id", "vim_net_id"),
                                     WHERE=where_)
                             if len(db_ifaces)>1:
                                 self.logger.critical("Refresing interfaces. "
@@ -172,6 +174,14 @@ class vim_thread(threading.Thread):
                                 continue
                             else:
                                 db_iface = db_ifaces[0]
+                                #If there is no sdn_net_id, check if it is because an already created vim network is being used
+                                #in that case, the sdn_net_id will be in that entry of the instance_nets table
+                                if not db_iface.get("sdn_net_id"):
+                                    result = self.db.get_rows(SELECT=('sdn_net_id',), FROM='instance_nets',
+                                                                  WHERE={'vim_net_id': db_iface.get("vim_net_id"), 'instance_scenario_id': None, "datacenter_tenant_id":  self.datacenter_tenant_id})
+                                    if len(result) == 1:
+                                        db_iface["sdn_net_id"] = result[0]['sdn_net_id']
+
                                 if db_iface.get("sdn_net_id") and interface.get("compute_node") and interface.get("pci"):
                                     sdn_net_id = db_iface["sdn_net_id"]
                                     sdn_port_name = sdn_net_id + "." + db_iface["vm_id"]
@@ -204,12 +214,12 @@ class vim_thread(threading.Thread):
 
                     task["vim_info"] = vim_info
                     if task["vim_info"]["status"] == "BUILD":
-                        self._insert_refresh(task, now+5)  # 5seconds
+                        self._insert_refresh(task, now + self.REFRESH_BUILD)
                     else:
-                        self._insert_refresh(task, now+300) # 5minutes
+                        self._insert_refresh(task, now + self.REFRESH_ACTIVE)
             except vimconn.vimconnException as e:
                 self.logger.error("vimconnException Exception when trying to refresh vms " + str(e))
-                self._insert_refresh(task, now + 300)  # 5minutes
+                self._insert_refresh(task, now + self.REFRESH_ACTIVE)
 
         if net_to_refresh_list:
             try:
@@ -271,12 +281,12 @@ class vim_thread(threading.Thread):
 
                     task["vim_info"] = vim_info
                     if task["vim_info"]["status"] == "BUILD":
-                        self._insert_refresh(task, now+5)    # 5seconds
+                        self._insert_refresh(task, now + self.REFRESH_BUILD)
                     else:
-                        self._insert_refresh(task, now+300)  # 5minutes
+                        self._insert_refresh(task, now + self.REFRESH_ACTIVE)
             except vimconn.vimconnException as e:
                 self.logger.error("vimconnException Exception when trying to refresh nets " + str(e))
-                self._insert_refresh(task, now + 300)  # 5minutes
+                self._insert_refresh(task, now + self.REFRESH_ACTIVE)
 
         if not items_to_refresh:
             time.sleep(1)
@@ -402,7 +412,7 @@ class vim_thread(threading.Thread):
             sdn_net_id = None
             sdn_controller = self.vim.config.get('sdn-controller')
             if sdn_controller and (net_type == "data" or net_type == "ptp"):
-                network = {"name": net_name, "type": net_type}
+                network = {"name": net_name, "type": net_type, "region": self.vim["config"]["datacenter_id"]}
 
                 vim_net = self.vim.get_network(net_id)
                 if vim_net.get('encapsulation') != 'vlan':
@@ -549,6 +559,20 @@ class vim_thread(threading.Thread):
             self._remove_refresh("get-net", net_id)
             result = self.vim.delete_network(net_id)
             if sdn_net_id:
+                #Delete any attached port to this sdn network
+                #At this point, there will be ports associated to this network in case it was manually done using 'openmano vim-net-sdn-attach'
+                try:
+                    port_list = self.ovim.get_ports(columns={'uuid'}, filter={'name': 'external_port', 'net_id': sdn_net_id})
+                except ovimException as e:
+                    raise vimconn.vimconnException(
+                        "ovimException obtaining external ports for net {}. ".format(sdn_net_id) + str(e))
+
+                for port in port_list:
+                    try:
+                        self.ovim.delete_port(port['uuid'])
+                    except ovimException as e:
+                        raise vimconn.vimconnException(
+                            "ovimException deleting port {} for net {}. ".format(port['uuid'], sdn_net_id) + str(e))
                 with self.db_lock:
                     self.ovim.delete_network(sdn_net_id)
             return True, result

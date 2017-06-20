@@ -107,7 +107,7 @@ class nfvo_db(db_base.db_base):
                                 created_time += 0.00001
                                 db_base._convert_bandwidth(dataiface, logger=self.logger)
                                 dataifacesDict[vm['name']][dataiface['name']] = {}
-                                dataifacesDict[vm['name']][dataiface['name']]['vpci'] = dataiface['vpci']
+                                dataifacesDict[vm['name']][dataiface['name']]['vpci'] = dataiface.get('vpci')
                                 dataifacesDict[vm['name']][dataiface['name']]['bw'] = dataiface['bandwidth']
                                 dataifacesDict[vm['name']][dataiface['name']]['model'] = "PF" if dataiface[
                                                                                                      'dedicated'] == "yes" else (
@@ -258,7 +258,7 @@ class nfvo_db(db_base.db_base):
                                 created_time += 0.00001
                                 db_base._convert_bandwidth(dataiface, logger=self.logger)
                                 ifaceDict = {}
-                                ifaceDict['vpci'] = dataiface['vpci']
+                                ifaceDict['vpci'] = dataiface.get('vpci')
                                 ifaceDict['bw'] = dataiface['bandwidth']
                                 ifaceDict['model'] = "PF" if dataiface['dedicated'] == "yes" else \
                                     ("VF" if dataiface['dedicated'] == "no" else "VFnotShared")

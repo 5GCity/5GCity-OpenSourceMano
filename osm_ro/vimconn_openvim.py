@@ -596,6 +596,9 @@ class vimconnector(vimconn.vimconnector):
         '''Returns the flavor identifier'''
         try:
             new_flavor_dict = flavor_data.copy()
+            for device in new_flavor_dict.get('extended', {}).get('devices', ()):
+                if 'image name' in device:
+                    del device['image name']
             new_flavor_dict["name"] = flavor_data["name"][:64]
             self._get_my_tenant()
             payload_req = json.dumps({'flavor': new_flavor_dict})

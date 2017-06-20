@@ -117,7 +117,7 @@ class vimconnector(vimconn.vimconnector):
                 except IOError as e:
                     raise vimconn.vimconnException("Error reading file '{}': {}".format(flavor_data[1:], e))
             elif isinstance(flavor_data, dict):
-                self.flavor_data = flavor_data
+                self.flavor_info = flavor_data
 
         self.logger = logging.getLogger('openmano.vim.aws')
         if log_level:
