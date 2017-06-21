@@ -40,6 +40,8 @@ from novaclient import client as nClient, exceptions as nvExceptions
 from keystoneauth1.identity import v2, v3
 from keystoneauth1 import session
 import keystoneclient.exceptions as ksExceptions
+import keystoneclient.v3.client as ksClient_v3
+import keystoneclient.v2_0.client as ksClient_v2
 from glanceclient import client as glClient
 import glanceclient.client as gl1Client
 import glanceclient.exc as gl1Exceptions
@@ -71,48 +73,63 @@ class vimconnector(vimconn.vimconnector):
         'url' is the keystone authorization url,
         'url_admin' is not use
         '''
-        self.osc_api_version = config.get('APIversion')
-        if self.osc_api_version != 'v3.3' and self.osc_api_version != 'v2.0' and self.osc_api_version:
+        api_version = config.get('APIversion')
+        if api_version and api_version not in ('v3.3', 'v2.0', '2', '3'):
             raise vimconn.vimconnException("Invalid value '{}' for config:APIversion. "
-                "Allowed values are 'v3.3' or 'v2.0'".format(self.osc_api_version))
+                                           "Allowed values are 'v3.3', 'v2.0', '2' or '3'".format(api_version))
         vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
                                       config)
 
         self.insecure = self.config.get("insecure", False)
         if not url:
             raise TypeError, 'url param can not be NoneType'
-        self.auth_url = url
-        self.tenant_name = tenant_name
-        self.tenant_id = tenant_id
-        self.user = user
-        self.passwd = passwd
         self.persistent_info = persistent_info
         self.session = persistent_info.get('session', {'reload_client': True})
         self.nova = self.session.get('nova')
         self.neutron = self.session.get('neutron')
         self.cinder = self.session.get('cinder')
         self.glance = self.session.get('glance')
+        self.keystone = self.session.get('keystone')
+        self.api_version3 = self.session.get('api_version3')
 
         self.logger = logging.getLogger('openmano.vim.openstack')
         if log_level:
             self.logger.setLevel( getattr(logging, log_level) )
-    
-    def __setitem__(self,index, value):
-        '''Set individuals parameters
-        Throw TypeError, KeyError
-        '''
+
+    def __getitem__(self, index):
+        """Get individuals parameters.
+        Throw KeyError"""
+        if index == 'project_domain_id':
+            return self.config.get("project_domain_id")
+        elif index == 'user_domain_id':
+            return self.config.get("user_domain_id")
+        else:
+            vimconn.vimconnector.__getitem__(self, index)
+
+    def __setitem__(self, index, value):
+        """Set individuals parameters and it is marked as dirty so to force connection reload.
+        Throw KeyError"""
+        if index == 'project_domain_id':
+            self.config["project_domain_id"] = value
+        elif index == 'user_domain_id':
+                self.config["user_domain_id"] = value
+        else:
+            vimconn.vimconnector.__setitem__(self, index, value)
         self.session['reload_client'] = True
-        vimconn.vimconnector.__setitem__(self,index, value)
-     
+
     def _reload_connection(self):
         '''Called before any operation, it check if credentials has changed
         Throw keystoneclient.apiclient.exceptions.AuthorizationFailure
         '''
         #TODO control the timing and possible token timeout, but it seams that python client does this task for us :-) 
         if self.session['reload_client']:
-            if self.osc_api_version == 'v3.3' or self.osc_api_version == '3' or \
-                    (not self.osc_api_version and self.auth_url.split("/")[-1] == "v3"):
-                auth = v3.Password(auth_url=self.auth_url,
+            if self.config.get('APIversion'):
+                self.api_version3 = self.config['APIversion'] == 'v3.3' or self.config['APIversion'] == '3'
+            else:  # get from ending auth_url that end with v3 or with v2.0
+                self.api_version3 =  self.url.split("/")[-1] == "v3"
+            self.session['api_version3'] = self.api_version3
+            if self.api_version3:
+                auth = v3.Password(auth_url=self.url,
                                    username=self.user,
                                    password=self.passwd,
                                    project_name=self.tenant_name,
@@ -120,12 +137,17 @@ class vimconnector(vimconn.vimconnector):
                                    project_domain_id=self.config.get('project_domain_id', 'default'),
                                    user_domain_id=self.config.get('user_domain_id', 'default'))
             else:
-                auth = v2.Password(auth_url=self.auth_url,
+                auth = v2.Password(auth_url=self.url,
                                    username=self.user,
                                    password=self.passwd,
                                    tenant_name=self.tenant_name,
                                    tenant_id=self.tenant_id)
             sess = session.Session(auth=auth, verify=not self.insecure)
+            if self.api_version3:
+                self.keystone = ksClient_v3.Client(session=sess)
+            else:
+                self.keystone = ksClient_v2.Client(session=sess)
+            self.session['keystone'] = self.keystone
             self.nova = self.session['nova'] = nClient.Client("2.1", session=sess)
             self.neutron = self.session['neutron'] = neClient.Client('2.0', session=sess)
             self.cinder = self.session['cinder'] = cClient.Client(2, session=sess)
@@ -163,7 +185,7 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnNotFoundException(type(exception).__name__ + ": " + str(exception))
         elif isinstance(exception, nvExceptions.Conflict):
             raise vimconn.vimconnConflictException(type(exception).__name__ + ": " + str(exception))
-        else: # ()
+        else:  # ()
             raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))
 
     def get_tenant_list(self, filter_dict={}):
@@ -177,15 +199,17 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Getting tenants from VIM filter: '%s'", str(filter_dict))
         try:
             self._reload_connection()
-            if self.osc_api_version == 'v3.3':
-                project_class_list=self.keystone.projects.findall(**filter_dict)
+            if self.api_version3:
+                project_class_list = self.keystone.projects.list(name=filter_dict.get("name"))
             else:
-                project_class_list=self.keystone.tenants.findall(**filter_dict)
+                project_class_list = self.keystone.tenants.findall(**filter_dict)
             project_list=[]
             for project in project_class_list:
+                if filter_dict.get('id') and filter_dict["id"] != project.id:
+                    continue
                 project_list.append(project.to_dict())
             return project_list
-        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
+        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)
 
     def new_tenant(self, tenant_name, tenant_description):
@@ -193,10 +217,11 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Adding a new tenant name: %s", tenant_name)
         try:
             self._reload_connection()
-            if self.osc_api_version == 'v3.3':
-                project=self.keystone.projects.create(tenant_name, tenant_description)
+            if self.api_version3:
+                project = self.keystone.projects.create(tenant_name, self.config.get("project_domain_id", "default"),
+                                                        description=tenant_description, is_domain=False)
             else:
-                project=self.keystone.tenants.create(tenant_name, tenant_description)
+                project = self.keystone.tenants.create(tenant_name, tenant_description)
             return project.id
         except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
             self._format_exception(e)
@@ -206,7 +231,7 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Deleting tenant %s from VIM", tenant_id)
         try:
             self._reload_connection()
-            if self.osc_api_version == 'v3.3':
+            if self.api_version3:
                 self.keystone.projects.delete(tenant_id)
             else:
                 self.keystone.tenants.delete(tenant_id)
@@ -285,8 +310,8 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Getting network from VIM filter: '%s'", str(filter_dict))
         try:
             self._reload_connection()
-            if self.osc_api_version == 'v3.3' and "tenant_id" in filter_dict:
-                filter_dict['project_id'] = filter_dict.pop('tenant_id')
+            if self.api_version3 and "tenant_id" in filter_dict:
+                filter_dict['project_id'] = filter_dict.pop('tenant_id') #TODO check
             net_dict=self.neutron.list_networks(**filter_dict)
             net_list=net_dict["networks"]
             self.__net_os2mano(net_list)
