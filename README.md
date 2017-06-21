@@ -4,14 +4,22 @@ A python client for osm orchestration
 
 # Installation
 
-## Install dependencies
+## python-osmclient
+### Install dependencies
 ```bash
-sudo apt-get install python-dev libcurl4-gnutls-dev python-pip libgnutls-dev python-prettytable   
+sudo apt-get install python-dev libcurl4-gnutls-dev python-pip libgnutls-dev python-prettytable  
 sudo pip install pycurl
 ```
 
-## Install python-osmclient
+### Install python-osmclient
     sudo pip install git+https://github.com/mfmarche/python-osmclient
+
+
+## Snap
+```bash
+apt install snapd
+snap install osmclient --channel=beta
+```
 
 # Setup
 Set the OSM_HOSTNAME variable to the host of the osm server.
@@ -21,7 +29,7 @@ Example
 localhost$ export OSM_HOSTNAME=<hostname>:8008
 ```
 
-# Examples 
+# Examples
 
 ## upload vnfd
 ```bash
@@ -72,6 +80,5 @@ localhost$ osm ns-list
 
 # Bash Completion
 python-osmclient uses [click](http://click.pocoo.org/5/).  You can setup bash completion by putting this in your .bashrc:
-    
-    eval "$(_OSM_COMPLETE=source osm)"
 
+    eval "$(_OSM_COMPLETE=source osm)"
