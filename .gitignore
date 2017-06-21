@@ -5,6 +5,10 @@ dist/
 *.gz
 *egg-info/
 .eggs
+parts/
+prime/
+stage/
+*.snap
 *venv/
 *venv3/
 .tox/
