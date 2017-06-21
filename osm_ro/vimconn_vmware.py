@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
-# This file is part of openmano
+# Copyright 2016-2017 VMware Inc.
+# This file is part of ETSI OSM
 # All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -18,7 +18,7 @@
 # under the License.
 #
 # For those usages not covered by the Apache License, Version 2.0 please
-# contact with: nfvlabs@tid.es
+# contact:  osslegalrouting@vmware.com
 ##
 
 """
@@ -357,6 +357,11 @@ class vimconnector(vimconn.vimconnector):
             Returns:
                 The return vca object that letter can be used to connect to vcloud direct as admin
         """
+        vca = self.connect()
+        if not vca:
+            raise vimconn.vimconnConnectionException("self.connect() is failed.")
+
+        self.vca = vca
         try:
             if self.org_uuid is None:
                 org_dict = self.get_org_list()
@@ -495,19 +500,16 @@ class vimconnector(vimconn.vimconnector):
         """
 
         self.logger.debug("get_vcd_network_list(): retrieving network list for vcd {}".format(self.tenant_name))
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed.")
 
         if not self.tenant_name:
             raise vimconn.vimconnConnectionException("Tenant name is empty.")
 
-        vdc = vca.get_vdc(self.tenant_name)
+        vdc = self.get_vdc_details()
         if vdc is None:
             raise vimconn.vimconnConnectionException("Can't retrieve information for a VDC {}".format(self.tenant_name))
 
         vdc_uuid = vdc.get_id().split(":")[3]
-        networks = vca.get_networks(vdc.get_name())
+        networks = self.vca.get_networks(vdc.get_name())
         network_list = []
         try:
             for network in networks:
@@ -553,21 +555,18 @@ class vimconnector(vimconn.vimconnector):
             List can be empty
         """
 
-        self.logger.debug("get_vcd_network_list(): retrieving network list for vcd {}".format(self.tenant_name))
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed.")
+        self.logger.debug("get_network_list(): retrieving network list for vcd {}".format(self.tenant_name))
 
         if not self.tenant_name:
             raise vimconn.vimconnConnectionException("Tenant name is empty.")
 
-        vdc = vca.get_vdc(self.tenant_name)
+        vdc = self.get_vdc_details()
         if vdc is None:
             raise vimconn.vimconnConnectionException("Can't retrieve information for a VDC {}.".format(self.tenant_name))
 
         try:
             vdcid = vdc.get_id().split(":")[3]
-            networks = vca.get_networks(vdc.get_name())
+            networks = self.vca.get_networks(vdc.get_name())
             network_list = []
 
             for network in networks:
@@ -613,15 +612,11 @@ class vimconnector(vimconn.vimconnector):
         """Method obtains network details of net_id VIM network
            Return a dict with  the fields at filter_dict (see get_network_list) plus some VIM specific>}, ...]"""
 
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed")
-
         try:
-            vdc = vca.get_vdc(self.tenant_name)
+            vdc = self.get_vdc_details()
             vdc_id = vdc.get_id().split(":")[3]
 
-            networks = vca.get_networks(vdc.get_name())
+            networks = self.vca.get_networks(vdc.get_name())
             filter_dict = {}
 
             for network in networks:
@@ -651,10 +646,6 @@ class vimconnector(vimconn.vimconnector):
 
             Returns the network identifier or raise an exception
         """
-
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() for tenant {} is failed.".format(self.tenant_name))
 
         # ############# Stub code for SRIOV #################
 #         dvport_group = self.get_dvport_group(net_id)
@@ -692,10 +683,6 @@ class vimconnector(vimconn.vimconnector):
                     vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
 
         """
-
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed")
 
         dict_entry = {}
         try:
@@ -1084,9 +1071,6 @@ class vimconnector(vimconn.vimconnector):
 
         Return: if image uploaded correct method will provide image catalog UUID.
         """
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed.")
 
         if not path:
             raise vimconn.vimconnException("Image path can't be None.")
@@ -1111,21 +1095,21 @@ class vimconnector(vimconn.vimconnector):
                           "vdc catalog name {}".format(filename, catalog_name, path, catalog_md5_name))
 
         try:
-            catalogs = vca.get_catalogs()
+            catalogs = self.vca.get_catalogs()
         except Exception as exp:
             self.logger.debug("Failed get catalogs() with Exception {} ".format(exp))
             raise vimconn.vimconnException("Failed get catalogs() with Exception {} ".format(exp))
 
         if len(catalogs) == 0:
             self.logger.info("Creating a new catalog entry {} in vcloud director".format(catalog_name))
-            result = self.create_vimcatalog(vca, catalog_md5_name)
+            result = self.create_vimcatalog(self.vca, catalog_md5_name)
             if not result:
                 raise vimconn.vimconnException("Failed create new catalog {} ".format(catalog_md5_name))
-            result = self.upload_vimimage(vca=vca, catalog_name=catalog_md5_name,
+            result = self.upload_vimimage(vca=self.vca, catalog_name=catalog_md5_name,
                                           media_name=filename, medial_file_name=path, progress=progress)
             if not result:
                 raise vimconn.vimconnException("Failed create vApp template for catalog {} ".format(catalog_name))
-            return self.get_catalogid(catalog_name, vca.get_catalogs())
+            return self.get_catalogid(catalog_name, self.vca.get_catalogs())
         else:
             for catalog in catalogs:
                 # search for existing catalog if we find same name we return ID
@@ -1134,20 +1118,20 @@ class vimconnector(vimconn.vimconnector):
                     self.logger.debug("Found existing catalog entry for {} "
                                       "catalog id {}".format(catalog_name,
                                                              self.get_catalogid(catalog_md5_name, catalogs)))
-                    return self.get_catalogid(catalog_md5_name, vca.get_catalogs())
+                    return self.get_catalogid(catalog_md5_name, self.vca.get_catalogs())
 
         # if we didn't find existing catalog we create a new one and upload image.
         self.logger.debug("Creating new catalog entry {} - {}".format(catalog_name, catalog_md5_name))
-        result = self.create_vimcatalog(vca, catalog_md5_name)
+        result = self.create_vimcatalog(self.vca, catalog_md5_name)
         if not result:
             raise vimconn.vimconnException("Failed create new catalog {} ".format(catalog_md5_name))
 
-        result = self.upload_vimimage(vca=vca, catalog_name=catalog_md5_name,
+        result = self.upload_vimimage(vca=self.vca, catalog_name=catalog_md5_name,
                                       media_name=filename, medial_file_name=path, progress=progress)
         if not result:
             raise vimconn.vimconnException("Failed create vApp template for catalog {} ".format(catalog_md5_name))
 
-        return self.get_catalogid(catalog_md5_name, vca.get_catalogs())
+        return self.get_catalogid(catalog_md5_name, self.vca.get_catalogs())
 
     def get_image_list(self, filter_dict={}):
         '''Obtain tenant images from VIM
@@ -1160,12 +1144,10 @@ class vimconnector(vimconn.vimconnector):
             [{<the fields at Filter_dict plus some VIM specific>}, ...]
             List can be empty
         '''
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed.")
+
         try:
             image_list = []
-            catalogs = vca.get_catalogs()
+            catalogs = self.vca.get_catalogs()
             if len(catalogs) == 0:
                 return image_list
             else:
@@ -1236,7 +1218,7 @@ class vimconnector(vimconn.vimconnector):
             return False
         return False
 
-    def get_namebyvappid(self, vca=None, vdc=None, vapp_uuid=None):
+    def get_namebyvappid(self, vdc=None, vapp_uuid=None):
         """Method returns vApp name from vCD and lookup done by vapp_id.
 
         Args:
@@ -1255,8 +1237,13 @@ class vimconnector(vimconn.vimconnector):
                 # we care only about UUID the rest doesn't matter
                 vappid = ref.href.split("vapp")[1][1:]
                 if vappid == vapp_uuid:
-                    response = Http.get(ref.href, headers=vca.vcloud_session.get_vcloud_headers(), verify=vca.verify,
+                    response = Http.get(ref.href, headers=self.vca.vcloud_session.get_vcloud_headers(), verify=self.vca.verify,
                                         logger=self.logger)
+
+                    #Retry login if session expired & retry sending request
+                    if response.status_code == 403:
+                        response = self.retry_rest('GET', ref.href)
+
                     tree = XmlElementTree.fromstring(response.content)
                     return tree.attrib['name']
         except Exception as e:
@@ -1291,9 +1278,6 @@ class vimconnector(vimconn.vimconnector):
         self.logger.info("Creating new instance for entry {}".format(name))
         self.logger.debug("desc {} boot {} image_id: {} flavor_id: {} net_list: {} cloud_config {} disk_list {}".format(
                                     description, start, image_id, flavor_id, net_list, cloud_config, disk_list))
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed.")
 
         #new vm name = vmname + tenant_id + uuid
         new_vm_name = [name, '-', str(uuid.uuid4())]
@@ -1305,11 +1289,15 @@ class vimconnector(vimconn.vimconnector):
         #     return vapp_uuid
 
         # we check for presence of VDC, Catalog entry and Flavor.
-        vdc = vca.get_vdc(self.tenant_name)
+        vdc = self.get_vdc_details()
         if vdc is None:
             raise vimconn.vimconnNotFoundException(
                 "new_vminstance(): Failed create vApp {}: (Failed retrieve VDC information)".format(name))
-        catalogs = vca.get_catalogs()
+        catalogs = self.vca.get_catalogs()
+        if catalogs is None:
+            #Retry once, if failed by refreshing token
+            self.get_token()
+            catalogs = self.vca.get_catalogs()
         if catalogs is None:
             raise vimconn.vimconnNotFoundException(
                 "new_vminstance(): Failed create vApp {}: (Failed retrieve catalogs list)".format(name))
@@ -1378,7 +1366,7 @@ class vimconnector(vimconn.vimconnector):
         # use: 'data', 'bridge', 'mgmt'
         # create vApp.  Set vcpu and ram based on flavor id.
         try:
-            vapptask = vca.create_vapp(self.tenant_name, vmname_andid, templateName,
+            vapptask = self.vca.create_vapp(self.tenant_name, vmname_andid, templateName,
                                        self.get_catalogbyid(image_id, catalogs),
                                        network_name=None,  # None while creating vapp
                                        network_mode=network_mode,
@@ -1387,10 +1375,20 @@ class vimconnector(vimconn.vimconnector):
                                        vm_memory=vm_memory)  # can be None if flavor is None
 
             if vapptask is None or vapptask is False:
+                self.get_token() # Retry getting token
+                vapptask = self.vca.create_vapp(self.tenant_name, vmname_andid, templateName,
+                                           self.get_catalogbyid(image_id, catalogs),
+                                           network_name=None,  # None while creating vapp
+                                           network_mode=network_mode,
+                                           vm_name=vmname_andid,
+                                           vm_cpus=vm_cpus,  # can be None if flavor is None
+                                           vm_memory=vm_memory)  # can be None if flavor is None
+
+            if vapptask is None or vapptask is False:
                 raise vimconn.vimconnUnexpectedResponse(
                     "new_vminstance(): failed to create vApp {}".format(vmname_andid))
             if type(vapptask) is VappTask:
-                vca.block_until_completed(vapptask)
+                self.vca.block_until_completed(vapptask)
 
         except Exception as exp:
             raise vimconn.vimconnUnexpectedResponse(
@@ -1398,14 +1396,14 @@ class vimconnector(vimconn.vimconnector):
 
         # we should have now vapp in undeployed state.
         try:
-            vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vmname_andid)
-            vapp_uuid = self.get_vappid(vca.get_vdc(self.tenant_name), vmname_andid)
+            vapp_uuid = self.get_vappid(self.get_vdc_details(), vmname_andid)
+
         except Exception as exp:
             raise vimconn.vimconnUnexpectedResponse(
                     "new_vminstance(): Failed to retrieve vApp {} after creation: Exception:{}"
                     .format(vmname_andid, exp))
 
-        if vapp is None:
+        if vapp_uuid is None:
             raise vimconn.vimconnUnexpectedResponse(
                 "new_vminstance(): Failed to retrieve vApp {} after creation".format(
                                                                             vmname_andid))
@@ -1440,6 +1438,8 @@ class vimconnector(vimconn.vimconnector):
                                                             pci_devices_info,
                                                             vmname_andid)
                                  )
+
+        vapp = self.vca.get_vapp(self.get_vdc_details(), vmname_andid)
         # Modify vm disk
         if vm_disk:
             #Assuming there is only one disk in ovf and fast provisioning in organization vDC is disabled
@@ -1471,7 +1471,7 @@ class vimconnector(vimconn.vimconnector):
                     if added_existing_disk:
                         time.sleep(5)
                         added_existing_disk = False
-                    self.add_new_disk(vca, vapp_uuid, disk['size'])
+                    self.add_new_disk(vapp_uuid, disk['size'])
 
         if numas:
             # Assigning numa affinity setting
@@ -1507,12 +1507,14 @@ class vimconnector(vimconn.vimconnector):
                                   - NONE (No IP addressing mode specified.)"""
 
                 if primary_netname is not None:
-                    nets = filter(lambda n: n.name == interface_net_name, vca.get_networks(self.tenant_name))
+                    nets = filter(lambda n: n.name == interface_net_name, self.vca.get_networks(self.tenant_name))
                     if len(nets) == 1:
                         self.logger.info("new_vminstance(): Found requested network: {}".format(nets[0].name))
+
+                        vapp = self.vca.get_vapp(self.get_vdc_details(), vmname_andid)
                         task = vapp.connect_to_network(nets[0].name, nets[0].href)
                         if type(task) is GenericTask:
-                            vca.block_until_completed(task)
+                            self.vca.block_until_completed(task)
                         # connect network to VM - with all DHCP by default
 
                         type_list = ['PF','VF','VFnotShared']
@@ -1536,6 +1538,7 @@ class vimconnector(vimconn.vimconnector):
                                                                 net)
                 nicIndex += 1
 
+            vapp = self.vca.get_vapp(self.get_vdc_details(), vmname_andid)
             # cloud-init for ssh-key injection
             if cloud_config:
                 self.cloud_init(vapp,cloud_config)
@@ -1544,7 +1547,7 @@ class vimconnector(vimconn.vimconnector):
             self.logger.debug("new_vminstance(): Deploying vApp {} ".format(name))
             deploytask = vapp.deploy(powerOn=False)
             if type(deploytask) is GenericTask:
-                vca.block_until_completed(deploytask)
+                self.vca.block_until_completed(deploytask)
 
         # ############# Stub code for SRIOV #################
         #Add SRIOV
@@ -1581,28 +1584,32 @@ class vimconnector(vimconn.vimconnector):
                                                                 str(memReserve),str(vm_obj)))
 
             self.logger.debug("new_vminstance(): power on vApp {} ".format(name))
+
+            vapp = self.vca.get_vapp(self.get_vdc_details(), vmname_andid)
             poweron_task = vapp.poweron()
             if type(poweron_task) is GenericTask:
-                vca.block_until_completed(poweron_task)
+                self.vca.block_until_completed(poweron_task)
 
         except Exception as exp :
             # it might be a case if specific mandatory entry in dict is empty or some other pyVcloud exception
-            self.logger.debug("new_vminstance(): Failed create new vm instance {}".format(name, exp))
-            raise vimconn.vimconnException("new_vminstance(): Failed create new vm instance {}".format(name, exp))
+            self.logger.debug("new_vminstance(): Failed create new vm instance {} with exception {}"
+                              .format(name, exp))
+            raise vimconn.vimconnException("new_vminstance(): Failed create new vm instance {} with exception {}"
+                                           .format(name, exp))
 
         # check if vApp deployed and if that the case return vApp UUID otherwise -1
         wait_time = 0
         vapp_uuid = None
         while wait_time <= MAX_WAIT_TIME:
             try:
-                vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vmname_andid)
+                vapp = self.vca.get_vapp(self.get_vdc_details(), vmname_andid)
             except Exception as exp:
                 raise vimconn.vimconnUnexpectedResponse(
                         "new_vminstance(): Failed to retrieve vApp {} after creation: Exception:{}"
                         .format(vmname_andid, exp))
 
             if vapp and vapp.me.deployed:
-                vapp_uuid = self.get_vappid(vca.get_vdc(self.tenant_name), vmname_andid)
+                vapp_uuid = self.get_vappid(self.get_vdc_details(), vmname_andid)
                 break
             else:
                 self.logger.debug("new_vminstance(): Wait for vApp {} to deploy".format(name))
@@ -1634,11 +1641,8 @@ class vimconnector(vimconn.vimconnector):
         """Returns the VM instance information from VIM"""
 
         self.logger.debug("Client requesting vm instance {} ".format(vim_vm_uuid))
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed.")
 
-        vdc = vca.get_vdc(self.tenant_name)
+        vdc = self.get_vdc_details()
         if vdc is None:
             raise vimconn.vimconnConnectionException(
                 "Failed to get a reference of VDC for a tenant {}".format(self.tenant_name))
@@ -1683,11 +1687,8 @@ class vimconnector(vimconn.vimconnector):
         """
 
         self.logger.debug("Client requesting delete vm instance {} ".format(vm__vim_uuid))
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed.")
 
-        vdc = vca.get_vdc(self.tenant_name)
+        vdc = self.get_vdc_details()
         if vdc is None:
             self.logger.debug("delete_vminstance(): Failed to get a reference of VDC for a tenant {}".format(
                 self.tenant_name))
@@ -1695,7 +1696,7 @@ class vimconnector(vimconn.vimconnector):
                 "delete_vminstance(): Failed to get a reference of VDC for a tenant {}".format(self.tenant_name))
 
         try:
-            vapp_name = self.get_namebyvappid(vca, vdc, vm__vim_uuid)
+            vapp_name = self.get_namebyvappid(vdc, vm__vim_uuid)
             if vapp_name is None:
                 self.logger.debug("delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
                 return -1, "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid)
@@ -1703,7 +1704,7 @@ class vimconnector(vimconn.vimconnector):
                 self.logger.info("Deleting vApp {} and UUID {}".format(vapp_name, vm__vim_uuid))
 
             # Delete vApp and wait for status change if task executed and vApp is None.
-            vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
+            vapp = self.vca.get_vapp(self.get_vdc_details(), vapp_name)
 
             if vapp:
                 if vapp.me.deployed:
@@ -1712,14 +1713,14 @@ class vimconnector(vimconn.vimconnector):
                     powered_off = False
                     wait_time = 0
                     while wait_time <= MAX_WAIT_TIME:
-                        vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
+                        vapp = self.vca.get_vapp(self.get_vdc_details(), vapp_name)
                         if not vapp:
                             self.logger.debug("delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
                             return -1, "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid)
 
                         power_off_task = vapp.poweroff()
                         if type(power_off_task) is GenericTask:
-                            result = vca.block_until_completed(power_off_task)
+                            result = self.vca.block_until_completed(power_off_task)
                             if result:
                                 powered_off = True
                                 break
@@ -1738,14 +1739,14 @@ class vimconnector(vimconn.vimconnector):
                     wait_time = 0
                     undeployed = False
                     while wait_time <= MAX_WAIT_TIME:
-                        vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
+                        vapp = self.vca.get_vapp(self.get_vdc_details(), vapp_name)
                         if not vapp:
                             self.logger.debug("delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
                             return -1, "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid)
                         undeploy_task = vapp.undeploy(action='powerOff')
 
                         if type(undeploy_task) is GenericTask:
-                            result = vca.block_until_completed(undeploy_task)
+                            result = self.vca.block_until_completed(undeploy_task)
                             if result:
                                 undeployed = True
                                 break
@@ -1760,14 +1761,14 @@ class vimconnector(vimconn.vimconnector):
 
                 # delete vapp
                 self.logger.info("Start deletion of vApp {} ".format(vapp_name))
-                vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
+                vapp = self.vca.get_vapp(self.get_vdc_details(), vapp_name)
 
                 if vapp is not None:
                     wait_time = 0
                     result = False
 
                     while wait_time <= MAX_WAIT_TIME:
-                        vapp = vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name)
+                        vapp = self.vca.get_vapp(self.get_vdc_details(), vapp_name)
                         if not vapp:
                             self.logger.debug("delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
                             return -1, "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid)
@@ -1775,8 +1776,8 @@ class vimconnector(vimconn.vimconnector):
                         delete_task = vapp.delete()
 
                         if type(delete_task) is GenericTask:
-                            vca.block_until_completed(delete_task)
-                            result = vca.block_until_completed(delete_task)
+                            self.vca.block_until_completed(delete_task)
+                            result = self.vca.block_until_completed(delete_task)
                             if result:
                                 break
                         else:
@@ -1792,7 +1793,7 @@ class vimconnector(vimconn.vimconnector):
             self.logger.debug(traceback.format_exc())
             raise vimconn.vimconnException("delete_vminstance(): Failed delete vm instance {}".format(vm__vim_uuid))
 
-        if vca.get_vapp(vca.get_vdc(self.tenant_name), vapp_name) is None:
+        if self.vca.get_vapp(self.get_vdc_details(), vapp_name) is None:
             self.logger.info("Deleted vm instance {} sccessfully".format(vm__vim_uuid))
             return vm__vim_uuid
         else:
@@ -1824,25 +1825,21 @@ class vimconnector(vimconn.vimconnector):
 
         self.logger.debug("Client requesting refresh vm status for {} ".format(vm_list))
 
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed.")
-
-        vdc = vca.get_vdc(self.tenant_name)
+        vdc = self.get_vdc_details()
         if vdc is None:
             raise vimconn.vimconnException("Failed to get a reference of VDC for a tenant {}".format(self.tenant_name))
 
         vms_dict = {}
         nsx_edge_list = []
         for vmuuid in vm_list:
-            vmname = self.get_namebyvappid(vca, vdc, vmuuid)
+            vmname = self.get_namebyvappid(self.get_vdc_details(), vmuuid)
             if vmname is not None:
 
                 try:
-                    the_vapp = vca.get_vapp(vdc, vmname)
+                    vm_pci_details = self.get_vm_pci_details(vmuuid)
+                    the_vapp = self.vca.get_vapp(self.get_vdc_details(), vmname)
                     vm_info = the_vapp.get_vms_details()
                     vm_status = vm_info[0]['status']
-                    vm_pci_details = self.get_vm_pci_details(vmuuid)
                     vm_info[0].update(vm_pci_details)
 
                     vm_dict = {'status': vcdStatusCode2manoFormat[the_vapp.me.get_status()],
@@ -1991,15 +1988,11 @@ class vimconnector(vimconn.vimconnector):
         if vm__vim_uuid is None or action_dict is None:
             raise vimconn.vimconnException("Invalid request. VM id or action is None.")
 
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed.")
-
-        vdc = vca.get_vdc(self.tenant_name)
+        vdc = self.get_vdc_details()
         if vdc is None:
             return -1, "Failed to get a reference of VDC for a tenant {}".format(self.tenant_name)
 
-        vapp_name = self.get_namebyvappid(vca, vdc, vm__vim_uuid)
+        vapp_name = self.get_namebyvappid(vdc, vm__vim_uuid)
         if vapp_name is None:
             self.logger.debug("action_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
             raise vimconn.vimconnException("Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
@@ -2007,7 +2000,7 @@ class vimconnector(vimconn.vimconnector):
             self.logger.info("Action_vminstance vApp {} and UUID {}".format(vapp_name, vm__vim_uuid))
 
         try:
-            the_vapp = vca.get_vapp(vdc, vapp_name)
+            the_vapp = self.vca.get_vapp(vdc, vapp_name)
             # TODO fix all status
             if "start" in action_dict:
                 vm_info = the_vapp.get_vms_details()
@@ -2015,28 +2008,28 @@ class vimconnector(vimconn.vimconnector):
                 self.logger.info("action_vminstance: Power on vApp: {}".format(vapp_name))
                 if vm_status == "Suspended" or vm_status == "Powered off":
                     power_on_task = the_vapp.poweron()
-                    result = vca.block_until_completed(power_on_task)
+                    result = self.vca.block_until_completed(power_on_task)
                     self.instance_actions_result("start", result, vapp_name)
             elif "rebuild" in action_dict:
                 self.logger.info("action_vminstance: Rebuild vApp: {}".format(vapp_name))
                 rebuild_task = the_vapp.deploy(powerOn=True)
-                result = vca.block_until_completed(rebuild_task)
+                result = self.vca.block_until_completed(rebuild_task)
                 self.instance_actions_result("rebuild", result, vapp_name)
             elif "pause" in action_dict:
                 self.logger.info("action_vminstance: pause vApp: {}".format(vapp_name))
                 pause_task = the_vapp.undeploy(action='suspend')
-                result = vca.block_until_completed(pause_task)
+                result = self.vca.block_until_completed(pause_task)
                 self.instance_actions_result("pause", result, vapp_name)
             elif "resume" in action_dict:
                 self.logger.info("action_vminstance: resume vApp: {}".format(vapp_name))
                 power_task = the_vapp.poweron()
-                result = vca.block_until_completed(power_task)
+                result = self.vca.block_until_completed(power_task)
                 self.instance_actions_result("resume", result, vapp_name)
             elif "shutoff" in action_dict or "shutdown" in action_dict:
                 action_name , value = action_dict.items()[0]
                 self.logger.info("action_vminstance: {} vApp: {}".format(action_name, vapp_name))
                 power_off_task = the_vapp.undeploy(action='powerOff')
-                result = vca.block_until_completed(power_off_task)
+                result = self.vca.block_until_completed(power_off_task)
                 if action_name == "shutdown":
                     self.instance_actions_result("shutdown", result, vapp_name)
                 else:
@@ -2133,10 +2126,6 @@ class vimconnector(vimconn.vimconnector):
             The return network name.
         """
 
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed.")
-
         if not network_uuid:
             return None
 
@@ -2162,10 +2151,6 @@ class vimconnector(vimconn.vimconnector):
             The return network uuid.
             network_uuid: network_id
         """
-
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed.")
 
         if not network_name:
             self.logger.debug("get_network_id_by_name() : Network name is empty")
@@ -2196,18 +2181,18 @@ class vimconnector(vimconn.vimconnector):
                 The return XML respond
         """
 
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed")
-
-        url_list = [vca.host, '/api/org']
+        url_list = [self.vca.host, '/api/org']
         vm_list_rest_call = ''.join(url_list)
 
-        if not (not vca.vcloud_session or not vca.vcloud_session.organization):
+        if not (not self.vca.vcloud_session or not self.vca.vcloud_session.organization):
             response = Http.get(url=vm_list_rest_call,
-                                headers=vca.vcloud_session.get_vcloud_headers(),
-                                verify=vca.verify,
-                                logger=vca.logger)
+                                headers=self.vca.vcloud_session.get_vcloud_headers(),
+                                verify=self.vca.verify,
+                                logger=self.vca.logger)
+
+            if response.status_code == 403:
+                response = self.retry_rest('GET', vm_list_rest_call)
+
             if response.status_code == requests.codes.ok:
                 return response.content
 
@@ -2225,21 +2210,22 @@ class vimconnector(vimconn.vimconnector):
                 The return XML respond
         """
 
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed")
-
         if org_uuid is None:
             return None
 
-        url_list = [vca.host, '/api/org/', org_uuid]
+        url_list = [self.vca.host, '/api/org/', org_uuid]
         vm_list_rest_call = ''.join(url_list)
 
-        if not (not vca.vcloud_session or not vca.vcloud_session.organization):
+        if not (not self.vca.vcloud_session or not self.vca.vcloud_session.organization):
             response = Http.get(url=vm_list_rest_call,
-                                headers=vca.vcloud_session.get_vcloud_headers(),
-                                verify=vca.verify,
-                                logger=vca.logger)
+                                headers=self.vca.vcloud_session.get_vcloud_headers(),
+                                verify=self.vca.verify,
+                                logger=self.vca.logger)
+
+            #Retry login if session expired & retry sending request
+            if response.status_code == 403:
+                response = self.retry_rest('GET', vm_list_rest_call)
+
             if response.status_code == requests.codes.ok:
                 return response.content
 
@@ -2260,9 +2246,6 @@ class vimconnector(vimconn.vimconnector):
         """
 
         org_dict = {}
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed")
 
         if org_uuid is None:
             return org_dict
@@ -2300,9 +2283,6 @@ class vimconnector(vimconn.vimconnector):
         """
 
         org_dict = {}
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed")
 
         content = self.list_org_action()
         try:
@@ -2474,21 +2454,22 @@ class vimconnector(vimconn.vimconnector):
                 The return XML respond
         """
 
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed")
-
         if network_uuid is None:
             return None
 
-        url_list = [vca.host, '/api/network/', network_uuid]
+        url_list = [self.vca.host, '/api/network/', network_uuid]
         vm_list_rest_call = ''.join(url_list)
 
-        if not (not vca.vcloud_session or not vca.vcloud_session.organization):
+        if not (not self.vca.vcloud_session or not self.vca.vcloud_session.organization):
             response = Http.get(url=vm_list_rest_call,
-                                headers=vca.vcloud_session.get_vcloud_headers(),
-                                verify=vca.verify,
-                                logger=vca.logger)
+                                headers=self.vca.vcloud_session.get_vcloud_headers(),
+                                verify=self.vca.verify,
+                                logger=self.vca.logger)
+
+            #Retry login if session expired & retry sending request
+            if response.status_code == 403:
+                response = self.retry_rest('GET', vm_list_rest_call)
+
             if response.status_code == requests.codes.ok:
                 return response.content
 
@@ -3051,7 +3032,7 @@ class vimconnector(vimconn.vimconnector):
         if need_admin_access:
             vca = self.connect_as_admin()
         else:
-            vca = self.connect()
+            vca = self.vca
 
         if not vca:
             raise vimconn.vimconnConnectionException("self.connect() is failed")
@@ -3066,6 +3047,10 @@ class vimconnector(vimconn.vimconnector):
                                 headers=vca.vcloud_session.get_vcloud_headers(),
                                 verify=vca.verify,
                                 logger=vca.logger)
+
+            if response.status_code == 403:
+                if need_admin_access == False:
+                    response = self.retry_rest('GET', get_vapp_restcall)
 
             if response.status_code != requests.codes.ok:
                 self.logger.debug("REST API call {} failed. Return status code {}".format(get_vapp_restcall,
@@ -3173,21 +3158,20 @@ class vimconnector(vimconn.vimconnector):
 
     def acuire_console(self, vm_uuid=None):
 
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed")
         if vm_uuid is None:
             return None
 
-        if not (not vca.vcloud_session or not vca.vcloud_session.organization):
+        if not (not self.vca.vcloud_session or not self.vca.vcloud_session.organization):
             vm_dict = self.get_vapp_details_rest(self, vapp_uuid=vm_uuid)
             console_dict = vm_dict['acquireTicket']
             console_rest_call = console_dict['href']
 
             response = Http.post(url=console_rest_call,
-                                 headers=vca.vcloud_session.get_vcloud_headers(),
-                                 verify=vca.verify,
-                                 logger=vca.logger)
+                                 headers=self.vca.vcloud_session.get_vcloud_headers(),
+                                 verify=self.vca.verify,
+                                 logger=self.vca.logger)
+            if response.status_code == 403:
+                response = self.retry_rest('POST', console_rest_call)
 
             if response.status_code == requests.codes.ok:
                 return response.content
@@ -3244,17 +3228,17 @@ class vimconnector(vimconn.vimconnector):
             Returns:
                 The return network uuid or return None
         """
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("self.connect() is failed")
         if disk_href is None or disk_size is None:
             return None
 
-        if vca.vcloud_session and vca.vcloud_session.organization:
+        if self.vca.vcloud_session and self.vca.vcloud_session.organization:
             response = Http.get(url=disk_href,
-                                headers=vca.vcloud_session.get_vcloud_headers(),
-                                verify=vca.verify,
-                                logger=vca.logger)
+                                headers=self.vca.vcloud_session.get_vcloud_headers(),
+                                verify=self.vca.verify,
+                                logger=self.vca.logger)
+
+        if response.status_code == 403:
+            response = self.retry_rest('GET', disk_href)
 
         if response.status_code != requests.codes.ok:
             self.logger.debug("GET REST API call {} failed. Return status code {}".format(disk_href,
@@ -3276,13 +3260,17 @@ class vimconnector(vimconn.vimconnector):
                                              xml_declaration=True)
 
             #Send PUT request to modify disk size
-            headers = vca.vcloud_session.get_vcloud_headers()
+            headers = self.vca.vcloud_session.get_vcloud_headers()
             headers['Content-Type'] = 'application/vnd.vmware.vcloud.rasdItemsList+xml; charset=ISO-8859-1'
 
             response = Http.put(url=disk_href,
                                 data=data,
                                 headers=headers,
-                                verify=vca.verify, logger=self.logger)
+                                verify=self.vca.verify, logger=self.logger)
+
+            if response.status_code == 403:
+                add_headers = {'Content-Type': headers['Content-Type']}
+                response = self.retry_rest('PUT', disk_href, add_headers, data)
 
             if response.status_code != 202:
                 self.logger.debug("PUT REST API call {} failed. Return status code {}".format(disk_href,
@@ -3290,7 +3278,7 @@ class vimconnector(vimconn.vimconnector):
             else:
                 modify_disk_task = taskType.parseString(response.content, True)
                 if type(modify_disk_task) is GenericTask:
-                    status = vca.block_until_completed(modify_disk_task)
+                    status = self.vca.block_until_completed(modify_disk_task)
                     return status
 
             return None
@@ -3675,9 +3663,6 @@ class vimconnector(vimconn.vimconnector):
             Returns:
                 None
         """
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("Failed to connect vCloud director")
 
         try:
             ip_address = None
@@ -3698,12 +3683,16 @@ class vimconnector(vimconn.vimconnector):
                 for vms in vapp._get_vms():
                     vm_id = (vms.id).split(':')[-1]
 
-                    url_rest_call = "{}/api/vApp/vm-{}/networkConnectionSection/".format(vca.host, vm_id)
+                    url_rest_call = "{}/api/vApp/vm-{}/networkConnectionSection/".format(self.vca.host, vm_id)
 
                     response = Http.get(url=url_rest_call,
-                                        headers=vca.vcloud_session.get_vcloud_headers(),
-                                        verify=vca.verify,
-                                        logger=vca.logger)
+                                        headers=self.vca.vcloud_session.get_vcloud_headers(),
+                                        verify=self.vca.verify,
+                                        logger=self.vca.logger)
+
+                    if response.status_code == 403:
+                        response = self.retry_rest('GET', url_rest_call)
+
                     if response.status_code != 200:
                         self.logger.error("REST call {} failed reason : {}"\
                                              "status code : {}".format(url_rest_call,
@@ -3741,11 +3730,16 @@ class vimconnector(vimconn.vimconnector):
 
                         data = data.replace('</NetworkConnection>\n','</NetworkConnection>\n{}\n'.format(new_item))
 
-                    headers = vca.vcloud_session.get_vcloud_headers()
+                    headers = self.vca.vcloud_session.get_vcloud_headers()
                     headers['Content-Type'] = 'application/vnd.vmware.vcloud.networkConnectionSection+xml'
                     response = Http.put(url=url_rest_call, headers=headers, data=data,
-                                                                   verify=vca.verify,
-                                                                   logger=vca.logger)
+                                                                   verify=self.vca.verify,
+                                                                   logger=self.vca.logger)
+
+                    if response.status_code == 403:
+                        add_headers = {'Content-Type': headers['Content-Type']}
+                        response = self.retry_rest('PUT', url_rest_call, add_headers, data)
+
                     if response.status_code != 202:
                         self.logger.error("REST call {} failed reason : {}"\
                                             "status code : {} ".format(url_rest_call,
@@ -3756,7 +3750,7 @@ class vimconnector(vimconn.vimconnector):
                     else:
                         nic_task = taskType.parseString(response.content, True)
                         if isinstance(nic_task, GenericTask):
-                            vca.block_until_completed(nic_task)
+                            self.vca.block_until_completed(nic_task)
                             self.logger.info("add_network_adapter_to_vms(): VM {} conneced to "\
                                                                "default NIC type".format(vm_id))
                         else:
@@ -3766,12 +3760,16 @@ class vimconnector(vimconn.vimconnector):
                 for vms in vapp._get_vms():
                     vm_id = (vms.id).split(':')[-1]
 
-                    url_rest_call = "{}/api/vApp/vm-{}/networkConnectionSection/".format(vca.host, vm_id)
+                    url_rest_call = "{}/api/vApp/vm-{}/networkConnectionSection/".format(self.vca.host, vm_id)
 
                     response = Http.get(url=url_rest_call,
-                                        headers=vca.vcloud_session.get_vcloud_headers(),
-                                        verify=vca.verify,
-                                        logger=vca.logger)
+                                        headers=self.vca.vcloud_session.get_vcloud_headers(),
+                                        verify=self.vca.verify,
+                                        logger=self.vca.logger)
+
+                    if response.status_code == 403:
+                        response = self.retry_rest('GET', url_rest_call)
+
                     if response.status_code != 200:
                         self.logger.error("REST call {} failed reason : {}"\
                                             "status code : {}".format(url_rest_call,
@@ -3810,11 +3808,15 @@ class vimconnector(vimconn.vimconnector):
 
                         data = data.replace('</NetworkConnection>\n','</NetworkConnection>\n{}\n'.format(new_item))
 
-                    headers = vca.vcloud_session.get_vcloud_headers()
+                    headers = self.vca.vcloud_session.get_vcloud_headers()
                     headers['Content-Type'] = 'application/vnd.vmware.vcloud.networkConnectionSection+xml'
                     response = Http.put(url=url_rest_call, headers=headers, data=data,
-                                                                   verify=vca.verify,
-                                                                   logger=vca.logger)
+                                                                   verify=self.vca.verify,
+                                                                   logger=self.vca.logger)
+
+                    if response.status_code == 403:
+                        add_headers = {'Content-Type': headers['Content-Type']}
+                        response = self.retry_rest('PUT', url_rest_call, add_headers, data)
 
                     if response.status_code != 202:
                         self.logger.error("REST call {} failed reason : {}"\
@@ -3826,7 +3828,7 @@ class vimconnector(vimconn.vimconnector):
                     else:
                         nic_task = taskType.parseString(response.content, True)
                         if isinstance(nic_task, GenericTask):
-                            vca.block_until_completed(nic_task)
+                            self.vca.block_until_completed(nic_task)
                             self.logger.info("add_network_adapter_to_vms(): VM {} "\
                                                "conneced to NIC type {}".format(vm_id, nic_type))
                         else:
@@ -3909,9 +3911,6 @@ class vimconnector(vimconn.vimconnector):
                     'owner': (optional) file owner, string with the format 'owner:group'
                 'boot-data-drive': boolean to indicate if user-data must be passed using a boot drive (hard disk
         """
-        vca = self.connect()
-        if not vca:
-            raise vimconn.vimconnConnectionException("Failed to connect vCloud director")
 
         try:
             if isinstance(cloud_config, dict):
@@ -3973,7 +3972,7 @@ class vimconnector(vimconn.vimconnector):
                                 vm_name = vm.name
                                 task = vapp.customize_guest_os(vm_name, customization_script=customize_script)
                                 if isinstance(task, GenericTask):
-                                    vca.block_until_completed(task)
+                                    self.vca.block_until_completed(task)
                                     self.logger.info("cloud_init : customized guest os task "\
                                                         "completed for VM {}".format(vm_name))
                                 else:
@@ -3986,7 +3985,7 @@ class vimconnector(vimconn.vimconnector):
                                                                "ssh-key".format(exp))
 
 
-    def add_new_disk(self, vca, vapp_uuid, disk_size):
+    def add_new_disk(self, vapp_uuid, disk_size):
         """
             Method to create an empty vm disk
 
@@ -4008,7 +4007,7 @@ class vimconnector(vimconn.vimconnector):
             if vm_details and "vm_virtual_hardware" in vm_details:
                 self.logger.info("Adding disk to VM: {} disk size:{}GB".format(vm_details["name"], disk_size))
                 disk_href = vm_details["vm_virtual_hardware"]["disk_edit_href"]
-                status = self.add_new_disk_rest(vca, disk_href, disk_size_mb)
+                status = self.add_new_disk_rest(disk_href, disk_size_mb)
 
         except Exception as exp:
             msg = "Error occurred while creating new disk {}.".format(exp)
@@ -4022,7 +4021,7 @@ class vimconnector(vimconn.vimconnector):
             self.rollback_newvm(vapp_uuid, msg)
 
 
-    def add_new_disk_rest(self, vca, disk_href, disk_size_mb):
+    def add_new_disk_rest(self, disk_href, disk_size_mb):
         """
         Retrives vApp Disks section & add new empty disk
 
@@ -4033,11 +4032,14 @@ class vimconnector(vimconn.vimconnector):
             Returns: Status of add new disk task
         """
         status = False
-        if vca.vcloud_session and vca.vcloud_session.organization:
+        if self.vca.vcloud_session and self.vca.vcloud_session.organization:
             response = Http.get(url=disk_href,
-                                headers=vca.vcloud_session.get_vcloud_headers(),
-                                verify=vca.verify,
-                                logger=vca.logger)
+                                headers=self.vca.vcloud_session.get_vcloud_headers(),
+                                verify=self.vca.verify,
+                                logger=self.vca.logger)
+
+        if response.status_code == 403:
+            response = self.retry_rest('GET', disk_href)
 
         if response.status_code != requests.codes.ok:
             self.logger.error("add_new_disk_rest: GET REST API call {} failed. Return status code {}"
@@ -4076,13 +4078,17 @@ class vimconnector(vimconn.vimconnector):
             new_data = new_data.replace('</Item>\n</RasdItemsList>', '</Item>\n{}\n</RasdItemsList>'.format(new_item))
 
             # Send PUT request to modify virtual hardware section with new disk
-            headers = vca.vcloud_session.get_vcloud_headers()
+            headers = self.vca.vcloud_session.get_vcloud_headers()
             headers['Content-Type'] = 'application/vnd.vmware.vcloud.rasdItemsList+xml; charset=ISO-8859-1'
 
             response = Http.put(url=disk_href,
                                 data=new_data,
                                 headers=headers,
-                                verify=vca.verify, logger=self.logger)
+                                verify=self.vca.verify, logger=self.logger)
+
+            if response.status_code == 403:
+                add_headers = {'Content-Type': headers['Content-Type']}
+                response = self.retry_rest('PUT', disk_href, add_headers, new_data)
 
             if response.status_code != 202:
                 self.logger.error("PUT REST API call {} failed. Return status code {}. Response Content:{}"
@@ -4090,7 +4096,7 @@ class vimconnector(vimconn.vimconnector):
             else:
                 add_disk_task = taskType.parseString(response.content, True)
                 if type(add_disk_task) is GenericTask:
-                    status = vca.block_until_completed(add_disk_task)
+                    status = self.vca.block_until_completed(add_disk_task)
                     if not status:
                         self.logger.error("Add new disk REST task failed to add {} MB disk".format(disk_size_mb))
 
@@ -4915,4 +4921,98 @@ class vimconnector(vimconn.vimconnector):
             self.logger.error("get_media_details : exception occurred "\
                                                "getting media details")
             raise vimconn.vimconnException(message=exp)
+
+
+    def retry_rest(self, api, url, add_headers=None, data=None):
+        """ Method to get Token & retry respective REST request
+            Args:
+                api - REST API - Can be one of 'GET' or 'PUT' or 'POST'
+                url - request url to be used
+                add_headers - Additional headers (optional)
+                data - Request payload data to be passed in request
+            Returns:
+                response - Response of request
+        """
+        response = None
+
+        #Get token
+        self.get_token()
+
+        headers=self.vca.vcloud_session.get_vcloud_headers()
+
+        if add_headers:
+            headers.update(add_headers)
+
+        if api == 'GET':
+            response = Http.get(url=url,
+                                headers=headers,
+                                verify=self.vca.verify,
+                                logger=self.vca.logger)
+            return response
+        elif api == 'PUT':
+            if headers:
+                headers.append
+            response = Http.put(url=url,
+                                data=data,
+                                headers=headers,
+                                verify=self.vca.verify, logger=self.logger)
+            return response
+        elif api == 'POST':
+            response = Http.post(url=url,
+                                 headers=headers,
+                                 verify=self.vca.verify,
+                                 logger=self.vca.logger)
+
+    def get_token(self):
+        """ Generate a new token if expired
+
+            Returns:
+                The return vca object that letter can be used to connect to vCloud director as admin for VDC
+        """
+        vca = None
+
+        try:
+            self.logger.debug("Generate token for vca {} as {} to datacenter {}.".format(self.org_name,
+                                                                                      self.user,
+                                                                                      self.org_name))
+            vca = VCA(host=self.url,
+                      username=self.user,
+                      service_type=STANDALONE,
+                      version=VCAVERSION,
+                      verify=False,
+                      log=False)
+
+            result = vca.login(password=self.passwd, org=self.org_name)
+            if not result:
+                raise vimconn.vimconnConnectionException("Can't connect to a vCloud director as: {}".format(self.user))
+
+            result = vca.login(token=vca.token, org=self.org_name, org_url=vca.vcloud_session.org_url)
+            if result is True:
+                self.logger.info(
+                    "Successfully generated token for vcloud direct org: {} as user: {}".format(self.org_name, self.user))
+
+        except:
+            raise vimconn.vimconnConnectionException("Can't connect to a vCloud director org: "
+                                                     "{} as user: {}".format(self.org_name, self.user))
+
+        if not vca:
+            raise vimconn.vimconnConnectionException("self.connect() is failed while reconnecting")
+
+        #Update vca
+        self.vca = vca
+
+
+    def get_vdc_details(self):
+        """ Get VDC details using pyVcloud Lib
+
+            Returns vdc object
+        """
+        vdc = self.vca.get_vdc(self.tenant_name)
+
+        #Retry once, if failed by refreshing token
+        if vdc is None:
+            self.get_token()
+            vdc = self.vca.get_vdc(self.tenant_name)
+
+        return vdc
 
