@@ -1,0 +1,133 @@
+nmap:
+  description: "nmap a thing!"
+  params:
+    destination:
+      description: "destination to scan"
+      type: string
+  required:
+    - destination
+ping:
+  description: 'ping a thing!'
+  params:
+    count:
+      description: "Stop after sending count ECHO_REQUEST packets"
+      type: integer
+      default: 30
+    destination:
+      description: "destination of ping request"
+      type: string
+  required:
+    - destination
+traceroute:
+  description: 'trace a thing!'
+  params:
+    hops:
+      description: "Stop tracing after count hops"
+      type: integer
+      default: 30
+    destination:
+      description: "destination of traceroute request"
+      type: string
+  required:
+    - destination
+dig:
+  description: "DNS lookup"
+  params:
+    nsserver:
+      description: "The nameserver to lookup against."
+      type: string
+    host:
+      description: "The host to lookup"
+      type: string
+    type:
+      description: "The DNS record type to lookup"
+      type: string
+  required:
+    - host
+iperf:
+    description: ""
+    params:
+      host:
+        description: ""
+        type: string
+      port:
+        description: ""
+        type: integer
+        default: 5201
+      format:
+        description: ""
+        type: string
+      interval:
+        description: ""
+        type: string
+      affinity:
+        description: ""
+        type: string
+      udp:
+        description: "Use UDP rather than TCP"
+        type: boolean
+        default: False
+      bandwidth:
+        description: "Set the target bandwidth to n bits/sec (default 1Mbit/sec for UDP, unlimited for TCP)"
+        type: integer
+        default: 1
+      time:
+        description: "Time, in seconds, to transmit for."
+        type: integer
+        default: 10
+      blockcount:
+        description: "The number of blocks to transmit"
+        type: integer
+      length:
+        description: "The length of buffer to read or write (default 128KB for TCP, 8KB for UDP)"
+        type: integer
+      parallel:
+        description: "The number of parallel client streams to run"
+        type: integer
+      reverse:
+        description: "Run in reverse mode (server sends, client receives)."
+        type: boolean
+        default: false
+      window:
+        description: "Window size/socket buffer size."
+        type: integer
+      bind:
+        description: "Bind to a specific interface or multicast address"
+        type: string
+      mss:
+        description: "Set the TCP maximum segment size (MTU - 40 bytes)"
+        type: integer
+      no-delay:
+        description: "Set the TCP no delay, disabling Nagle's algorithm."
+        type: boolean
+        default: false
+      ipv4:
+        description: "Only use IPv4"
+        type: boolean
+        default: false
+      ipv6:
+        description: "Only use IPv6"
+        type: boolean
+        default: false
+      tos:
+        description: "Set the IP 'type of service'"
+        type: integer
+      flowlabel:
+        description: "Set the IPv6 flow label (linux-only)"
+        type: string
+      zerocopy:
+        description: "Use a 'zero copy' method of sending data, such as sendfile(s), instead of the usual write(2)."
+        type: boolean
+        default: false
+      omit:
+        description: "Omit the first n seconds of the test, to skip past the TCP slow-start period."
+        type: integer
+      title:
+        description: "Prefix every output line with this string."
+        type: string
+      congestion:
+        description: "Set the linux congestion control algorithm."
+        type: string
+
+    required:
+      - host

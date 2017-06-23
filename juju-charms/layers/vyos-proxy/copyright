@@ -1,0 +1,9 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0
+
+Files: *
+Copyright: 2015, Canonical Ltd.
+License: Apache-2.0 
+
+License: Apache-2.0
+ On Debian GNU/Linux system you can find the complete text of the
+ Apache-2.0 license in '/usr/share/common-licenses/Apache-2.0'
