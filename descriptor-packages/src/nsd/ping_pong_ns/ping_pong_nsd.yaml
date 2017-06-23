@@ -1,0 +1,102 @@
+#
+#   Copyright 2016 RIFT.io Inc
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+#
+
+nsd:nsd-catalog:
+    nsd:nsd:
+     -  nsd:id: rift_ping_pong_ns
+        nsd:logo: rift_logo.png
+        nsd:name: ping_pong_ns
+        nsd:short-name: ping_pong_ns
+        nsd:vendor: RIFT.io
+        nsd:version: '1.1'
+        nsd:description: RIFT.io sample ping pong network service
+        nsd:constituent-vnfd:
+        -   nsd:member-vnf-index: '1'
+            nsd:vnfd-id-ref: rift_ping_vnf
+        -   nsd:member-vnf-index: '2'
+            nsd:vnfd-id-ref: rift_pong_vnf
+        nsd:initial-config-primitive:
+        -   nsd:name: start traffic
+            nsd:parameter:
+            -   nsd:name: port
+                nsd:value: 5555
+            -   nsd:name: ssh-username
+                nsd:value: fedora
+            -   nsd:name: ssh-password
+                nsd:value: fedora
+            nsd:seq: '1'
+            nsd:user-defined-script: start_traffic.py
+        nsd:input-parameter-xpath:
+        -   nsd:xpath: /nsd:nsd-catalog/nsd:nsd/nsd:vendor
+        nsd:ip-profiles:
+        -   nsd:description: Inter VNF Link
+            nsd:ip-profile-params:
+                nsd:gateway-address: 31.31.31.210
+                nsd:ip-version: ipv4
+                nsd:subnet-address: 31.31.31.0/24
+                nsd:dhcp-params:
+                  nsd:count: 200
+                  nsd:start-address: 31.31.31.2
+            nsd:name: InterVNFLink
+        nsd:placement-groups:
+        -   nsd:member-vnfd:
+            -   nsd:member-vnf-index-ref: '1'
+                nsd:vnfd-id-ref: rift_ping_vnf
+            -   nsd:member-vnf-index-ref: '2'
+                nsd:vnfd-id-ref: rift_pong_vnf
+            nsd:name: Orcus
+            nsd:requirement: Place this VM on the Kuiper belt object Orcus
+            nsd:strategy: COLOCATION
+        -   nsd:member-vnfd:
+            -   nsd:member-vnf-index-ref: '1'
+                nsd:vnfd-id-ref: rift_ping_vnf
+            -   nsd:member-vnf-index-ref: '2'
+                nsd:vnfd-id-ref: rift_pong_vnf
+            nsd:name: Quaoar
+            nsd:requirement: Place this VM on the Kuiper belt object Quaoar
+            nsd:strategy: COLOCATION
+        nsd:vld:
+        -   nsd:id: mgmt_vl
+            nsd:description: Management VL
+            nsd:name: mgmt_vl
+            nsd:short-name: mgmt_vl
+            nsd:type: ELAN
+            nsd:vendor: RIFT.io
+            nsd:version: '1.0'
+            nsd:mgmt-network: 'true'
+            nsd:vnfd-connection-point-ref:
+            -   nsd:member-vnf-index-ref: '1'
+                nsd:vnfd-connection-point-ref: ping_vnfd/cp0
+                nsd:vnfd-id-ref: rift_ping_vnf
+            -   nsd:member-vnf-index-ref: '2'
+                nsd:vnfd-connection-point-ref: pong_vnfd/cp0
+                nsd:vnfd-id-ref: rift_pong_vnf
+        -   nsd:id: ping_pong_vl1
+            nsd:description: Data VL
+            nsd:ip-profile-ref: InterVNFLink
+            nsd:name: data_vl
+            nsd:short-name: data_vl
+            nsd:type: ELAN
+            nsd:vendor: RIFT.io
+            nsd:version: '1.0'
+            nsd:vnfd-connection-point-ref:
+            -   nsd:member-vnf-index-ref: '1'
+                nsd:vnfd-connection-point-ref: ping_vnfd/cp1
+                nsd:vnfd-id-ref: rift_ping_vnf
+            -   nsd:member-vnf-index-ref: '2'
+                nsd:vnfd-connection-point-ref: pong_vnfd/cp1
+                nsd:vnfd-id-ref: rift_pong_vnf

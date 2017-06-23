@@ -1,0 +1,114 @@
+#
+#   Copyright 2016 RIFT.io Inc
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+#
+
+vnfd:vnfd-catalog:
+    vnfd:
+     -  id: rift_pong_vnf
+        name: pong_vnf
+        short-name: pong_vnf
+        logo: rift_logo.png
+        vendor: RIFT.io
+        version: '1.1'
+        description: This is an example RIFT.ware VNF
+        connection-point:
+        -   name: pong_vnfd/cp0
+            type: VPORT
+        -   name: pong_vnfd/cp1
+            type: VPORT
+        http-endpoint:
+        -   path: api/v1/pong/stats
+            polling_interval_secs: '2'
+            port: '18889'
+        mgmt-interface:
+            dashboard-params:
+                path: api/v1/pong/stats
+                port: '18889'
+            port: '18889'
+            vdu-id: iovdu_0
+        placement-groups:
+        -   member-vdus:
+            -   member-vdu-ref: iovdu_0
+            name: Weywot
+            requirement: Place this VM on the Kuiper belt object Weywot
+            strategy: COLOCATION
+        vdu:
+        -   cloud-init-file: pong_cloud_init.cfg
+            count: '1'
+            external-interface:
+            -   name: eth0
+                virtual-interface:
+                    type: VIRTIO
+                vnfd-connection-point-ref: pong_vnfd/cp0
+            -   name: eth1
+                virtual-interface:
+                    type: VIRTIO
+                vnfd-connection-point-ref: pong_vnfd/cp1
+            id: iovdu_0
+            image: Fedora-x86_64-20-20131211.1-sda-pong.qcow2
+            name: iovdu_0
+            vm-flavor:
+                memory-mb: '512'
+                storage-gb: '4'
+                vcpu-count: '1'
+        vnf-configuration:
+            config-attributes:
+                config-delay: 10
+            service-primitive:
+            -   name: start
+            -   name: stop
+            -   name: restart
+            -   name: config
+                parameter:
+                -   data-type: STRING
+                    default-value: <rw_mgmt_ip>
+                    name: ssh-hostname
+                -   data-type: STRING
+                    default-value: fedora
+                    name: ssh-username
+                -   data-type: STRING
+                    default-value: fedora
+                    name: ssh-password
+                -   data-type: STRING
+                    name: ssh-private-key
+                -   data-type: STRING
+                    default-value: pong
+                    name: mode
+                    read-only: 'true'
+            -   name: set-server
+                parameter:
+                -   data-type: STRING
+                    name: server-ip
+                -   data-type: INTEGER
+                    name: server-port
+            -   name: start-traffic
+            -   name: stop-traffic
+            initial-config-primitive:
+            -   name: config
+                parameter:
+                -   name: ssh-hostname
+                    value: <rw_mgmt_ip>
+                -   name: ssh-username
+                    value: fedora
+                -   name: ssh-password
+                    value: fedora
+                -   name: mode
+                    value: pong
+                seq: '1'
+            -   name: start
+                seq: '2'
+            juju:
+                charm: pingpong

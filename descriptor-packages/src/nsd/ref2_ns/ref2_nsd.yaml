@@ -1,0 +1,40 @@
+nsd:nsd-catalog:
+    nsd:
+    -   constituent-vnfd:
+        -   member-vnf-index: '1'
+            vnfd-id-ref: Ref_Vnf_12
+        -   member-vnf-index: '2'
+            vnfd-id-ref: Ref_Vnf_22
+        description: Reference NS2
+        id: Ref_NS_2
+        name: Ref_NS_2
+        vendor: ETSI
+        vld:
+        -   id: '97465'
+            name: VL1
+            vnfd-connection-point-ref:
+            -   member-vnf-index-ref: '1'
+                vnfd-connection-point-ref: mgmt0
+                vnfd-id-ref: Ref_Vnf_12
+            -   member-vnf-index-ref: '2'
+                vnfd-connection-point-ref: mgmt
+                vnfd-id-ref: Ref_Vnf_22
+        -   id: f66e6
+            name: VL2
+            vnfd-connection-point-ref:
+            -   member-vnf-index-ref: '1'
+                vnfd-connection-point-ref: east
+                vnfd-id-ref: Ref_Vnf_12
+            -   member-vnf-index-ref: '2'
+                vnfd-connection-point-ref: east
+                vnfd-id-ref: Ref_Vnf_22
+        -   id: b72e9
+            name: VL3
+            vnfd-connection-point-ref:
+            -   member-vnf-index-ref: '1'
+                vnfd-connection-point-ref: west
+                vnfd-id-ref: Ref_Vnf_12
+            -   member-vnf-index-ref: '2'
+                vnfd-connection-point-ref: west
+                vnfd-id-ref: Ref_Vnf_22
+
