@@ -35,6 +35,7 @@ import netaddr
 import time
 import yaml
 import random
+import re
 
 from novaclient import client as nClient, exceptions as nvExceptions
 from keystoneauth1.identity import v2, v3
@@ -77,6 +78,15 @@ class vimconnector(vimconn.vimconnector):
         if api_version and api_version not in ('v3.3', 'v2.0', '2', '3'):
             raise vimconn.vimconnException("Invalid value '{}' for config:APIversion. "
                                            "Allowed values are 'v3.3', 'v2.0', '2' or '3'".format(api_version))
+        vim_type = config.get('vim_type')
+        if vim_type and vim_type not in ('vio', 'VIO'):
+            raise vimconn.vimconnException("Invalid value '{}' for config:vim_type."
+                            "Allowed values are 'vio' or 'VIO'".format(vim_type))
+
+        if config.get('dataplane_net_vlan_range') is not None:
+            #validate vlan ranges provided by user
+            self._validate_vlan_ranges(config.get('dataplane_net_vlan_range'))
+
         vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
                                       config)
 
@@ -89,12 +99,25 @@ class vimconnector(vimconn.vimconnector):
         self.neutron = self.session.get('neutron')
         self.cinder = self.session.get('cinder')
         self.glance = self.session.get('glance')
+        self.glancev1 = self.session.get('glancev1')
         self.keystone = self.session.get('keystone')
         self.api_version3 = self.session.get('api_version3')
+        self.vim_type = self.config.get("vim_type")
+        if self.vim_type:
+            self.vim_type = self.vim_type.upper()
+        if self.config.get("use_internal_endpoint"):
+            self.endpoint_type = "internalURL"
+        else:
+            self.endpoint_type = None
 
         self.logger = logging.getLogger('openmano.vim.openstack')
+
+        ####### VIO Specific Changes #########
+        if self.vim_type == "VIO":
+            self.logger = logging.getLogger('openmano.vim.vio')
+
         if log_level:
-            self.logger.setLevel( getattr(logging, log_level) )
+            self.logger.setLevel(getattr(logging, log_level))
 
     def __getitem__(self, index):
         """Get individuals parameters.
@@ -144,14 +167,22 @@ class vimconnector(vimconn.vimconnector):
                                    tenant_id=self.tenant_id)
             sess = session.Session(auth=auth, verify=not self.insecure)
             if self.api_version3:
-                self.keystone = ksClient_v3.Client(session=sess)
+                self.keystone = ksClient_v3.Client(session=sess, endpoint_type=self.endpoint_type)
             else:
-                self.keystone = ksClient_v2.Client(session=sess)
+                self.keystone = ksClient_v2.Client(session=sess, endpoint_type=self.endpoint_type)
             self.session['keystone'] = self.keystone
-            self.nova = self.session['nova'] = nClient.Client("2.1", session=sess)
-            self.neutron = self.session['neutron'] = neClient.Client('2.0', session=sess)
-            self.cinder = self.session['cinder'] = cClient.Client(2, session=sess)
-            self.glance = self.session['glance'] = glClient.Client(2, session=sess)
+            self.nova = self.session['nova'] = nClient.Client("2.1", session=sess, endpoint_type=self.endpoint_type)
+            self.neutron = self.session['neutron'] = neClient.Client('2.0', session=sess, endpoint_type=self.endpoint_type)
+            self.cinder = self.session['cinder'] = cClient.Client(2, session=sess, endpoint_type=self.endpoint_type)
+            if self.endpoint_type == "internalURL":
+                glance_service_id = self.keystone.services.list(name="glance")[0].id
+                glance_endpoint = self.keystone.endpoints.list(glance_service_id, interface="internal")[0].url
+            else:
+                glance_endpoint = None
+            self.glance = self.session['glance'] = glClient.Client(2, session=sess, endpoint=glance_endpoint)
+            #using version 1 of glance client in new_image()
+            self.glancev1 = self.session['glancev1'] = glClient.Client('1', session=sess,
+                                                                       endpoint=glance_endpoint)
             self.session['reload_client'] = False
             self.persistent_info['session'] = self.session
 
@@ -169,9 +200,7 @@ class vimconnector(vimconn.vimconnector):
                 net['type']='data'
             else:
                 net['type']='bridge'
-                
-                
-            
+
     def _format_exception(self, exception):
         '''Transform a keystone, nova, neutron  exception into a vimconn exception'''
         if isinstance(exception, (HTTPException, gl1Exceptions.HTTPException, gl1Exceptions.CommunicationError,
@@ -254,6 +283,19 @@ class vimconnector(vimconn.vimconnector):
                 network_dict["provider:network_type"]     = "vlan"
                 if vlan!=None:
                     network_dict["provider:network_type"] = vlan
+
+                ####### VIO Specific Changes #########
+                if self.vim_type == "VIO":
+                    if vlan is not None:
+                        network_dict["provider:segmentation_id"] = vlan
+                    else:
+                        if self.config.get('dataplane_net_vlan_range') is None:
+                            raise vimconn.vimconnConflictException("You must provide "\
+                                "'dataplane_net_vlan_range' in format [start_ID - end_ID]"\
+                                "at config value before creating sriov network with vlan tag")
+
+                        network_dict["provider:segmentation_id"] = self._genrate_vlanID()
+
             network_dict["shared"]=shared
             new_net=self.neutron.create_network({'network':network_dict})
             #print new_net
@@ -483,7 +525,7 @@ class vimconnector(vimconn.vimconnector):
                     while name in fl_names:
                         name_suffix += 1
                         name = flavor_data['name']+"-" + str(name_suffix)
-                        
+
                 ram = flavor_data.get('ram',64)
                 vcpus = flavor_data.get('vcpus',1)
                 numa_properties=None
@@ -499,6 +541,9 @@ class vimconnector(vimconn.vimconnector):
                         numa_properties["hw:mem_page_size"] = "large"
                         numa_properties["hw:cpu_policy"] = "dedicated"
                         numa_properties["hw:numa_mempolicy"] = "strict"
+                        if self.vim_type == "VIO":
+                            numa_properties["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
+                            numa_properties["vmware:latency_sensitivity_level"] = "high"
                         for numa in numas:
                             #overwrite ram and vcpus
                             ram = numa['memory']*1024
@@ -522,14 +567,14 @@ class vimconnector(vimconn.vimconnector):
                             #     if interface["dedicated"]=="yes":
                             #         raise vimconn.vimconnException("Passthrough interfaces are not supported for the openstack connector", http_code=vimconn.HTTP_Service_Unavailable)
                             #     #TODO, add the key 'pci_passthrough:alias"="<label at config>:<number ifaces>"' when a way to connect it is available
-                                
-                #create flavor                 
-                new_flavor=self.nova.flavors.create(name, 
-                                ram, 
-                                vcpus, 
+
+                #create flavor
+                new_flavor=self.nova.flavors.create(name,
+                                ram,
+                                vcpus,
                                 flavor_data.get('disk',1),
                                 is_public=flavor_data.get('is_public', True)
-                            ) 
+                            )
                 #add metadata
                 if numa_properties:
                     new_flavor.set_keys(numa_properties)
@@ -564,8 +609,6 @@ class vimconnector(vimconn.vimconnector):
         Returns the image_id
         '''
         # ALF TODO: revise and change for the new method or session
-        #using version 1 of glance client
-        glancev1 = gl1Client.Client('1',self.glance_endpoint, token=self.keystone.auth_token, **self.k_creds)  #TODO check k_creds vs n_creds
         retry=0
         max_retries=3
         while retry<max_retries:
@@ -596,11 +639,11 @@ class vimconnector(vimconn.vimconnector):
                         disk_format="raw"
                 self.logger.debug("new_image: '%s' loading from '%s'", image_dict['name'], image_dict['location'])
                 if image_dict['location'][0:4]=="http":
-                    new_image = glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
+                    new_image = self.glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
                             container_format="bare", location=image_dict['location'], disk_format=disk_format)
                 else: #local path
                     with open(image_dict['location']) as fimage:
-                        new_image = glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
+                        new_image = self.glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
                             container_format="bare", data=fimage, disk_format=disk_format)
                 #insert metadata. We cannot use 'new_image.properties.setdefault' 
                 #because nova and glance are "INDEPENDENT" and we are using nova for reading metadata
@@ -672,6 +715,7 @@ class vimconnector(vimconn.vimconnector):
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
             self._format_exception(e)
 
+
     def new_vminstance(self,name,description,start,image_id,flavor_id,net_list,cloud_config=None,disk_list=None):
         '''Adds a VM instance to VIM
         Params:
@@ -696,16 +740,16 @@ class vimconnector(vimconn.vimconnector):
             net_list_vim=[]
             external_network=[] #list of external networks to be connected to instance, later on used to create floating_ip
             self._reload_connection()
-            metadata_vpci={} #For a specific neutron plugin 
+            metadata_vpci = {} #For a specific neutron plugin
             for net in net_list:
                 if not net.get("net_id"): #skip non connected iface
                     continue
 
                 port_dict={
-                    "network_id": net["net_id"],
-                    "name": net.get("name"),
-                    "admin_state_up": True
-                }
+                            "network_id": net["net_id"],
+                            "name": net.get("name"),
+                            "admin_state_up": True
+                        }
                 if net["type"]=="virtual":
                     if "vpci" in net:
                         metadata_vpci[ net["net_id"] ] = [[ net["vpci"], "" ]]
@@ -715,7 +759,19 @@ class vimconnector(vimconn.vimconnector):
                             metadata_vpci["VF"]=[]
                         metadata_vpci["VF"].append([ net["vpci"], "" ])
                     port_dict["binding:vnic_type"]="direct"
+                    ########## VIO specific Changes #######
+                    if self.vim_type == "VIO":
+                        #Need to create port with port_security_enabled = False and no-security-groups
+                        port_dict["port_security_enabled"]=False
+                        port_dict["provider_security_groups"]=[]
+                        port_dict["security_groups"]=[]
                 else: #For PT
+                    ########## VIO specific Changes #######
+                    #Current VIO release does not support port with type 'direct-physical'
+                    #So no need to create virtual port in case of PCI-device.
+                    #Will update port_dict code when support gets added in next VIO release
+                    if self.vim_type == "VIO":
+                        raise vimconn.vimconnNotSupportedException("Current VIO release does not support full passthrough (PT)")
                     if "vpci" in net:
                         if "PF" not in metadata_vpci:
                             metadata_vpci["PF"]=[]
@@ -727,7 +783,9 @@ class vimconnector(vimconn.vimconnector):
                     port_dict["mac_address"]=net["mac_address"]
                 if net.get("port_security") == False:
                     port_dict["port_security_enabled"]=net["port_security"]
+
                 new_port = self.neutron.create_port({"port": port_dict })
+
                 net["mac_adress"] = new_port["port"]["mac_address"]
                 net["vim_id"] = new_port["port"]["id"]
                 net["ip"] = new_port["port"].get("fixed_ips", [{}])[0].get("ip_address")
@@ -747,10 +805,10 @@ class vimconnector(vimconn.vimconnector):
                     #metadata["pci_assignement"] = metadata["pci_assignement"][0:255]
                     self.logger.warn("Metadata deleted since it exceeds the expected length (255) ")
                     metadata = {}
-            
+
             self.logger.debug("name '%s' image_id '%s'flavor_id '%s' net_list_vim '%s' description '%s' metadata %s",
                               name, image_id, flavor_id, str(net_list_vim), description, str(metadata))
-            
+
             security_groups   = self.config.get('security_groups')
             if type(security_groups) is str:
                 security_groups = ( security_groups, )
@@ -1219,6 +1277,67 @@ class vimconnector(vimconn.vimconnector):
             self._format_exception(e)
         #TODO insert exception vimconn.HTTP_Unauthorized
 
+    ####### VIO Specific Changes #########
+    def _genrate_vlanID(self):
+        """
+         Method to get unused vlanID
+            Args:
+                None
+            Returns:
+                vlanID
+        """
+        #Get used VLAN IDs
+        usedVlanIDs = []
+        networks = self.get_network_list()
+        for net in networks:
+            if net.get('provider:segmentation_id'):
+                usedVlanIDs.append(net.get('provider:segmentation_id'))
+        used_vlanIDs = set(usedVlanIDs)
+
+        #find unused VLAN ID
+        for vlanID_range in self.config.get('dataplane_net_vlan_range'):
+            try:
+                start_vlanid , end_vlanid = map(int, vlanID_range.replace(" ", "").split("-"))
+                for vlanID in xrange(start_vlanid, end_vlanid + 1):
+                    if vlanID not in used_vlanIDs:
+                        return vlanID
+            except Exception as exp:
+                raise vimconn.vimconnException("Exception {} occurred while generating VLAN ID.".format(exp))
+        else:
+            raise vimconn.vimconnConflictException("Unable to create the SRIOV VLAN network."\
+                " All given Vlan IDs {} are in use.".format(self.config.get('dataplane_net_vlan_range')))
+
+
+    def _validate_vlan_ranges(self, dataplane_net_vlan_range):
+        """
+        Method to validate user given vlanID ranges
+            Args:  None
+            Returns: None
+        """
+        for vlanID_range in dataplane_net_vlan_range:
+            vlan_range = vlanID_range.replace(" ", "")
+            #validate format
+            vlanID_pattern = r'(\d)*-(\d)*$'
+            match_obj = re.match(vlanID_pattern, vlan_range)
+            if not match_obj:
+                raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}.You must provide "\
+                "'dataplane_net_vlan_range' in format [start_ID - end_ID].".format(vlanID_range))
+
+            start_vlanid , end_vlanid = map(int,vlan_range.split("-"))
+            if start_vlanid <= 0 :
+                raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}."\
+                "Start ID can not be zero. For VLAN "\
+                "networks valid IDs are 1 to 4094 ".format(vlanID_range))
+            if end_vlanid > 4094 :
+                raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}."\
+                "End VLAN ID can not be greater than 4094. For VLAN "\
+                "networks valid IDs are 1 to 4094 ".format(vlanID_range))
+
+            if start_vlanid > end_vlanid:
+                raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}."\
+                    "You must provide a 'dataplane_net_vlan_range' in format start_ID - end_ID and "\
+                    "start_ID < end_ID ".format(vlanID_range))
+
 #NOT USED FUNCTIONS
     
     def new_external_port(self, port_data):
@@ -1330,5 +1449,4 @@ class vimconnector(vimconn.vimconnector):
         if self.debug:
             print "get_hosts " + error_text
         return error_value, error_text        
-  
 
