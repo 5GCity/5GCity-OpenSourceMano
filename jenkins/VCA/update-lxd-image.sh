@@ -21,6 +21,9 @@ DOWNLOAD_PACKAGES=""
 
 PACKAGES="$LAYER_BASIC $DOWNLOAD_PACKAGES"
 
+# Packages from pypi to pre-install
+PYPI="charms.reactive charmhelpers paramiko>=1.16.0,<1.17"
+
 function cache() {
     series=$1
     container=juju-${series}-base
@@ -35,6 +38,7 @@ function cache() {
     lxc exec $container -- apt-get update -y
     lxc exec $container -- apt-get upgrade -y
     lxc exec $container -- apt-get install -y $PACKAGES $2
+    lxc exec $container -- pip3 install --upgrade $PYPI
     lxc stop $container
 
     lxc image delete $alias || true
