@@ -1,6 +1,6 @@
 
 /*
- * 
+ *
  *   Copyright 2016 RIFT.IO Inc
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
@@ -69,10 +69,10 @@ module vnfr
       key "name";
       uses manotypes:placement-group-info;
       uses manotypes:placement-group-input;
-    }  
+    }
   }
-  
-  
+
+
   grouping virtual-interface {
     container virtual-interface {
       description
@@ -192,8 +192,8 @@ module vnfr
 
       leaf create-time {
         description
-          "Creation timestamp of this Virtual Network 
-          Function.  The timestamp is expressed as 
+          "Creation timestamp of this Virtual Network
+          Function.  The timestamp is expressed as
           seconds since unix epoch - 1970-01-01T00:00:00Z";
 
         type uint32;
@@ -213,7 +213,9 @@ module vnfr
       }
 
       // Use parameters provided here to configure this VNF
-      uses manotypes:vnf-configuration;
+      container vnf-configuration {
+        uses manotypes:vca-configuration;
+      }
 
       // Mainly used by Mon-params & dashboard url
       container mgmt-interface {
@@ -351,6 +353,10 @@ module vnfr
 
         uses manotypes:supplemental-boot-data;
 
+        container vdu-configuration {
+          uses manotypes:vca-configuration;
+        }
+
         list volumes {
           key "name";
 
@@ -445,7 +451,7 @@ module vnfr
         }
         leaf operational-status {
           description
-            "The operational status of the VDU 
+            "The operational status of the VDU
               init                : The VDU has just started.
               vm-init-phase       : The VDUs in the VNF is being created in VIM.
               vm-alloc-pending    : The  VM alloc is pending in VIM
@@ -566,4 +572,3 @@ module vnfr
     }
   }
 }
-
