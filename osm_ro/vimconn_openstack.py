@@ -104,7 +104,7 @@ class vimconnector(vimconn.vimconnector):
         elif index == 'user_domain_id':
             return self.config.get("user_domain_id")
         else:
-            vimconn.vimconnector.__getitem__(self, index)
+            return vimconn.vimconnector.__getitem__(self, index)
 
     def __setitem__(self, index, value):
         """Set individuals parameters and it is marked as dirty so to force connection reload.
