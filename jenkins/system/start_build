@@ -19,6 +19,7 @@
 HERE=$(realpath $(dirname $0))
 OSM_JENKINS=$(dirname $HERE)
 . $OSM_JENKINS/common/all_funcs
+. $OSM_JENKINS/common/install_common
 
 INFO "Installing packages"
 apt-get update
@@ -53,9 +54,7 @@ systemctl start lxd-bridge
 
 apt-get install -y python-pip python python-pycurl charm-tools python-pytest
 
-# TODO: use package when available on osm repo
-git clone https://osm.etsi.org/gerrit/osm/osmclient
-pip install osmclient/.
+apt install -y python-osmclient
 
 export OSM_USE_LOCAL_DEVOPS=true
 devops/installers/install_osm.sh --test $*
@@ -72,6 +71,8 @@ if [ $RC == 0 ]; then
 
    TO_ADD="export OSM_HOSTNAME=$SO_CONTAINER_IP"
    grep -q OSM_HOSTNAME ~/.bashrc && sed -i "s/.*OSM_HOSTNAME.*/$TO_ADD/" ~/.bashrc || echo -e "$TO_ADD\n$(cat ~/.bashrc)" > ~/.bashrc
+   TO_ADD="export OSM_RO_HOSTNAME=$RO_CONTAINER_IP"
+   grep -q OSM_RO_HOSTNAME ~/.bashrc && sed -i "s/.*OSM_RO_HOSTNAME.*/$TO_ADD/" ~/.bashrc || echo -e "$TO_ADD\n$(cat ~/.bashrc)" > ~/.bashrc
 fi
 
 INFO "done, RC=$RC"
