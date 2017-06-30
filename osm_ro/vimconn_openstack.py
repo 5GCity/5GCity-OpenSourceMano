@@ -266,19 +266,19 @@ class vimconnector(vimconn.vimconnector):
                 ip_profile['subnet_address'] = "192.168.{}.0/24".format(subnet_rand)
             if 'ip_version' not in ip_profile: 
                 ip_profile['ip_version'] = "IPv4"
-            subnet={"name":net_name+"-subnet",
+            subnet = {"name":net_name+"-subnet",
                     "network_id": new_net["network"]["id"],
                     "ip_version": 4 if ip_profile['ip_version']=="IPv4" else 6,
                     "cidr": ip_profile['subnet_address']
                     }
-            if 'gateway_address' in ip_profile:
-                subnet['gateway_ip'] = ip_profile['gateway_address']
+            # Gateway should be set to None if not needed. Otherwise openstack assigns one by default
+            subnet['gateway_ip'] = ip_profile.get('gateway_address')
             if ip_profile.get('dns_address'):
                 subnet['dns_nameservers'] = ip_profile['dns_address'].split(";")
             if 'dhcp_enabled' in ip_profile:
                 subnet['enable_dhcp'] = False if ip_profile['dhcp_enabled']=="false" else True
             if 'dhcp_start_address' in ip_profile:
-                subnet['allocation_pools']=[]
+                subnet['allocation_pools'] = []
                 subnet['allocation_pools'].append(dict())
                 subnet['allocation_pools'][0]['start'] = ip_profile['dhcp_start_address']
             if 'dhcp_count' in ip_profile:
