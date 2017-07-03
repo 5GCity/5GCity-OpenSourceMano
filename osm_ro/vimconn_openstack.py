@@ -169,9 +169,7 @@ class vimconnector(vimconn.vimconnector):
                 net['type']='data'
             else:
                 net['type']='bridge'
-                
-                
-            
+
     def _format_exception(self, exception):
         '''Transform a keystone, nova, neutron  exception into a vimconn exception'''
         if isinstance(exception, (HTTPException, gl1Exceptions.HTTPException, gl1Exceptions.CommunicationError,
@@ -185,6 +183,8 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnNotFoundException(type(exception).__name__ + ": " + str(exception))
         elif isinstance(exception, nvExceptions.Conflict):
             raise vimconn.vimconnConflictException(type(exception).__name__ + ": " + str(exception))
+        elif isinstance(exception, vimconn.vimconnException):
+            raise
         else:  # ()
             raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))
 
@@ -672,6 +672,25 @@ class vimconnector(vimconn.vimconnector):
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
             self._format_exception(e)
 
+    def __wait_for_vm(self, vm_id, status):
+        """wait until vm is in the desired status and return True.
+        If the VM gets in ERROR status, return false.
+        If the timeout is reached generate an exception"""
+        elapsed_time = 0
+        while elapsed_time < server_timeout:
+            vm_status = self.nova.servers.get(vm_id).status
+            if vm_status == status:
+                return True
+            if vm_status == 'ERROR':
+                return False
+            time.sleep(1)
+            elapsed_time += 1
+
+        # if we exceeded the timeout rollback
+        if elapsed_time >= server_timeout:
+            raise vimconn.vimconnException('Timeout waiting for instance ' + vm_id + ' to get ' + status,
+                                           http_code=vimconn.HTTP_Request_Timeout)
+
     def new_vminstance(self,name,description,start,image_id,flavor_id,net_list,cloud_config=None,disk_list=None):
         '''Adds a VM instance to VIM
         Params:
@@ -692,11 +711,13 @@ class vimconnector(vimconn.vimconnector):
         '''
         self.logger.debug("new_vminstance input: image='%s' flavor='%s' nics='%s'",image_id, flavor_id,str(net_list))
         try:
+            server = None
             metadata={}
             net_list_vim=[]
-            external_network=[] #list of external networks to be connected to instance, later on used to create floating_ip
+            external_network=[]     # list of external networks to be connected to instance, later on used to create floating_ip
+            no_secured_ports = []   # List of port-is with port-security disabled
             self._reload_connection()
-            metadata_vpci={} #For a specific neutron plugin 
+            metadata_vpci={}   # For a specific neutron plugin
             for net in net_list:
                 if not net.get("net_id"): #skip non connected iface
                     continue
@@ -715,7 +736,7 @@ class vimconnector(vimconn.vimconnector):
                             metadata_vpci["VF"]=[]
                         metadata_vpci["VF"].append([ net["vpci"], "" ])
                     port_dict["binding:vnic_type"]="direct"
-                else: #For PT
+                else:  # For PT
                     if "vpci" in net:
                         if "PF" not in metadata_vpci:
                             metadata_vpci["PF"]=[]
@@ -725,8 +746,6 @@ class vimconnector(vimconn.vimconnector):
                     port_dict["name"]=name
                 if net.get("mac_address"):
                     port_dict["mac_address"]=net["mac_address"]
-                if net.get("port_security") == False:
-                    port_dict["port_security_enabled"]=net["port_security"]
                 new_port = self.neutron.create_port({"port": port_dict })
                 net["mac_adress"] = new_port["port"]["mac_address"]
                 net["vim_id"] = new_port["port"]["id"]
@@ -739,6 +758,11 @@ class vimconnector(vimconn.vimconnector):
                 elif net['use'] == 'mgmt' and self.config.get('use_floating_ip'):
                     net['exit_on_floating_ip_error'] = False
                     external_network.append(net)
+
+                # If port security is disabled when the port has not yet been attached to the VM, then all vm traffic is dropped.
+                # As a workaround we wait until the VM is active and then disable the port-security
+                if net.get("port_security") == False:
+                    no_secured_ports.append(new_port["port"]["id"])
 
             if metadata_vpci:
                 metadata = {"pci_assignement": json.dumps(metadata_vpci)}
@@ -858,25 +882,29 @@ class vimconnector(vimconn.vimconnector):
                                               config_drive = config_drive,
                                               block_device_mapping = block_device_mapping
                                               )  # , description=description)
+
+            # Previously mentioned workaround to wait until the VM is active and then disable the port-security
+            if no_secured_ports:
+                self.__wait_for_vm(server.id, 'ACTIVE')
+
+            for port_id in no_secured_ports:
+                try:
+                    self.neutron.update_port(port_id, {"port": {"port_security_enabled": False, "security_groups": None} })
+
+                except Exception as e:
+                    self.logger.error("It was not possible to disable port security for port {}".format(port_id))
+                    self.delete_vminstance(server.id)
+                    raise
+
             #print "DONE :-)", server
             pool_id = None
             floating_ips = self.neutron.list_floatingips().get("floatingips", ())
+
+            if external_network:
+                self.__wait_for_vm(server.id, 'ACTIVE')
+
             for floating_network in external_network:
                 try:
-                    # wait until vm is active
-                    elapsed_time = 0
-                    while elapsed_time < server_timeout:
-                        status = self.nova.servers.get(server.id).status
-                        if status == 'ACTIVE':
-                            break
-                        time.sleep(1)
-                        elapsed_time += 1
-
-                    #if we exceeded the timeout rollback
-                    if elapsed_time >= server_timeout:
-                        raise vimconn.vimconnException('Timeout creating instance ' + name,
-                                                       http_code=vimconn.HTTP_Request_Timeout)
-
                     assigned = False
                     while(assigned == False):
                         if floating_ips:
@@ -920,26 +948,31 @@ class vimconnector(vimconn.vimconnector):
                     if not floating_network['exit_on_floating_ip_error']:
                         self.logger.warn("Cannot create floating_ip. %s", str(e))
                         continue
-                    self.delete_vminstance(server.id)
                     raise
 
             return server.id
 #        except nvExceptions.NotFound as e:
 #            error_value=-vimconn.HTTP_Not_Found
 #            error_text= "vm instance %s not found" % vm_id
-        except (ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError) as e:
+#        except TypeError as e:
+#            raise vimconn.vimconnException(type(e).__name__ + ": "+  str(e), http_code=vimconn.HTTP_Bad_Request)
+
+        except Exception as e:
             # delete the volumes we just created
             if block_device_mapping != None:
                 for volume_id in block_device_mapping.itervalues():
                     self.cinder.volumes.delete(volume_id)
 
-            # delete ports we just created
-            for net_item in net_list_vim:
-                if 'port-id' in net_item:
-                    self.neutron.delete_port(net_item['port-id'])
+            # Delete the VM
+            if server != None:
+                self.delete_vminstance(server.id)
+            else:
+                # delete ports we just created
+                for net_item in net_list_vim:
+                    if 'port-id' in net_item:
+                        self.neutron.delete_port(net_item['port-id'])
+
             self._format_exception(e)
-        except TypeError as e:
-            raise vimconn.vimconnException(type(e).__name__ + ": "+  str(e), http_code=vimconn.HTTP_Bad_Request)
 
     def get_vminstance(self,vm_id):
         '''Returns the VM instance information from VIM'''
