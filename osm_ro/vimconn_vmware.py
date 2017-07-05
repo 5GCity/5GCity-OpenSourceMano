@@ -1314,6 +1314,7 @@ class vimconnector(vimconn.vimconnector):
         vm_cpus = None
         vm_memory = None
         vm_disk = None
+        numas = None
 
         if flavor_id is not None:
             if flavor_id not in vimconnector.flavorlist:
@@ -1366,16 +1367,7 @@ class vimconnector(vimconn.vimconnector):
         # use: 'data', 'bridge', 'mgmt'
         # create vApp.  Set vcpu and ram based on flavor id.
         try:
-            vapptask = self.vca.create_vapp(self.tenant_name, vmname_andid, templateName,
-                                       self.get_catalogbyid(image_id, catalogs),
-                                       network_name=None,  # None while creating vapp
-                                       network_mode=network_mode,
-                                       vm_name=vmname_andid,
-                                       vm_cpus=vm_cpus,  # can be None if flavor is None
-                                       vm_memory=vm_memory)  # can be None if flavor is None
-
-            if vapptask is None or vapptask is False:
-                self.get_token() # Retry getting token
+            for retry in (1,2):
                 vapptask = self.vca.create_vapp(self.tenant_name, vmname_andid, templateName,
                                            self.get_catalogbyid(image_id, catalogs),
                                            network_name=None,  # None while creating vapp
@@ -1383,6 +1375,12 @@ class vimconnector(vimconn.vimconnector):
                                            vm_name=vmname_andid,
                                            vm_cpus=vm_cpus,  # can be None if flavor is None
                                            vm_memory=vm_memory)  # can be None if flavor is None
+
+                if not vapptask and retry==1:
+                    self.get_token() # Retry getting token
+                    continue
+                else:
+                    break
 
             if vapptask is None or vapptask is False:
                 raise vimconn.vimconnUnexpectedResponse(
@@ -4983,23 +4981,21 @@ class vimconnector(vimconn.vimconnector):
                       log=False)
 
             result = vca.login(password=self.passwd, org=self.org_name)
-            if not result:
-                raise vimconn.vimconnConnectionException("Can't connect to a vCloud director as: {}".format(self.user))
-
-            result = vca.login(token=vca.token, org=self.org_name, org_url=vca.vcloud_session.org_url)
             if result is True:
-                self.logger.info(
-                    "Successfully generated token for vcloud direct org: {} as user: {}".format(self.org_name, self.user))
+                result = vca.login(token=vca.token, org=self.org_name, org_url=vca.vcloud_session.org_url)
+                if result is True:
+                    self.logger.info(
+                        "Successfully generated token for vcloud direct org: {} as user: {}".format(self.org_name, self.user))
+                    #Update vca
+                    self.vca = vca
+                    return
 
         except:
             raise vimconn.vimconnConnectionException("Can't connect to a vCloud director org: "
                                                      "{} as user: {}".format(self.org_name, self.user))
 
-        if not vca:
+        if not vca or not result:
             raise vimconn.vimconnConnectionException("self.connect() is failed while reconnecting")
-
-        #Update vca
-        self.vca = vca
 
 
     def get_vdc_details(self):
