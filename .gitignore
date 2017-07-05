@@ -12,3 +12,4 @@ stage/
 *venv/
 *venv3/
 .tox/
+snap/.snapcraft/
