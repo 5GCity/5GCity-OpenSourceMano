@@ -23,6 +23,7 @@ OSM_JENKINS=$(dirname $HERE)
 
 INFO "Installing packages"
 apt-get update
+apt install -y lxd
 
 INFO "Configuring LXD"
 # ZFS doesn't work inside a nested container. ZFS should be configured in the host LXD.
