@@ -485,6 +485,40 @@ class test_vimconn_new_network(test_base):
         else:
             logger.info("Failed to delete network id {}".format(self.__class__.network_id))
 
+    def test_050_refresh_nets_status(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+        # creating new network
+        network_name = _get_random_string(20)
+        net_type = 'bridge'
+        network_id = test_config["vim_conn"].new_network(net_name=network_name,
+                                                          net_type=net_type)
+        # refresh net status
+        net_dict = test_config["vim_conn"].refresh_nets_status([network_id])
+        for attr in net_dict[network_id]:
+            if attr == 'status':
+                self.assertEqual(net_dict[network_id][attr], 'ACTIVE')
+
+        # Deleting created network
+        result = test_config["vim_conn"].delete_network(network_id)
+        if result:
+            logger.info("Network id {} sucessfully deleted".format(network_id))
+        else:
+            logger.info("Failed to delete network id {}".format(network_id))
+
+    def test_060_refresh_nets_status_negative(self):
+        unknown_net_id = str(uuid.uuid4())
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        # refresh net status
+        net_dict = test_config["vim_conn"].refresh_nets_status([unknown_net_id])
+        self.assertEqual(net_dict, {})
+
 class test_vimconn_get_network_list(test_base):
     # test_index = 1
     network_name = None
@@ -838,9 +872,9 @@ class test_vimconn_new_flavor(test_base):
         self.__class__.test_index += 1
 
         # create new flavor
-        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
-        self.assertEqual(type(flavor_id),str)
-        self.assertIsInstance(uuid.UUID(flavor_id),uuid.UUID)
+        self.__class__.flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+        self.assertEqual(type(self.__class__.flavor_id),str)
+        self.assertIsInstance(uuid.UUID(self.__class__.flavor_id),uuid.UUID)
 
     def test_010_delete_flavor(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
@@ -1001,6 +1035,7 @@ class test_vimconn_new_vminstance(test_base):
     net_type = None
     network_id = None
     image_id = None
+    instance_id = None
 
     def setUp(self):
         # create network
@@ -1049,13 +1084,9 @@ class test_vimconn_new_vminstance(test_base):
 
         net_list = [{'use': self.__class__.net_type, 'name': name, 'floating_ip': False, 'vpci': vpci, 'port_security': True, 'type': 'virtual', 'net_id': self.__class__.network_id}]
 
-        instance_id = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=self.__class__.image_id, flavor_id=flavor_id, net_list=net_list)
+        self.__class__.instance_id = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=self.__class__.image_id, flavor_id=flavor_id, net_list=net_list)
 
-        self.assertEqual(type(instance_id),str)
-        # Deleting created vm instance
-        logger.info("Deleting created vm intance")
-        test_config["vim_conn"].delete_vminstance(instance_id)
-        time.sleep(10)
+        self.assertEqual(type(self.__class__.instance_id),str)
 
     def test_010_new_vminstance_by_model(self):
         flavor_data = {'ram': 1024, 'vcpus': 2, 'disk': 10}
@@ -1203,6 +1234,104 @@ class test_vimconn_new_vminstance(test_base):
                                                                   flavor_id=unknown_flavor_id,
                                                                             net_list=net_list)
         self.assertEqual((context.exception).http_code, 404)
+
+    def test_070_get_vminstance(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        # Get instance by its id
+        vm_info = test_config["vim_conn"].get_vminstance(self.__class__.instance_id)
+
+        if test_config['vimtype'] == 'vmware':
+            for attr in vm_info:
+                if attr == 'status':
+                    self.assertEqual(vm_info[attr], 'ACTIVE')
+                if attr == 'hostId':
+                    self.assertEqual(type(vm_info[attr]), str)
+                if attr == 'interfaces':
+                    self.assertEqual(type(vm_info[attr]), list)
+                    self.assertEqual(vm_info[attr][0]['IsConnected'], 'true')
+                if attr == 'IsEnabled':
+                    self.assertEqual(vm_info[attr], 'true')
+
+    def test_080_get_vminstance_negative(self):
+        unknown_instance_id = str(uuid.uuid4())
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        with self.assertRaises(Exception) as context:
+            test_config["vim_conn"].get_vminstance(unknown_instance_id)
+
+        self.assertEqual((context.exception).http_code, 404)
+
+    def test_090_refresh_vms_status(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+        vm_list = []
+        vm_list.append(self.__class__.instance_id)
+
+        # refresh vm status
+        vm_info = test_config["vim_conn"].refresh_vms_status(vm_list)
+        for attr in vm_info[self.__class__.instance_id]:
+            if attr == 'status':
+                self.assertEqual(vm_info[self.__class__.instance_id][attr], 'ACTIVE')
+            if attr == 'interfaces':
+                self.assertEqual(type(vm_info[self.__class__.instance_id][attr]), list)
+
+    def test_100_refresh_vms_status_negative(self):
+        unknown_id = str(uuid.uuid4())
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        vm_dict = test_config["vim_conn"].refresh_vms_status([unknown_id])
+        self.assertEqual(vm_dict, {})
+
+    def test_110_action_vminstance(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        action_list = ['shutdown','start','shutoff','rebuild','pause','resume']
+        # various action on vminstace
+        for action in action_list:
+            instance_id = test_config["vim_conn"].action_vminstance(self.__class__.instance_id,
+                                                                               { action: None})
+            self.assertEqual(instance_id, self.__class__.instance_id)
+
+    def test_120_action_vminstance_negative(self):
+        non_exist_id = str(uuid.uuid4())
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        action = 'start'
+        with self.assertRaises(Exception) as context:
+            test_config["vim_conn"].action_vminstance(non_exist_id, { action: None})
+
+        self.assertEqual((context.exception).http_code, 400)
+
+    def test_130_delete_vminstance(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        # Deleting created vm instance
+        logger.info("Deleting created vm instance")
+        test_config["vim_conn"].delete_vminstance(self.__class__.instance_id)
+        time.sleep(10)
 
 '''
 IMPORTANT NOTE
