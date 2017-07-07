@@ -186,6 +186,7 @@ class vimconnector(vimconn.vimconnector):
         elif isinstance(exception, vimconn.vimconnException):
             raise
         else:  # ()
+            self.logger.error("General Exception " + str(exception), exc_info=True)
             raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))
 
     def get_tenant_list(self, filter_dict={}):
@@ -718,6 +719,7 @@ class vimconnector(vimconn.vimconnector):
             no_secured_ports = []   # List of port-is with port-security disabled
             self._reload_connection()
             metadata_vpci={}   # For a specific neutron plugin
+            block_device_mapping = None
             for net in net_list:
                 if not net.get("net_id"): #skip non connected iface
                     continue
@@ -749,7 +751,12 @@ class vimconnector(vimconn.vimconnector):
                 new_port = self.neutron.create_port({"port": port_dict })
                 net["mac_adress"] = new_port["port"]["mac_address"]
                 net["vim_id"] = new_port["port"]["id"]
-                net["ip"] = new_port["port"].get("fixed_ips", [{}])[0].get("ip_address")
+                # if try to use a network without subnetwork, it will return a emtpy list
+                fixed_ips = new_port["port"].get("fixed_ips")
+                if fixed_ips:
+                    net["ip"] = fixed_ips[0].get("ip_address")
+                else:
+                    net["ip"] = None
                 net_list_vim.append({"port-id": new_port["port"]["id"]})
 
                 if net.get('floating_ip', False):
@@ -829,10 +836,9 @@ class vimconnector(vimconn.vimconnector):
                 userdata = cloud_config
 
             #Create additional volumes in case these are present in disk_list
-            block_device_mapping = None
             base_disk_index = ord('b')
             if disk_list != None:
-                block_device_mapping = dict()
+                block_device_mapping = {}
                 for disk in disk_list:
                     if 'image_id' in disk:
                         volume = self.cinder.volumes.create(size = disk['size'],name = name + '_vd' +
@@ -879,8 +885,8 @@ class vimconnector(vimconn.vimconnector):
                                               availability_zone=self.config.get('availability_zone'),
                                               key_name=self.config.get('keypair'),
                                               userdata=userdata,
-                                              config_drive = config_drive,
-                                              block_device_mapping = block_device_mapping
+                                              config_drive=config_drive,
+                                              block_device_mapping=block_device_mapping
                                               )  # , description=description)
 
             # Previously mentioned workaround to wait until the VM is active and then disable the port-security
@@ -959,7 +965,7 @@ class vimconnector(vimconn.vimconnector):
 
         except Exception as e:
             # delete the volumes we just created
-            if block_device_mapping != None:
+            if block_device_mapping:
                 for volume_id in block_device_mapping.itervalues():
                     self.cinder.volumes.delete(volume_id)
 
