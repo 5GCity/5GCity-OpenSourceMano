@@ -23,13 +23,13 @@
 # contact with: nfvlabs@tid.es
 ##
 
-'''
+"""
 openmano client used to interact with openmano-server (openmanod) 
-'''
+"""
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ = "$09-oct-2014 09:09:48$"
-__version__ = "0.4.14-r521"
-version_date = "May 2017"
+__version__ = "0.4.15-r525"
+version_date = "Jul 2017"
 
 from argcomplete.completers import FilesCompleter
 import os
@@ -1033,6 +1033,7 @@ def datacenter_delete(args):
         print content['error']['description']
     return result
 
+
 def datacenter_list(args):
     #print "datacenter-list",args
     tenant='any' if args.all else _get_tenant()
@@ -1050,6 +1051,7 @@ def datacenter_list(args):
         args.verbose += 1
     return _print_verbose(mano_response, args.verbose)
 
+
 def datacenter_sdn_port_mapping_set(args):
     tenant = _get_tenant()
     datacenter = _get_datacenter(args.name, tenant)
@@ -1058,30 +1060,37 @@ def datacenter_sdn_port_mapping_set(args):
     if not args.file:
         raise OpenmanoCLIError(
             "No yaml/json has been provided specifying the SDN port mapping")
+    sdn_port_mapping = _load_file_or_yaml(args.file)
+    payload_req = json.dumps({"sdn_port_mapping": sdn_port_mapping})
 
-    port_mapping = yaml.load(datacenter_sdn_port_mapping_list(args))
-    if 'error' in port_mapping:
+    # read
+    URLrequest = "http://%s:%s/openmano/%s/datacenters/%s/sdn_mapping" % (mano_host, mano_port, tenant, datacenter)
+    mano_response = requests.get(URLrequest)
+    logger.debug("openmano response: %s", mano_response.text)
+    port_mapping = mano_response.json()
+    if mano_response.status_code != 200:
+        str(mano_response.json())
         raise OpenmanoCLIError("openmano client error: {}".format(port_mapping['error']['description']))
     if len(port_mapping["sdn_port_mapping"]["ports_mapping"]) > 0:
         if not args.force:
             r = raw_input("Datacenter %s already contains a port mapping. Overwrite? (y/N)? " % (datacenter))
             if not (len(r) > 0 and r[0].lower() == "y"):
                 return 0
-        args.force = True
-        print datacenter_sdn_port_mapping_clear(args)
 
-    sdn_port_mapping = _load_file_or_yaml(args.file)
-    payload_req = json.dumps({"sdn_port_mapping": sdn_port_mapping})
+        # clear
+        URLrequest = "http://%s:%s/openmano/%s/datacenters/%s/sdn_mapping" % (mano_host, mano_port, tenant, datacenter)
+        mano_response = requests.delete(URLrequest)
+        logger.debug("openmano response: %s", mano_response.text)
+        if mano_response.status_code != 200:
+            return _print_verbose(mano_response, args.verbose)
 
+    # set
     URLrequest = "http://%s:%s/openmano/%s/datacenters/%s/sdn_mapping" % (mano_host, mano_port, tenant, datacenter)
     logger.debug("openmano request: %s", payload_req)
     mano_response = requests.post(URLrequest, headers=headers_req, data=payload_req)
     logger.debug("openmano response: %s", mano_response.text)
+    return _print_verbose(mano_response, args.verbose)
 
-    if mano_response.status_code == 200:
-        return yaml.safe_dump(mano_response.json())
-    else:
-        return mano_response.content
 
 def datacenter_sdn_port_mapping_list(args):
     tenant = _get_tenant()
@@ -1091,10 +1100,8 @@ def datacenter_sdn_port_mapping_list(args):
     mano_response = requests.get(URLrequest)
     logger.debug("openmano response: %s", mano_response.text)
 
-    if mano_response.status_code != 200:
-        return mano_response.content
+    return _print_verbose(mano_response, 4)
 
-    return yaml.safe_dump(mano_response.json())
 
 def datacenter_sdn_port_mapping_clear(args):
     tenant = _get_tenant()
@@ -1102,19 +1109,15 @@ def datacenter_sdn_port_mapping_clear(args):
 
     if not args.force:
         r = raw_input("Clean SDN port mapping for datacenter %s (y/N)? " %(datacenter))
-        if  not (len(r)>0  and r[0].lower()=="y"):
+        if not (len(r) > 0 and r[0].lower() == "y"):
             return 0
 
     URLrequest = "http://%s:%s/openmano/%s/datacenters/%s/sdn_mapping" % (mano_host, mano_port, tenant, datacenter)
     mano_response = requests.delete(URLrequest)
     logger.debug("openmano response: %s", mano_response.text)
 
-    if mano_response.status_code != 200:
-        if "No port mapping for datacenter" in mano_response.content:
-            return "No port mapping for datacenter " + datacenter + " has been found"
-        return mano_response.content
+    return _print_verbose(mano_response, args.verbose)
 
-    return yaml.safe_dump(mano_response.json())
 
 def sdn_controller_create(args):
     tenant = _get_tenant()
@@ -1145,42 +1148,41 @@ def sdn_controller_create(args):
     mano_response = requests.post(URLrequest, headers=headers_req, data=payload_req)
     logger.debug("openmano response: %s", mano_response.text)
     result = _print_verbose(mano_response, args.verbose)
-
     return result
+
 
 def sdn_controller_edit(args):
     tenant = _get_tenant()
     controller_uuid = _get_item_uuid("sdn_controllers", args.name, tenant)
     headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
 
-    if not (args.new_name or args.ip or args.port or args.dpid or args.type):
-        raise OpenmanoCLIError("At least one parameter must be editd")
-
-    if not args.force:
-        r = raw_input("Update SDN controller %s (y/N)? " %(args.name))
-        if  not (len(r)>0  and r[0].lower()=="y"):
-            return 0
-
     controller_dict = {}
-    if args.new_name != None:
+    if args.new_name:
         controller_dict['name'] = args.new_name
-    if args.ip != None:
+    if args.ip:
         controller_dict['ip'] = args.ip
-    if args.port != None:
+    if args.port:
         controller_dict['port'] = int(args.port)
-    if args.dpid != None:
+    if args.dpid:
         controller_dict['dpid'] = args.dpid
-    if args.type != None:
+    if args.type:
         controller_dict['type'] = args.type
-    if args.description != None:
+    if args.description:
         controller_dict['description'] = args.description
-    if args.user != None:
+    if args.user:
         controller_dict['user'] = args.user
-    if args.password != None:
+    if args.password:
         controller_dict['password'] = args.password
 
-    payload_req = json.dumps({"sdn_controller": controller_dict})
+    if not controller_dict:
+        raise OpenmanoCLIError("At least one parameter must be edited")
 
+    if not args.force:
+        r = raw_input("Update SDN controller {} (y/N)? ".format(args.name))
+        if not (len(r) > 0 and r[0].lower() == "y"):
+            return 0
+
+    payload_req = json.dumps({"sdn_controller": controller_dict})
     # print payload_req
 
     URLrequest = "http://%s:%s/openmano/%s/sdn_controllers/%s" % (mano_host, mano_port, tenant, controller_uuid)
@@ -1188,8 +1190,8 @@ def sdn_controller_edit(args):
     mano_response = requests.put(URLrequest, headers=headers_req, data=payload_req)
     logger.debug("openmano response: %s", mano_response.text)
     result = _print_verbose(mano_response, args.verbose)
-
     return result
+
 
 def sdn_controller_list(args):
     tenant = _get_tenant()
@@ -1208,8 +1210,9 @@ def sdn_controller_list(args):
     if args.name!=None:
         args.verbose += 1
 
-    result = json.dumps(mano_response.json(), indent=4)
-    return result
+    # json.dumps(mano_response.json(), indent=4)
+    return _print_verbose(mano_response, args.verbose)
+
 
 def sdn_controller_delete(args):
     tenant = _get_tenant()
@@ -1223,9 +1226,7 @@ def sdn_controller_delete(args):
     URLrequest = "http://%s:%s/openmano/%s/sdn_controllers/%s" % (mano_host, mano_port, tenant, controller_uuid)
     mano_response = requests.delete(URLrequest)
     logger.debug("openmano response: %s", mano_response.text)
-    result = _print_verbose(mano_response, args.verbose)
-
-    return result
+    return _print_verbose(mano_response, args.verbose)
 
 def vim_action(args):
     #print "datacenter-net-action",args
@@ -1284,6 +1285,7 @@ def vim_action(args):
             args.verbose=0
         return _print_verbose(mano_response, args.verbose)
 
+
 def _get_items(item, item_name_id=None, datacenter=None, tenant=None):
     URLrequest = "http://%s:%s/openmano" %(mano_host, mano_port)
     if tenant:
@@ -1298,6 +1300,7 @@ def _get_items(item, item_name_id=None, datacenter=None, tenant=None):
     logger.debug("openmano response: %s", mano_response.text )
 
     return mano_response
+
 
 def vim_net_sdn_attach(args):
     #Verify the network exists in the vim
@@ -1324,8 +1327,7 @@ def vim_net_sdn_attach(args):
     mano_response = requests.post(URLrequest, headers=headers_req, data=json.dumps(payload_req))
     logger.debug("openmano response: %s", mano_response.text)
     result = _print_verbose(mano_response, args.verbose)
-
-    return
+    return result
 
 
 def vim_net_sdn_detach(args):
@@ -1358,8 +1360,8 @@ def vim_net_sdn_detach(args):
     mano_response = requests.delete(URLrequest)
     logger.debug("openmano response: %s", mano_response.text)
     result = _print_verbose(mano_response, args.verbose)
+    return result
 
-    return
 
 def datacenter_net_action(args):
     if args.action == "net-update":
@@ -1471,6 +1473,7 @@ def datacenter_netmap_action(args):
     logger.debug("openmano response: %s", mano_response.text )
     return _print_verbose(mano_response, args.verbose)
 
+
 def element_edit(args):
     element = _get_item_uuid(args.element, args.name)
     headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
@@ -1543,6 +1546,7 @@ def datacenter_edit(args):
     if args.name != None:
         args.verbose += 1
     return _print_verbose(mano_response, args.verbose)
+
 
 def version(args):
     headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
