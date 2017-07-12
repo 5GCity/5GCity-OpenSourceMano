@@ -351,12 +351,12 @@ class vimconnector(vimconn.vimconnector):
             if filter_dict != {}:
                 if 'tenant_id' in filter_dict:
                     tfilters['vpcId'] = filter_dict['tenant_id']
-            subnets = self.conn_vpc.get_all_subnets(subnet_ids=filter_dict.get('id', None), filters=tfilters)
+            subnets = self.conn_vpc.get_all_subnets(subnet_ids=filter_dict.get('name', None), filters=tfilters)
             net_list = []
             for net in subnets:
                 net_list.append(
                     {'id': str(net.id), 'name': str(net.id), 'status': str(net.state), 'vpc_id': str(net.vpc_id),
-                     'cidr_block': str(net.cidr_block)})
+                     'cidr_block': str(net.cidr_block), 'type': 'bridge'})
             return net_list
         except Exception as e:
             self.format_vimconn_exception(e)
@@ -796,7 +796,10 @@ class vimconnector(vimconn.vimconnector):
                         interface_dict['vim_interface_id'] = interface.id
                         interface_dict['vim_net_id'] = interface.subnet_id
                         interface_dict['mac_address'] = interface.mac_address
-                        interface_dict['ip_address'] = interface.private_ip_address
+                        if hasattr(interface, 'publicIp') and interface.publicIp != None:
+                            interface_dict['ip_address'] = interface.publicIp + ";" + interface.private_ip_address
+                        else:
+                            interface_dict['ip_address'] = interface.private_ip_address
                         instance_dict['interfaces'].append(interface_dict)
                 except Exception as e:
                     self.logger.error("Exception getting vm status: %s", str(e), exc_info=True)
