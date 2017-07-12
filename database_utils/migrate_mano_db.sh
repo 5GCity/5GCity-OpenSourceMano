@@ -27,7 +27,7 @@
 
 DBUSER="mano"
 DBPASS=""
-DEFAULT_DBPASS="maopw"
+DEFAULT_DBPASS="manopw"
 DBHOST=""
 DBPORT="3306"
 DBNAME="mano_db"
