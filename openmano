@@ -1123,8 +1123,13 @@ def sdn_controller_create(args):
     tenant = _get_tenant()
     headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
 
-    if not (args.ip and args.port and args.dpid and args.type):
-        raise OpenmanoCLIError("The following arguments are required: ip, port, dpid, type")
+    error_msg=[]
+    if not args.ip: error_msg.append("'ip'")
+    if not args.port: error_msg.append("'port'")
+    if not args.dpid: error_msg.append("'dpid'")
+    if not args.type: error_msg.append("'type'")
+    if error_msg:
+        raise OpenmanoCLIError("The following arguments are required: " + ",".join(error_msg))
 
     controller_dict = {}
     controller_dict['name'] = args.name
