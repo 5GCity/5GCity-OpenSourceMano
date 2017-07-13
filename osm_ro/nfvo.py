@@ -1923,6 +1923,7 @@ def get_vim_thread(mydb, tenant_id, datacenter_id_name=None, datacenter_tenant_i
     except db_base_Exception as e:
         raise NfvoException("{} {}".format(type(e).__name__ , str(e)), e.http_code)
 
+
 def get_datacenter_by_name_uuid(mydb, tenant_id, datacenter_id_name=None, **extra_filter):
     datacenter_id = None
     datacenter_name = None

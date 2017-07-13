@@ -1376,10 +1376,18 @@ def http_get_instance_id(tenant_id, instance_id):
             nfvo.refresh_instance(mydb, tenant_id, instance_dict)
         except (nfvo.NfvoException, db_base_Exception) as e:
             logger.warn("nfvo.refresh_instance couldn't refresh the status of the instance: %s" % str(e))
-        #obtain data with results upated
+        # obtain data with results upated
         instance = mydb.get_instance_scenario(instance_id, tenant_id)
+        # Workaround to SO, convert vnfs:vms:interfaces:ip_address from ";" separated list to report the first value
+        for vnf in instance.get("vnfs", ()):
+            for vm in vnf.get("vms", ()):
+                for iface in vm.get("interfaces", ()):
+                    if iface.get("ip_address"):
+                        index = iface["ip_address"].find(";")
+                        if index >= 0:
+                            iface["ip_address"] = iface["ip_address"][:index]
         convert_datetime2str(instance)
-        #print json.dumps(instance, indent=4)
+        # print json.dumps(instance, indent=4)
         return format_out(instance)
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_instance_id error {}: {}".format(e.http_code, str(e)))
