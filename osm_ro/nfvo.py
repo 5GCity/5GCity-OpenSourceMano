@@ -1923,6 +1923,7 @@ def get_vim_thread(mydb, tenant_id, datacenter_id_name=None, datacenter_tenant_i
     except db_base_Exception as e:
         raise NfvoException("{} {}".format(type(e).__name__ , str(e)), e.http_code)
 
+
 def get_datacenter_by_name_uuid(mydb, tenant_id, datacenter_id_name=None, **extra_filter):
     datacenter_id = None
     datacenter_name = None
@@ -2789,20 +2790,24 @@ def new_datacenter(mydb, datacenter_descriptor):
 
 
 def edit_datacenter(mydb, datacenter_id_name, datacenter_descriptor):
-    #obtain data, check that only one exist
+    # obtain data, check that only one exist
     datacenter = mydb.get_table_by_uuid_name('datacenters', datacenter_id_name)
-    #edit data
+
+    # edit data
     datacenter_id = datacenter['uuid']
     where={'uuid': datacenter['uuid']}
+    remove_port_mapping = False
     if "config" in datacenter_descriptor:
-        if datacenter_descriptor['config']!=None:
+        if datacenter_descriptor['config'] != None:
             try:
                 new_config_dict = datacenter_descriptor["config"]
                 #delete null fields
                 to_delete=[]
                 for k in new_config_dict:
-                    if new_config_dict[k]==None:
+                    if new_config_dict[k] == None:
                         to_delete.append(k)
+                        if k == 'sdn-controller':
+                            remove_port_mapping = True
 
                 config_text = datacenter.get("config")
                 if not config_text:
@@ -2814,7 +2819,16 @@ def edit_datacenter(mydb, datacenter_id_name, datacenter_descriptor):
                     del config_dict[k]
             except Exception as e:
                 raise NfvoException("Bad format at datacenter:config " + str(e), HTTP_Bad_Request)
-        datacenter_descriptor["config"]= yaml.safe_dump(config_dict,default_flow_style=True,width=256) if len(config_dict)>0 else None
+        if config_dict:
+            datacenter_descriptor["config"] = yaml.safe_dump(config_dict, default_flow_style=True, width=256)
+        else:
+            datacenter_descriptor["config"] = None
+        if remove_port_mapping:
+            try:
+                datacenter_sdn_port_mapping_delete(mydb, None, datacenter_id)
+            except ovimException as e:
+                logger.error("Error deleting datacenter-port-mapping " + str(e))
+
     mydb.update_rows('datacenters', datacenter_descriptor, where)
     return datacenter_id
 
@@ -2823,6 +2837,10 @@ def delete_datacenter(mydb, datacenter):
     #get nfvo_tenant info
     datacenter_dict = mydb.get_table_by_uuid_name('datacenters', datacenter, 'datacenter')
     mydb.delete_row_by_id("datacenters", datacenter_dict['uuid'])
+    try:
+        datacenter_sdn_port_mapping_delete(mydb, None, datacenter_dict['uuid'])
+    except ovimException as e:
+        logger.error("Error deleting datacenter-port-mapping " + str(e))
     return datacenter_dict['uuid'] + " " + datacenter_dict['name']
 
 

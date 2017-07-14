@@ -27,13 +27,13 @@
 
 DBUSER="mano"
 DBPASS=""
-DEFAULT_DBPASS="maopw"
+DEFAULT_DBPASS="manopw"
 DBHOST=""
 DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=21
+LAST_DB_VERSION=22
  
 # Detect paths
 MYSQL=$(which mysql)
@@ -189,6 +189,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5005 ] && DB_VERSION=19  #0.5.5 =>  19
 #[ $OPENMANO_VER_NUM -ge 5009 ] && DB_VERSION=20  #0.5.9 =>  20
 #[ $OPENMANO_VER_NUM -ge 5015 ] && DB_VERSION=21  #0.5.15 =>  21
+#[ $OPENMANO_VER_NUM -ge 5016 ] && DB_VERSION=22  #0.5.16 =>  22
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -770,6 +771,19 @@ function downgrade_from_21(){
     echo "      shorten column 'dns_address' at table 'ip_profiles'"
     echo "ALTER TABLE ip_profiles MODIFY dns_address varchar(64) DEFAULT NULL NULL;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "DELETE FROM schema_version WHERE version_int='21';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+
+function upgrade_to_22(){
+    # echo "    upgrade database from version 0.21 to version 0.22"
+    echo "      Changed type of ram in 'flavors' from SMALLINT to MEDIUMINT"
+    echo "ALTER TABLE flavors CHANGE COLUMN ram ram MEDIUMINT(7) UNSIGNED NULL DEFAULT NULL AFTER disk;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (22, '0.22', '0.5.16', 'Changed type of ram in flavors from SMALLINT to MEDIUMINT', '2017-06-02');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+function downgrade_from_22(){
+    # echo "    downgrade database from version 0.22 to version 0.21"
+    echo "      Changed type of ram in 'flavors' from MEDIUMINT to SMALLINT"
+    echo "ALTER TABLE flavors CHANGE COLUMN ram ram SMALLINT(5) UNSIGNED NULL DEFAULT NULL AFTER disk;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "DELETE FROM schema_version WHERE version_int='22';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
 
 function upgrade_to_X(){
