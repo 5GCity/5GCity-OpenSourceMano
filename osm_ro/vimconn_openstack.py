@@ -64,7 +64,7 @@ netStatus2manoFormat={'ACTIVE':'ACTIVE','PAUSED':'PAUSED','INACTIVE':'INACTIVE',
 
 #global var to have a timeout creating and deleting volumes
 volume_timeout = 60
-server_timeout = 60
+server_timeout = 300
 
 class vimconnector(vimconn.vimconnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None,
