@@ -2191,7 +2191,9 @@ def create_instance(mydb, tenant_id, instance_dict):
 
         # 3. Creating new vm instances in the VIM
         #myvim.new_vminstance(self,vimURI,tenant_id,name,description,image_id,flavor_id,net_dict)
-        for sce_vnf in scenarioDict['vnfs']:
+        sce_vnf_list = sorted(scenarioDict['vnfs'], key=lambda k: k['name']) 
+        #for sce_vnf in scenarioDict['vnfs']:
+        for sce_vnf in sce_vnf_list:
             if sce_vnf.get("datacenter"):
                 vim = myvims[ sce_vnf["datacenter"] ]
                 myvim_thread_id = myvim_threads_id[ sce_vnf["datacenter"] ]
