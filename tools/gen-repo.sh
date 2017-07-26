@@ -93,7 +93,7 @@ $JFROG_CLI rt download --build "$BUILD" osm-release || FATAL "Failed to download
 
 BUILD_NUMBER=$(basename "$BUILD")
 
-[ $PASSPHRASE_FILE ] && GPG_PASSPHRASE="--no-use-agent --passphrase \"$(cat $PASSPHRASE_FILE)\""
+[ $PASSPHRASE_FILE ] && GPG_PASSPHRASE="--no-tty --no-use-agent --passphrase \"$(cat $PASSPHRASE_FILE)\""
 
 mkdir -p $BASE_DIR/dists
 
@@ -119,10 +119,10 @@ apt-ftparchive release dists/$OUT_REPO > dists/$OUT_REPO/Release
 #gzip -9fk dists/$OUT_REPO/Release
 
 rm -f dists/$OUT_REPO/InRelease
-eval gpg $GPG_PASSPHRASE --default-key $GPGKEY --clearsign -o dists/$OUT_REPO/InRelease dists/$OUT_REPO/Release
+eval gpg $GPG_PASSPHRASE --no-tty --default-key $GPGKEY --clearsign -o dists/$OUT_REPO/InRelease dists/$OUT_REPO/Release
 
 rm -f dists/$OUT_REPO/Release.gpg
-eval gpg $GPG_PASSPHRASE --default-key $GPGKEY -abs -o dists/$OUT_REPO/Release.gpg dists/$OUT_REPO/Release
+eval gpg $GPG_PASSPHRASE --no-tty --default-key $GPGKEY -abs -o dists/$OUT_REPO/Release.gpg dists/$OUT_REPO/Release
 
 
 echo "performing rsync of repo $RELEASE_DIR/dist/$OUT_REPO to osm-download.etsi.org:/repos/"
