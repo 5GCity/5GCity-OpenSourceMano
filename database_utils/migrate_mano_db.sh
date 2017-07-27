@@ -33,7 +33,7 @@ DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=22
+LAST_DB_VERSION=23
  
 # Detect paths
 MYSQL=$(which mysql)
@@ -190,6 +190,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5009 ] && DB_VERSION=20  #0.5.9 =>  20
 #[ $OPENMANO_VER_NUM -ge 5015 ] && DB_VERSION=21  #0.5.15 =>  21
 #[ $OPENMANO_VER_NUM -ge 5016 ] && DB_VERSION=22  #0.5.16 =>  22
+#[ $OPENMANO_VER_NUM -ge 5019 ] && DB_VERSION=23  #0.5.20 =>  23
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -784,6 +785,19 @@ function downgrade_from_22(){
     echo "      Changed type of ram in 'flavors' from MEDIUMINT to SMALLINT"
     echo "ALTER TABLE flavors CHANGE COLUMN ram ram SMALLINT(5) UNSIGNED NULL DEFAULT NULL AFTER disk;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "DELETE FROM schema_version WHERE version_int='22';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+
+function upgrade_to_23(){
+    # echo "    upgrade database from version 0.22 to version 0.23"
+    echo "      add column 'availability_zone' at table 'vms'"
+    echo "ALTER TABLE mano_db.vms ADD COLUMN availability_zone VARCHAR(255) NULL AFTER modified_at;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (23, '0.23', '0.5.20', 'Changed type of ram in flavors from SMALLINT to MEDIUMINT', '2017-08-29');" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+function downgrade_from_23(){
+    # echo "    downgrade database from version 0.23 to version 0.22"
+    echo "      remove column 'availability_zone' from table 'vms'"
+    echo "ALTER TABLE mano_db.vms DROP COLUMN availability_zone;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "DELETE FROM schema_version WHERE version_int='23';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
 
 function upgrade_to_X(){

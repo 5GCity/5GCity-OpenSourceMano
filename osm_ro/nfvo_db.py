@@ -590,10 +590,12 @@ class nfvo_db(db_base.db_base):
                         self.cur.execute(cmd)
                         vnf['interfaces'] = self.cur.fetchall()
                         #vms
-                        cmd = "SELECT vms.uuid as uuid, flavor_id, image_id, vms.name as name, vms.description as description, vms.boot_data as boot_data " \
-                                " FROM vnfs join vms on vnfs.uuid=vms.vnf_id " \
-                                " WHERE vnfs.uuid='" + vnf['vnf_id'] +"'"  \
-                                " ORDER BY vms.created_at"
+                        cmd = "SELECT vms.uuid as uuid, flavor_id, image_id, vms.name as name," \
+                              " vms.description as description, vms.boot_data as boot_data," \
+                              " vms.availability_zone as availability_zone" \
+                              " FROM vnfs join vms on vnfs.uuid=vms.vnf_id " \
+                              " WHERE vnfs.uuid='" + vnf['vnf_id'] +"'"  \
+                              " ORDER BY vms.created_at"
                         self.logger.debug(cmd)
                         self.cur.execute(cmd)
                         vnf['vms'] = self.cur.fetchall()

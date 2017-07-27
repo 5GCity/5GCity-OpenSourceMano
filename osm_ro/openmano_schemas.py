@@ -541,8 +541,9 @@ vnfc_schema = {
     "properties":{
         "name": name_schema,
         "description": description_schema,
-        "VNFC image": {"oneOf": [path_schema, http_schema]},
         "image name": name_schema,
+        "availability_zone": name_schema,
+        "VNFC image": {"oneOf": [path_schema, http_schema]},
         "image checksum": checksum_schema,
         "image metadata": metadata_schema, 
         #"cloud-config": cloud_config_schema, #common for all vnfs in the scenario
@@ -592,6 +593,7 @@ vnfd_schema_v01 = {
             "properties":{
                 "name": name_schema,
                 "description": description_schema,
+
                 "class": nameshort_schema,
                 "public": {"type" : "boolean"},
                 "physical": {"type" : "boolean"},

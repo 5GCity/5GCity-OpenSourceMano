@@ -759,6 +759,7 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
         for vnfc in vnf_descriptor['vnf']['VNFC']:
             VNFCitem={}
             VNFCitem["name"] = vnfc['name']
+            VNFCitem["availability_zone"] = vnfc.get('availability_zone')
             VNFCitem["description"] = vnfc.get("description", 'VM %s of the VNF %s' %(vnfc['name'],vnf_name))
 
             #print "Flavor name: %s. Description: %s" % (VNFCitem["name"]+"-flv", VNFCitem["description"])
@@ -1667,6 +1668,7 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
 
         logger.debug("start_scenario 2. Creating new nets (vnf internal nets) in the VIM")
         #For each vnf net, we create it and we add it to instanceNetlist.
+
         for sce_vnf in scenarioDict['vnfs']:
             for net in sce_vnf['nets']:
                 #print "Net name: %s. Description: %s" % (net["name"], net["description"])
@@ -1698,6 +1700,11 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
         #myvim.new_vminstance(self,vimURI,tenant_id,name,description,image_id,flavor_id,net_dict)
         i = 0
         for sce_vnf in scenarioDict['vnfs']:
+            nfv_availability_zones = []
+            for vm in sce_vnf['vms']:
+                vm_av = vm.get('availability_zone')
+                if vm_av and vm_av not in nfv_availability_zones:
+                    nfv_availability_zones.append(vm_av)
             for vm in sce_vnf['vms']:
                 i += 1
                 myVMDict = {}
@@ -1784,8 +1791,16 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
                 #print "networks", yaml.safe_dump(myVMDict['networks'], indent=4, default_flow_style=False)
                 #print "interfaces", yaml.safe_dump(vm['interfaces'], indent=4, default_flow_style=False)
                 #print ">>>>>>>>>>>>>>>>>>>>>>>>>>>"
-                vm_id = myvim.new_vminstance(myVMDict['name'],myVMDict['description'],myVMDict.get('start', None),
-                        myVMDict['imageRef'],myVMDict['flavorRef'],myVMDict['networks'])
+
+                if 'availability_zone' in myVMDict:
+                    counter_availability_zone = nfv_availability_zones.index(myVMDict['availability_zone'])
+                else:
+                    counter_availability_zone = None
+
+                vm_id = myvim.new_vminstance(myVMDict['name'], myVMDict['description'], myVMDict.get('start', None),
+                                             myVMDict['imageRef'], myVMDict['flavorRef'], myVMDict['networks'],
+                                             availavility_zone_index=counter_availability_zone,
+                                             nfv_availability_zones=nfv_availability_zones)
                 #print "VIM vm instance id (server id) for scenario %s: %s" % (scenarioDict['name'],vm_id)
                 vm['vim_id'] = vm_id
                 rollbackList.append({'what':'vm','where':'vim','vim_id':datacenter_id,'uuid':vm_id})
@@ -2158,7 +2173,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                     sce_net["created"] = True
 
         # 2. Creating new nets (vnf internal nets) in the VIM"
-        #For each vnf net, we create it and we add it to instanceNetlist.
+        # For each vnf net, we create it and we add it to instanceNetlist.
         for sce_vnf in scenarioDict['vnfs']:
             for net in sce_vnf['nets']:
                 if sce_vnf.get("datacenter"):
@@ -2187,15 +2202,28 @@ def create_instance(mydb, tenant_id, instance_dict):
                 rollbackList.append({'what':'network','where':'vim','vim_id':datacenter_id,'uuid':task_id})
                 net["created"] = True
 
-
         #print "auxNetDict:"
         #print yaml.safe_dump(auxNetDict, indent=4, default_flow_style=False)
 
         # 3. Creating new vm instances in the VIM
         #myvim.new_vminstance(self,vimURI,tenant_id,name,description,image_id,flavor_id,net_dict)
+
         sce_vnf_list = sorted(scenarioDict['vnfs'], key=lambda k: k['name']) 
         #for sce_vnf in scenarioDict['vnfs']:
         for sce_vnf in sce_vnf_list:
+            nfv_availability_zones = []
+            for vm in sce_vnf['vms']:
+                vm_av = vm.get('availability_zone')
+                if vm_av and vm_av not in nfv_availability_zones:
+                    nfv_availability_zones.append(vm_av)
+
+            # check if there is enough availability zones available at vim level.
+            if myvims[datacenter_id].availability_zone:
+                vim_availability_zones = myvims[datacenter_id].availability_zone
+                nfv_availability_zones_num = len(vim_availability_zones)
+                if len(nfv_availability_zones) > nfv_availability_zones_num:
+                    raise NfvoException('No enough availablity zones for this deployment', HTTP_Bad_Request)
+
             if sce_vnf.get("datacenter"):
                 vim = myvims[ sce_vnf["datacenter"] ]
                 myvim_thread_id = myvim_threads_id[ sce_vnf["datacenter"] ]
@@ -2204,8 +2232,9 @@ def create_instance(mydb, tenant_id, instance_dict):
                 vim = myvims[ default_datacenter_id ]
                 myvim_thread_id = myvim_threads_id[ default_datacenter_id ]
                 datacenter_id = default_datacenter_id
-            sce_vnf["datacenter_id"] =  datacenter_id
+            sce_vnf["datacenter_id"] = datacenter_id
             i = 0
+
             for vm in sce_vnf['vms']:
                 i += 1
                 myVMDict = {}
@@ -2242,6 +2271,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                 vm['vim_flavor_id'] = flavor_id
                 myVMDict['imageRef'] = vm['vim_image_id']
                 myVMDict['flavorRef'] = vm['vim_flavor_id']
+                myVMDict['availability_zone'] = vm.get('availability_zone')
                 myVMDict['networks'] = []
                 task_depends = {}
                 #TODO ALF. connect_mgmt_interfaces. Connect management interfaces if this is true
@@ -2309,9 +2339,15 @@ def create_instance(mydb, tenant_id, instance_dict):
                     cloud_config_vm = unify_cloud_config(vm["boot_data"], cloud_config)
                 else:
                     cloud_config_vm = cloud_config
+
+                if 'availability_zone' in myVMDict and myVMDict.get('availability_zone'):
+                    counter_availability_zone = nfv_availability_zones.index(myVMDict['availability_zone'])
+                else:
+                    counter_availability_zone = None
                 task = new_task("new-vm", (myVMDict['name'], myVMDict['description'], myVMDict.get('start', None),
                                            myVMDict['imageRef'], myVMDict['flavorRef'], myVMDict['networks'],
-                                           cloud_config_vm, myVMDict['disks']), depends=task_depends)
+                                           cloud_config_vm, myVMDict['disks'], counter_availability_zone,
+                                           nfv_availability_zones), depends=task_depends)
                 instance_tasks[task["id"]] = task
                 tasks_to_launch[myvim_thread_id].append(task)
                 vm_id = task["id"]

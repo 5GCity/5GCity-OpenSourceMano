@@ -84,6 +84,7 @@ class vimconnector(vimconn.vimconnector):
         if not url:
             raise TypeError, 'url param can not be NoneType'
         self.persistent_info = persistent_info
+        self.availability_zone = persistent_info.get('availability_zone', None)
         self.session = persistent_info.get('session', {'reload_client': True})
         self.nova = self.session.get('nova')
         self.neutron = self.session.get('neutron')
@@ -165,6 +166,9 @@ class vimconnector(vimconn.vimconnector):
             self.glancev1 = self.session['glancev1'] = glClient.Client('1', session=sess)
             self.session['reload_client'] = False
             self.persistent_info['session'] = self.session
+            # add availablity zone info inside  self.persistent_info
+            self._set_availablity_zones()
+            self.persistent_info['availability_zone'] = self.availability_zone
 
     def __net_os2mano(self, net_list_dict):
         '''Transform the net openstack format to mano format
@@ -700,7 +704,64 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnException('Timeout waiting for instance ' + vm_id + ' to get ' + status,
                                            http_code=vimconn.HTTP_Request_Timeout)
 
-    def new_vminstance(self,name,description,start,image_id,flavor_id,net_list,cloud_config=None,disk_list=None):
+    def _get_openstack_availablity_zones(self):
+        """
+        Get from openstack availability zones available
+        :return:
+        """
+        try:
+            openstack_availability_zone = self.nova.availability_zones.list()
+            openstack_availability_zone = [str(zone.zoneName) for zone in openstack_availability_zone
+                                           if zone.zoneName != 'internal']
+            return openstack_availability_zone
+        except Exception as e:
+            return None
+
+    def _set_availablity_zones(self):
+        """
+        Set vim availablity zone
+        :return:
+        """
+
+        if 'availability_zone' in self.config:
+            vim_availability_zones = self.config.get('availability_zone')
+            if isinstance(vim_availability_zones, str):
+                self.availability_zone = [vim_availability_zones]
+            elif isinstance(vim_availability_zones, list):
+                self.availability_zone = vim_availability_zones
+        else:
+            self.availability_zone = self._get_openstack_availablity_zones()
+
+    def _get_vm_availavility_zone(self, availavility_zone_index, nfv_availability_zones):
+        """
+        Return a list with all availability zones create during datacenter attach.
+        :return: List with availability zones
+        """
+        openstack_avilability_zone = self.availability_zone
+
+        # check if VIM offer enough availability zones describe in the VNFC
+        if self.availability_zone and availavility_zone_index is not None \
+                and 0 <= len(nfv_availability_zones) <= len(self.availability_zone):
+
+            if nfv_availability_zones:
+                vnf_azone = nfv_availability_zones[availavility_zone_index]
+                zones_available = []
+
+                for nfv_zone in nfv_availability_zones:
+                    for vim_zone in openstack_avilability_zone:
+                        if nfv_zone is vim_zone:
+                            zones_available.append(nfv_zone)
+
+                if len(zones_available) == len(openstack_avilability_zone) and vnf_azone in openstack_avilability_zone:
+                    return vnf_azone
+                else:
+                    return openstack_avilability_zone[availavility_zone_index]
+        else:
+            raise vimconn.vimconnConflictException("No enough availablity zones for this deployment")
+        return None
+
+    def new_vminstance(self, name, description, start, image_id, flavor_id, net_list,cloud_config=None,disk_list=None,
+                       availavility_zone_index=None, nfv_availability_zones=None):
         '''Adds a VM instance to VIM
         Params:
             start: indicates if VM must start or boot in pause mode. Ignored
@@ -715,6 +776,25 @@ class vimconnector(vimconn.vimconnector):
                 type: 'virtual', 'PF', 'VF', 'VFnotShared'
                 vim_id: filled/added by this function
                 floating_ip: True/False (or it can be None)
+                'cloud_config': (optional) dictionary with:
+                'key-pairs': (optional) list of strings with the public key to be inserted to the default user
+                'users': (optional) list of users to be inserted, each item is a dict with:
+                    'name': (mandatory) user name,
+                    'key-pairs': (optional) list of strings with the public key to be inserted to the user
+                'user-data': (optional) string is a text script to be passed directly to cloud-init
+                'config-files': (optional). List of files to be transferred. Each item is a dict with:
+                    'dest': (mandatory) string with the destination absolute path
+                    'encoding': (optional, by default text). Can be one of:
+                        'b64', 'base64', 'gz', 'gz+b64', 'gz+base64', 'gzip+b64', 'gzip+base64'
+                    'content' (mandatory): string with the content of the file
+                    'permissions': (optional) string with file permissions, typically octal notation '0644'
+                    'owner': (optional) file owner, string with the format 'owner:group'
+                'boot-data-drive': boolean to indicate if user-data must be passed using a boot drive (hard disk)
+            'disk_list': (optional) list with additional disks to the VM. Each item is a dict with:
+                'image_id': (optional). VIM id of an existing image. If not provided an empty disk must be mounted
+                'size': (mandatory) string with the size of the disk in GB
+            availavility_zone_index:counter for instance order in vim availability_zones availables
+            nfv_availability_zones: Lost given by user in the VNFC descriptor.
                 #TODO ip, security groups
         Returns the instance identifier
         '''
@@ -886,15 +966,17 @@ class vimconnector(vimconn.vimconnector):
 
                     raise vimconn.vimconnException('Timeout creating volumes for instance ' + name,
                                                    http_code=vimconn.HTTP_Request_Timeout)
+            # get availability Zone
+            vm_av_zone = self._get_vm_availavility_zone(availavility_zone_index, nfv_availability_zones)
 
-            self.logger.debug("nova.servers.create({}, {}, {}, nics={}, meta={}, security_groups={}," \
-                                              "availability_zone={}, key_name={}, userdata={}, config_drive={}, " \
-                                              "block_device_mapping={})".format(name, image_id, flavor_id, net_list_vim,
-                                                metadata, security_groups, self.config.get('availability_zone'),
-                                                self.config.get('keypair'), userdata, config_drive, block_device_mapping))
+            self.logger.debug("nova.servers.create({}, {}, {}, nics={}, meta={}, security_groups={}, "
+                              "availability_zone={}, key_name={}, userdata={}, config_drive={}, "
+                              "block_device_mapping={})".format(name, image_id, flavor_id, net_list_vim, metadata,
+                                                                security_groups, vm_av_zone, self.config.get('keypair'),
+                              userdata, config_drive, block_device_mapping))
             server = self.nova.servers.create(name, image_id, flavor_id, nics=net_list_vim, meta=metadata,
                                               security_groups=security_groups,
-                                              availability_zone=self.config.get('availability_zone'),
+                                              availability_zone=vm_av_zone,
                                               key_name=self.config.get('keypair'),
                                               userdata=userdata,
                                               config_drive=config_drive,
