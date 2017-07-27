@@ -18,7 +18,7 @@
 properties([
     parameters([
         string(defaultValue: env.GERRIT_BRANCH, description: '', name: 'GERRIT_BRANCH'),
-        string(defaultValue: 'pipeline', description: '', name: 'NODE'),
+        string(defaultValue: 'system', description: '', name: 'NODE'),
         string(defaultValue: '', description: '', name: 'BUILD_FROM_SOURCE'),
         string(defaultValue: 'unstable', description: '', name: 'REPO_DISTRO'),
         string(defaultValue: '', description: '', name: 'COMMIT_ID'),
