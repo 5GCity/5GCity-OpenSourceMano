@@ -13,6 +13,7 @@ function usage() {
     echo -e "  -r  <release dir>        "
     echo -e "  -h  <rsync user@host>    "
     echo -e "  -R  <rsync options>      "
+    echo -e "  -P  <public key file>    "
     exit 1
 }
 
@@ -31,6 +32,7 @@ function dump_vars() {
     echo "BUILD:          $BUILD"
     echo "RSYNC_USER_HOST $RSYNC_USER_HOST"
     echo "RSYNC_OPTIONS   $RSYNC_OPTIONS"
+    echo "PUBLIC_KEY_FILE $PUBLIC_KEY_FILE"
 }
 
 IN_REPO="unstable"
@@ -41,8 +43,9 @@ REPO_BASE=repo
 RELEASE_DIR=ReleaseTWO
 RSYNC_USER_HOST=osmusers@osm-download.etsi.org
 CURR_DIR=$(pwd)
+PUBLIC_KEY_FILE=~/OSM\ ETSI\ Release\ Key.gpg
 
-while getopts ":p:i:o:k:j::d:b:r:h:R:" o; do
+while getopts ":p:i:o:k:j::d:b:r:h:R:P:" o; do
     case "${o}" in
         p)
             PASSPHRASE_FILE=${OPTARG}
@@ -73,6 +76,9 @@ while getopts ":p:i:o:k:j::d:b:r:h:R:" o; do
             ;;
         R)
             RSYNC_OPTIONS=${OPTARG}
+            ;;
+        P)
+            PUBLIC_KEY_FILE=${OPTARG}
             ;;
         *)
             usage
@@ -124,8 +130,10 @@ eval gpg $GPG_PASSPHRASE --no-tty --default-key $GPGKEY --clearsign -o dists/$OU
 rm -f dists/$OUT_REPO/Release.gpg
 eval gpg $GPG_PASSPHRASE --no-tty --default-key $GPGKEY -abs -o dists/$OUT_REPO/Release.gpg dists/$OUT_REPO/Release
 
-
 echo "performing rsync of repo $RELEASE_DIR/dist/$OUT_REPO to osm-download.etsi.org:/repos/"
 cd $CURR_DIR/$REPO_BASE
+
+# copy over the public key file
+[ "$PUBLIC_KEY_FILE" ] && cp "$PUBLIC_KEY_FILE" osm/debian/$RELEASE_DIR
 
 rsync -avR $RSYNC_OPTIONS osm/debian/$RELEASE_DIR rsync://$RSYNC_USER_HOST/repos
