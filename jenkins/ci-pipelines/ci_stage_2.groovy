@@ -38,6 +38,10 @@ def ci_pipeline(mdg,url_prefix,project,branch,refspec,revision,build_system) {
         project_checkout(url_prefix,project,refspec,revision)
     }
 
+    stage('License Scan') {
+        sh "devops/tools/license_scan.sh"
+    }
+
     container_name = "${project}-${branch}".toLowerCase()
 
     stage('Docker-Build') {
