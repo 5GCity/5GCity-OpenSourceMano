@@ -1302,6 +1302,53 @@ class test_vimconn_get_tenant_list(test_base):
 
         self.assertEqual(filter_tenant_list, [])
 
+class test_vimconn_new_tenant(test_base):
+    tenant_id = None
+
+    def test_000_new_tenant(self):
+        tenant_name = _get_random_string(20)
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        self.__class__.tenant_id = test_config["vim_conn"].new_tenant(tenant_name)
+        time.sleep(15)
+
+        self.assertEqual(type(self.__class__.tenant_id), str)
+
+    def test_010_new_tenant_negative(self):
+        Invalid_tenant_name = 10121
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        with self.assertRaises(Exception) as context:
+            test_config["vim_conn"].new_tenant(Invalid_tenant_name)
+
+        self.assertEqual((context.exception).http_code, 400)
+
+    def test_020_delete_tenant(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        tenant_id = test_config["vim_conn"].delete_tenant(self.__class__.tenant_id)
+        self.assertEqual(type(tenant_id), str)
+
+    def test_030_delete_tenant_negative(self):
+        Non_exist_tenant_name = 'Test_30_tenant'
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        with self.assertRaises(Exception) as context:
+            test_config["vim_conn"].delete_tenant(Non_exist_tenant_name)
+
+        self.assertEqual((context.exception).http_code, 404)
 
 '''
 IMPORTANT NOTE
