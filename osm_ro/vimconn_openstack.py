@@ -89,6 +89,7 @@ class vimconnector(vimconn.vimconnector):
         self.neutron = self.session.get('neutron')
         self.cinder = self.session.get('cinder')
         self.glance = self.session.get('glance')
+        self.glancev1 = self.session.get('glancev1')
         self.keystone = self.session.get('keystone')
         self.api_version3 = self.session.get('api_version3')
 
@@ -152,6 +153,7 @@ class vimconnector(vimconn.vimconnector):
             self.neutron = self.session['neutron'] = neClient.Client('2.0', session=sess)
             self.cinder = self.session['cinder'] = cClient.Client(2, session=sess)
             self.glance = self.session['glance'] = glClient.Client(2, session=sess)
+            self.glancev1 = self.session['glancev1'] = glClient.Client('1', session=sess)
             self.session['reload_client'] = False
             self.persistent_info['session'] = self.session
 
@@ -564,9 +566,6 @@ class vimconnector(vimconn.vimconnector):
             metadata: metadata of the image
         Returns the image_id
         '''
-        # ALF TODO: revise and change for the new method or session
-        #using version 1 of glance client
-        glancev1 = gl1Client.Client('1',self.glance_endpoint, token=self.keystone.auth_token, **self.k_creds)  #TODO check k_creds vs n_creds
         retry=0
         max_retries=3
         while retry<max_retries:
@@ -597,11 +596,11 @@ class vimconnector(vimconn.vimconnector):
                         disk_format="raw"
                 self.logger.debug("new_image: '%s' loading from '%s'", image_dict['name'], image_dict['location'])
                 if image_dict['location'][0:4]=="http":
-                    new_image = glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
+                    new_image = self.glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
                             container_format="bare", location=image_dict['location'], disk_format=disk_format)
                 else: #local path
                     with open(image_dict['location']) as fimage:
-                        new_image = glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
+                        new_image = self.glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
                             container_format="bare", data=fimage, disk_format=disk_format)
                 #insert metadata. We cannot use 'new_image.properties.setdefault' 
                 #because nova and glance are "INDEPENDENT" and we are using nova for reading metadata
