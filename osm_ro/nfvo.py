@@ -334,7 +334,9 @@ def rollback(mydb,  vims, rollback_list):
         if item["where"]=="vim":
             if item["vim_id"] not in vims:
                 continue
-            vim=vims[ item["vim_id"] ]
+            if is_task_id(item["uuid"]):
+                continue
+            vim = vims[item["vim_id"]]
             try:
                 if item["what"]=="image":
                     vim.delete_image(item["uuid"])
@@ -481,7 +483,7 @@ def check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=1):
                     HTTP_Bad_Request)
 
 
-def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vim=False, return_on_error = None):
+def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vim=False, return_on_error=None):
     #look if image exist
     if only_create_at_vim:
         image_mano_id = image_dict['uuid']
