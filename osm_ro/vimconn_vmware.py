@@ -427,9 +427,61 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnException("Failed create tenant {}".format(tenant_name))
 
     def delete_tenant(self, tenant_id=None):
-        """Delete a tenant from VIM"""
-        'Returns the tenant identifier'
-        raise vimconn.vimconnNotImplemented("Should have implemented this")
+        """ Delete a tenant from VIM
+             Args:
+                tenant_id is tenant_id to be deleted.
+
+            Return:
+                returns the tenant identifier in UUID format.
+                If action is failed method will throw exception
+        """
+        vca = self.connect_as_admin()
+        if not vca:
+            raise vimconn.vimconnConnectionException("self.connect() is failed")
+
+        if tenant_id is not None:
+            if vca.vcloud_session and vca.vcloud_session.organization:
+                #Get OrgVDC
+                url_list = [self.vca.host, '/api/vdc/', tenant_id]
+                orgvdc_herf = ''.join(url_list)
+                response = Http.get(url=orgvdc_herf,
+                                headers=vca.vcloud_session.get_vcloud_headers(),
+                                verify=vca.verify,
+                                logger=vca.logger)
+
+                if response.status_code != requests.codes.ok:
+                    self.logger.debug("delete_tenant():GET REST API call {} failed. "\
+                                      "Return status code {}".format(orgvdc_herf,
+                                                                     response.status_code))
+                    raise vimconn.vimconnNotFoundException("Fail to get tenant {}".format(tenant_id))
+
+                lxmlroot_respond = lxmlElementTree.fromstring(response.content)
+                namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.iteritems() if prefix}
+                namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
+                vdc_remove_href = lxmlroot_respond.find("xmlns:Link[@rel='remove']",namespaces).attrib['href']
+                vdc_remove_href = vdc_remove_href + '?recursive=true&force=true'
+
+                #Delete OrgVDC
+                response = Http.delete(url=vdc_remove_href,
+                                    headers=vca.vcloud_session.get_vcloud_headers(),
+                                    verify=vca.verify,
+                                    logger=vca.logger)
+
+                if response.status_code == 202:
+                        delete_vdc_task = taskType.parseString(response.content, True)
+                        if type(delete_vdc_task) is GenericTask:
+                            self.vca.block_until_completed(delete_vdc_task)
+                            self.logger.info("Deleted tenant with ID {}".format(tenant_id))
+                            return tenant_id
+                else:
+                    self.logger.debug("delete_tenant(): DELETE REST API call {} failed. "\
+                                      "Return status code {}".format(vdc_remove_href,
+                                                                     response.status_code))
+                    raise vimconn.vimconnException("Fail to delete tenant with ID {}".format(tenant_id))
+        else:
+            self.logger.debug("delete_tenant():Incorrect tenant ID  {}".format(tenant_id))
+            raise vimconn.vimconnNotFoundException("Fail to get tenant {}".format(tenant_id))
+
 
     def get_tenant_list(self, filter_dict={}):
         """Obtain tenants of VIM
@@ -795,12 +847,81 @@ class vimconnector(vimconn.vimconnector):
 
     def delete_image(self, image_id):
         """
-
-        :param image_id:
-        :return:
+            Deletes a tenant image from VIM
+            Args:
+                image_id is ID of Image to be deleted
+            Return:
+                returns the image identifier in UUID format or raises an exception on error
         """
+        vca = self.connect_as_admin()
+        if not vca:
+            raise vimconn.vimconnConnectionException("self.connect() is failed")
+        # Get Catalog details
+        url_list = [self.vca.host, '/api/catalog/', image_id]
+        catalog_herf = ''.join(url_list)
+        response = Http.get(url=catalog_herf,
+                            headers=vca.vcloud_session.get_vcloud_headers(),
+                            verify=vca.verify,
+                            logger=vca.logger)
 
-        raise vimconn.vimconnNotImplemented("Should have implemented this")
+        if response.status_code != requests.codes.ok:
+            self.logger.debug("delete_image():GET REST API call {} failed. "\
+                              "Return status code {}".format(catalog_herf,
+                                                             response.status_code))
+            raise vimconn.vimconnNotFoundException("Fail to get image {}".format(image_id))
+
+        lxmlroot_respond = lxmlElementTree.fromstring(response.content)
+        namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.iteritems() if prefix}
+        namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
+
+        catalogItems_section = lxmlroot_respond.find("xmlns:CatalogItems",namespaces)
+        catalogItems = catalogItems_section.iterfind("xmlns:CatalogItem",namespaces)
+        for catalogItem in catalogItems:
+            catalogItem_href = catalogItem.attrib['href']
+
+            #GET details of catalogItem
+            response = Http.get(url=catalogItem_href,
+                            headers=vca.vcloud_session.get_vcloud_headers(),
+                            verify=vca.verify,
+                            logger=vca.logger)
+
+            if response.status_code != requests.codes.ok:
+                self.logger.debug("delete_image():GET REST API call {} failed. "\
+                                  "Return status code {}".format(catalog_herf,
+                                                                 response.status_code))
+                raise vimconn.vimconnNotFoundException("Fail to get catalogItem {} for catalog {}".format(
+                                                                                    catalogItem,
+                                                                                    image_id))
+
+            lxmlroot_respond = lxmlElementTree.fromstring(response.content)
+            namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.iteritems() if prefix}
+            namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
+            catalogitem_remove_href = lxmlroot_respond.find("xmlns:Link[@rel='remove']",namespaces).attrib['href']
+
+            #Remove catalogItem
+            response = Http.delete(url= catalogitem_remove_href,
+                                    headers=vca.vcloud_session.get_vcloud_headers(),
+                                    verify=vca.verify,
+                                    logger=vca.logger)
+            if response.status_code == requests.codes.no_content:
+                self.logger.debug("Deleted Catalog item {}".format(catalogItem))
+            else:
+                raise vimconn.vimconnException("Fail to delete Catalog Item {}".format(catalogItem))
+
+        #Remove catalog
+        url_list = [self.vca.host, '/api/admin/catalog/', image_id]
+        catalog_remove_herf = ''.join(url_list)
+        response = Http.delete(url= catalog_remove_herf,
+                                    headers=vca.vcloud_session.get_vcloud_headers(),
+                                    verify=vca.verify,
+                                    logger=vca.logger)
+
+        if response.status_code == requests.codes.no_content:
+            self.logger.debug("Deleted Catalog {}".format(image_id))
+            return image_id
+        else:
+            raise vimconn.vimconnException("Fail to delete Catalog {}".format(image_id))
+
 
     def catalog_exists(self, catalog_name, catalogs):
         """
@@ -2892,8 +3013,7 @@ class vimconnector(vimconn.vimconnector):
                 # application/vnd.vmware.admin.providervdc+xml
                 # we need find a template from witch we instantiate VDC
                 if child.tag.split("}")[1] == 'VdcTemplate':
-                    if child.attrib.get('type') == 'application/vnd.vmware.admin.vdcTemplate+xml' and child.attrib.get(
-                            'name') == 'openmano':
+                    if child.attrib.get('type') == 'application/vnd.vmware.admin.vdcTemplate+xml':
                         vdc_template_ref = child.attrib.get('href')
         except:
             self.logger.debug("Failed parse respond for rest api call {}".format(vm_list_rest_call))
@@ -2916,6 +3036,11 @@ class vimconnector(vimconn.vimconnector):
             headers['Content-Type'] = 'application/vnd.vmware.vcloud.instantiateVdcTemplateParams+xml'
             response = Http.post(url=vm_list_rest_call, headers=headers, data=data, verify=vca.verify,
                                  logger=vca.logger)
+
+            vdc_task = taskType.parseString(response.content, True)
+            if type(vdc_task) is GenericTask:
+                self.vca.block_until_completed(vdc_task)
+
             # if we all ok we respond with content otherwise by default None
             if response.status_code >= 200 and response.status_code < 300:
                 return response.content
@@ -4921,7 +5046,7 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnException(message=exp)
 
 
-    def retry_rest(self, api, url, add_headers=None, data=None):
+    def retry_rest(self, method, url, add_headers=None, data=None):
         """ Method to get Token & retry respective REST request
             Args:
                 api - REST API - Can be one of 'GET' or 'PUT' or 'POST'
@@ -4941,25 +5066,30 @@ class vimconnector(vimconn.vimconnector):
         if add_headers:
             headers.update(add_headers)
 
-        if api == 'GET':
+        if method == 'GET':
             response = Http.get(url=url,
                                 headers=headers,
                                 verify=self.vca.verify,
                                 logger=self.vca.logger)
-            return response
-        elif api == 'PUT':
-            if headers:
-                headers.append
+        elif method == 'PUT':
             response = Http.put(url=url,
                                 data=data,
                                 headers=headers,
-                                verify=self.vca.verify, logger=self.logger)
-            return response
-        elif api == 'POST':
+                                verify=self.vca.verify,
+                                logger=self.logger)
+        elif method == 'POST':
             response = Http.post(url=url,
+                                 headers=headers,
+                                 data=data,
+                                 verify=self.vca.verify,
+                                 logger=self.vca.logger)
+        elif method == 'DELETE':
+            response = Http.delete(url=url,
                                  headers=headers,
                                  verify=self.vca.verify,
                                  logger=self.vca.logger)
+        return response
+
 
     def get_token(self):
         """ Generate a new token if expired
@@ -5011,4 +5141,5 @@ class vimconnector(vimconn.vimconnector):
             vdc = self.vca.get_vdc(self.tenant_name)
 
         return vdc
+
 
