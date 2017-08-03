@@ -823,6 +823,7 @@ class test_vimconn_new_image(test_base):
         image_path = test_config['image_path']
         if image_path:
             image_id = test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : image_path })
+            time.sleep(20)
             self.assertEqual(type(image_id),str)
             self.assertIsInstance(uuid.UUID(image_id),uuid.UUID)
         else:
@@ -840,6 +841,28 @@ class test_vimconn_new_image(test_base):
             test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : Non_exist_image_path })
 
         self.assertEqual((context.exception).http_code, 400)
+
+    def test_020_delete_image(self):
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        image_id = test_config["vim_conn"].delete_image(self.__class__.image_id)
+        self.assertEqual(type(image_id),str)
+
+    def test_030_delete_image_negative(self):
+        Non_exist_image_id = str(uuid.uuid4())
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        with self.assertRaises(Exception) as context:
+            test_config["vim_conn"].delete_image(Non_exist_image_id)
+
+        self.assertEqual((context.exception).http_code, 404)
 
 class test_vimconn_get_image_id_from_path(test_base):
 
