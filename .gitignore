@@ -1,0 +1,11 @@
+build
+.eggs
+*.pyc
+deb_dist
+dist
+*egg-info
+*.gz
+osm_im
+pyangbind
+dists
+pool
