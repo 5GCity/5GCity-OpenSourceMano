@@ -4014,7 +4014,6 @@ class vimconnector(vimconn.vimconnector):
                                                                            "affinity".format(exp))
 
 
-
     def cloud_init(self, vapp, cloud_config):
         """
         Method to inject ssh-key
@@ -4035,9 +4034,10 @@ class vimconnector(vimconn.vimconnector):
                     'owner': (optional) file owner, string with the format 'owner:group'
                 'boot-data-drive': boolean to indicate if user-data must be passed using a boot drive (hard disk
         """
-
         try:
-            if isinstance(cloud_config, dict):
+            if not isinstance(cloud_config, dict):
+                raise Exception("cloud_init : parameter cloud_config is not a dictionary")
+            else:
                 key_pairs = []
                 userdata = []
                 if "key-pairs" in cloud_config:
@@ -4046,68 +4046,94 @@ class vimconnector(vimconn.vimconnector):
                 if "users" in cloud_config:
                     userdata = cloud_config["users"]
 
-            for key in key_pairs:
-                for user in userdata:
-                    if 'name' in user: user_name = user['name']
-                    if 'key-pairs' in user and len(user['key-pairs']) > 0:
-                        for user_key in user['key-pairs']:
-                            customize_script = """
-                        #!/bin/bash
-                        echo performing customization tasks with param $1 at `date "+DATE: %Y-%m-%d - TIME: %H:%M:%S"` >> /root/customization.log
-                        if [ "$1" = "precustomization" ];then
-                            echo performing precustomization tasks   on `date "+DATE: %Y-%m-%d - TIME: %H:%M:%S"` >> /root/customization.log
-                            if [ ! -d /root/.ssh ];then
-                                mkdir /root/.ssh
-                                chown root:root /root/.ssh
-                                chmod 700 /root/.ssh
-                                touch /root/.ssh/authorized_keys
-                                chown root:root /root/.ssh/authorized_keys
-                                chmod 600 /root/.ssh/authorized_keys
-                                # make centos with selinux happy
-                                which restorecon && restorecon -Rv /root/.ssh
-                                echo '{key}' >> /root/.ssh/authorized_keys
-                            else
-                                touch /root/.ssh/authorized_keys
-                                chown root:root /root/.ssh/authorized_keys
-                                chmod 600 /root/.ssh/authorized_keys
-                                echo '{key}' >> /root/.ssh/authorized_keys
-                            fi
-                            if [ -d /home/{user_name} ];then
-                                if [ ! -d /home/{user_name}/.ssh ];then
-                                    mkdir /home/{user_name}/.ssh
-                                    chown {user_name}:{user_name} /home/{user_name}/.ssh
-                                    chmod 700 /home/{user_name}/.ssh
-                                    touch /home/{user_name}/.ssh/authorized_keys
-                                    chown {user_name}:{user_name} /home/{user_name}/.ssh/authorized_keys
-                                    chmod 600 /home/{user_name}/.ssh/authorized_keys
-                                    # make centos with selinux happy
-                                    which restorecon && restorecon -Rv /home/{user_name}/.ssh
-                                    echo '{user_key}' >> /home/{user_name}/.ssh/authorized_keys
-                                else
-                                    touch /home/{user_name}/.ssh/authorized_keys
-                                    chown {user_name}:{user_name} /home/{user_name}/.ssh/authorized_keys
-                                    chmod 600 /home/{user_name}/.ssh/authorized_keys
-                                    echo '{user_key}' >> /home/{user_name}/.ssh/authorized_keys
-                                fi
-                            fi
-                        fi""".format(key=key, user_name=user_name, user_key=user_key)
+                self.logger.debug("cloud_init : Guest os customization started..")
+                customize_script = self.format_script(key_pairs=key_pairs, users_list=userdata)
+                self.guest_customization(vapp, customize_script)
 
-                            for vm in vapp._get_vms():
-                                vm_name = vm.name
-                                task = vapp.customize_guest_os(vm_name, customization_script=customize_script)
-                                if isinstance(task, GenericTask):
-                                    self.vca.block_until_completed(task)
-                                    self.logger.info("cloud_init : customized guest os task "\
-                                                        "completed for VM {}".format(vm_name))
-                                else:
-                                    self.logger.error("cloud_init : task for customized guest os"\
-                                                               "failed for VM {}".format(vm_name))
         except Exception as exp:
             self.logger.error("cloud_init : exception occurred while injecting "\
                                                                        "ssh-key")
             raise vimconn.vimconnException("cloud_init : Error {} failed to inject "\
                                                                "ssh-key".format(exp))
 
+    def format_script(self, key_pairs=[], users_list=[]):
+        bash_script = """
+        #!/bin/bash
+        echo performing customization tasks with param $1 at `date "+DATE: %Y-%m-%d - TIME: %H:%M:%S"` >> /root/customization.log
+        if [ "$1" = "precustomization" ];then
+            echo performing precustomization tasks   on `date "+DATE: %Y-%m-%d - TIME: %H:%M:%S"` >> /root/customization.log
+        """
+
+        keys = "\n".join(key_pairs)
+        if keys:
+            keys_data = """
+            if [ ! -d /root/.ssh ];then
+                mkdir /root/.ssh
+                chown root:root /root/.ssh
+                chmod 700 /root/.ssh
+                touch /root/.ssh/authorized_keys
+                chown root:root /root/.ssh/authorized_keys
+                chmod 600 /root/.ssh/authorized_keys
+                # make centos with selinux happy
+                which restorecon && restorecon -Rv /root/.ssh
+            else
+                touch /root/.ssh/authorized_keys
+                chown root:root /root/.ssh/authorized_keys
+                chmod 600 /root/.ssh/authorized_keys
+            fi
+            echo '{key}' >> /root/.ssh/authorized_keys
+            """.format(key=keys)
+
+            bash_script+= keys_data
+
+        for user in users_list:
+            if 'name' in user: user_name = user['name']
+            if 'key-pairs' in user:
+                user_keys = "\n".join(user['key-pairs'])
+            else:
+                user_keys = None
+
+            add_user_name = """
+                useradd -d /home/{user_name} -m -g users -s /bin/bash {user_name}
+                """.format(user_name=user_name)
+
+            bash_script+= add_user_name
+
+            if user_keys:
+                user_keys_data = """
+                mkdir /home/{user_name}/.ssh
+                chown {user_name}:{user_name} /home/{user_name}/.ssh
+                chmod 700 /home/{user_name}/.ssh
+                touch /home/{user_name}/.ssh/authorized_keys
+                chown {user_name}:{user_name} /home/{user_name}/.ssh/authorized_keys
+                chmod 600 /home/{user_name}/.ssh/authorized_keys
+                # make centos with selinux happy
+                which restorecon && restorecon -Rv /home/{user_name}/.ssh
+                echo '{user_key}' >> /home/{user_name}/.ssh/authorized_keys
+                """.format(user_name=user_name,user_key=user_keys)
+
+                bash_script+= user_keys_data
+
+        return bash_script+"\n\tfi"
+
+    def guest_customization(self, vapp, customize_script):
+        """
+        Method to customize guest os
+        vapp - Vapp object
+        customize_script - Customize script to be run at first boot of VM.
+        """
+        for vm in vapp._get_vms():
+            vm_name = vm.name
+            task = vapp.customize_guest_os(vm_name, customization_script=customize_script)
+            if isinstance(task, GenericTask):
+                self.vca.block_until_completed(task)
+                self.logger.info("guest_customization : customized guest os task "\
+                                             "completed for VM {}".format(vm_name))
+            else:
+                self.logger.error("guest_customization : task for customized guest os"\
+                                                    "failed for VM {}".format(vm_name))
+                raise vimconn.vimconnException("guest_customization : failed to perform"\
+                                       "guest os customization on VM {}".format(vm_name))
 
     def add_new_disk(self, vapp_uuid, disk_size):
         """
