@@ -25,8 +25,8 @@
 vimconn implement an Abstract class for the vim connector plugins
  with the definition of the method to be implemented.
 """
-__author__="Alfonso Tierno"
-__date__ ="$16-oct-2015 11:09:29$"
+__author__="Alfonso Tierno, Igor D.C."
+__date__ ="$14-aug-2017 23:59:59$"
 
 import logging
 
@@ -458,8 +458,205 @@ class vimconnector():
                 suffix:   extra text, e.g. the http path and query string   
         """
         raise vimconnNotImplemented( "Should have implemented this" )
-        
-#NOT USED METHODS in current version        
+
+    def new_classification(self, name, ctype, definition):
+        """Creates a traffic classification in the VIM
+        Params:
+            'name': name of this classification
+            'ctype': type of this classification
+            'definition': definition of this classification (type-dependent free-form text)
+        Returns the VIM's classification ID on success or raises an exception on failure
+        """
+        raise vimconnNotImplemented( "SFC support not implemented" )
+
+    def get_classification(self, classification_id):
+        """Obtain classification details of the VIM's classification with ID='classification_id'
+        Return a dict that contains:
+            'id': VIM's classification ID (same as classification_id)
+            'name': VIM's classification name
+            'type': type of this classification
+            'definition': definition of the classification
+            'status': 'ACTIVE', 'INACTIVE', 'DOWN', 'BUILD', 'ERROR', 'VIM_ERROR', 'OTHER'
+            'error_msg': (optional) text that explains the ERROR status
+            other VIM specific fields: (optional) whenever possible
+        Raises an exception upon error or when classification is not found
+        """
+        raise vimconnNotImplemented( "SFC support not implemented" )
+
+    def get_classification_list(self, filter_dict={}):
+        """Obtain classifications from the VIM
+        Params:
+            'filter_dict' (optional): contains the entries to filter the classifications on and only return those that match ALL:
+                id:   string => returns classifications with this VIM's classification ID, which implies a return of one classification at most
+                name: string => returns only classifications with this name
+                type: string => returns classifications of this type
+                definition: string => returns classifications that have this definition
+                tenant_id: string => returns only classifications that belong to this tenant/project
+        Returns a list of classification dictionaries, each dictionary contains:
+            'id': (mandatory) VIM's classification ID
+            'name': (mandatory) VIM's classification name
+            'type': type of this classification
+            'definition': definition of the classification
+            other VIM specific fields: (optional) whenever possible using the same naming of filter_dict param
+        List can be empty if no classification matches the filter_dict. Raise an exception only upon VIM connectivity,
+            authorization, or some other unspecific error
+        """
+        raise vimconnNotImplemented( "SFC support not implemented" )
+
+    def delete_classification(self, classification_id):
+        """Deletes a classification from the VIM
+        Returns the classification ID (classification_id) or raises an exception upon error or when classification is not found
+        """
+        raise vimconnNotImplemented( "SFC support not implemented" )
+
+    def new_sfi(self, name, ingress_ports, egress_ports, sfc_encap=True):
+        """Creates a service function instance in the VIM
+        Params:
+            'name': name of this service function instance
+            'ingress_ports': set of ingress ports (VIM's port IDs)
+            'egress_ports': set of egress ports (VIM's port IDs)
+            'sfc_encap': boolean stating whether this specific instance supports IETF SFC Encapsulation
+        Returns the VIM's service function instance ID on success or raises an exception on failure
+        """
+        raise vimconnNotImplemented( "SFC support not implemented" )
+
+    def get_sfi(self, sfi_id):
+        """Obtain service function instance details of the VIM's service function instance with ID='sfi_id'
+        Return a dict that contains:
+            'id': VIM's sfi ID (same as sfi_id)
+            'name': VIM's sfi name
+            'ingress_ports': set of ingress ports (VIM's port IDs)
+            'egress_ports': set of egress ports (VIM's port IDs)
+            'status': 'ACTIVE', 'INACTIVE', 'DOWN', 'BUILD', 'ERROR', 'VIM_ERROR', 'OTHER'
+            'error_msg': (optional) text that explains the ERROR status
+            other VIM specific fields: (optional) whenever possible
+        Raises an exception upon error or when service function instance is not found
+        """
+        raise vimconnNotImplemented( "SFC support not implemented" )
+
+    def get_sfi_list(self, filter_dict={}):
+        """Obtain service function instances from the VIM
+        Params:
+            'filter_dict' (optional): contains the entries to filter the sfis on and only return those that match ALL:
+                id:   string  => returns sfis with this VIM's sfi ID, which implies a return of one sfi at most
+                name: string  => returns only service function instances with this name
+                tenant_id: string => returns only service function instances that belong to this tenant/project
+        Returns a list of service function instance dictionaries, each dictionary contains:
+            'id': (mandatory) VIM's sfi ID
+            'name': (mandatory) VIM's sfi name
+            'ingress_ports': set of ingress ports (VIM's port IDs)
+            'egress_ports': set of egress ports (VIM's port IDs)
+            other VIM specific fields: (optional) whenever possible using the same naming of filter_dict param
+        List can be empty if no sfi matches the filter_dict. Raise an exception only upon VIM connectivity,
+            authorization, or some other unspecific error
+        """
+        raise vimconnNotImplemented( "SFC support not implemented" )
+
+    def delete_sfi(self, sfi_id):
+        """Deletes a service function instance from the VIM
+        Returns the service function instance ID (sfi_id) or raises an exception upon error or when sfi is not found
+        """
+        raise vimconnNotImplemented( "SFC support not implemented" )
+
+    def new_sf(self, name, sfis, sfc_encap=True):
+        """Creates (an abstract) service function in the VIM
+        Params:
+            'name': name of this service function
+            'sfis': set of service function instances of this (abstract) service function
+            'sfc_encap': boolean stating whether this service function supports IETF SFC Encapsulation
+        Returns the VIM's service function ID on success or raises an exception on failure
+        """
+        raise vimconnNotImplemented( "SFC support not implemented" )
+
+    def get_sf(self, sf_id):
+        """Obtain service function details of the VIM's service function with ID='sf_id'
+        Return a dict that contains:
+            'id': VIM's sf ID (same as sf_id)
+            'name': VIM's sf name
+            'sfis': VIM's sf's set of VIM's service function instance IDs
+            'sfc_encap': boolean stating whether this service function supports IETF SFC Encapsulation
+            'status': 'ACTIVE', 'INACTIVE', 'DOWN', 'BUILD', 'ERROR', 'VIM_ERROR', 'OTHER'
+            'error_msg': (optional) text that explains the ERROR status
+            other VIM specific fields: (optional) whenever possible
+        Raises an exception upon error or when sf is not found
+        """
+
+    def get_sf_list(self, filter_dict={}):
+        """Obtain service functions from the VIM
+        Params:
+            'filter_dict' (optional): contains the entries to filter the sfs on and only return those that match ALL:
+                id:   string  => returns sfs with this VIM's sf ID, which implies a return of one sf at most
+                name: string  => returns only service functions with this name
+                tenant_id: string => returns only service functions that belong to this tenant/project
+        Returns a list of service function dictionaries, each dictionary contains:
+            'id': (mandatory) VIM's sf ID
+            'name': (mandatory) VIM's sf name
+            'sfis': VIM's sf's set of VIM's service function instance IDs
+            'sfc_encap': boolean stating whether this service function supports IETF SFC Encapsulation
+            other VIM specific fields: (optional) whenever possible using the same naming of filter_dict param
+        List can be empty if no sf matches the filter_dict. Raise an exception only upon VIM connectivity,
+            authorization, or some other unspecific error
+        """
+        raise vimconnNotImplemented( "SFC support not implemented" )
+
+    def delete_sf(self, sf_id):
+        """Deletes (an abstract) service function from the VIM
+        Returns the service function ID (sf_id) or raises an exception upon error or when sf is not found
+        """
+        raise vimconnNotImplemented( "SFC support not implemented" )
+
+
+    def new_sfp(self, name, classifications, sfs, sfc_encap=True, spi=None):
+        """Creates a service function path
+        Params:
+            'name': name of this service function path
+            'classifications': set of traffic classifications that should be matched on to get into this sfp
+            'sfs': list of every service function that constitutes this path , from first to last
+            'sfc_encap': whether this is an SFC-Encapsulated chain (i.e using NSH), True by default
+            'spi': (optional) the Service Function Path identifier (SPI: Service Path Identifier) for this path
+        Returns the VIM's sfp ID on success or raises an exception on failure
+        """
+        raise vimconnNotImplemented( "SFC support not implemented" )
+
+    def get_sfp(self, sfp_id):
+        """Obtain service function path details of the VIM's sfp with ID='sfp_id'
+        Return a dict that contains:
+            'id': VIM's sfp ID (same as sfp_id)
+            'name': VIM's sfp name
+            'classifications': VIM's sfp's list of VIM's classification IDs
+            'sfs': VIM's sfp's list of VIM's service function IDs
+            'status': 'ACTIVE', 'INACTIVE', 'DOWN', 'BUILD', 'ERROR', 'VIM_ERROR', 'OTHER'
+            'error_msg': (optional) text that explains the ERROR status
+            other VIM specific fields: (optional) whenever possible
+        Raises an exception upon error or when sfp is not found
+        """
+        raise vimconnNotImplemented( "SFC support not implemented" )
+
+    def get_sfp_list(self, filter_dict={}):
+        """Obtain service function paths from VIM
+        Params:
+            'filter_dict' (optional): contains the entries to filter the sfps on, and only return those that match ALL:
+                id:   string  => returns sfps with this VIM's sfp ID , which implies a return of one sfp at most
+                name: string  => returns only sfps with this name
+                tenant_id: string => returns only sfps that belong to this tenant/project
+        Returns a list of service function path dictionaries, each dictionary contains:
+            'id': (mandatory) VIM's sfp ID
+            'name': (mandatory) VIM's sfp name
+            'classifications': VIM's sfp's list of VIM's classification IDs
+            'sfs': VIM's sfp's list of VIM's service function IDs
+            other VIM specific fields: (optional) whenever possible using the same naming of filter_dict param
+        List can be empty if no sfp matches the filter_dict. Raise an exception only upon VIM connectivity,
+            authorization, or some other unspecific error
+        """
+        raise vimconnNotImplemented( "SFC support not implemented" )
+
+    def delete_sfp(self, sfp_id):
+        """Deletes a service function path from the VIM
+        Returns the sfp ID (sfp_id) or raises an exception upon error or when sf is not found
+        """
+        raise vimconnNotImplemented( "SFC support not implemented" )
+
+#NOT USED METHODS in current version
 
     def host_vim2gui(self, host, server_dict):
         """Transform host dictionary from VIM format to GUI format,
@@ -505,4 +702,3 @@ class vimconnector():
         """Adds a VM instance to VIM"""
         """Returns the instance identifier"""
         raise vimconnNotImplemented( "Should have implemented this" )
-
