@@ -395,12 +395,12 @@ def check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=1):
             name_dict[ interface["name"] ] = "overlay"
         vnfc_interfaces[ vnfc["name"] ] = name_dict
         # check bood-data info
-        if "boot-data" in vnfc:
-            # check that user-data is incompatible with users and config-files
-            if (vnfc["boot-data"].get("users") or vnfc["boot-data"].get("config-files")) and vnfc["boot-data"].get("user-data"):
-                raise NfvoException(
-                    "Error at vnf:VNFC:boot-data, fields 'users' and 'config-files' are not compatible with 'user-data'",
-                    HTTP_Bad_Request)
+        # if "boot-data" in vnfc:
+        #     # check that user-data is incompatible with users and config-files
+        #     if (vnfc["boot-data"].get("users") or vnfc["boot-data"].get("config-files")) and vnfc["boot-data"].get("user-data"):
+        #         raise NfvoException(
+        #             "Error at vnf:VNFC:boot-data, fields 'users' and 'config-files' are not compatible with 'user-data'",
+        #             HTTP_Bad_Request)
 
     #check if the info in external_connections matches with the one in the vnfcs
     name_list=[]
@@ -1839,10 +1839,10 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
 
 
 def unify_cloud_config(cloud_config_preserve, cloud_config):
-    ''' join the cloud config information into cloud_config_preserve.
+    """ join the cloud config information into cloud_config_preserve.
     In case of conflict cloud_config_preserve preserves
-    None is admited
-    '''
+    None is allowed
+    """
     if not cloud_config_preserve and not cloud_config:
         return None
 
@@ -1892,10 +1892,19 @@ def unify_cloud_config(cloud_config_preserve, cloud_config):
         new_cloud_config["boot-data-drive"] = cloud_config_preserve["boot-data-drive"]
 
     # user-data
-    if cloud_config and cloud_config.get("user-data") != None:
-        new_cloud_config["user-data"] = cloud_config["user-data"]
-    if cloud_config_preserve and cloud_config_preserve.get("user-data") != None:
-        new_cloud_config["user-data"] = cloud_config_preserve["user-data"]
+    new_cloud_config["user-data"] = []
+    if cloud_config and cloud_config.get("user-data"):
+        if isinstance(cloud_config["user-data"], list):
+            new_cloud_config["user-data"] += cloud_config["user-data"]
+        else:
+            new_cloud_config["user-data"].append(cloud_config["user-data"])
+    if cloud_config_preserve and cloud_config_preserve.get("user-data"):
+        if isinstance(cloud_config_preserve["user-data"], list):
+            new_cloud_config["user-data"] += cloud_config_preserve["user-data"]
+        else:
+            new_cloud_config["user-data"].append(cloud_config_preserve["user-data"])
+    if not new_cloud_config["user-data"]:
+        del new_cloud_config["user-data"]
 
     # config files
     new_cloud_config["config-files"] = []

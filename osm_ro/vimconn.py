@@ -387,7 +387,8 @@ class vimconnector():
                 'users': (optional) list of users to be inserted, each item is a dict with:
                     'name': (mandatory) user name,
                     'key-pairs': (optional) list of strings with the public key to be inserted to the user
-                'user-data': (optional) string is a text script to be passed directly to cloud-init
+                'user-data': (optional) can be a string with the text script to be passed directly to cloud-init,
+                    or a list of strings, each one contains a script to be passed, usually with a MIMEmultipart file
                 'config-files': (optional). List of files to be transferred. Each item is a dict with:
                     'dest': (mandatory) string with the destination absolute path
                     'encoding': (optional, by default text). Can be one of:

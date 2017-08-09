@@ -35,6 +35,7 @@ import netaddr
 import time
 import yaml
 import random
+import sys
 
 from novaclient import client as nClient, exceptions as nvExceptions
 from keystoneauth1.identity import v2, v3
@@ -50,8 +51,11 @@ from httplib import HTTPException
 from neutronclient.neutron import client as neClient
 from neutronclient.common import exceptions as neExceptions
 from requests.exceptions import ConnectionError
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
-'''contain the openstack virtual machine status to openmano status'''
+
+"""contain the openstack virtual machine status to openmano status"""
 vmStatus2manoFormat={'ACTIVE':'ACTIVE',
                      'PAUSED':'PAUSED',
                      'SUSPENDED': 'SUSPENDED',
@@ -685,6 +689,41 @@ class vimconnector(vimconn.vimconnector):
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
             self._format_exception(e)
 
+    @staticmethod
+    def _create_mimemultipart(content_list):
+        """Creates a MIMEmultipart text combining the content_list
+        :param content_list: list of text scripts to be combined
+        :return: str of the created MIMEmultipart. If the list is empty returns None, if the list contains only one
+        element MIMEmultipart is not created and this content is returned
+        """
+        if not content_list:
+            return None
+        elif len(content_list) == 1:
+            return content_list[0]
+        combined_message = MIMEMultipart()
+        for content in content_list:
+            if content.startswith('#include'):
+                format = 'text/x-include-url'
+            elif content.startswith('#include-once'):
+                format = 'text/x-include-once-url'
+            elif content.startswith('#!'):
+                format = 'text/x-shellscript'
+            elif content.startswith('#cloud-config'):
+                format = 'text/cloud-config'
+            elif content.startswith('#cloud-config-archive'):
+                format = 'text/cloud-config-archive'
+            elif content.startswith('#upstart-job'):
+                format = 'text/upstart-job'
+            elif content.startswith('#part-handler'):
+                format = 'text/part-handler'
+            elif content.startswith('#cloud-boothook'):
+                format = 'text/cloud-boothook'
+            else:  # by default
+                format = 'text/x-shellscript'
+            sub_message = MIMEText(content, format, sys.getdefaultencoding())
+            combined_message.attach(sub_message)
+        return combined_message.as_string()
+
     def __wait_for_vm(self, vm_id, status):
         """wait until vm is in the desired status and return True.
         If the VM gets in ERROR status, return false.
@@ -883,14 +922,17 @@ class vimconnector(vimconn.vimconnector):
             #cloud config
             userdata=None
             config_drive = None
+            userdata_list = []
             if isinstance(cloud_config, dict):
                 if cloud_config.get("user-data"):
-                    userdata=cloud_config["user-data"]
+                    if isinstance(cloud_config["user-data"], str):
+                        userdata_list.append(cloud_config["user-data"])
+                    else:
+                        for u in cloud_config["user-data"]:
+                            userdata_list.append(u)
                 if cloud_config.get("boot-data-drive") != None:
                     config_drive = cloud_config["boot-data-drive"]
                 if cloud_config.get("config-files") or cloud_config.get("users") or cloud_config.get("key-pairs"):
-                    if userdata:
-                        raise vimconn.vimconnConflictException("Cloud-config cannot contain both 'userdata' and 'config-files'/'users'/'key-pairs'")
                     userdata_dict={}
                     #default user
                     if cloud_config.get("key-pairs"):
@@ -924,8 +966,9 @@ class vimconnector(vimconn.vimconnector):
                             if file.get("owner"):
                                 file_info["owner"] = file["owner"]
                             userdata_dict["write_files"].append(file_info)
-                    userdata = "#cloud-config\n"
-                    userdata += yaml.safe_dump(userdata_dict, indent=4, default_flow_style=False)
+                    userdata_list.append("#cloud-config\n" + yaml.safe_dump(userdata_dict, indent=4,
+                                                                              default_flow_style=False))
+                    userdata = self._create_mimemultipart(userdata_list)
                 self.logger.debug("userdata: %s", userdata)
             elif isinstance(cloud_config, str):
                 userdata = cloud_config
