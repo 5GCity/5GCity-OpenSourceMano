@@ -38,6 +38,7 @@ tables_with_createdat_field=["datacenters","instance_nets","instance_scenarios",
                            "interfaces","nets","nfvo_tenants","scenarios","sce_interfaces","sce_nets",
                            "sce_vnfs","tenants_datacenters","datacenter_tenants","vms","vnfs", "datacenter_nets"]
 
+
 class nfvo_db(db_base.db_base):
     def __init__(self, host=None, user=None, passwd=None, database=None, log_name='openmano.db', log_level=None):
         db_base.db_base.__init__(self, host, user, passwd, database, log_name, log_level)
@@ -585,16 +586,18 @@ class nfvo_db(db_base.db_base):
                     scenario_dict['vnfs'] = self.cur.fetchall()
                     for vnf in scenario_dict['vnfs']:
                         #sce_interfaces
-                        cmd = "SELECT scei.uuid,scei.sce_net_id,scei.interface_id,i.external_name,scei.ip_address FROM sce_interfaces as scei join interfaces as i on scei.interface_id=i.uuid WHERE scei.sce_vnf_id='{}' ORDER BY scei.created_at".format(vnf['uuid'])
+                        cmd = "SELECT scei.uuid,scei.sce_net_id,scei.interface_id,i.external_name,scei.ip_address"\
+                              " FROM sce_interfaces as scei join interfaces as i on scei.interface_id=i.uuid"\
+                              " WHERE scei.sce_vnf_id='{}' ORDER BY scei.created_at".format(vnf['uuid'])
                         self.logger.debug(cmd)
                         self.cur.execute(cmd)
                         vnf['interfaces'] = self.cur.fetchall()
                         #vms
                         cmd = "SELECT vms.uuid as uuid, flavor_id, image_id, vms.name as name," \
-                              " vms.description as description, vms.boot_data as boot_data," \
+                              " vms.description as description, vms.boot_data as boot_data, count," \
                               " vms.availability_zone as availability_zone" \
-                              " FROM vnfs join vms on vnfs.uuid=vms.vnf_id " \
-                              " WHERE vnfs.uuid='" + vnf['vnf_id'] +"'"  \
+                              " FROM vnfs join vms on vnfs.uuid=vms.vnf_id" \
+                              " WHERE vnfs.uuid='" + vnf['vnf_id'] + "'"  \
                               " ORDER BY vms.created_at"
                         self.logger.debug(cmd)
                         self.cur.execute(cmd)
@@ -720,6 +723,43 @@ class nfvo_db(db_base.db_base):
                     return scenario_uuid + " " + scenario_name
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries, "delete", "instances running")
+            tries -= 1
+
+    def new_rows(self, tables, uuid_list=None):
+        """
+        Make a transactional insertion of rows at several tables
+        :param tables: list with dictionary where the keys are the table names and the values are a row or row list
+            with the values to be inserted at the table. Each row is a dictionary with the key values. E.g.:
+            tables = [
+                {"table1": [ {"column1": value, "column2: value, ... }, {"column1": value, "column2: value, ... }, ...],
+                {"table2": [ {"column1": value, "column2: value, ... }, {"column1": value, "column2: value, ... }, ...],
+                {"table3": {"column1": value, "column2: value, ... }
+            }
+        :param uuid_list: list of created uuids, first one is the root (#TODO to store at uuid table)
+        :return: None if success,  raise exception otherwise
+        """
+        tries = 2
+        while tries:
+            created_time = time.time()
+            try:
+                with self.con:
+                    self.cur = self.con.cursor()
+                    for table in tables:
+                        for table_name, row_list in table.items():
+                            index = 0
+                            if isinstance(row_list, dict):
+                                row_list = (row_list, )  #create a list with the single value
+                            for row in row_list:
+                                if table_name in self.tables_with_created_field:
+                                    created_time_param = created_time + index*0.00001
+                                else:
+                                    created_time_param=0
+                                self._new_row_internal(table_name, row, add_uuid=False, root_uuid=None,
+                                                               created_time=created_time_param)
+                                index += 1
+                    return
+            except (mdb.Error, AttributeError) as e:
+                self._format_error(e, tries)
             tries -= 1
 
     def new_instance_scenario_as_a_whole(self,tenant_id,instance_scenario_name,instance_scenario_description,scenarioDict):

@@ -38,6 +38,7 @@ import console_proxy_thread as cli
 import vimconn
 import logging
 import collections
+from uuid import uuid4
 from db_base import db_base_Exception
 
 import nfvo_db
@@ -830,6 +831,7 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
             #print "Image id for VNFC %s: %s" % (vnfc['name'],image_id)
             VNFCDict[vnfc['name']]["image_id"] = image_id
             VNFCDict[vnfc['name']]["image_path"] = vnfc.get('VNFC image')
+            VNFCDict[vnfc['name']]["count"] = vnfc.get('count', 1)
             if vnfc.get("boot-data"):
                 VNFCDict[vnfc['name']]["boot_data"] = yaml.safe_dump(vnfc["boot-data"], default_flow_style=True, width=256)
 
@@ -965,6 +967,7 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
             #print "Image id for VNFC %s: %s" % (vnfc['name'],image_id)
             VNFCDict[vnfc['name']]["image_id"] = image_id
             VNFCDict[vnfc['name']]["image_path"] = vnfc.get('VNFC image')
+            VNFCDict[vnfc['name']]["count"] = vnfc.get('count', 1)
             if vnfc.get("boot-data"):
                 VNFCDict[vnfc['name']]["boot_data"] = yaml.safe_dump(vnfc["boot-data"], default_flow_style=True, width=256)
 
@@ -2002,14 +2005,30 @@ def create_instance(mydb, tenant_id, instance_dict):
     #logger.debug(">>>>>>> InstanceDict:\n{}".format(yaml.safe_dump(instance_dict,default_flow_style=False, width=256)))
     #logger.debug(">>>>>>> ScenarioDict:\n{}".format(yaml.safe_dump(scenarioDict,default_flow_style=False, width=256)))
 
-    scenarioDict['datacenter_id'] = default_datacenter_id
+    uuid_list = []
+    instance_name = instance_dict["name"]
+    instance_uuid = str(uuid4())
+    uuid_list.append(instance_uuid)
+    db_instance_scenario = {
+        "uuid": instance_uuid,
+        "name": instance_name,
+        "tenant_id": tenant_id,
+        "scenario_id": scenarioDict['uuid'],
+        "datacenter_id": default_datacenter_id,
+        # filled bellow 'datacenter_tenant_id'
+        "description": instance_dict.get("description"),
+    }
+    db_ip_profiles=[]
+    if scenarioDict.get("cloud-config"):
+        db_instance_scenario["cloud_config"] = yaml.safe_dump(scenarioDict["cloud-config"],
+                                                              default_flow_style=True, width=256)
 
+    vnf_net2instance = {}   #Auxiliar dictionary. First key:'scenario' or sce_vnf uuid. Second Key: uuid of the net/sce_net. Value: vim_net_id
+    sce_net2instance = {}
     auxNetDict = {}   #Auxiliar dictionary. First key:'scenario' or sce_vnf uuid. Second Key: uuid of the net/sce_net. Value: vim_net_id
     auxNetDict['scenario'] = {}
 
     logger.debug("Creating instance from scenario-dict:\n%s", yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False))  #TODO remove
-    instance_name = instance_dict["name"]
-    instance_description = instance_dict.get("description")
     try:
         # 0 check correct parameters
         for net_name, net_instance_desc in instance_dict.get("networks",{}).iteritems():
@@ -2093,12 +2112,12 @@ def create_instance(mydb, tenant_id, instance_dict):
         #logger.debug(">>>>>>>> Merged dictionary")
         logger.debug("Creating instance scenario-dict MERGED:\n%s", yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False))
 
-
         # 1. Creating new nets (sce_nets) in the VIM"
+        db_instance_nets = []
         for sce_net in scenarioDict['nets']:
-            sce_net["vim_id_sites"]={}
-            descriptor_net =  instance_dict.get("networks",{}).get(sce_net["name"],{})
+            descriptor_net = instance_dict.get("networks",{}).get(sce_net["name"],{})
             net_name = descriptor_net.get("vim-network-name")
+            sce_net2instance[sce_net['uuid']] = {}
             auxNetDict['scenario'][sce_net['uuid']] = {}
 
             sites = descriptor_net.get("sites", [ {} ])
@@ -2163,7 +2182,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                         if not create_network:
                             raise NfvoException("No candidate VIM network found for " + filter_text, HTTP_Bad_Request )
                     else:
-                        sce_net["vim_id_sites"][datacenter_id] = vim_nets[0]['id']
+                        vim_id = vim_nets[0]['id']
                         auxNetDict['scenario'][sce_net['uuid']][datacenter_id] = vim_nets[0]['id']
                         create_network = False
                 if create_network:
@@ -2173,10 +2192,38 @@ def create_instance(mydb, tenant_id, instance_dict):
                     instance_tasks[task_id] = task
                     tasks_to_launch[myvim_thread_id].append(task)
                     #network_id = vim.new_network(net_vim_name, net_type, sce_net.get('ip_profile',None))
-                    sce_net["vim_id_sites"][datacenter_id] = task_id
+                    vim_id = task_id
                     auxNetDict['scenario'][sce_net['uuid']][datacenter_id] = task_id
                     rollbackList.append({'what':'network', 'where':'vim', 'vim_id':datacenter_id, 'uuid':task_id})
                     sce_net["created"] = True
+
+                # fill database content
+                net_uuid = str(uuid4())
+                uuid_list.append(net_uuid)
+                sce_net2instance[sce_net['uuid']][datacenter_id] = net_uuid
+                db_net = {
+                    "uuid": net_uuid,
+                    'vim_net_id': vim_id,
+                    "instance_scenario_id": instance_uuid,
+                    "sce_net_id": sce_net["uuid"],
+                    "created": create_network,
+                    'datacenter_id': datacenter_id,
+                    'datacenter_tenant_id': myvim_thread_id,
+                    'status': 'BUILD' if create_network else "ACTIVE"
+                }
+                db_instance_nets.append(db_net)
+            if 'ip_profile' in sce_net:
+                db_ip_profile={
+                    'instance_net_id': net_uuid,
+                    'ip_version': sce_net['ip_profile']['ip_version'],
+                    'subnet_address': sce_net['ip_profile']['subnet_address'],
+                    'gateway_address': sce_net['ip_profile']['gateway_address'],
+                    'dns_address': sce_net['ip_profile']['dns_address'],
+                    'dhcp_enabled': sce_net['ip_profile']['dhcp_enabled'],
+                    'dhcp_start_address': sce_net['ip_profile']['dhcp_start_address'],
+                    'dhcp_count': sce_net['ip_profile']['dhcp_count'],
+                }
+                db_ip_profiles.append(db_ip_profile)
 
         # 2. Creating new nets (vnf internal nets) in the VIM"
         # For each vnf net, we create it and we add it to instanceNetlist.
@@ -2201,19 +2248,51 @@ def create_instance(mydb, tenant_id, instance_dict):
                 instance_tasks[task_id] = task
                 tasks_to_launch[myvim_thread_id].append(task)
                 # network_id = vim.new_network(net_name, net_type, net.get('ip_profile',None))
-                net['vim_id'] = task_id
+                vim_id = task_id
+                if sce_vnf['uuid'] not in vnf_net2instance:
+                    vnf_net2instance[sce_vnf['uuid']] = {}
+                vnf_net2instance[sce_vnf['uuid']][net['uuid']] = task_id
                 if sce_vnf['uuid'] not in auxNetDict:
                     auxNetDict[sce_vnf['uuid']] = {}
                 auxNetDict[sce_vnf['uuid']][net['uuid']] = task_id
                 rollbackList.append({'what':'network','where':'vim','vim_id':datacenter_id,'uuid':task_id})
                 net["created"] = True
 
-        #print "auxNetDict:"
-        #print yaml.safe_dump(auxNetDict, indent=4, default_flow_style=False)
+                # fill database content
+                net_uuid = str(uuid4())
+                uuid_list.append(net_uuid)
+                vnf_net2instance[sce_vnf['uuid']][net['uuid']] = net_uuid
+                db_net = {
+                    "uuid": net_uuid,
+                    'vim_net_id': vim_id,
+                    "instance_scenario_id": instance_uuid,
+                    "net_id": net["uuid"],
+                    "created": True,
+                    'datacenter_id': datacenter_id,
+                    'datacenter_tenant_id': myvim_thread_id,
+                }
+                db_instance_nets.append(db_net)
+                if 'ip_profile' in net:
+                    db_ip_profile = {
+                        'instance_net_id': net_uuid,
+                        'ip_version': net['ip_profile']['ip_version'],
+                        'subnet_address': net['ip_profile']['subnet_address'],
+                        'gateway_address': net['ip_profile']['gateway_address'],
+                        'dns_address': net['ip_profile']['dns_address'],
+                        'dhcp_enabled': net['ip_profile']['dhcp_enabled'],
+                        'dhcp_start_address': net['ip_profile']['dhcp_start_address'],
+                        'dhcp_count': net['ip_profile']['dhcp_count'],
+                    }
+                    db_ip_profiles.append(db_ip_profile)
+
+        #print "vnf_net2instance:"
+        #print yaml.safe_dump(vnf_net2instance, indent=4, default_flow_style=False)
 
         # 3. Creating new vm instances in the VIM
+        db_instance_vnfs = []
+        db_instance_vms = []
+        db_instance_interfaces = []
         #myvim.new_vminstance(self,vimURI,tenant_id,name,description,image_id,flavor_id,net_dict)
-
         sce_vnf_list = sorted(scenarioDict['vnfs'], key=lambda k: k['name']) 
         #for sce_vnf in scenarioDict['vnfs']:
         for sce_vnf in sce_vnf_list:
@@ -2239,10 +2318,21 @@ def create_instance(mydb, tenant_id, instance_dict):
             sce_vnf["datacenter_id"] = datacenter_id
             i = 0
 
+            vnf_uuid = str(uuid4())
+            uuid_list.append(vnf_uuid)
+            db_instance_vnf = {
+                'uuid': vnf_uuid,
+                'instance_scenario_id': instance_uuid,
+                'vnf_id': sce_vnf['vnf_id'],
+                'sce_vnf_id': sce_vnf['uuid'],
+                'datacenter_id': datacenter_id,
+                'datacenter_tenant_id': myvim_thread_id,
+            }
+            db_instance_vnfs.append(db_instance_vnf)
+
             for vm in sce_vnf['vms']:
-                i += 1
                 myVMDict = {}
-                myVMDict['name'] = "{}.{}.{}".format(instance_name,sce_vnf['name'],chr(96+i))
+                myVMDict['name'] = "{}.{}.{}".format(instance_name[:64], sce_vnf['name'][:64], vm["name"][:64])
                 myVMDict['description'] = myVMDict['name'][0:99]
 #                if not startvms:
 #                    myVMDict['start'] = "no"
@@ -2279,6 +2369,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                 myVMDict['networks'] = []
                 task_depends = {}
                 #TODO ALF. connect_mgmt_interfaces. Connect management interfaces if this is true
+                db_vm_ifaces = []
                 for iface in vm['interfaces']:
                     netDict = {}
                     if iface['type']=="data":
@@ -2325,54 +2416,114 @@ def create_instance(mydb, tenant_id, instance_dict):
                             #print vnf_iface
                             if vnf_iface['interface_id']==iface['uuid']:
                                 netDict['net_id'] = auxNetDict['scenario'][ vnf_iface['sce_net_id'] ][datacenter_id]
+                                instance_net_id = sce_net2instance[ vnf_iface['sce_net_id'] ][datacenter_id]
                                 break
                     else:
                         netDict['net_id'] = auxNetDict[ sce_vnf['uuid'] ][ iface['net_id'] ]
+                        instance_net_id = vnf_net2instance[ sce_vnf['uuid'] ][ iface['net_id'] ]
                     if netDict.get('net_id') and is_task_id(netDict['net_id']):
                         task_depends[netDict['net_id']] = instance_tasks[netDict['net_id']]
                     #skip bridge ifaces not connected to any net
                     #if 'net_id' not in netDict or netDict['net_id']==None:
                     #    continue
                     myVMDict['networks'].append(netDict)
-                #print ">>>>>>>>>>>>>>>>>>>>>>>>>>>"
-                #print myVMDict['name']
-                #print "networks", yaml.safe_dump(myVMDict['networks'], indent=4, default_flow_style=False)
-                #print "interfaces", yaml.safe_dump(vm['interfaces'], indent=4, default_flow_style=False)
-                #print ">>>>>>>>>>>>>>>>>>>>>>>>>>>"
+                    db_vm_iface={
+                        # "uuid"
+                        # 'instance_vm_id': instance_vm_uuid,
+                        "instance_net_id": instance_net_id,
+                        'interface_id': iface['uuid'],
+                        # 'vim_interface_id': ,
+                        'type': 'external' if iface['external_name'] is not None else 'internal',
+                        'ip_address': iface.get('ip_address'),
+                        'floating_ip': int(iface.get('floating-ip', False)),
+                        'port_security': int(iface.get('port-security', True))
+                    }
+                    db_vm_ifaces.append(db_vm_iface)
+                # print ">>>>>>>>>>>>>>>>>>>>>>>>>>>"
+                # print myVMDict['name']
+                # print "networks", yaml.safe_dump(myVMDict['networks'], indent=4, default_flow_style=False)
+                # print "interfaces", yaml.safe_dump(vm['interfaces'], indent=4, default_flow_style=False)
+                # print ">>>>>>>>>>>>>>>>>>>>>>>>>>>"
                 if vm.get("boot_data"):
                     cloud_config_vm = unify_cloud_config(vm["boot_data"], cloud_config)
                 else:
                     cloud_config_vm = cloud_config
-
                 if myVMDict.get('availability_zone'):
                     av_index = vnf_availability_zones.index(myVMDict['availability_zone'])
                 else:
                     av_index = None
-                task = new_task("new-vm", (myVMDict['name'], myVMDict['description'], myVMDict.get('start', None),
-                                           myVMDict['imageRef'], myVMDict['flavorRef'], myVMDict['networks'],
-                                           cloud_config_vm, myVMDict['disks'], av_index,
-                                           vnf_availability_zones), depends=task_depends)
-                instance_tasks[task["id"]] = task
-                tasks_to_launch[myvim_thread_id].append(task)
-                vm_id = task["id"]
-                vm['vim_id'] = vm_id
-                rollbackList.append({'what':'vm','where':'vim','vim_id':datacenter_id,'uuid':vm_id})
-                #put interface uuid back to scenario[vnfs][vms[[interfaces]
-                for net in myVMDict['networks']:
-                    if "vim_id" in net:
-                        for iface in vm['interfaces']:
-                            if net["name"]==iface["internal_name"]:
-                                iface["vim_id"]=net["vim_id"]
-                                break
+                for vm_index in range(0, vm.get('count', 1)):
+                    vm_index_name = ""
+                    if vm.get('count', 1) > 1:
+                        vm_index_name += "." + chr(97 + vm_index)
+                    task = new_task("new-vm", (myVMDict['name']+vm_index_name, myVMDict['description'],
+                                               myVMDict.get('start', None), myVMDict['imageRef'],
+                                               myVMDict['flavorRef'], myVMDict['networks'],
+                                               cloud_config_vm, myVMDict['disks'], av_index,
+                                               vnf_availability_zones), depends=task_depends)
+                    instance_tasks[task["id"]] = task
+                    tasks_to_launch[myvim_thread_id].append(task)
+                    vm_id = task["id"]
+                    vm['vim_id'] = vm_id
+                    rollbackList.append({'what':'vm','where':'vim','vim_id':datacenter_id,'uuid':vm_id})
+                    # put interface uuid back to scenario[vnfs][vms[[interfaces]
+                    for net in myVMDict['networks']:
+                        if "vim_id" in net:
+                            for iface in vm['interfaces']:
+                                if net["name"]==iface["internal_name"]:
+                                    iface["vim_id"]=net["vim_id"]
+                                    break
+                    vm_uuid = str(uuid4())
+                    uuid_list.append(vm_uuid)
+                    db_vm = {
+                        "uuid": vm_uuid,
+                        'instance_vnf_id': vnf_uuid,
+                        "vim_vm_id": vm_id,
+                        "vm_id": vm["uuid"],
+                        # "status":
+                    }
+                    db_instance_vms.append(db_vm)
+                    for db_vm_iface in db_vm_ifaces:
+                        iface_uuid = str(uuid4())
+                        uuid_list.append(iface_uuid)
+                        db_vm_iface_instance = {
+                            "uuid": iface_uuid,
+                            "instance_vm_id": vm_uuid
+                        }
+                        db_vm_iface_instance.update(db_vm_iface)
+                        if db_vm_iface_instance.get("ip_address"):  # increment ip_address
+                            ip = db_vm_iface_instance.get("ip_address")
+                            i = ip.rfind(".")
+                            if i > 0:
+                                try:
+                                    i += 1
+                                    ip = ip[i:] + str(int(ip[:i]) +1)
+                                    db_vm_iface_instance["ip_address"] = ip
+                                except:
+                                    db_vm_iface_instance["ip_address"] = None
+                        db_instance_interfaces.append(db_vm_iface_instance)
+
         scenarioDict["datacenter2tenant"] = myvim_threads_id
+
+        db_instance_scenario['datacenter_tenant_id'] = myvim_threads_id[default_datacenter_id]
+        db_instance_scenario['datacenter_id'] = default_datacenter_id
+        db_tables=[
+            {"instance_scenarios": db_instance_scenario},
+            {"instance_vnfs": db_instance_vnfs},
+            {"instance_nets": db_instance_nets},
+            {"ip_profiles": db_ip_profiles},
+            {"instance_vms": db_instance_vms},
+            {"instance_interfaces": db_instance_interfaces},
+        ]
+
         logger.debug("create_instance Deployment done scenarioDict: %s",
-                    yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False) )
-        instance_id = mydb.new_instance_scenario_as_a_whole(tenant_id,instance_name, instance_description, scenarioDict)
+                    yaml.safe_dump(db_tables, indent=4, default_flow_style=False) )
+        mydb.new_rows(db_tables, uuid_list)
         for myvim_thread_id,task_list in tasks_to_launch.items():
             for task in task_list:
                 vim_threads["running"][myvim_thread_id].insert_task(task)
 
-        global_instance_tasks[instance_id] = instance_tasks
+        global_instance_tasks[instance_uuid] = instance_tasks
         # Update database with those ended instance_tasks
         # for task in instance_tasks.values():
         #     if task["status"] == "ok":
@@ -2382,7 +2533,7 @@ def create_instance(mydb, tenant_id, instance_dict):
         #         elif task["name"] == "new-net":
         #             mydb.update_rows("instance_nets", UPDATE={"vim_net_id": task["result"]},
         #                              WHERE={"vim_net_id": task["id"]})
-        return mydb.get_instance_scenario(instance_id)
+        return mydb.get_instance_scenario(instance_uuid)
     except (NfvoException, vimconn.vimconnException,db_base_Exception)  as e:
         message = rollback(mydb, myvims, rollbackList)
         if isinstance(e, db_base_Exception):

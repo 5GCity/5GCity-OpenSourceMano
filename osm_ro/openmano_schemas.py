@@ -386,7 +386,7 @@ internal_connection_schema = {
         "name": name_schema,
         "description":description_schema,
         "type":{"type":"string", "enum":["bridge","data","ptp"]},
-        "elements": {"type" : "array", "items": internal_connection_element_schema, "minItems":2}
+        "elements": {"type" : "array", "items": internal_connection_element_schema, "minItems":1}
     },
     "required": ["name", "type", "elements"],
     "additionalProperties": False
@@ -400,7 +400,7 @@ internal_connection_schema_v02 = {
         "type": {"type": "string", "enum":["e-line", "e-lan"]},
         "implementation": {"type": "string", "enum":["overlay", "underlay"]},
         "ip-profile": ip_profile_schema,
-        "elements": {"type" : "array", "items": internal_connection_element_schema_v02, "minItems":2}
+        "elements": {"type" : "array", "items": internal_connection_element_schema_v02, "minItems":1}
     },
     "required": ["name", "type", "implementation", "elements"],
     "additionalProperties": False
@@ -541,6 +541,7 @@ vnfc_schema = {
     "properties":{
         "name": name_schema,
         "description": description_schema,
+        "count": integer1_schema,
         "image name": name_schema,
         "availability_zone": name_schema,
         "VNFC image": {"oneOf": [path_schema, http_schema]},

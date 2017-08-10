@@ -33,7 +33,7 @@ DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=23
+LAST_DB_VERSION=24
  
 # Detect paths
 MYSQL=$(which mysql)
@@ -191,6 +191,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5015 ] && DB_VERSION=21  #0.5.15 =>  21
 #[ $OPENMANO_VER_NUM -ge 5016 ] && DB_VERSION=22  #0.5.16 =>  22
 #[ $OPENMANO_VER_NUM -ge 5020 ] && DB_VERSION=23  #0.5.20 =>  23
+#[ $OPENMANO_VER_NUM -ge 5021 ] && DB_VERSION=24  #0.5.21 =>  24
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -798,6 +799,22 @@ function downgrade_from_23(){
     echo "      remove column 'availability_zone' from table 'vms'"
     echo "ALTER TABLE mano_db.vms DROP COLUMN availability_zone;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
     echo "DELETE FROM schema_version WHERE version_int='23';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+}
+
+function upgrade_to_24(){
+    # echo "    upgrade database from version 0.23 to version 0.24"
+    echo "      Add 'count' to table 'vms'"
+    echo "ALTER TABLE vms ADD COLUMN count SMALLINT NOT NULL DEFAULT '1' AFTER vnf_id;" | $DBCMD ||
+        ! echo "ERROR. Aborted!" || exit -1
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
+         "VALUES (24, '0.24', '0.5.21', 'Added vnfd fields', '2017-08-29');" | $DBCMD ||
+         ! echo "ERROR. Aborted!" || exit -1
+}
+function downgrade_from_24(){
+    # echo "    downgrade database from version 0.24 to version 0.23"
+    echo "      Remove 'count' from table 'vms'"
+    echo "ALTER TABLE vms DROP COLUMN count;" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
+    echo "DELETE FROM schema_version WHERE version_int='24';" | $DBCMD || ! echo "ERROR. Aborted!" || exit -1
 }
 
 function upgrade_to_X(){
