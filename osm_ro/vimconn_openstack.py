@@ -22,14 +22,21 @@
 ##
 
 '''
-osconnector implements all the methods to interact with openstack using the python-client.
+osconnector implements all the methods to interact with openstack using the python-neutronclient.
+
+For the VNF forwarding graph, The OpenStack VIM connector calls the
+networking-sfc Neutron extension methods, whose resources are mapped
+to the VIM connector's SFC resources as follows:
+- Classification (OSM) -> Flow Classifier (Neutron)
+- Service Function Instance (OSM) -> Port Pair (Neutron)
+- Service Function (OSM) -> Port Pair Group (Neutron)
+- Service Function Path (OSM) -> Port Chain (Neutron)
 '''
-__author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes, xFlow Research"
-__date__ ="$22-jun-2014 11:19:29$"
+__author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes, xFlow Research, Igor D.C."
+__date__  = "$22-sep-2017 23:59:59$"
 
 import vimconn
 import json
-import yaml
 import logging
 import netaddr
 import time
@@ -37,6 +44,7 @@ import yaml
 import random
 import sys
 import re
+import copy
 
 from novaclient import client as nClient, exceptions as nvExceptions
 from keystoneauth1.identity import v2, v3
@@ -67,6 +75,8 @@ vmStatus2manoFormat={'ACTIVE':'ACTIVE',
 netStatus2manoFormat={'ACTIVE':'ACTIVE','PAUSED':'PAUSED','INACTIVE':'INACTIVE','BUILD':'BUILD','ERROR':'ERROR','DELETED':'DELETED'
                      }
 
+supportedClassificationTypes = ['legacy_flow_classifier']
+
 #global var to have a timeout creating and deleting volumes
 volume_timeout = 60
 server_timeout = 300
@@ -96,7 +106,7 @@ class vimconnector(vimconn.vimconnector):
 
         self.insecure = self.config.get("insecure", False)
         if not url:
-            raise TypeError, 'url param can not be NoneType'
+            raise TypeError('url param can not be NoneType')
         self.persistent_info = persistent_info
         self.availability_zone = persistent_info.get('availability_zone', None)
         self.session = persistent_info.get('session', {'reload_client': True})
@@ -218,13 +228,117 @@ class vimconnector(vimconn.vimconnector):
             else:
                 net['type']='bridge'
 
+    def __classification_os2mano(self, class_list_dict):
+        """Transform the openstack format (Flow Classifier) to mano format
+        (Classification) class_list_dict can be a list of dict or a single dict
+        """
+        if isinstance(class_list_dict, dict):
+            class_list_ = [class_list_dict]
+        elif isinstance(class_list_dict, list):
+            class_list_ = class_list_dict
+        else:
+            raise TypeError(
+                "param class_list_dict must be a list or a dictionary")
+        for classification in class_list_:
+            id = classification.pop('id')
+            name = classification.pop('name')
+            description = classification.pop('description')
+            project_id = classification.pop('project_id')
+            tenant_id = classification.pop('tenant_id')
+            original_classification = copy.deepcopy(classification)
+            classification.clear()
+            classification['ctype'] = 'legacy_flow_classifier'
+            classification['definition'] = original_classification
+            classification['id'] = id
+            classification['name'] = name
+            classification['description'] = description
+            classification['project_id'] = project_id
+            classification['tenant_id'] = tenant_id
+
+    def __sfi_os2mano(self, sfi_list_dict):
+        """Transform the openstack format (Port Pair) to mano format (SFI)
+        sfi_list_dict can be a list of dict or a single dict
+        """
+        if isinstance(sfi_list_dict, dict):
+            sfi_list_ = [sfi_list_dict]
+        elif isinstance(sfi_list_dict, list):
+            sfi_list_ = sfi_list_dict
+        else:
+            raise TypeError(
+                "param sfi_list_dict must be a list or a dictionary")
+        for sfi in sfi_list_:
+            sfi['ingress_ports'] = []
+            sfi['egress_ports'] = []
+            if sfi.get('ingress'):
+                sfi['ingress_ports'].append(sfi['ingress'])
+            if sfi.get('egress'):
+                sfi['egress_ports'].append(sfi['egress'])
+            del sfi['ingress']
+            del sfi['egress']
+            params = sfi.get('service_function_parameters')
+            sfc_encap = False
+            if params:
+                correlation = params.get('correlation')
+                if correlation:
+                    sfc_encap = True
+            sfi['sfc_encap'] = sfc_encap
+            del sfi['service_function_parameters']
+
+    def __sf_os2mano(self, sf_list_dict):
+        """Transform the openstack format (Port Pair Group) to mano format (SF)
+        sf_list_dict can be a list of dict or a single dict
+        """
+        if isinstance(sf_list_dict, dict):
+            sf_list_ = [sf_list_dict]
+        elif isinstance(sf_list_dict, list):
+            sf_list_ = sf_list_dict
+        else:
+            raise TypeError(
+                "param sf_list_dict must be a list or a dictionary")
+        for sf in sf_list_:
+            del sf['port_pair_group_parameters']
+            sf['sfis'] = sf['port_pairs']
+            del sf['port_pairs']
+
+    def __sfp_os2mano(self, sfp_list_dict):
+        """Transform the openstack format (Port Chain) to mano format (SFP)
+        sfp_list_dict can be a list of dict or a single dict
+        """
+        if isinstance(sfp_list_dict, dict):
+            sfp_list_ = [sfp_list_dict]
+        elif isinstance(sfp_list_dict, list):
+            sfp_list_ = sfp_list_dict
+        else:
+            raise TypeError(
+                "param sfp_list_dict must be a list or a dictionary")
+        for sfp in sfp_list_:
+            params = sfp.pop('chain_parameters')
+            sfc_encap = False
+            if params:
+                correlation = params.get('correlation')
+                if correlation:
+                    sfc_encap = True
+            sfp['sfc_encap'] = sfc_encap
+            sfp['spi'] = sfp.pop('chain_id')
+            sfp['classifications'] = sfp.pop('flow_classifiers')
+            sfp['service_functions'] = sfp.pop('port_pair_groups')
+
+    # placeholder for now; read TODO note below
+    def _validate_classification(self, type, definition):
+        # only legacy_flow_classifier Type is supported at this point
+        return True
+        # TODO(igordcard): this method should be an abstract method of an
+        # abstract Classification class to be implemented by the specific
+        # Types. Also, abstract vimconnector should call the validation
+        # method before the implemented VIM connectors are called.
+
     def _format_exception(self, exception):
         '''Transform a keystone, nova, neutron  exception into a vimconn exception'''
         if isinstance(exception, (HTTPException, gl1Exceptions.HTTPException, gl1Exceptions.CommunicationError,
                                   ConnectionError, ksExceptions.ConnectionError, neExceptions.ConnectionFailed
                                   )):
-            raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))            
-        elif isinstance(exception, (nvExceptions.ClientException, ksExceptions.ClientException, 
+            raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))
+        elif isinstance(exception, (nvExceptions.ClientException, ksExceptions.ClientException,
                                     neExceptions.NeutronException, nvExceptions.BadRequest)):
             raise vimconn.vimconnUnexpectedResponse(type(exception).__name__ + ": " + str(exception))
         elif isinstance(exception, (neExceptions.NetworkNotFoundClient, nvExceptions.NotFound)):
@@ -326,7 +440,7 @@ class vimconnector(vimconn.vimconnector):
                 #Fake subnet is required
                 subnet_rand = random.randint(0, 255)
                 ip_profile['subnet_address'] = "192.168.{}.0/24".format(subnet_rand)
-            if 'ip_version' not in ip_profile: 
+            if 'ip_version' not in ip_profile:
                 ip_profile['ip_version'] = "IPv4"
             subnet = {"name":net_name+"-subnet",
                     "network_id": new_net["network"]["id"],
@@ -439,7 +553,7 @@ class vimconnector(vimconn.vimconnector):
                     error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR 
                     vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
 
-        '''        
+        '''
         net_dict={}
         for net_id in net_list:
             net = {}
@@ -450,7 +564,7 @@ class vimconnector(vimconn.vimconnector):
                 else:
                     net["status"] = "OTHER"
                     net["error_msg"] = "VIM status reported " + net_vim['status']
-                    
+
                 if net['status'] == "ACTIVE" and not net_vim['admin_state_up']:
                     net['status'] = 'DOWN'
                 try:
@@ -587,11 +701,11 @@ class vimconnector(vimconn.vimconnector):
                             #     if interface["dedicated"]=="yes":
                             #         raise vimconn.vimconnException("Passthrough interfaces are not supported for the openstack connector", http_code=vimconn.HTTP_Service_Unavailable)
                             #     #TODO, add the key 'pci_passthrough:alias"="<label at config>:<number ifaces>"' when a way to connect it is available
-                                
+
                 #create flavor                 
-                new_flavor=self.nova.flavors.create(name, 
-                                ram, 
-                                vcpus, 
+                new_flavor=self.nova.flavors.create(name,
+                                ram,
+                                vcpus,
                                 flavor_data.get('disk',1),
                                 is_public=flavor_data.get('is_public', True)
                             )
@@ -682,7 +796,7 @@ class vimconnector(vimconn.vimconnector):
             except IOError as e:  #can not open the file
                 raise vimconn.vimconnConnectionException(type(e).__name__ + ": " + str(e)+ " for " + image_dict['location'],
                                                          http_code=vimconn.HTTP_Bad_Request)
-     
+
     def delete_image(self, image_id):
         '''Deletes a tenant image from openstack VIM. Returns the old id
         '''
@@ -694,7 +808,7 @@ class vimconnector(vimconn.vimconnector):
             self._format_exception(e)
 
     def get_image_id_from_path(self, path):
-        '''Get the image id from image path in the VIM database. Returns the image_id''' 
+        '''Get the image id from image path in the VIM database. Returns the image_id'''
         try:
             self._reload_connection()
             images = self.nova.images.list()
@@ -704,7 +818,7 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnNotFoundException("image with location '{}' not found".format( path))
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
             self._format_exception(e)
-        
+
     def get_image_list(self, filter_dict={}):
         '''Obtain tenant images from VIM
         Filter_dict can be:
@@ -969,10 +1083,10 @@ class vimconnector(vimconn.vimconnector):
                     #metadata["pci_assignement"] = metadata["pci_assignement"][0:255]
                     self.logger.warn("Metadata deleted since it exceeds the expected length (255) ")
                     metadata = {}
-            
+
             self.logger.debug("name '%s' image_id '%s'flavor_id '%s' net_list_vim '%s' description '%s' metadata %s",
                               name, image_id, flavor_id, str(net_list_vim), description, str(metadata))
-            
+
             security_groups   = self.config.get('security_groups')
             if type(security_groups) is str:
                 security_groups = ( security_groups, )
@@ -1216,7 +1330,7 @@ class vimconnector(vimconn.vimconnector):
                 console_dict = server.get_spice_console(console_type)
             else:
                 raise vimconn.vimconnException("console type '{}' not allowed".format(console_type), http_code=vimconn.HTTP_Bad_Request)
-            
+
             console_dict1 = console_dict.get("console")
             if console_dict1:
                 console_url = console_dict1.get("url")
@@ -1228,14 +1342,14 @@ class vimconnector(vimconn.vimconnector):
                     if protocol_index < 0 or port_index<0 or suffix_index<0:
                         return -vimconn.HTTP_Internal_Server_Error, "Unexpected response from VIM"
                     console_dict={"protocol": console_url[0:protocol_index],
-                                  "server":   console_url[protocol_index+2:port_index], 
-                                  "port":     console_url[port_index:suffix_index], 
-                                  "suffix":   console_url[suffix_index+1:] 
+                                  "server":   console_url[protocol_index+2:port_index],
+                                  "port":     console_url[port_index:suffix_index],
+                                  "suffix":   console_url[suffix_index+1:]
                                   }
                     protocol_index += 2
                     return console_dict
             raise vimconn.vimconnUnexpectedResponse("Unexpected response from VIM")
-            
+
         except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, nvExceptions.BadRequest, ConnectionError) as e:
             self._format_exception(e)
 
@@ -1385,7 +1499,7 @@ class vimconnector(vimconn.vimconnector):
                 vm['error_msg'] = str(e)
             vm_dict[vm_id] = vm
         return vm_dict
-    
+
     def action_vminstance(self, vm_id, action_dict):
         '''Send and action over a VM instance from VIM
         Returns the vm_id if the action was successfully sent to the VIM'''
@@ -1394,7 +1508,7 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             server = self.nova.servers.find(id=vm_id)
             if "start" in action_dict:
-                if action_dict["start"]=="rebuild":  
+                if action_dict["start"]=="rebuild":
                     server.rebuild()
                 else:
                     if server.status=="PAUSED":
@@ -1436,7 +1550,7 @@ class vimconnector(vimconn.vimconnector):
                 elif console_type == "spice-html5":
                     console_dict = server.get_spice_console(console_type)
                 else:
-                    raise vimconn.vimconnException("console type '{}' not allowed".format(console_type), 
+                    raise vimconn.vimconnException("console type '{}' not allowed".format(console_type),
                                                    http_code=vimconn.HTTP_Bad_Request)
                 try:
                     console_url = console_dict["console"]["url"]
@@ -1447,14 +1561,14 @@ class vimconnector(vimconn.vimconnector):
                     if protocol_index < 0 or port_index<0 or suffix_index<0:
                         raise vimconn.vimconnException("Unexpected response from VIM " + str(console_dict))
                     console_dict2={"protocol": console_url[0:protocol_index],
-                                  "server":   console_url[protocol_index+2 : port_index], 
-                                  "port":     int(console_url[port_index+1 : suffix_index]), 
-                                  "suffix":   console_url[suffix_index+1:] 
+                                  "server":   console_url[protocol_index+2 : port_index],
+                                  "port":     int(console_url[port_index+1 : suffix_index]),
+                                  "suffix":   console_url[suffix_index+1:]
                                   }
-                    return console_dict2               
+                    return console_dict2
                 except Exception as e:
                     raise vimconn.vimconnException("Unexpected response from VIM " + str(console_dict))
-            
+
             return vm_id
         except (ksExceptions.ClientException, nvExceptions.ClientException, nvExceptions.NotFound, ConnectionError) as e:
             self._format_exception(e)
@@ -1522,19 +1636,19 @@ class vimconnector(vimconn.vimconnector):
                     "start_ID < end_ID ".format(vlanID_range))
 
 #NOT USED FUNCTIONS
-    
+
     def new_external_port(self, port_data):
         #TODO openstack if needed
         '''Adds a external port to VIM'''
         '''Returns the port identifier'''
-        return -vimconn.HTTP_Internal_Server_Error, "osconnector.new_external_port() not implemented" 
-        
+        return -vimconn.HTTP_Internal_Server_Error, "osconnector.new_external_port() not implemented"
+
     def connect_port_network(self, port_id, network_id, admin=False):
         #TODO openstack if needed
         '''Connects a external port to a network'''
         '''Returns status code of the VIM response'''
-        return -vimconn.HTTP_Internal_Server_Error, "osconnector.connect_port_network() not implemented" 
-    
+        return -vimconn.HTTP_Internal_Server_Error, "osconnector.connect_port_network() not implemented"
+
     def new_user(self, user_name, user_passwd, tenant_id=None):
         '''Adds a new user to openstack VIM'''
         '''Returns the user identifier'''
@@ -1554,13 +1668,13 @@ class vimconnector(vimconn.vimconnector):
         #if reaching here is because an exception
         if self.debug:
             self.logger.debug("new_user " + error_text)
-        return error_value, error_text        
+        return error_value, error_text
 
     def delete_user(self, user_id):
         '''Delete a user from openstack VIM'''
         '''Returns the user identifier'''
         if self.debug:
-            print "osconnector: Deleting  a  user from VIM"
+            print("osconnector: Deleting  a  user from VIM")
         try:
             self._reload_connection()
             self.keystone.users.delete(user_id)
@@ -1577,14 +1691,14 @@ class vimconnector(vimconn.vimconnector):
         #TODO insert exception vimconn.HTTP_Unauthorized
         #if reaching here is because an exception
         if self.debug:
-            print "delete_tenant " + error_text
+            print("delete_tenant " + error_text)
         return error_value, error_text
- 
+
     def get_hosts_info(self):
         '''Get the information of deployed hosts
         Returns the hosts content'''
         if self.debug:
-            print "osconnector: Getting Host info from VIM"
+            print("osconnector: Getting Host info from VIM")
         try:
             h_list=[]
             self._reload_connection()
@@ -1601,8 +1715,8 @@ class vimconnector(vimconn.vimconnector):
         #TODO insert exception vimconn.HTTP_Unauthorized
         #if reaching here is because an exception
         if self.debug:
-            print "get_hosts_info " + error_text
-        return error_value, error_text        
+            print("get_hosts_info " + error_text)
+        return error_value, error_text
 
     def get_hosts(self, vim_tenant):
         '''Get the hosts and deployed instances
@@ -1630,8 +1744,297 @@ class vimconnector(vimconn.vimconnector):
         #TODO insert exception vimconn.HTTP_Unauthorized
         #if reaching here is because an exception
         if self.debug:
-            print "get_hosts " + error_text
-        return error_value, error_text        
-  
+            print("get_hosts " + error_text)
+        return error_value, error_text
 
+    def new_classification(self, name, ctype, definition):
+        self.logger.debug(
+            'Adding a new (Traffic) Classification to VIM, named %s', name)
+        try:
+            new_class = None
+            self._reload_connection()
+            if ctype not in supportedClassificationTypes:
+                raise vimconn.vimconnNotSupportedException(
+                        'OpenStack VIM connector doesn\'t support provided '
+                        'Classification Type {}, supported ones are: '
+                        '{}'.format(ctype, supportedClassificationTypes))
+            if not self._validate_classification(ctype, definition):
+                raise vimconn.vimconnException(
+                    'Incorrect Classification definition '
+                    'for the type specified.')
+            classification_dict = definition
+            classification_dict['name'] = name
 
+            new_class = self.neutron.create_flow_classifier(
+                {'flow_classifier': classification_dict})
+            return new_class['flow_classifier']['id']
+        except (neExceptions.ConnectionFailed, ksExceptions.ClientException,
+                neExceptions.NeutronException, ConnectionError) as e:
+            self.logger.error(
+                'Creation of Classification failed.')
+            self._format_exception(e)
+
+    def get_classification(self, class_id):
+        self.logger.debug(" Getting Classification %s from VIM", class_id)
+        filter_dict = {"id": class_id}
+        class_list = self.get_classification_list(filter_dict)
+        if len(class_list) == 0:
+            raise vimconn.vimconnNotFoundException(
+                "Classification '{}' not found".format(class_id))
+        elif len(class_list) > 1:
+            raise vimconn.vimconnConflictException(
+                "Found more than one Classification with this criteria")
+        classification = class_list[0]
+        return classification
+
+    def get_classification_list(self, filter_dict={}):
+        self.logger.debug("Getting Classifications from VIM filter: '%s'",
+                          str(filter_dict))
+        try:
+            self._reload_connection()
+            if self.api_version3 and "tenant_id" in filter_dict:
+                filter_dict['project_id'] = filter_dict.pop('tenant_id')
+            classification_dict = self.neutron.list_flow_classifier(
+                **filter_dict)
+            classification_list = classification_dict["flow_classifiers"]
+            self.__classification_os2mano(classification_list)
+            return classification_list
+        except (neExceptions.ConnectionFailed, ksExceptions.ClientException,
+                neExceptions.NeutronException, ConnectionError) as e:
+            self._format_exception(e)
+
+    def delete_classification(self, class_id):
+        self.logger.debug("Deleting Classification '%s' from VIM", class_id)
+        try:
+            self._reload_connection()
+            self.neutron.delete_flow_classifier(class_id)
+            return class_id
+        except (neExceptions.ConnectionFailed, neExceptions.NeutronException,
+                ksExceptions.ClientException, neExceptions.NeutronException,
+                ConnectionError) as e:
+            self._format_exception(e)
+
+    def new_sfi(self, name, ingress_ports, egress_ports, sfc_encap=True):
+        self.logger.debug(
+            "Adding a new Service Function Instance to VIM, named '%s'", name)
+        try:
+            new_sfi = None
+            self._reload_connection()
+            correlation = None
+            if sfc_encap:
+                # TODO(igordc): must be changed to NSH in Queens
+                # (MPLS is a workaround)
+                correlation = 'mpls'
+            if len(ingress_ports) != 1:
+                raise vimconn.vimconnNotSupportedException(
+                    "OpenStack VIM connector can only have "
+                    "1 ingress port per SFI")
+            if len(egress_ports) != 1:
+                raise vimconn.vimconnNotSupportedException(
+                    "OpenStack VIM connector can only have "
+                    "1 egress port per SFI")
+            sfi_dict = {'name': name,
+                        'ingress': ingress_ports[0],
+                        'egress': egress_ports[0],
+                        'service_function_parameters': {
+                            'correlation': correlation}}
+            new_sfi = self.neutron.create_port_pair({'port_pair': sfi_dict})
+            return new_sfi['port_pair']['id']
+        except (neExceptions.ConnectionFailed, ksExceptions.ClientException,
+                neExceptions.NeutronException, ConnectionError) as e:
+            if new_sfi:
+                try:
+                    self.neutron.delete_port_pair_group(
+                        new_sfi['port_pair']['id'])
+                except Exception:
+                    self.logger.error(
+                        'Creation of Service Function Instance failed, with '
+                        'subsequent deletion failure as well.')
+            self._format_exception(e)
+
+    def get_sfi(self, sfi_id):
+        self.logger.debug(
+            'Getting Service Function Instance %s from VIM', sfi_id)
+        filter_dict = {"id": sfi_id}
+        sfi_list = self.get_sfi_list(filter_dict)
+        if len(sfi_list) == 0:
+            raise vimconn.vimconnNotFoundException(
+                "Service Function Instance '{}' not found".format(sfi_id))
+        elif len(sfi_list) > 1:
+            raise vimconn.vimconnConflictException(
+                'Found more than one Service Function Instance '
+                'with this criteria')
+        sfi = sfi_list[0]
+        return sfi
+
+    def get_sfi_list(self, filter_dict={}):
+        self.logger.debug("Getting Service Function Instances from "
+                          "VIM filter: '%s'", str(filter_dict))
+        try:
+            self._reload_connection()
+            if self.api_version3 and "tenant_id" in filter_dict:
+                filter_dict['project_id'] = filter_dict.pop('tenant_id')
+            sfi_dict = self.neutron.list_port_pair(**filter_dict)
+            sfi_list = sfi_dict["port_pairs"]
+            self.__sfi_os2mano(sfi_list)
+            return sfi_list
+        except (neExceptions.ConnectionFailed, ksExceptions.ClientException,
+                neExceptions.NeutronException, ConnectionError) as e:
+            self._format_exception(e)
+
+    def delete_sfi(self, sfi_id):
+        self.logger.debug("Deleting Service Function Instance '%s' "
+                          "from VIM", sfi_id)
+        try:
+            self._reload_connection()
+            self.neutron.delete_port_pair(sfi_id)
+            return sfi_id
+        except (neExceptions.ConnectionFailed, neExceptions.NeutronException,
+                ksExceptions.ClientException, neExceptions.NeutronException,
+                ConnectionError) as e:
+            self._format_exception(e)
+
+    def new_sf(self, name, sfis, sfc_encap=True):
+        self.logger.debug("Adding a new Service Function to VIM, "
+                          "named '%s'", name)
+        try:
+            new_sf = None
+            self._reload_connection()
+            correlation = None
+            if sfc_encap:
+                # TODO(igordc): must be changed to NSH in Queens
+                # (MPLS is a workaround)
+                correlation = 'mpls'
+            for instance in sfis:
+                sfi = self.get_sfi(instance)
+                if sfi.get('sfc_encap') != correlation:
+                    raise vimconn.vimconnNotSupportedException(
+                        "OpenStack VIM connector requires all SFIs of the "
+                        "same SF to share the same SFC Encapsulation")
+            sf_dict = {'name': name,
+                       'port_pairs': sfis}
+            new_sf = self.neutron.create_port_pair_group({
+                'port_pair_group': sf_dict})
+            return new_sf['port_pair_group']['id']
+        except (neExceptions.ConnectionFailed, ksExceptions.ClientException,
+                neExceptions.NeutronException, ConnectionError) as e:
+            if new_sf:
+                try:
+                    self.neutron.delete_port_pair_group(
+                        new_sf['port_pair_group']['id'])
+                except Exception:
+                    self.logger.error(
+                        'Creation of Service Function failed, with '
+                        'subsequent deletion failure as well.')
+            self._format_exception(e)
+
+    def get_sf(self, sf_id):
+        self.logger.debug("Getting Service Function %s from VIM", sf_id)
+        filter_dict = {"id": sf_id}
+        sf_list = self.get_sf_list(filter_dict)
+        if len(sf_list) == 0:
+            raise vimconn.vimconnNotFoundException(
+                "Service Function '{}' not found".format(sf_id))
+        elif len(sf_list) > 1:
+            raise vimconn.vimconnConflictException(
+                "Found more than one Service Function with this criteria")
+        sf = sf_list[0]
+        return sf
+
+    def get_sf_list(self, filter_dict={}):
+        self.logger.debug("Getting Service Function from VIM filter: '%s'",
+                          str(filter_dict))
+        try:
+            self._reload_connection()
+            if self.api_version3 and "tenant_id" in filter_dict:
+                filter_dict['project_id'] = filter_dict.pop('tenant_id')
+            sf_dict = self.neutron.list_port_pair_group(**filter_dict)
+            sf_list = sf_dict["port_pair_groups"]
+            self.__sf_os2mano(sf_list)
+            return sf_list
+        except (neExceptions.ConnectionFailed, ksExceptions.ClientException,
+                neExceptions.NeutronException, ConnectionError) as e:
+            self._format_exception(e)
+
+    def delete_sf(self, sf_id):
+        self.logger.debug("Deleting Service Function '%s' from VIM", sf_id)
+        try:
+            self._reload_connection()
+            self.neutron.delete_port_pair_group(sf_id)
+            return sf_id
+        except (neExceptions.ConnectionFailed, neExceptions.NeutronException,
+                ksExceptions.ClientException, neExceptions.NeutronException,
+                ConnectionError) as e:
+            self._format_exception(e)
+
+    def new_sfp(self, name, classifications, sfs, sfc_encap=True, spi=None):
+        self.logger.debug("Adding a new Service Function Path to VIM, "
+                          "named '%s'", name)
+        try:
+            new_sfp = None
+            self._reload_connection()
+            if not sfc_encap:
+                raise vimconn.vimconnNotSupportedException(
+                    "OpenStack VIM connector only supports "
+                    "SFC-Encapsulated chains")
+            # TODO(igordc): must be changed to NSH in Queens
+            # (MPLS is a workaround)
+            correlation = 'mpls'
+            sfp_dict = {'name': name,
+                        'flow_classifiers': classifications,
+                        'port_pair_groups': sfs,
+                        'chain_parameters': {'correlation': correlation}}
+            if spi:
+                sfp_dict['chain_id'] = spi
+            new_sfp = self.neutron.create_port_chain({'port_chain': sfp_dict})
+            return new_sfp["port_chain"]["id"]
+        except (neExceptions.ConnectionFailed, ksExceptions.ClientException,
+                neExceptions.NeutronException, ConnectionError) as e:
+            if new_sfp:
+                try:
+                    self.neutron.delete_port_chain(new_sfp['port_chain']['id'])
+                except Exception:
+                    self.logger.error(
+                        'Creation of Service Function Path failed, with '
+                        'subsequent deletion failure as well.')
+            self._format_exception(e)
+
+    def get_sfp(self, sfp_id):
+        self.logger.debug(" Getting Service Function Path %s from VIM", sfp_id)
+        filter_dict = {"id": sfp_id}
+        sfp_list = self.get_sfp_list(filter_dict)
+        if len(sfp_list) == 0:
+            raise vimconn.vimconnNotFoundException(
+                "Service Function Path '{}' not found".format(sfp_id))
+        elif len(sfp_list) > 1:
+            raise vimconn.vimconnConflictException(
+                "Found more than one Service Function Path with this criteria")
+        sfp = sfp_list[0]
+        return sfp
+
+    def get_sfp_list(self, filter_dict={}):
+        self.logger.debug("Getting Service Function Paths from VIM filter: "
+                          "'%s'", str(filter_dict))
+        try:
+            self._reload_connection()
+            if self.api_version3 and "tenant_id" in filter_dict:
+                filter_dict['project_id'] = filter_dict.pop('tenant_id')
+            sfp_dict = self.neutron.list_port_chain(**filter_dict)
+            sfp_list = sfp_dict["port_chains"]
+            self.__sfp_os2mano(sfp_list)
+            return sfp_list
+        except (neExceptions.ConnectionFailed, ksExceptions.ClientException,
+                neExceptions.NeutronException, ConnectionError) as e:
+            self._format_exception(e)
+
+    def delete_sfp(self, sfp_id):
+        self.logger.debug(
+            "Deleting Service Function Path '%s' from VIM", sfp_id)
+        try:
+            self._reload_connection()
+            self.neutron.delete_port_chain(sfp_id)
+            return sfp_id
+        except (neExceptions.ConnectionFailed, neExceptions.NeutronException,
+                ksExceptions.ClientException, neExceptions.NeutronException,
+                ConnectionError) as e:
+            self._format_exception(e)
