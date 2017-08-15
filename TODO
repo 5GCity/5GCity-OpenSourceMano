@@ -1,0 +1,5 @@
+TODO
+====
+
+- Add a LogWatcher coroutine that yields from debug-log api
+- Add a way to exit the event loop when a Model matches a bundle yaml
