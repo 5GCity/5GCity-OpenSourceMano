@@ -149,7 +149,16 @@ class vimconnector(vimconn.vimconnector):
             else:
                 self.keystone = ksClient_v2.Client(session=sess)
             self.session['keystone'] = self.keystone
-            self.nova = self.session['nova'] = nClient.Client("2.1", session=sess)
+            # In order to enable microversion functionality an explicit microversion must be specified in 'config'.
+            # This implementation approach is due to the warning message in
+            # https://developer.openstack.org/api-guide/compute/microversions.html
+            # where it is stated that microversion backwards compatibility is not guaranteed and clients should
+            # always require an specific microversion.
+            # To be able to use 'device role tagging' functionality define 'microversion: 2.32' in datacenter config
+            version = self.config.get("microversion")
+            if not version:
+                version = "2.1"
+            self.nova = self.session['nova'] = nClient.Client(str(version), session=sess)
             self.neutron = self.session['neutron'] = neClient.Client('2.0', session=sess)
             self.cinder = self.session['cinder'] = cClient.Client(2, session=sess)
             self.glance = self.session['glance'] = glClient.Client(2, session=sess)
@@ -756,7 +765,7 @@ class vimconnector(vimconn.vimconnector):
                     net["ip"] = fixed_ips[0].get("ip_address")
                 else:
                     net["ip"] = None
-                net_list_vim.append({"port-id": new_port["port"]["id"]})
+                net_list_vim.append({"port-id": new_port["port"]["id"], "tag": new_port["port"]["name"]})
 
                 if net.get('floating_ip', False):
                     net['exit_on_floating_ip_error'] = True
