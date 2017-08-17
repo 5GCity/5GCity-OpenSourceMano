@@ -16,4 +16,5 @@
 
 from lib.osm.fixtures import osm
 from lib.openstack.fixtures import openstack
+from lib.vmware.fixtures import vmware
 from lib.vim.fixtures import vim

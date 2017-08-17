@@ -17,8 +17,10 @@
 from lib.osm.fixtures import osm_add_options
 from lib.openstack.fixtures import openstack_add_options
 from lib.vim.fixtures import vim_add_options
+from lib.vmware.fixtures import vmware_add_options
 
 def pytest_addoption(parser):
     osm_add_options(parser)
     openstack_add_options(parser)
+    vmware_add_options(parser)
     vim_add_options(parser)

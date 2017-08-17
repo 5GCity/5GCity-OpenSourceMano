@@ -20,6 +20,7 @@ import time
 
 @pytest.mark.vim
 @pytest.mark.openstack
+@pytest.mark.vmware
 class TestClass(object):
 
     def test_empty_vim(self,osm):
@@ -46,5 +47,20 @@ class TestClass(object):
         assert resp['vim_url_admin'] == os_access['os-url']
         assert resp['vim_tenants'][0]['user'] == os_access['os-username']
         assert resp['vim_tenants'][0]['vim_tenant_name'] == os_access['os-project-name']
+
+        assert not osm.get_api().vim.delete('pytest')
+
+    @pytest.mark.vmware
+    def test_add_vim_account_vmware(self,osm,vmware,cleanup_test_add_vim_account):
+        os_access=vmware.get_access()
+        assert not osm.get_api().vim.create('pytest',os_access)
+
+        resp=osm.get_api().vim.get('pytest')
+        assert resp['name'] == 'pytest'
+        assert resp['type'] == 'vmware'
+        assert resp['vim_url'] == os_access['vcd-url']
+        assert resp['vim_url_admin'] == os_access['vcd-url']
+        assert resp['vim_tenants'][0]['user'] == os_access['vcd-username']
+        assert resp['vim_tenants'][0]['vim_tenant_name'] == os_access['vcd-tenant-name']
 
         assert not osm.get_api().vim.delete('pytest')
