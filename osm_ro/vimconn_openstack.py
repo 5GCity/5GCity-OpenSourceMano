@@ -765,7 +765,11 @@ class vimconnector(vimconn.vimconnector):
                     net["ip"] = fixed_ips[0].get("ip_address")
                 else:
                     net["ip"] = None
-                net_list_vim.append({"port-id": new_port["port"]["id"], "tag": new_port["port"]["name"]})
+
+                port = {"port-id": new_port["port"]["id"]}
+                if float(self.nova.api_version.get_string()) >= 2.32:
+                    port["tag"] = new_port["port"]["name"]
+                net_list_vim.append(port)
 
                 if net.get('floating_ip', False):
                     net['exit_on_floating_ip_error'] = True
