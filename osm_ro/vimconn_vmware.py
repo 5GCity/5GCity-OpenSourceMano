@@ -671,6 +671,9 @@ class vimconnector(vimconn.vimconnector):
             networks = self.vca.get_networks(vdc.get_name())
             filter_dict = {}
 
+            if not networks:
+                vimconn.vimconnNotFoundException("Network {} not found".format(net_id))
+
             for network in networks:
                 vdc_network_id = network.get_id().split(":")
                 if len(vdc_network_id) == 4 and vdc_network_id[3] == net_id:
@@ -686,9 +689,16 @@ class vimconnector(vimconn.vimconnector):
                     filter_dict["type"] = "bridge"
                     self.logger.debug("Returning {}".format(filter_dict))
                     return filter_dict
-        except:
+            else:
+                raise vimconn.vimconnNotFoundException("Network {} not found".format(net_id))
+
+        except Exception as e:
             self.logger.debug("Error in get_network")
             self.logger.debug(traceback.format_exc())
+            if isinstance(e, vimconn.vimconnException):
+                raise
+            else:
+                raise vimconn.vimconnNotFoundException("Failed : Network not found {} ".format(e))
 
         return filter_dict
 
