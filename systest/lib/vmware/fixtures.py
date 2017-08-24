@@ -36,10 +36,10 @@ def vmware_add_options(parser):
 def vmware(request):
     from lib.vmware import vmware
     access = {}
-    access['vcd-url'] = request.config.getoption("--vcd-url")
-    access['vcd-username'] = request.config.getoption("--vcd-username")
-    access['vcd-password'] = request.config.getoption("--vcd-password")
-    access['vcd-tenant-name'] = request.config.getoption("--vcd-tenant-name")
+    access['vim-url'] = request.config.getoption("--vcd-url")
+    access['vim-username'] = request.config.getoption("--vcd-username")
+    access['vim-password'] = request.config.getoption("--vcd-password")
+    access['vim-tenant-name'] = request.config.getoption("--vcd-tenant-name")
     access['config'] = request.config.getoption("--config")
     access['vim-type'] = 'vmware'
     access['description'] = 'pytest system test'

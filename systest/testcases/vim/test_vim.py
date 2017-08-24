@@ -43,10 +43,10 @@ class TestClass(object):
         resp=osm.get_api().vim.get('pytest')
         assert resp['name'] == 'pytest'
         assert resp['type'] == 'openstack'
-        assert resp['vim_url'] == os_access['os-url']
-        assert resp['vim_url_admin'] == os_access['os-url']
-        assert resp['vim_tenants'][0]['user'] == os_access['os-username']
-        assert resp['vim_tenants'][0]['vim_tenant_name'] == os_access['os-project-name']
+        assert resp['vim_url'] == os_access['vim-url']
+        assert resp['vim_url_admin'] == os_access['vim-url']
+        assert resp['vim_tenants'][0]['user'] == os_access['vim-username']
+        assert resp['vim_tenants'][0]['vim_tenant_name'] == os_access['vim-tenant-name']
 
         assert not osm.get_api().vim.delete('pytest')
 
@@ -58,9 +58,9 @@ class TestClass(object):
         resp=osm.get_api().vim.get('pytest')
         assert resp['name'] == 'pytest'
         assert resp['type'] == 'vmware'
-        assert resp['vim_url'] == os_access['vcd-url']
-        assert resp['vim_url_admin'] == os_access['vcd-url']
-        assert resp['vim_tenants'][0]['user'] == os_access['vcd-username']
-        assert resp['vim_tenants'][0]['vim_tenant_name'] == os_access['vcd-tenant-name']
+        assert resp['vim_url'] == os_access['vim-url']
+        assert resp['vim_url_admin'] == os_access['vim-url']
+        assert resp['vim_tenants'][0]['user'] == os_access['vim-username']
+        assert resp['vim_tenants'][0]['vim_tenant_name'] == os_access['vim-tenant-name']
 
         assert not osm.get_api().vim.delete('pytest')
