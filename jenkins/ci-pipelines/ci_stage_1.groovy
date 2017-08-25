@@ -35,7 +35,7 @@ node("${params.NODE}") {
         params.PROJECT_URL_PREFIX  = 'https://osm.etsi.org/gerrit'
     }
 
-    stage('downstream stage_2') {
+    stage('downstream') {
         // pipeline running from gerrit trigger.
         // kickoff the downstream multibranch pipeline
         def downstream_params = [
@@ -47,9 +47,16 @@ node("${params.NODE}") {
             booleanParam(name: 'TEST_INSTALL', value: params.TEST_INSTALL),
         ]
 
+        stage_name = "stage_2"
+        if ( params.STAGE )
+        {
+            // go directly to stage 3 (osm system)
+            stage_name = "stage_3"
+            mdg = "osm"
+        }
         println("TEST_INSTALL = ${params.TEST_INSTALL}")
         // callout to stage_2.  This is a multi-branch pipeline.
-        upstream_job_name = "${mdg}-stage_2/${GERRIT_BRANCH}"
+        upstream_job_name = "${mdg}-${stage_name}/${GERRIT_BRANCH}"
 
         stage_2_result = build job: "${upstream_job_name}", parameters: downstream_params, propagate: true
         if (stage_2_result.getResult() != 'SUCCESS') {
