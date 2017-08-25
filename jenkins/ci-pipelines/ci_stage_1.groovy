@@ -25,7 +25,8 @@ def Get_MDG(project) {
     return project
 }
 
-node {
+node("${params.NODE}") {
+
     mdg = Get_MDG("${GERRIT_PROJECT}")
     println("MDG is ${mdg}")
 
