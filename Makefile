@@ -27,7 +27,7 @@ MODEL_DIR := models/yang
 RW_PB_EXT := build/yang/rw-pb-ext.yang
 Q?=@
 
-PYANG_OPTIONS := -Wnone
+PYANG_OPTIONS := -Werror
 
 all: $(PYTHON_MODELS) pyangbind
 	$(MAKE) package

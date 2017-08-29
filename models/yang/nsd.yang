@@ -35,10 +35,6 @@ module nsd
     prefix "inet";
   }
 
-  import ietf-yang-types {
-    prefix "yang";
-  }
-
   import mano-types {
     prefix "manotypes";
   }

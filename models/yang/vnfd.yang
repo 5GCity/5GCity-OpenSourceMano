@@ -27,14 +27,6 @@ module vnfd
     prefix "manotypes";
   }
 
-  import rw-pb-ext {
-    prefix "rwpb";
-  }
-
-  import ietf-yang-types {
-    prefix "yang";
-  }
-
   import ietf-inet-types {
     prefix "inet";
   }
