@@ -590,7 +590,7 @@ class vimconnector(vimconn.vimconnector):
             self.format_vimconn_exception(e)
 
     def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None,
-                       disk_list=None):
+                       disk_list=None, availability_zone_index=None, availability_zone_list=None):
         """Create a new VM/instance in AWS
         Params: name
                 decription

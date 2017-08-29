@@ -356,7 +356,7 @@ class vimconnector():
         raise vimconnNotImplemented( "Should have implemented this" )
 
     def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
-        availavility_zone_index=None, nfv_availability_zones=None):
+        availability_zone_index=None, availability_zone_list=None):
         """Adds a VM instance to VIM
         Params:
             'start': (boolean) indicates if VM must start or created in pause mode.
@@ -399,9 +399,9 @@ class vimconnector():
             'disk_list': (optional) list with additional disks to the VM. Each item is a dict with:
                 'image_id': (optional). VIM id of an existing image. If not provided an empty disk must be mounted
                 'size': (mandatory) string with the size of the disk in GB
-            availavility_zone_index: Index of nfv_availability_zones to use for this this VM
-            nfv_availability_zones: list of availability zones given by user in the VNFC descriptor.  Ignore if
-            availability_zone_index is None
+            availability_zone_index: Index of availability_zone_list to use for this this VM. None if not AV required
+            availability_zone_list: list of availability zones given by user in the VNFD descriptor.  Ignore if
+                availability_zone_index is None
         Returns the instance identifier or raises an exception on error
         """
         raise vimconnNotImplemented( "Should have implemented this" )

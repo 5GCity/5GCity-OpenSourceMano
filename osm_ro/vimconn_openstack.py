@@ -732,36 +732,38 @@ class vimconnector(vimconn.vimconnector):
         else:
             self.availability_zone = self._get_openstack_availablity_zones()
 
-    def _get_vm_availavility_zone(self, availavility_zone_index, nfv_availability_zones):
+    def _get_vm_availability_zone(self, availability_zone_index, availability_zone_list):
         """
-        Return a list with all availability zones create during datacenter attach.
-        :return: List with availability zones
+        Return thge availability zone to be used by the created VM.
+        :return: The VIM availability zone to be used or None
         """
-        openstack_avilability_zone = self.availability_zone
+        if availability_zone_index is None:
+            if not self.config.get('availability_zone'):
+                return None
+            elif isinstance(self.config.get('availability_zone'), str):
+                return self.config['availability_zone']
+            else:
+                # TODO consider using a different parameter at config for default AV and AV list match
+                return self.config['availability_zone'][0]
 
-        # check if VIM offer enough availability zones describe in the VNFC
-        if self.availability_zone and availavility_zone_index is not None \
-                and 0 <= len(nfv_availability_zones) <= len(self.availability_zone):
-
-            if nfv_availability_zones:
-                vnf_azone = nfv_availability_zones[availavility_zone_index]
-                zones_available = []
-
-                for nfv_zone in nfv_availability_zones:
-                    for vim_zone in openstack_avilability_zone:
-                        if nfv_zone is vim_zone:
-                            zones_available.append(nfv_zone)
-
-                if len(zones_available) == len(openstack_avilability_zone) and vnf_azone in openstack_avilability_zone:
-                    return vnf_azone
-                else:
-                    return openstack_avilability_zone[availavility_zone_index]
+        vim_availability_zones = self.availability_zone
+        # check if VIM offer enough availability zones describe in the VNFD
+        if vim_availability_zones and len(availability_zone_list) <= len(vim_availability_zones):
+            # check if all the names of NFV AV match VIM AV names
+            match_by_index = False
+            for av in availability_zone_list:
+                if av not in vim_availability_zones:
+                    match_by_index = True
+                    break
+            if match_by_index:
+                return vim_availability_zones[availability_zone_index]
+            else:
+                return availability_zone_list[availability_zone_index]
         else:
-            raise vimconn.vimconnConflictException("No enough availablity zones for this deployment")
-        return None
+            raise vimconn.vimconnConflictException("No enough availability zones at VIM for this deployment")
 
-    def new_vminstance(self, name, description, start, image_id, flavor_id, net_list,cloud_config=None,disk_list=None,
-                       availavility_zone_index=None, nfv_availability_zones=None):
+    def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
+                       availability_zone_index=None, availability_zone_list=None):
         '''Adds a VM instance to VIM
         Params:
             start: indicates if VM must start or boot in pause mode. Ignored
@@ -793,8 +795,9 @@ class vimconnector(vimconn.vimconnector):
             'disk_list': (optional) list with additional disks to the VM. Each item is a dict with:
                 'image_id': (optional). VIM id of an existing image. If not provided an empty disk must be mounted
                 'size': (mandatory) string with the size of the disk in GB
-            availavility_zone_index:counter for instance order in vim availability_zones availables
-            nfv_availability_zones: Lost given by user in the VNFC descriptor.
+            availability_zone_index: Index of availability_zone_list to use for this this VM. None if not AV required
+            availability_zone_list: list of availability zones given by user in the VNFD descriptor.  Ignore if
+                availability_zone_index is None
                 #TODO ip, security groups
         Returns the instance identifier
         '''
@@ -967,7 +970,7 @@ class vimconnector(vimconn.vimconnector):
                     raise vimconn.vimconnException('Timeout creating volumes for instance ' + name,
                                                    http_code=vimconn.HTTP_Request_Timeout)
             # get availability Zone
-            vm_av_zone = self._get_vm_availavility_zone(availavility_zone_index, nfv_availability_zones)
+            vm_av_zone = self._get_vm_availability_zone(availability_zone_index, availability_zone_list)
 
             self.logger.debug("nova.servers.create({}, {}, {}, nics={}, meta={}, security_groups={}, "
                               "availability_zone={}, key_name={}, userdata={}, config_drive={}, "

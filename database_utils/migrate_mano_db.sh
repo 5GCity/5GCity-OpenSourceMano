@@ -190,7 +190,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5009 ] && DB_VERSION=20  #0.5.9 =>  20
 #[ $OPENMANO_VER_NUM -ge 5015 ] && DB_VERSION=21  #0.5.15 =>  21
 #[ $OPENMANO_VER_NUM -ge 5016 ] && DB_VERSION=22  #0.5.16 =>  22
-#[ $OPENMANO_VER_NUM -ge 5019 ] && DB_VERSION=23  #0.5.20 =>  23
+#[ $OPENMANO_VER_NUM -ge 5020 ] && DB_VERSION=23  #0.5.20 =>  23
 #TODO ... put next versions here
 
 function upgrade_to_1(){

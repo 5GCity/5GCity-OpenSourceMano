@@ -1700,11 +1700,17 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
         #myvim.new_vminstance(self,vimURI,tenant_id,name,description,image_id,flavor_id,net_dict)
         i = 0
         for sce_vnf in scenarioDict['vnfs']:
-            nfv_availability_zones = []
+            vnf_availability_zones = []
             for vm in sce_vnf['vms']:
                 vm_av = vm.get('availability_zone')
-                if vm_av and vm_av not in nfv_availability_zones:
-                    nfv_availability_zones.append(vm_av)
+                if vm_av and vm_av not in vnf_availability_zones:
+                    vnf_availability_zones.append(vm_av)
+
+            # check if there is enough availability zones available at vim level.
+            if myvims[datacenter_id].availability_zone and vnf_availability_zones:
+                if len(vnf_availability_zones) > len(myvims[datacenter_id].availability_zone):
+                    raise NfvoException('No enough availability zones at VIM for this deployment', HTTP_Bad_Request)
+
             for vm in sce_vnf['vms']:
                 i += 1
                 myVMDict = {}
@@ -1793,14 +1799,14 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
                 #print ">>>>>>>>>>>>>>>>>>>>>>>>>>>"
 
                 if 'availability_zone' in myVMDict:
-                    counter_availability_zone = nfv_availability_zones.index(myVMDict['availability_zone'])
+                    av_index = vnf_availability_zones.index(myVMDict['availability_zone'])
                 else:
-                    counter_availability_zone = None
+                    av_index = None
 
                 vm_id = myvim.new_vminstance(myVMDict['name'], myVMDict['description'], myVMDict.get('start', None),
                                              myVMDict['imageRef'], myVMDict['flavorRef'], myVMDict['networks'],
-                                             availavility_zone_index=counter_availability_zone,
-                                             nfv_availability_zones=nfv_availability_zones)
+                                             availability_zone_index=av_index,
+                                             availability_zone_list=vnf_availability_zones)
                 #print "VIM vm instance id (server id) for scenario %s: %s" % (scenarioDict['name'],vm_id)
                 vm['vim_id'] = vm_id
                 rollbackList.append({'what':'vm','where':'vim','vim_id':datacenter_id,'uuid':vm_id})
@@ -2211,18 +2217,16 @@ def create_instance(mydb, tenant_id, instance_dict):
         sce_vnf_list = sorted(scenarioDict['vnfs'], key=lambda k: k['name']) 
         #for sce_vnf in scenarioDict['vnfs']:
         for sce_vnf in sce_vnf_list:
-            nfv_availability_zones = []
+            vnf_availability_zones = []
             for vm in sce_vnf['vms']:
                 vm_av = vm.get('availability_zone')
-                if vm_av and vm_av not in nfv_availability_zones:
-                    nfv_availability_zones.append(vm_av)
+                if vm_av and vm_av not in vnf_availability_zones:
+                    vnf_availability_zones.append(vm_av)
 
             # check if there is enough availability zones available at vim level.
-            if myvims[datacenter_id].availability_zone:
-                vim_availability_zones = myvims[datacenter_id].availability_zone
-                nfv_availability_zones_num = len(vim_availability_zones)
-                if len(nfv_availability_zones) > nfv_availability_zones_num:
-                    raise NfvoException('No enough availablity zones for this deployment', HTTP_Bad_Request)
+            if myvims[datacenter_id].availability_zone and vnf_availability_zones:
+                if len(vnf_availability_zones) > len(myvims[datacenter_id].availability_zone):
+                    raise NfvoException('No enough availability zones at VIM for this deployment', HTTP_Bad_Request)
 
             if sce_vnf.get("datacenter"):
                 vim = myvims[ sce_vnf["datacenter"] ]
@@ -2340,14 +2344,14 @@ def create_instance(mydb, tenant_id, instance_dict):
                 else:
                     cloud_config_vm = cloud_config
 
-                if 'availability_zone' in myVMDict and myVMDict.get('availability_zone'):
-                    counter_availability_zone = nfv_availability_zones.index(myVMDict['availability_zone'])
+                if myVMDict.get('availability_zone'):
+                    av_index = vnf_availability_zones.index(myVMDict['availability_zone'])
                 else:
-                    counter_availability_zone = None
+                    av_index = None
                 task = new_task("new-vm", (myVMDict['name'], myVMDict['description'], myVMDict.get('start', None),
                                            myVMDict['imageRef'], myVMDict['flavorRef'], myVMDict['networks'],
-                                           cloud_config_vm, myVMDict['disks'], counter_availability_zone,
-                                           nfv_availability_zones), depends=task_depends)
+                                           cloud_config_vm, myVMDict['disks'], av_index,
+                                           vnf_availability_zones), depends=task_depends)
                 instance_tasks[task["id"]] = task
                 tasks_to_launch[myvim_thread_id].append(task)
                 vm_id = task["id"]
