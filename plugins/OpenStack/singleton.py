@@ -1,14 +1,17 @@
+"""Simple singleton class."""
+
 from __future__ import unicode_literals
 
 
 class Singleton(object):
-    """Simple singleton class"""
+    """Simple singleton class."""
 
     def __init__(self, decorated):
+        """Initialize singleton instance."""
         self._decorated = decorated
 
     def instance(self):
-        """Return singleton instance"""
+        """Return singleton instance."""
         try:
             return self._instance
         except AttributeError:

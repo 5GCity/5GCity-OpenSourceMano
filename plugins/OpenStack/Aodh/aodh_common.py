@@ -1,16 +1,15 @@
 """Common methods for the Aodh Sender/Receiver."""
 
-import threading
-import os
+import logging as log
+
 import requests
 
-from keystoneauth1.identity import v3
 from keystoneauth1.identity.v3 import AuthMethod
-from keystoneauth1 import session
-from keystoneclient.v3 import client
-from keystoneclient.service_catalog import ServiceCatalog
 
-from plugins.Openstack.settings import Config
+from keystoneclient.service_catalog import ServiceCatalog
+from keystoneclient.v3 import client
+
+from plugins.OpenStack.settings import Config
 
 
 class Aodh_Common(object):
@@ -23,8 +22,7 @@ class Aodh_Common(object):
         self._ks = None
 
     def _authenticate(self):
-        """Authenticate and/or renew the authentication token"""
-
+        """Authenticate and/or renew the authentication token."""
         if self._auth_token is not None:
             return self._auth_token
 
@@ -37,26 +35,33 @@ class Aodh_Common(object):
             self._auth_token = self._ks.auth_token
         except Exception as exc:
 
-            # TODO: Log errors
+            log.warn("Authentication failed with the following exception: %s",
+                     exc)
             self._auth_token = None
 
         return self._auth_token
 
     def get_endpoint(self):
-        endpoint = self._ks.service_catalog.url_for(
-            service_type='alarming',
-            endpoint_type='internalURL',
-            region_name='RegionOne')
-        return endpoint
+        """Get the endpoint for Aodh."""
+        try:
+            return self._ks.service_catalog.url_for(
+                service_type='alarming',
+                endpoint_type='internalURL',
+                region_name='RegionOne')
+        except Exception as exc:
+            log.warning("Failed to retreive endpoint for Aodh due to: %s",
+                        exc)
+        return None
 
     @classmethod
-    def _perform_request(cls, url, auth_token, req_type="get", payload=None):
+    def _perform_request(cls, url, auth_token,
+                         req_type="get", payload=None, params=None):
         """Perform the POST/PUT/GET/DELETE request."""
-
         # request headers
         headers = {'X-Auth-Token': auth_token,
                    'Content-type': 'application/json'}
         # perform request and return its result
+        response = None
         try:
             if req_type == "put":
                 response = requests.put(
@@ -68,15 +73,14 @@ class Aodh_Common(object):
                     timeout=1)
             elif req_type == "get":
                 response = requests.get(
-                    url, headers=headers, timeout=1)
+                    url, params=params, headers=headers, timeout=1)
             elif req_type == "delete":
                 response = requests.delete(
                     url, headers=headers, timeout=1)
             else:
-                print("Invalid request type")
+                log.warn("Invalid request type")
 
         except Exception as e:
-            # Log info later
-            print("Exception thrown on request", e)
+            log.warn("Exception thrown on request", e)
 
         return response
