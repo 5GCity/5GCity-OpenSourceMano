@@ -21,6 +21,7 @@ PYBINDPLUGIN:=$(shell /usr/bin/env python -c \
 
 YANG_MODELS := vnfd nsd
 PYTHON_MODELS := $(addsuffix .py, $(YANG_MODELS))
+PYTHON_JSONSCHEMAS := $(addsuffix .jsonschema, $(YANG_MODELS))
 
 OUT_DIR := osm_im
 MODEL_DIR := models/yang
@@ -29,7 +30,7 @@ Q?=@
 
 PYANG_OPTIONS := -Werror
 
-all: $(PYTHON_MODELS) pyangbind
+all: $(PYTHON_MODELS) pyangbind $(PYTHON_JSONSCHEMAS)
 	$(MAKE) package
 
 $(OUT_DIR):
@@ -39,6 +40,10 @@ $(OUT_DIR):
 %.py: $(OUT_DIR) $(RW_PB_EXT)
 	$(Q)echo generating $@ from $*.yang
 	$(Q)pyang $(PYANG_OPTIONS) --path build/yang --path $(MODEL_DIR) --plugindir $(PYBINDPLUGIN) -f pybind -o $(OUT_DIR)/$@ $(MODEL_DIR)/$*.yang
+
+%.jsonschema: $(OUT_DIR) $(RW_PB_EXT) pyang-json-schema-plugin
+	$(Q)echo generating $@ from $*.yang
+	$(Q)pyang $(PYANG_OPTIONS) --path build/yang --path $(MODEL_DIR) --plugindir pyang-json-schema-plugin -f json-schema -o $(OUT_DIR)/$@ $(MODEL_DIR)/$*.yang
 
 $(RW_PB_EXT):
 	$(Q)mkdir -p $$(dirname $@)
@@ -50,6 +55,9 @@ package:
 pyangbind:
 	git clone https://github.com/robshakir/pyangbind
 	cd pyangbind; python setup.py --command-packages=stdeb.command bdist_deb; cd ..
+
+pyang-json-schema-plugin:
+	git clone https://github.com/cmoberg/pyang-json-schema-plugin
 
 clean:
 	$(Q)rm -rf build deb deb_dist *.gz pyangbind $(OUT_DIR)
