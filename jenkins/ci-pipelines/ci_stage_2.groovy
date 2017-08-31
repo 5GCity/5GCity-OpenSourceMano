@@ -39,7 +39,7 @@ def ci_pipeline(mdg,url_prefix,project,branch,refspec,revision,build_system) {
     }
 
     stage('License Scan') {
-        sh "devops/tools/license_scan.sh"
+        bash "devops/tools/license_scan.sh"
     }
 
     container_name = "${project}-${branch}".toLowerCase()
