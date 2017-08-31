@@ -60,4 +60,4 @@ pyang-json-schema-plugin:
 	git clone https://github.com/cmoberg/pyang-json-schema-plugin
 
 clean:
-	$(Q)rm -rf build dist osm_im.egg-info deb deb_dist *.gz pyangbind $(OUT_DIR)
+	$(Q)rm -rf build dist osm_im.egg-info deb deb_dist *.gz pyangbind pyang-json-schema-plugin $(OUT_DIR)
