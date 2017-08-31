@@ -23,7 +23,7 @@ OSM_JENKINS=$(dirname $HERE)
 
 INFO "Installing packages"
 apt-get update
-apt install -y lxd
+apt-get install -y lxd
 
 INFO "Configuring LXD"
 # ZFS doesn't work inside a nested container. ZFS should be configured in the host LXD.
@@ -55,9 +55,10 @@ systemctl start lxd-bridge
 
 apt-get install -y python-pip python python-pycurl charm-tools python-pytest
 
-apt install -y python-osmclient
+apt-get install -y python-osmclient
 
 export OSM_USE_LOCAL_DEVOPS=true
+echo "devops/installers/install_osm.sh --test $*"
 devops/installers/install_osm.sh --test $*
 RC=$?
 

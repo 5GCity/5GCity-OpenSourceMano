@@ -34,8 +34,8 @@ fi
 
 OSM_git_checkout "$@"
 
-apt update
-apt install -y docker.io
+apt-get update
+apt-get install -y docker.io
 
 # cleanup all pre-existing builds.
 # deb pkg build fails if previous build image is present
