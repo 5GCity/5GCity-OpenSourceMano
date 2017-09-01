@@ -33,7 +33,8 @@ for file in $(git diff --name-only origin/$GERRIT_BRANCH); do
     if [ -f $file ]; then
         if [ -s $file ]; then
             license=$(wget -qO - --post-file $file https://osm.etsi.org/fossology/?mod=agent_nomos_once |sed "s/^[ \t]*//;s/[ \t]*$//")
-            if [[ $license =~ $RE ]]; then
+            result=$(echo $license | grep "$RE")
+            if [ -n "$result" ]; then
                 # possibly we have exceeded the post rate
                 sleep 10
                 license=$(wget -qO - --post-file $file https://osm.etsi.org/fossology/?mod=agent_nomos_once |sed "s/^[ \t]*//;s/[ \t]*$//")
