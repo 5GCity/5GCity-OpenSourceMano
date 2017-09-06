@@ -30,7 +30,7 @@ Q?=@
 
 PYANG_OPTIONS := -Werror
 
-all: $(PYTHON_MODELS) pyangbind $(PYTHON_JSONSCHEMAS)
+all: $(PYTHON_MODELS) pyangbind
 	$(MAKE) package
 
 $(OUT_DIR):
