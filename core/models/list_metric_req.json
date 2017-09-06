@@ -1,0 +1,17 @@
+{
+  "schema_version": { "type": "string" },
+  "schema_type": { "type": "string" },
+  "metrics_list_request":
+  {
+    "metric_name": { "type": "string" },
+    "correlation_id": { "type": "integer" },
+    "resource_uuid": { "type": "string" },
+    "vim_type": { "type": "string" }
+  },
+  "required": [ "schema_version",
+                "schema_type",
+                "metric_name",
+                "correlation_id",
+                "resource_uuid",
+                "vim_type"]
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": { "type": "string" },
+  "schema_type": "metric_data_response",
+  "metrics_name": { "type": "string" },
+  "metric_uuid": { "type": "string" },
+  "correlation_id": { "type": "integer" },
+  "resource_uuid": { "type": "string" },
+  "tenant_uuid": { "type": "string" },
+  "metrics_data":
+  {
+    "time_series": { "type": "array" },
+    "metrics_series": { "type": "array" },
+    "unit": { "type": "string" }
+  },
+  "required": [ "schema_version",
+                "schema_type",
+                "metric_name",
+                "metric_uuid",
+                "resource_uuid",
+                "tenant_uuid",
+                "time_series",
+                "metrics_series" ]
+}

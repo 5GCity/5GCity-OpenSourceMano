@@ -1,0 +1,17 @@
+{
+  "schema_version": { "type": "string" },
+  "schema_type": { "type": "string" },
+  "correlation_id": { "type": "integer" },
+  "metrics_create_response":
+  {
+    "metric_uuid": { "type": "string" },
+    "resource_uuid": { "type": "string" },
+    "status": { "type": "boolean" }
+  },
+  "required": [ "schema_type",
+                "schema_version",
+                "correlation_id",
+                "metric_uuid",
+                "resource_uuid",
+                "status" ]
+}

@@ -1,0 +1,15 @@
+{
+  "schema_version": { "type": "string" },
+  "schema_type": { "type": "string" },
+  "alarm_create_response":
+  {
+    "correlation_id": { "type": "integer" },
+    "alarm_uuid": { "type": "string" },
+    "status": { "type": "boolean" }
+  },
+  "required": [ "schema_version",
+  	        "schema_type",
+  	        "correlation_id",
+  	        "alarm_uuid",
+  	        "status" ]
+}
