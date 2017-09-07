@@ -184,16 +184,17 @@ def format_out(data):
         return json.dumps(data, indent=4) + "\n"
 
 def format_in(default_schema, version_fields=None, version_dict_schema=None):
-    ''' Parse the content of HTTP request against a json_schema
-        Parameters
-            default_schema: The schema to be parsed by default if no version field is found in the client data
-            version_fields: If provided it contains a tuple or list with the fields to iterate across the client data to obtain the version
-            version_dict_schema: It contains a dictionary with the version as key, and json schema to apply as value
-                It can contain a None as key, and this is apply if the client data version does not match any key 
-        Return:
-            user_data, used_schema: if the data is successfully decoded and matches the schema
-            launch a bottle abort if fails
-    '''
+    """
+    Parse the content of HTTP request against a json_schema
+    :param default_schema: The schema to be parsed by default if no version field is found in the client data. In None
+        no validation is done
+    :param version_fields: If provided it contains a tuple or list with the fields to iterate across the client data to
+        obtain the version
+    :param version_dict_schema: It contains a dictionary with the version as key, and json schema to apply as value.
+        It can contain a None as key, and this is apply if the client data version does not match any key
+    :return:  user_data, used_schema: if the data is successfully decoded and matches the schema.
+        Launch a bottle abort if fails
+    """
     #print "HEADERS :" + str(bottle.request.headers.items())
     try:
         error_text = "Invalid header format "
@@ -212,13 +213,16 @@ def format_in(default_schema, version_fields=None, version_dict_schema=None):
             logger.warning('Content-Type ' + str(format_type) + ' not supported.')
             bottle.abort(HTTP_Not_Acceptable, 'Content-Type ' + str(format_type) + ' not supported.')
             return
-        #if client_data == None:
+        # if client_data == None:
         #    bottle.abort(HTTP_Bad_Request, "Content error, empty")
         #    return
 
-        logger.debug('IN: %s', yaml.safe_dump(client_data, explicit_start=True, indent=4, default_flow_style=False, tags=False, encoding='utf-8', allow_unicode=True) )
-        #look for the client provider version
+        logger.debug('IN: %s', yaml.safe_dump(client_data, explicit_start=True, indent=4, default_flow_style=False,
+                                              tags=False, encoding='utf-8', allow_unicode=True) )
+        # look for the client provider version
         error_text = "Invalid content "
+        if not default_schema and not version_fields:
+            return client_data, None
         client_version = None
         used_schema = None
         if version_fields != None:
@@ -229,9 +233,9 @@ def format_in(default_schema, version_fields=None, version_dict_schema=None):
                 else:
                     client_version=None
                     break
-        if client_version==None:
-            used_schema=default_schema
-        elif version_dict_schema!=None:
+        if client_version == None:
+            used_schema = default_schema
+        elif version_dict_schema != None:
             if client_version in version_dict_schema:
                 used_schema = version_dict_schema[client_version]
             elif None in version_dict_schema:
@@ -995,7 +999,7 @@ def http_get_vnfs(tenant_id):
             #check valid tenant_id
             nfvo.check_tenant(mydb, tenant_id)
         select_,where_,limit_ = filter_query_string(bottle.request.query, None,
-                ('uuid','name','description','public', "tenant_id", "created_at") )
+                ('uuid', 'name', 'osm_id', 'description', 'public', "tenant_id", "created_at") )
         where_or = {}
         if tenant_id != "any":
             where_or["tenant_id"] = tenant_id
@@ -1033,9 +1037,12 @@ def http_get_vnf_id(tenant_id,vnf_id):
 
 @bottle.route(url_base + '/<tenant_id>/vnfs', method='POST')
 def http_post_vnfs(tenant_id):
-    '''insert a vnf into the catalogue. Creates the flavor and images in the VIM, and creates the VNF and its internal structure in the OPENMANO DB'''
-    #print "Parsing the YAML file of the VNF"
-    #parse input data
+    """ Insert a vnf into the catalogue. Creates the flavor and images, and fill the tables at database
+    :param tenant_id: tenant that this vnf belongs to
+    :return:
+    """
+    # print "Parsing the YAML file of the VNF"
+    # parse input data
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     http_content, used_schema = format_in( vnfd_schema_v01, ("schema_version",), {"0.2": vnfd_schema_v02})
     r = utils.remove_extra_items(http_content, used_schema)
@@ -1057,9 +1064,34 @@ def http_post_vnfs(tenant_id):
         logger.error("Unexpected exception: ", exc_info=True)
         bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
-            
+
+@bottle.route(url_base + '/v3/<tenant_id>/vnfd', method='POST')
+def http_post_vnfs_v3(tenant_id):
+    """
+    Insert one or several VNFs in the catalog, following OSM IM
+    :param tenant_id: tenant owner of the VNF
+    :return: The detailed list of inserted VNFs, following the old format
+    """
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    http_content, _ = format_in(None)
+    try:
+        vnfd_uuid_list = nfvo.new_vnfd_v3(mydb, tenant_id, http_content)
+        vnfd_list = []
+        for vnfd_uuid in vnfd_uuid_list:
+            vnf = nfvo.get_vnf_id(mydb, tenant_id, vnfd_uuid)
+            utils.convert_str2boolean(vnf, ('public',))
+            convert_datetime2str(vnf)
+            vnfd_list.append(vnf["vnf"])
+        return format_out({"vnfd": vnfd_list})
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_vnfs error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 @bottle.route(url_base + '/<tenant_id>/vnfs/<vnf_id>', method='DELETE')
-def http_delete_vnf_id(tenant_id,vnf_id):
+def http_delete_vnf_id(tenant_id, vnf_id):
     '''delete a vnf from database, and images and flavors in VIM when appropriate, can use both uuid or name'''
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     #check valid tenant_id and deletes the vnf, including images, 
@@ -1179,6 +1211,31 @@ def http_post_scenarios(tenant_id):
         logger.error("Unexpected exception: ", exc_info=True)
         bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
+@bottle.route(url_base + '/v3/<tenant_id>/nsd', method='POST')
+def http_post_nsds_v3(tenant_id):
+    """
+    Insert one or several NSDs in the catalog, following OSM IM
+    :param tenant_id: tenant owner of the NSD
+    :return: The detailed list of inserted NSDs, following the old format
+    """
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    http_content, _ = format_in(None)
+    try:
+        nsd_uuid_list = nfvo.new_nsd_v3(mydb, tenant_id, http_content)
+        nsd_list = []
+        for nsd_uuid in nsd_uuid_list:
+            scenario = mydb.get_scenario(nsd_uuid, tenant_id)
+            convert_datetime2str(scenario)
+            nsd_list.append(scenario)
+        data = {'nsd': nsd_list}
+        return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_post_nsds_v3 error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
 
 @bottle.route(url_base + '/<tenant_id>/scenarios/<scenario_id>/action', method='POST')
 def http_post_scenario_action(tenant_id, scenario_id):
@@ -1231,7 +1288,8 @@ def http_get_scenarios(tenant_id):
         if tenant_id != "any":
             nfvo.check_tenant(mydb, tenant_id) 
         #obtain data
-        s,w,l=filter_query_string(bottle.request.query, None, ('uuid', 'name', 'description', 'tenant_id', 'created_at', 'public'))
+        s,w,l=filter_query_string(bottle.request.query, None,
+                                  ('uuid', 'name', 'osm_id', 'description', 'tenant_id', 'created_at', 'public'))
         where_or={}
         if tenant_id != "any":
             where_or["tenant_id"] = tenant_id

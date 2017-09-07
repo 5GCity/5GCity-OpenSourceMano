@@ -33,7 +33,7 @@ DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=24
+LAST_DB_VERSION=25
  
 # Detect paths
 MYSQL=$(which mysql)
@@ -192,6 +192,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5016 ] && DB_VERSION=22  #0.5.16 =>  22
 #[ $OPENMANO_VER_NUM -ge 5020 ] && DB_VERSION=23  #0.5.20 =>  23
 #[ $OPENMANO_VER_NUM -ge 5021 ] && DB_VERSION=24  #0.5.21 =>  24
+#[ $OPENMANO_VER_NUM -ge 5022 ] && DB_VERSION=25  #0.5.22 =>  25
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -814,6 +815,39 @@ function downgrade_from_24(){
     echo "      Remove 'count' from table 'vms'"
     sql "ALTER TABLE vms DROP COLUMN count;"
     sql "DELETE FROM schema_version WHERE version_int='24';"
+}
+function upgrade_to_25(){
+    # echo "    upgrade database from version 0.24 to version 0.25"
+    echo "      Add 'osm_id','short_name','vendor' to tables 'vnfs', 'scenarios'"
+    for table in vnfs scenarios; do
+        sql "ALTER TABLE $table ADD COLUMN osm_id VARCHAR(255) NULL AFTER uuid, "\
+             "ADD UNIQUE INDEX osm_id_tenant_id (osm_id, tenant_id), "\
+             "ADD COLUMN short_name VARCHAR(255) NULL AFTER name, "\
+             "ADD COLUMN vendor VARCHAR(255) NULL AFTER description;"
+    done
+    sql "ALTER TABLE vnfs ADD COLUMN mgmt_access VARCHAR(2000) NULL AFTER vendor;"
+    sql "ALTER TABLE vms ADD COLUMN osm_id VARCHAR(255) NULL AFTER uuid;"
+    sql "ALTER TABLE sce_vnfs ADD COLUMN member_vnf_index SMALLINT(6) NULL DEFAULT NULL AFTER uuid;"
+    echo "      Add 'security_group' to table 'ip_profiles'"
+    sql "ALTER TABLE ip_profiles ADD COLUMN security_group VARCHAR(255) NULL DEFAULT NULL AFTER dhcp_count;"
+
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
+         "VALUES (25, '0.25', '0.5.22', 'Added osm_id to vnfs,scenarios', '2017-09-01');"
+}
+function downgrade_from_25(){
+    # echo "    downgrade database from version 0.25 to version 0.24"
+    echo "      Remove 'osm_id','short_name','vendor' from tables 'vnfs', 'scenarios'"
+    for table in vnfs scenarios; do
+        sql "ALTER TABLE $table DROP INDEX  osm_id_tenant_id, DROP COLUMN osm_id, "\
+             "DROP COLUMN short_name, DROP COLUMN vendor;"
+    done
+    sql "ALTER TABLE vnfs DROP COLUMN mgmt_access;"
+    sql "ALTER TABLE vms DROP COLUMN osm_id;"
+    sql "ALTER TABLE sce_vnfs DROP COLUMN member_vnf_index;"
+    echo "      Remove 'security_group' from table 'ip_profiles'"
+    sql "ALTER TABLE ip_profiles DROP COLUMN security_group;"
+
+    sql "DELETE FROM schema_version WHERE version_int='25';"
 }
 
 function upgrade_to_X(){

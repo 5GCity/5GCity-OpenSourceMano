@@ -580,7 +580,8 @@ class nfvo_db(db_base.db_base):
                         scenario_dict["cloud-config"] = yaml.load(scenario_dict["cloud_config"])
                     del scenario_dict["cloud_config"]
                     #sce_vnfs
-                    cmd = "SELECT uuid,name,vnf_id,description FROM sce_vnfs WHERE scenario_id='{}' ORDER BY created_at".format(scenario_dict['uuid'])
+                    cmd = "SELECT uuid,name,member_vnf_index,vnf_id,description FROM sce_vnfs WHERE scenario_id='{}' "\
+                          "ORDER BY created_at".format(scenario_dict['uuid'])
                     self.logger.debug(cmd)
                     self.cur.execute(cmd)
                     scenario_dict['vnfs'] = self.cur.fetchall()

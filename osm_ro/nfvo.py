@@ -47,6 +47,12 @@ from time import time
 from lib_osm_openvim import ovim as ovim_module
 from lib_osm_openvim.ovim import ovimException
 
+import osm_im.vnfd as vnfd_catalog
+import osm_im.nsd as nsd_catalog
+
+from pyangbind.lib.serialise import pybindJSONDecoder
+from itertools import chain
+
 global global_config
 global vimconn_imported
 global logger
@@ -631,11 +637,11 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
         #    continue
         #elif res_vim==0:
 
-        #Create the flavor in VIM
-        #Translate images at devices from MANO id to VIM id
+        # Create the flavor in VIM
+        # Translate images at devices from MANO id to VIM id
         disk_list = []
         if 'extended' in flavor_dict and flavor_dict['extended']!=None and "devices" in flavor_dict['extended']:
-            #make a copy of original devices
+            # make a copy of original devices
             devices_original=[]
 
             for device in flavor_dict["extended"].get("devices",[]):
@@ -646,7 +652,9 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
                     del device['image']
                 if 'image metadata' in device:
                     del device['image metadata']
-            dev_nb=0
+                if 'image checksum' in device:
+                    del device['image checksum']
+            dev_nb = 0
             for index in range(0,len(devices_original)) :
                 device=devices_original[index]
                 if "image" not in device and "image name" not in device:
@@ -658,7 +666,7 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
                 image_dict['universal_name']=device.get('image name')
                 image_dict['description']=flavor_dict['name']+str(dev_nb)+"-img"
                 image_dict['location']=device.get('image')
-                #image_dict['new_location']=device.get('image location')
+                # image_dict['new_location']=device.get('image location')
                 image_dict['checksum']=device.get('image checksum')
                 image_metadata_dict = device.get('image metadata', None)
                 image_metadata_str = None
@@ -718,6 +726,365 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
             mydb.update_rows('datacenters_flavors', UPDATE={'vim_id':flavor_vim_id}, WHERE={'datacenter_id':vim_id, 'flavor_id':flavor_mano_id})
 
     return flavor_vim_id if only_create_at_vim else flavor_mano_id
+
+
+def get_str(obj, field, length):
+    """
+    Obtain the str value,
+    :param obj:
+    :param length:
+    :return:
+    """
+    value = obj.get(field)
+    if value is not None:
+        value = str(value)[:length]
+    return value
+
+def _lookfor_or_create_image(db_image, mydb, descriptor):
+    """
+    fill image content at db_image dictionary. Check if the image with this image and checksum exist
+    :param db_image: dictionary to insert data
+    :param mydb: database connector
+    :param descriptor: yang descriptor
+    :return: uuid if the image exist at DB, or None if a new image must be created with the data filled at db_image
+    """
+
+    db_image["name"] = get_str(descriptor, "image", 255)
+    db_image["checksum"] = get_str(descriptor, "image-checksum", 32)
+    if not db_image["checksum"]:  # Ensure that if empty string, None is stored
+        db_image["checksum"] = None
+    if db_image["name"].startswith("/"):
+        db_image["location"] = db_image["name"]
+        existing_images = mydb.get_rows(FROM="images", WHERE={'location': db_image["location"]})
+    else:
+        db_image["universal_name"] = db_image["name"]
+        existing_images = mydb.get_rows(FROM="images", WHERE={'universal_name': db_image['universal_name'],
+                                                              'checksum': db_image['checksum']})
+    if existing_images:
+        return existing_images[0]["uuid"]
+    else:
+        image_uuid = str(uuid4())
+        db_image["uuid"] = image_uuid
+        return None
+
+def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
+    """
+    Parses an OSM IM vnfd_catalog and insert at DB
+    :param mydb:
+    :param tenant_id:
+    :param vnf_descriptor:
+    :return: The list of cretated vnf ids
+    """
+    try:
+        myvnfd = vnfd_catalog.vnfd()
+        pybindJSONDecoder.load_ietf_json(vnf_descriptor, None, None, obj=myvnfd)
+        db_vnfs = []
+        db_nets = []
+        db_vms = []
+        db_vms_index = 0
+        db_interfaces = []
+        db_images = []
+        db_flavors = []
+        uuid_list = []
+        vnfd_uuid_list = []
+        for rift_vnfd in myvnfd.vnfd_catalog.vnfd.itervalues():
+            vnfd = rift_vnfd.get()
+
+            # table vnf
+            vnf_uuid = str(uuid4())
+            uuid_list.append(vnf_uuid)
+            vnfd_uuid_list.append(vnf_uuid)
+            db_vnf = {
+                "uuid": vnf_uuid,
+                "osm_id": get_str(vnfd, "id", 255),
+                "name": get_str(vnfd, "name", 255),
+                "description": get_str(vnfd, "description", 255),
+                "tenant_id": tenant_id,
+                "vendor": get_str(vnfd, "vendor", 255),
+                "short_name": get_str(vnfd, "short-name", 255),
+                "descriptor": str(vnf_descriptor)[:60000]
+            }
+
+            # table nets (internal-vld)
+            net_id2uuid = {}  # for mapping interface with network
+            for vld in vnfd.get("internal-vld").itervalues():
+                net_uuid = str(uuid4())
+                uuid_list.append(net_uuid)
+                db_net = {
+                    "name": get_str(vld, "name", 255),
+                    "vnf_id": vnf_uuid,
+                    "uuid": net_uuid,
+                    "description": get_str(vld, "description", 255),
+                    "type": "bridge",   # TODO adjust depending on connection point type
+                }
+                net_id2uuid[vld.get("id")] = net_uuid
+                db_nets.append(db_net)
+
+            # table vms (vdus)
+            vdu_id2uuid = {}
+            vdu_id2db_table_index = {}
+            for vdu in vnfd.get("vdu").itervalues():
+                vm_uuid = str(uuid4())
+                uuid_list.append(vm_uuid)
+                db_vm = {
+                    "uuid": vm_uuid,
+                    "osm_id": get_str(vdu, "id", 255),
+                    "name": get_str(vdu, "name", 255),
+                    "description": get_str(vdu, "description", 255),
+                    "vnf_id": vnf_uuid,
+                }
+                vdu_id2uuid[db_vm["osm_id"]] = vm_uuid
+                vdu_id2db_table_index[db_vm["osm_id"]] = db_vms_index
+                if vdu.get("count"):
+                    db_vm["count"] = int(vdu["count"])
+
+                # table image
+                image_present = False
+                if vdu.get("image"):
+                    image_present = True
+                    db_image = {}
+                    image_uuid = _lookfor_or_create_image(db_image, mydb, vdu)
+                    if not image_uuid:
+                        image_uuid = db_image["uuid"]
+                        db_images.append(db_image)
+                    db_vm["image_id"] = image_uuid
+
+                # volumes
+                devices = []
+                if vdu.get("volumes"):
+                    for volume_key in sorted(vdu["volumes"]):
+                        volume = vdu["volumes"][volume_key]
+                        if not image_present:
+                            # Convert the first volume to vnfc.image
+                            image_present = True
+                            db_image = {}
+                            image_uuid = _lookfor_or_create_image(db_image, mydb, volume)
+                            if not image_uuid:
+                                image_uuid = db_image["uuid"]
+                                db_images.append(db_image)
+                            db_vm["image_id"] = image_uuid
+                        else:
+                            # Add Openmano devices
+                            device = {}
+                            device["type"] = str(volume.get("device-type"))
+                            if volume.get("size"):
+                                device["size"] = int(volume["size"])
+                            if volume.get("image"):
+                                device["image name"] = str(volume["image"])
+                                if volume.get("image-checksum"):
+                                    device["image checksum"] = str(volume["image-checksum"])
+                            devices.append(device)
+
+                # table flavors
+                db_flavor = {
+                    "name": get_str(vdu, "name", 250) + "-flv",
+                    "vcpus": int(vdu["vm-flavor"].get("vcpu-count", 1)),
+                    "ram": int(vdu["vm-flavor"].get("memory-mb", 1)),
+                    "disk": int(vdu["vm-flavor"].get("storage-gb", 1)),
+                }
+                # EPA  TODO revise
+                extended = {}
+                numa = {}
+                if devices:
+                    extended["devices"] = devices
+                if vdu.get("guest-epa"):   # TODO or dedicated_int:
+                    epa_vcpu_set = False
+                    if vdu["guest-epa"].get("numa-node-policy"):  # TODO or dedicated_int:
+                        numa_node_policy = vdu["guest-epa"].get("numa-node-policy")
+                        if numa_node_policy.get("node"):
+                            numa_node = numa_node_policy.node[0]
+                            if numa_node.get("num-cores"):
+                                numa["cores"] = numa_node["num-cores"]
+                                epa_vcpu_set = True
+                            if numa_node.get("paired-threads"):
+                                if numa_node["paired-threads"].get("num-paired-threads"):
+                                    numa["paired-threads"] = numa_node["paired-threads"]["num-paired-threads"]
+                                    epa_vcpu_set = True
+                                if len(numa_node["paired-threads"].get("paired-thread-ids")) > 0:
+                                    numa["paired-threads-id"] = []
+                                    for pair in numa_node["paired-threads"]["paired-thread-ids"].itervalues:
+                                        numa["paired-threads-id"].append(
+                                            (str(pair["thread-a"]), str(pair["thread-b"]))
+                                        )
+                            if numa_node.get("num-threads"):
+                                numa["threads"] = numa_node["num-threads"]
+                                epa_vcpu_set = True
+                            if numa_node.get("memory-mb"):
+                                numa["memory"] = max(int(numa_node["memory-mb"] / 1024), 1)
+                    if vdu["guest-epa"].get("mempage-size"):
+                        if vdu["guest-epa"]["mempage-size"] != "SMALL":
+                            numa["memory"] = max(int(db_flavor["ram"] / 1024), 1)
+                    if vdu["guest-epa"].get("cpu-pinning-policy") and not epa_vcpu_set:
+                        if vdu["guest-epa"]["cpu-pinning-policy"] == "DEDICATED":
+                            if vdu["guest-epa"].get("cpu-thread-pinning-policy") and \
+                                            vdu["guest-epa"]["cpu-thread-pinning-policy"] != "PREFER":
+                                numa["cores"] = max(db_flavor["vcpus"], 1)
+                            else:
+                                numa["threads"] = max(db_flavor["vcpus"], 1)
+                if numa:
+                    extended["numas"] = [numa]
+                if extended:
+                    extended_text = yaml.safe_dump(extended, default_flow_style=True, width=256)
+                    db_flavor["extended"] = extended_text
+                # look if flavor exist
+
+                temp_flavor_dict = {'disk': db_flavor.get('disk', 1),
+                                    'ram': db_flavor.get('ram'),
+                                    'vcpus': db_flavor.get('vcpus'),
+                                    'extended': db_flavor.get('extended')
+                                    }
+                existing_flavors = mydb.get_rows(FROM="flavors", WHERE=temp_flavor_dict)
+                if existing_flavors:
+                    flavor_uuid = existing_flavors[0]["uuid"]
+                else:
+                    flavor_uuid = str(uuid4())
+                    uuid_list.append(flavor_uuid)
+                    db_flavor["uuid"] = flavor_uuid
+                    db_flavors.append(db_flavor)
+                db_vm["flavor_id"] = flavor_uuid
+
+                # cloud-init
+                boot_data = {}
+                if vdu.get("cloud-init"):
+                    boot_data["user-data"] = vdu["cloud-init"]
+                elif vdu.get("cloud-init-file"):
+                    # TODO Where this file content is present???
+                    # boot_data["user-data"] = rift_vnfd.files[vdu["cloud-init-file"]]
+                    boot_data["user-data"] = str(vdu["cloud-init-file"])
+
+                if vdu.get("supplemental-boot-data"):
+                    if vdu["supplemental-boot-data"].get('boot-data-drive'):
+                            boot_data['boot-data-drive'] = True
+                    if vdu["supplemental-boot-data"].get('config-file'):
+                        om_cfgfile_list = list()
+                        for custom_config_file in vdu["supplemental-boot-data"]['config-file'].itervalues():
+                            # TODO Where this file content is present???
+                            cfg_source = str(custom_config_file["source"])
+                            om_cfgfile_list.append({"dest": custom_config_file["dest"],
+                                                    "content": cfg_source})
+                        boot_data['config-files'] = om_cfgfile_list
+                if boot_data:
+                    db_vm["boot_data"] = boot_data
+
+                db_vms.append(db_vm)
+                db_vms_index += 1
+
+                # table interfaces (internal/external interfaces)
+                cp_name2iface_uuid = {}
+                cp_name2vm_uuid = {}
+                for iface in chain(vdu.get("internal-interface").itervalues(), vdu.get("external-interface").itervalues()):
+                    iface_uuid = str(uuid4())
+                    uuid_list.append(iface_uuid)
+                    db_interface = {
+                        "uuid": iface_uuid,
+                        "internal_name": get_str(iface, "name", 255),
+                        "vm_id": vm_uuid,
+                    }
+                    if iface.get("virtual-interface").get("vpci"):
+                        db_interface["vpci"] = get_str(iface.get("virtual-interface"), "vpci", 12)
+
+                    if iface.get("virtual-interface").get("bandwidth"):
+                        bps = int(iface.get("virtual-interface").get("bandwidth"))
+                        db_interface["bw"] = bps/1000
+
+                    if iface.get("virtual-interface").get("type") == "OM-MGMT":
+                        db_interface["type"] = "mgmt"
+                    elif iface.get("virtual-interface").get("type") in ("VIRTIO", "E1000"):
+                        db_interface["type"] = "bridge"
+                        db_interface["model"] = get_str(iface.get("virtual-interface"), "type", 12)
+                    elif iface.get("virtual-interface").get("type") in ("SR-IOV", "PCI-PASSTHROUGH"):
+                        db_interface["type"] = "data"
+                        db_interface["model"] = get_str(iface.get("virtual-interface"), "type", 12)
+                    else:
+                        raise ValueError("Interface type {} not supported".format(iface.get("virtual-interface").get("type")))
+
+                    if iface.get("vnfd-connection-point-ref"):
+                        try:
+                            cp = vnfd.get("connection-point")[iface.get("vnfd-connection-point-ref")]
+                            db_interface["external_name"] = get_str(cp, "name", 255)
+                            cp_name2iface_uuid[db_interface["external_name"]] = iface_uuid
+                            cp_name2vm_uuid[db_interface["external_name"]] = vm_uuid
+                            # TODO add port-security-enable
+                            # if cp.get("port-security-enabled") == False:
+                            # elif cp.get("port-security-enabled") == True:
+                        except KeyError:
+                            raise KeyError(
+                                "Error wrong reference at vnfd['{vnf}'] vdu['{vdu}']:internal-interface['{iface}']:"
+                                "vnfd-connection-point-ref '{cp}' is not present at connection-point".format(
+                                    vnf=vnfd["id"], vdu=vdu["id"], iface=iface["name"],
+                                    cp=iface.get("vnfd-connection-point-ref"))
+                            )
+                    elif iface.get("vdu-internal-connection-point-ref"):
+                        try:
+                            for vld in vnfd.get("internal-vld").itervalues():
+                                for cp in vld.get("internal-connection-point").itervalues():
+                                    if cp.get("id-ref") == iface.get("vdu-internal-connection-point-ref"):
+                                        db_interface["net_id"] = net_id2uuid[vld.get("id")]
+                                        break
+                        except KeyError:
+                            raise KeyError(
+                                "Error at vnfd['{vnf}'] vdu['{vdu}']:internal-interface['{iface}']:"
+                                "vdu-internal-connection-point-ref '{cp}' is not referenced by any internal-vld".format(
+                                    vnf=vnfd["id"], vdu=vdu["id"], iface=iface["name"],
+                                    cp=iface.get("vdu-internal-connection-point-ref"))
+                            )
+
+                    db_interfaces.append(db_interface)
+
+            # VNF affinity and antiaffinity
+            for pg in vnfd.get("placement-groups").itervalues():
+                pg_name = get_str(pg, "name", 255)
+                for vdu in pg.get("member-vdus").itervalues():
+                    vdu_id = get_str(vdu, "member-vdu-ref", 255)
+                    if vdu_id not in vdu_id2db_table_index:
+                        raise KeyError(
+                            "Error at 'vnfd'['{vnf}']:'placement-groups'['{pg}']:'member-vdus':'{vdu}' references a non existing vdu".format(
+                                vnf=vnfd["id"], pg=pg_name, vdu=vdu_id))
+                    db_vms[vdu_id2db_table_index[vdu_id]]["availability_zone"] = pg_name
+                    # TODO consider the case of isolation and not colocation
+                    # if pg.get("strategy") == "ISOLATION":
+                    
+            # VNF mgmt configuration
+            mgmt_access = {}
+            if vnfd["mgmt-interface"].get("vdu-id"):
+                if vnfd["mgmt-interface"]["vdu-id"] not in vdu_id2uuid:
+                    raise KeyError(
+                        "Error at vnfd['{vnf}']:'mgmt-interface':'vdu-id':{vdu} reference a non existing vdu".format(
+                            vnf=vnfd["id"], vdu=vnfd["mgmt-interface"]["vdu-id"]))
+                mgmt_access["vm_id"] = vdu_id2uuid[vnfd["mgmt-interface"]["vdu-id"]]
+            if vnfd["mgmt-interface"].get("ip-address"):
+                mgmt_access["ip-address"] = str(vnfd["mgmt-interface"].get("ip-address"))
+            if vnfd["mgmt-interface"].get("cp"):
+                if vnfd["mgmt-interface"]["cp"] not in cp_name2iface_uuid:
+                    raise KeyError(
+                        "Error at vnfd['{vnf}']:'mgmt-interface':'cp':{cp} reference a non existing connection-point".
+                            format(vnf=vnfd["id"], cp=vnfd["mgmt-interface"]["cp"]))
+                mgmt_access["vm_id"] = cp_name2vm_uuid[vnfd["mgmt-interface"]["cp"]]
+                mgmt_access["interface_id"] = cp_name2iface_uuid[vnfd["mgmt-interface"]["cp"]]
+            default_user = get_str(vnfd.get("vnf-configuration").get("config-access", {}).get("ssh-access", {}),
+                                    "default-user", 64)
+            if default_user:
+                mgmt_access["default_user"] = default_user
+            if mgmt_access:
+                db_vnf["mgmt_access"] = yaml.safe_dump(mgmt_access, default_flow_style=True, width=256)
+
+            db_vnfs.append(db_vnf)
+        db_tables=[
+            {"vnfs": db_vnfs},
+            {"nets": db_nets},
+            {"images": db_images},
+            {"flavors": db_flavors},
+            {"vms": db_vms},
+            {"interfaces": db_interfaces},
+        ]
+
+        logger.debug("create_vnf Deployment done vnfDict: %s",
+                    yaml.safe_dump(db_tables, indent=4, default_flow_style=False) )
+        mydb.new_rows(db_tables, uuid_list)
+        return vnfd_uuid_list
+    except Exception as e:
+        logger.error("Exception {}".format(e))
+        raise  # NfvoException("Exception {}".format(e), HTTP_Bad_Request)
 
 
 def new_vnf(mydb, tenant_id, vnf_descriptor):
@@ -1002,14 +1369,15 @@ def get_vnf_id(mydb, tenant_id, vnf_id):
         where_or["public"] = True
     vnf = mydb.get_table_by_uuid_name('vnfs', vnf_id, "VNF", WHERE_OR=where_or, WHERE_AND_OR="AND")
 
-    vnf_id=vnf["uuid"]
-    filter_keys = ('uuid','name','description','public', "tenant_id", "created_at")
+    vnf_id = vnf["uuid"]
+    filter_keys = ('uuid', 'name', 'description', 'public', "tenant_id", "osm_id", "created_at")
     filtered_content = dict( (k,v) for k,v in vnf.iteritems() if k in filter_keys )
     #change_keys_http2db(filtered_content, http2db_vnf, reverse=True)
     data={'vnf' : filtered_content}
     #GET VM
     content = mydb.get_rows(FROM='vnfs join vms on vnfs.uuid=vms.vnf_id',
-            SELECT=('vms.uuid as uuid','vms.name as name', 'vms.description as description', 'boot_data'),
+            SELECT=('vms.uuid as uuid', 'vms.osm_id as osm_id', 'vms.name as name', 'vms.description as description',
+                    'boot_data'),
             WHERE={'vnfs.uuid': vnf_id} )
     if len(content)==0:
         raise NfvoException("vnf '{}' not found".format(vnf_id), HTTP_Not_Found)
@@ -1608,6 +1976,170 @@ def new_scenario_v02(mydb, tenant_id, scenario_dict, version):
     return scenario_id
 
 
+def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
+    """
+    Parses an OSM IM nsd_catalog and insert at DB
+    :param mydb:
+    :param tenant_id:
+    :param nsd_descriptor:
+    :return: The list of cretated NSD ids
+    """
+    try:
+        mynsd = nsd_catalog.nsd()
+        pybindJSONDecoder.load_ietf_json(nsd_descriptor, None, None, obj=mynsd)
+        db_scenarios = []
+        db_sce_nets = []
+        db_sce_vnfs = []
+        db_sce_interfaces = []
+        db_ip_profiles = []
+        db_ip_profiles_index = 0
+        uuid_list = []
+        nsd_uuid_list = []
+        for rift_nsd in mynsd.nsd_catalog.nsd.itervalues():
+            nsd = rift_nsd.get()
+
+            # table sceanrios
+            scenario_uuid = str(uuid4())
+            uuid_list.append(scenario_uuid)
+            nsd_uuid_list.append(scenario_uuid)
+            db_scenario = {
+                "uuid": scenario_uuid,
+                "osm_id": get_str(nsd, "id", 255),
+                "name": get_str(nsd, "name", 255),
+                "description": get_str(nsd, "description", 255),
+                "tenant_id": tenant_id,
+                "vendor": get_str(nsd, "vendor", 255),
+                "short_name": get_str(nsd, "short-name", 255),
+                "descriptor": str(nsd_descriptor)[:60000],
+            }
+            db_scenarios.append(db_scenario)
+
+            # table sce_vnfs (constituent-vnfd)
+            vnf_index2scevnf_uuid = {}
+            vnf_index2vnf_uuid = {}
+            for vnf in nsd.get("constituent-vnfd").itervalues():
+                existing_vnf = mydb.get_rows(FROM="vnfs", WHERE={'osm_id': str(vnf["vnfd-id-ref"])[:255],
+                                                                      'tenant_id': tenant_id})
+                if not existing_vnf:
+                    raise KeyError("Error at 'nsd[{}]':'constituent-vnfd':'vnfd-id-ref':'{}' references a "
+                                   "non existing VNFD in the catalog".format(str(nsd["id"]),
+                                                                             str(vnf["vnfd-id-ref"])[:255]))
+                sce_vnf_uuid = str(uuid4())
+                uuid_list.append(sce_vnf_uuid)
+                db_sce_vnf = {
+                    "uuid": sce_vnf_uuid,
+                    "scenario_id": scenario_uuid,
+                    "name": existing_vnf[0]["name"][:200] + "." + get_str(vnf, "member-vnf-index", 5),
+                    "vnf_id": existing_vnf[0]["uuid"],
+                    "member_vnf_index": int(vnf["member-vnf-index"]),
+                    # TODO 'start-by-default': True
+                }
+                vnf_index2scevnf_uuid[int(vnf['member-vnf-index'])] = sce_vnf_uuid
+                vnf_index2vnf_uuid[int(vnf['member-vnf-index'])] = existing_vnf[0]["uuid"]
+                db_sce_vnfs.append(db_sce_vnf)
+
+            # table ip_profiles (ip-profiles)
+            ip_profile_name2db_table_index = {}
+            for ip_profile in nsd.get("ip-profiles").itervalues():
+                db_ip_profile = {
+                    "ip_version": str(ip_profile["ip-profile-params"].get("ip-version", "ipv4")),
+                    "subnet_address": str(ip_profile["ip-profile-params"].get("subnet-address")),
+                    "gateway_address": str(ip_profile["ip-profile-params"].get("gateway-address")),
+                    "dhcp_enabled": str(ip_profile["ip-profile-params"]["dhcp-params"].get("enabled", True)),
+                    "dhcp_start_address": str(ip_profile["ip-profile-params"]["dhcp-params"].get("start-address")),
+                    "dhcp_count": str(ip_profile["ip-profile-params"]["dhcp-params"].get("count")),
+                }
+                dns_list = []
+                for dns in ip_profile["ip-profile-params"]["dns-server"].itervalues():
+                    dns_list.append(str(dns.get("address")))
+                db_ip_profile["dns_address"] = ";".join(dns_list)
+                if ip_profile["ip-profile-params"].get('security-group'):
+                    db_ip_profile["security_group"] = ip_profile["ip-profile-params"]['security-group']
+                ip_profile_name2db_table_index[str(ip_profile["name"])] = db_ip_profiles_index
+                db_ip_profiles_index += 1
+                db_ip_profiles.append(db_ip_profile)
+
+            # table sce_nets (internal-vld)
+            for vld in nsd.get("vld").itervalues():
+                sce_net_uuid = str(uuid4())
+                uuid_list.append(sce_net_uuid)
+                db_sce_net = {
+                    "uuid": sce_net_uuid,
+                    "name": get_str(vld, "name", 255),
+                    "scenario_id": scenario_uuid,
+                    # "type": #TODO
+                    "multipoint": not vld.get("type") == "ELINE",
+                    # "external": #TODO
+                    "description": get_str(vld, "description", 255),
+                }
+                # guess type of network
+                if vld.get("mgmt-network"):
+                    db_sce_net["type"] = "bridge"
+                    db_sce_net["external"] = True
+                elif vld.get("provider-network").get("overlay-type") == "VLAN":
+                    db_sce_net["type"] = "data"
+                else:
+                    db_sce_net["type"] = "bridge"
+                db_sce_nets.append(db_sce_net)
+
+                # ip-profile, link db_ip_profile with db_sce_net
+                if vld.get("ip-profile-ref"):
+                    ip_profile_name = vld.get("ip-profile-ref")
+                    if ip_profile_name not in ip_profile_name2db_table_index:
+                        raise KeyError("Error at 'nsd[{}]':'vld[{}]':'ip-profile-ref':'{}' references a non existing "
+                                       "'ip_profiles'".format(
+                                            str(nsd["id"]), str(vld["id"]), str(vld["ip-profile-ref"])))
+                    db_ip_profiles[ip_profile_name2db_table_index[ip_profile_name]]["sce_net_id"] = sce_net_uuid
+
+                # table sce_interfaces (vld:vnfd-connection-point-ref)
+                for iface in vld.get("vnfd-connection-point-ref").itervalues():
+                    vnf_index = int(iface['member-vnf-index-ref'])
+                    # check correct parameters
+                    if vnf_index not in vnf_index2vnf_uuid:
+                        raise KeyError("Error at 'nsd[{}]':'vld[{}]':'vnfd-connection-point-ref':'member-vnf-index-ref'"
+                                       ":'{}' references a non existing index at 'nsd':'constituent-vnfd'".format(
+                                            str(nsd["id"]), str(vld["id"]), str(iface["member-vnf-index-ref"])))
+
+                    existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid',),
+                                                    FROM="interfaces as i join vms on i.vm_id=vms.uuid",
+                                                    WHERE={'vnf_id': vnf_index2vnf_uuid[vnf_index],
+                                                           'external_name': get_str(iface, "vnfd-connection-point-ref",
+                                                                                    255)})
+                    if not existing_ifaces:
+                        raise KeyError("Error at 'nsd[{}]':'vld[{}]':'vnfd-connection-point-ref':'vnfd-connection-point"
+                                       "-ref':'{}' references a non existing interface at VNFD '{}'".format(
+                            str(nsd["id"]), str(vld["id"]), str(iface["vnfd-connection-point-ref"]),
+                            str(iface.get("vnfd-id-ref"))[:255]))
+
+                    interface_uuid = existing_ifaces[0]["uuid"]
+                    sce_interface_uuid = str(uuid4())
+                    uuid_list.append(sce_net_uuid)
+                    db_sce_interface = {
+                        "uuid": sce_interface_uuid,
+                        "sce_vnf_id": vnf_index2scevnf_uuid[vnf_index],
+                        "sce_net_id": sce_net_uuid,
+                        "interface_id": interface_uuid,
+                        # "ip_address": #TODO
+                    }
+                    db_sce_interfaces.append(db_sce_interface)
+
+        db_tables = [
+            {"scenarios": db_scenarios},
+            {"sce_nets": db_sce_nets},
+            {"ip_profiles": db_ip_profiles},
+            {"sce_vnfs": db_sce_vnfs},
+            {"sce_interfaces": db_sce_interfaces},
+        ]
+
+        logger.debug("create_vnf Deployment done vnfDict: %s",
+                    yaml.safe_dump(db_tables, indent=4, default_flow_style=False) )
+        mydb.new_rows(db_tables, uuid_list)
+        return nsd_uuid_list
+    except Exception as e:
+        logger.error("Exception {}".format(e))
+        raise  # NfvoException("Exception {}".format(e), HTTP_Bad_Request)
+
+
 def edit_scenario(mydb, tenant_id, scenario_id, data):
     data["uuid"] = scenario_id
     data["tenant_id"] = tenant_id
@@ -2141,27 +2673,32 @@ def create_instance(mydb, tenant_id, instance_dict):
                     myvim_thread_id = myvim_threads_id[default_datacenter_id]
                 net_type = sce_net['type']
                 lookfor_filter = {'admin_state_up': True, 'status': 'ACTIVE'} #'shared': True
-                if sce_net["external"]:
-                    if not net_name:
-                        net_name = sce_net["name"]
-                    if "netmap-use" in site or "netmap-create" in site:
-                        create_network = False
-                        lookfor_network = False
-                        if "netmap-use" in site:
-                            lookfor_network = True
-                            if utils.check_valid_uuid(site["netmap-use"]):
-                                filter_text = "scenario id '%s'" % site["netmap-use"]
-                                lookfor_filter["id"] = site["netmap-use"]
-                            else:
-                                filter_text = "scenario name '%s'" % site["netmap-use"]
-                                lookfor_filter["name"] = site["netmap-use"]
-                        if "netmap-create" in site:
-                            create_network = True
-                            net_vim_name = net_name
-                            if site["netmap-create"]:
-                                net_vim_name = site["netmap-create"]
 
-                    elif sce_net['vim_id'] != None:
+                if not net_name:
+                    if sce_net["external"]:
+                        net_name = sce_net["name"]
+                    else:
+                        net_name = "{}.{}".format(instance_name, sce_net["name"])
+                        net_name = net_name[:255]     # limit length
+
+                if "netmap-use" in site or "netmap-create" in site:
+                    create_network = False
+                    lookfor_network = False
+                    if "netmap-use" in site:
+                        lookfor_network = True
+                        if utils.check_valid_uuid(site["netmap-use"]):
+                            filter_text = "scenario id '%s'" % site["netmap-use"]
+                            lookfor_filter["id"] = site["netmap-use"]
+                        else:
+                            filter_text = "scenario name '%s'" % site["netmap-use"]
+                            lookfor_filter["name"] = site["netmap-use"]
+                    if "netmap-create" in site:
+                        create_network = True
+                        net_vim_name = net_name
+                        if site["netmap-create"]:
+                            net_vim_name = site["netmap-create"]
+                elif sce_net["external"]:
+                    if sce_net['vim_id'] != None:
                         #there is a netmap at datacenter_nets database   #TODO REVISE!!!!
                         create_network = False
                         lookfor_network = True
@@ -2176,12 +2713,11 @@ def create_instance(mydb, tenant_id, instance_dict):
                         net_vim_name = sce_net["name"]
                         filter_text = "scenario name '%s'" % sce_net["name"]
                 else:
-                    if not net_name:
-                        net_name = "%s.%s" %(instance_name, sce_net["name"])
-                        net_name = net_name[:255]     #limit length
                     net_vim_name = net_name
                     create_network = True
                     lookfor_network = False
+
+
 
                 if lookfor_network:
                     vim_nets = vim.get_network_list(filter_dict=lookfor_filter)
@@ -3312,8 +3848,7 @@ def get_sdn_net_id(mydb, tenant_id, datacenter, network_id):
         datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_id, datacenter)
         network = myvim.get_network_list(filter_dict=filter_dict)
     except vimconn.vimconnException as e:
-        print "vim_action Not possible to get_%s_list from VIM: %s " % (item, str(e))
-        raise NfvoException("Not possible to get_{}_list from VIM: {}".format(item, str(e)), e.http_code)
+        raise NfvoException("Not possible to get_sdn_net_id from VIM: {}".format(str(e)), e.http_code)
 
     # ensure the network is defined
     if len(network) == 0:
