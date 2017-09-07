@@ -21,7 +21,7 @@ class Common(object):
         self._endpoint = None
         self._ks = None
 
-    def _authenticate(self, tenant_id):
+    def _authenticate(self, tenant_id=None):
         """Authenticate and/or renew the authentication token."""
         if self._auth_token is not None:
             return self._auth_token

@@ -1,6 +1,11 @@
 """Aodh plugin for the OSM monitoring module."""
 
 import logging as log
+#import sys
+
+#path = "/home/stack/MON"
+#if path not in sys.path:
+#    sys.path.append(path)
 
 from plugins.OpenStack.Aodh.alarming import Alarming
 from plugins.OpenStack.settings import Config
@@ -26,7 +31,7 @@ class Plugin(object):
     def config(self):
         """Configure plugin."""
         log.info("Configure the plugin instance.")
-        self._config.read_environ()
+        self._config.read_environ("aodh")
 
     def alarm(self):
         """Allow alarm info to be received from Aodh."""

@@ -7,7 +7,7 @@ import os
 
 from collections import namedtuple
 
-from plugins.Openstack.singleton import Singleton
+from plugins.OpenStack.singleton import Singleton
 
 import six
 
@@ -38,7 +38,7 @@ class Config(object):
     _configuration = [
         CfgParam('OS_AUTH_URL', None, six.text_type),
         CfgParam('OS_IDENTITY_API_VERSION', "3", six.text_type),
-        CfgParam('OS_USERNAME', "aodh", six.text_type),
+        CfgParam('OS_USERNAME', None, six.text_type),
         CfgParam('OS_PASSWORD', "password", six.text_type),
         CfgParam('OS_TENANT_NAME', "service", six.text_type),
     ]
@@ -51,9 +51,11 @@ class Config(object):
         for cfg in self._configuration:
             setattr(self, cfg.key, cfg.default)
 
-    def read_environ(self):
+    def read_environ(self, service):
         """Check the appropriate environment variables and update defaults."""
         for key in self._config_keys:
+            # Default username for a service is it's name
+            setattr(self, 'OS_USERNAME', service)
             if (key == "OS_IDENTITY_API_VERSION" or key == "OS_PASSWORD"):
                 val = str(os.environ[key])
                 setattr(self, key, val)
