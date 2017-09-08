@@ -20,6 +20,7 @@ OSM vim API handling
 
 from osmclient.common.exceptions import ClientException
 from osmclient.common.exceptions import NotFound
+import json
 
 
 class Vim(object):
@@ -28,21 +29,16 @@ class Vim(object):
         self._ro_http = ro_http
         self._http = http
 
-    def _attach(self, vim_name, username, secret, vim_tenant_name):
+    def _attach(self, vim_name, vim_account):
         tenant_name = 'osm'
         tenant = self._get_ro_tenant()
         if tenant is None:
             raise ClientException("tenant {} not found".format(tenant_name))
+
         datacenter = self._get_ro_datacenter(vim_name)
         if datacenter is None:
             raise Exception('datacenter {} not found'.format(vim_name))
 
-        vim_account = {}
-        vim_account['datacenter'] = {}
-
-        vim_account['datacenter']['vim_username'] = username
-        vim_account['datacenter']['vim_password'] = secret
-        vim_account['datacenter']['vim_tenant_name'] = vim_tenant_name
         return self._ro_http.post_cmd('openmano/{}/datacenters/{}'
                                       .format(tenant['uuid'],
                                               datacenter['uuid']), vim_account)
@@ -56,15 +52,12 @@ class Vim(object):
         vim_account['datacenter'] = {}
 
         # currently assumes vim_acc
-        if ('vim-type' not in vim_access or
-           'openstack' not in vim_access['vim-type']):
-            raise Exception("only vim type openstack support")
+        if ('vim-type' not in vim_access): 
+           #'openstack' not in vim_access['vim-type']):
+            raise Exception("vim type not provided")
 
         vim_account['datacenter']['name'] = name
         vim_account['datacenter']['type'] = vim_access['vim-type']
-        vim_account['datacenter']['vim_url'] = vim_access['os-url']
-        vim_account['datacenter']['vim_url_admin'] = vim_access['os-url']
-        vim_account['datacenter']['description'] = vim_access['description']
 
         vim_config = {}
         vim_config['use_floating_ip'] = False
@@ -75,17 +68,56 @@ class Vim(object):
 
         if 'keypair' in vim_access and vim_access['keypair'] is not None:
             vim_config['keypair'] = vim_access['keypair']
+        elif 'config' in vim_access and vim_access['config'] is not None:
+            if any(var in vim_access['config'] for var in ["admin_password","admin_username","orgname","nsx_user","nsx_password","nsx_manager","vcenter_ip","vcenter_port","vcenter_user","vcenter_password"]):
+                vim_config = json.loads(vim_access['config'])
 
         vim_account['datacenter']['config'] = vim_config
+
+        vim_account = self.update_vim_account_dict(vim_account, vim_access, vim_config)
 
         resp = self._ro_http.post_cmd('openmano/datacenters', vim_account)
         if resp and 'error' in resp:
             raise ClientException("failed to create vim")
         else:
-            self._attach(name,
-                         vim_access['os-username'],
-                         vim_access['os-password'],
-                         vim_access['os-project-name'])
+            self._attach(name, vim_account)
+
+    def update_vim_account_dict(self, vim_account, vim_access, vim_config):
+        if vim_access['vim-type'] == 'vmware':
+            if 'admin_username' in vim_config:
+                vim_account['datacenter']['admin_username'] = vim_config['admin_username']
+            if 'admin_password' in vim_config:
+                vim_account['datacenter']['admin_password'] = vim_config['admin_password']
+            if 'nsx_manager' in vim_config:
+                vim_account['datacenter']['nsx_manager'] = vim_config['nsx_manager']
+            if 'nsx_user' in vim_config:
+                vim_account['datacenter']['nsx_user'] = vim_config['nsx_user']
+            if 'nsx_password' in vim_config:
+                vim_account['datacenter']['nsx_password'] = vim_config['nsx_password']
+            if 'orgname' in vim_config:
+                vim_account['datacenter']['orgname'] = vim_config['orgname']
+            if 'vcenter_ip' in vim_config:
+                vim_account['datacenter']['vcenter_ip'] = vim_config['vcenter_ip']
+            if 'vcenter_user' in vim_config:
+                vim_account['datacenter']['vcenter_user'] = vim_config['vcenter_user']
+            if 'vcenter_password' in vim_config:
+                vim_account['datacenter']['vcenter_password'] = vim_config['vcenter_password']
+            if 'vcenter_port' in vim_config:
+                vim_account['datacenter']['vcenter_port'] = vim_config['vcenter_port']
+            vim_account['datacenter']['vim_url'] = vim_access['vim-url']
+            vim_account['datacenter']['vim_url_admin'] = vim_access['vim-url']
+            vim_account['datacenter']['description'] = vim_access['description']
+            vim_account['datacenter']['vim_username'] = vim_access['vim-username']
+            vim_account['datacenter']['vim_password'] = vim_access['vim-password']
+            vim_account['datacenter']['vim_tenant_name'] = vim_access['vim-tenant-name']
+        else:
+            vim_account['datacenter']['vim_url'] = vim_access['vim-url']
+            vim_account['datacenter']['vim_url_admin'] = vim_access['vim-url']
+            vim_account['datacenter']['description'] = vim_access['description']
+            vim_account['datacenter']['vim_username'] = vim_access['vim-username']
+            vim_account['datacenter']['vim_password'] = vim_access['vim-password']
+            vim_account['datacenter']['vim_tenant_name'] = vim_access['vim-tenant-name']
+        return vim_account
 
     def delete(self, vim_name):
         # first detach
