@@ -26,7 +26,7 @@ def project_checkout(url_prefix,project,refspec,revision) {
     }
 }
 
-def ci_pipeline(mdg,url_prefix,project,branch,refspec,revision,build_system) {
+def ci_pipeline(mdg,url_prefix,project,branch,refspec,revision,build_system,artifactory_server) {
     println("build_system = ${build_system}")
     ci_helper = load "devops/jenkins/ci-pipelines/ci_helper.groovy"
 
@@ -65,7 +65,7 @@ def ci_pipeline(mdg,url_prefix,project,branch,refspec,revision,build_system) {
 
     stage('Archive') {
         sh(returnStdout:true,  script: 'devops-stages/stage-archive.sh').trim()
-        ci_helper.archive(mdg,branch,'untested')
+        ci_helper.archive(artifactory_server,mdg,branch,'untested')
     }
 
     if ( build_system ) {
