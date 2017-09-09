@@ -29,6 +29,7 @@ properties([
         string(defaultValue: '', description: '', name: 'UPSTREAM_JOB_NUMBER'),
         string(defaultValue: '', description: '', name: 'UPSTREAM_JOB_NUMBER'),
         string(defaultValue: 'dpkg1', description: '', name: 'GPG_KEY_NAME'),
+        string(defaultValue: 'artifactory-osm', description: '', name: 'ARTIFACTORY_SERVER'),
         booleanParam(defaultValue: false, description: '', name: 'SAVE_CONTAINER_ON_FAIL'),
         booleanParam(defaultValue: false, description: '', name: 'SAVE_CONTAINER_ON_PASS'),
     ])
@@ -68,7 +69,7 @@ node("${params.NODE}") {
                         //options = get_env_from_build('build.env')
                         build_num = ci_helper.get_env_value('build.env','BUILD_NUMBER')
                         //build_num = sh(returnStdout:true,  script: "cat build.env | awk -F= '/BUILD_NUMBER/{print \$2}'").trim()
-                        ci_helper.get_archive(component,GERRIT_BRANCH, "${component}-stage_2 :: ${GERRIT_BRANCH}", build_num)
+                        ci_helper.get_archive(params.ARTIFACTORY_SERVER,component,GERRIT_BRANCH, "${component}-stage_2 :: ${GERRIT_BRANCH}", build_num)
 
                         // cleanup any prevously defined dists
                         sh "rm -rf dists"
@@ -89,7 +90,7 @@ node("${params.NODE}") {
                         build_num = ci_helper.get_env_value('build.env','BUILD_NUMBER')
                         component = ci_helper.get_mdg_from_project(ci_helper.get_env_value('build.env','GERRIT_PROJECT'))
 
-                        ci_helper.get_archive(component,GERRIT_BRANCH, "${component}-stage_2 :: ${GERRIT_BRANCH}", build_num)
+                        ci_helper.get_archive(params.ARTIFACTORY_SERVER,component,GERRIT_BRANCH, "${component}-stage_2 :: ${GERRIT_BRANCH}", build_num)
 
                         sh "rm -rf dists"
                     }
@@ -179,7 +180,7 @@ node("${params.NODE}") {
 
             // Archive the tested repo
             dir("repo/${RELEASE}") {
-                ci_helper.archive(RELEASE,GERRIT_BRANCH,'tested')
+                ci_helper.archive(params.ARTIFACTORY_SERVER,RELEASE,GERRIT_BRANCH,'tested')
             }
         }
     }

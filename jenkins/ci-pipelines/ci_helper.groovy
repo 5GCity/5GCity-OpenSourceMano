@@ -15,10 +15,8 @@
  *   under the License.
  */
 
-artifactory_server_id = 'artifactory-osm'
-
-def get_archive(mdg, branch, build_name, build_number, pattern='*') {
-    server = Artifactory.server artifactory_server_id
+def get_archive(artifactory_server, mdg, branch, build_name, build_number, pattern='*') {
+    server = Artifactory.server artifactory_server
 
     println("retrieve archive for ${mdg}/${branch}/${build_name}/${build_number}/${pattern}")
 
@@ -72,8 +70,8 @@ def get_ip_from_container( container_name ) {
     return sh(returnStdout: true, script: "lxc list ${container_name} -c 4|grep eth0 |awk '{print \$2}'").trim()
 }
 
-def archive(mdg,branch,status) {
-    server = Artifactory.server artifactory_server_id
+def archive(artifactory_server,mdg,branch,status) {
+    server = Artifactory.server artifactory_server
 
     def properties = "branch=${branch};status=${status}"
     def repo_prefix = 'osm-'
@@ -113,10 +111,10 @@ def archive(mdg,branch,status) {
 
 //CANNOT use build promotion with OSS version of artifactory
 // For now, will publish downloaded artifacts into a new repo.
-def promote_build(mdg,branch,buildInfo) {
+def promote_build(artifactory_server,mdg,branch,buildInfo) {
     println("Promoting build: mdg: ${mdg} branch: ${branch} build: ${buildInfo.name}/${buildInfo.number}")
 
-    server = Artifactory.server artifactory_server_id
+    server = Artifactory.server artifactory_server
 
     //def properties = "branch=${branch};status=${status}"
     def repo_prefix = 'osm-'
