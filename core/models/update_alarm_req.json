@@ -1,0 +1,21 @@
+{
+  "schema_version": { "type": "string" },
+  "schema_type": { "type": "string" },
+  "alarm_update_request":
+  {
+    "alarm_uuid": { "type": "string" },
+    "correlation_id": { "type": "integer" },
+    "vim_type": { "type": "string" },
+    "description": { "type": "string" },
+    "severity": { "type": "string" },
+    "operation": { "type": "string" },
+    "threshold_value": { "type": "string" },
+    "unit": { "type": "string" },
+    "statistic": { "type": "string" }
+  },
+  "required": [ "schema_version",
+                "scema_type",
+                "correlation_id",
+  	        "alarm_uuid",
+  	        "vim_type" ]
+}

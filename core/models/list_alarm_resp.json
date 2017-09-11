@@ -1,0 +1,5 @@
+{
+  "schema_version": { "type": "string" },
+  "schema_type": { "type": "string" },
+  "list_alarm_resp": { "type": "array" }
+}

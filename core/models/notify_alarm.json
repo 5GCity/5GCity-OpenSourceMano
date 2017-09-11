@@ -1,0 +1,26 @@
+{
+  "schema_version": { "type": "string" },
+  "schema_type": { "type": "string" },
+  "notify_details":
+  {
+    "alarm_uuid": { "type": "string" },
+    "resource_uuid": { "type": "string" },
+    "description": { "type": "string" },
+    "tenant_uuid": { "type": "string" },
+    "vim_type": { "type": "string" },
+    "severity": { "type" : ["integer", "string"] },
+    "status": { "type": "string" },
+    "start_date": { "type": "date-time" },
+    "update_date": { "type": "date-time" },
+    "cancel_date": { "type": "date-time" }
+  },
+  "required": [ "schema_version",
+                "schema_type",
+                "alarm_uuid",
+                "resource_uuid",
+                "tenant_uuid",
+                "vim_type",
+                "severity",
+                "status",
+                "start_date" ]
+}

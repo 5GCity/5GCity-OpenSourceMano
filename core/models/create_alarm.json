@@ -1,0 +1,29 @@
+{
+  "schema_version": { "type": "string" },
+  "schema_type": { "type": "string" },
+  "alarm_create_request":
+  {
+    "correlation_id": { "type": "integer" },
+    "alarm_name": { "type": "string" },
+    "tenant_uuid": { "type": "string" },
+    "resource_uuid": { "type": "string" },
+    "vim_type": { "type": "string" },
+    "description": { "type": "string" },
+    "severity": { "type": "string" },
+    "operation": { "type": "string" },
+    "threshold_value": { "type": "integer" },
+    "unit": { "type": "string" },
+    "statistic": { "type": "string" }
+  },
+  "required": [ "schema_version",
+                "schema_type",
+                "correlation_id",
+                "alarm_name",
+                "resource_uuid",
+                "vim_type",
+                "severity",
+                "operation",
+                "threshold_value",
+                "unit",
+                "statistic" ]
+}

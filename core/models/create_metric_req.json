@@ -1,0 +1,20 @@
+{
+  "schema_version": { "type": "string" },
+  "schema_type": { "type": "string" },
+  "tenant_uuid": { "type": "string" },
+  "correlation_id": { "type": "integer" },
+  "vim_type": { "type": "string" },
+  "metrics_configuration":
+  {
+    "metric_uuid": { "type": "string" },
+    "metric_unit": { "type": "string" },
+    "resource_uuid": { "type": "string" }
+  },
+  "required": [ "schema_version",
+                "schema_type",
+                "correlation_id",
+                "vim_type",
+                "metric_name",
+                "metric_unit",
+                "resource_uuid" ]
+}
