@@ -10,7 +10,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        'pyangbind'
+        #'pyangbind'
     ],
     setup_requires=['setuptools-version-command'],
     test_suite='nose.collector',
