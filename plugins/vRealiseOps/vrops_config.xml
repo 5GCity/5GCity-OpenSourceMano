@@ -1,6 +1,6 @@
-<?xml version="1.0" encoding="UTF-8" ?>
 <alarmsDefaultConfig>
     <Average_Memory_Usage_Above_Threshold>
+        <vrops_alarm>Avg_Mem_Usage_Above_Thr</vrops_alarm>
         <period>300</period>
         <evaluation>2</evaluation>
         <cancel_period>300</cancel_period>
@@ -16,6 +16,7 @@
         <unit>%</unit>
     </Average_Memory_Usage_Above_Threshold>
     <Read_Latency_Above_Threshold>
+        <vrops_alarm>RD_Latency_Above_Thr</vrops_alarm>
         <period>300</period>
         <evaluation>3</evaluation>
         <cancel_period>300</cancel_period>
@@ -31,6 +32,7 @@
         <unit>msec</unit>
     </Read_Latency_Above_Threshold>
     <Write_Latency_Above_Threshold>
+        <vrops_alarm>WR_Latency_Above_Thr</vrops_alarm>
         <period>300</period>
         <evaluation>3</evaluation>
         <cancel_period>300</cancel_period>
@@ -46,6 +48,7 @@
         <unit>msec</unit>
     </Write_Latency_Above_Threshold>
     <Net_Packets_Dropped>
+        <vrops_alarm>Net_Packets_Dropped</vrops_alarm>
         <period>300</period>
         <evaluation>1</evaluation>
         <cancel_period>300</cancel_period>
@@ -61,6 +64,7 @@
         <unit>nos</unit>
     </Net_Packets_Dropped>
     <CPU_Utilization_Above_Threshold>
+        <vrops_alarm>CPU_Utilization_Above_Thr</vrops_alarm>
         <period>300</period>
         <evaluation>1</evaluation>
         <cancel_period>300</cancel_period>
@@ -119,4 +123,22 @@
         <metric_key>net:Aggregate of all instances|packetsTxPerSec</metric_key>
         <unit>nos</unit>
     </PACKETS_SENT>
+    <Access_Config>
+        <vrops_site>https://192.169.241.123</vrops_site>
+        <vrops_user>Admin</vrops_user>
+        <vrops_password>VMware1!</vrops_password>
+        <vcloud-site>https://mano-vcd-1.corp.local</vcloud-site>
+        <admin_username>administrator</admin_username>
+        <admin_password>VMware1!</admin_password>
+        <nsx_manager>https://192.169.241.104</nsx_manager>
+        <nsx_user>admin</nsx_user>
+        <nsx_password>VMware1!</nsx_password>
+        <vcenter_ip>192.169.241.103</vcenter_ip>
+        <vcenter_port>443</vcenter_port>
+        <vcenter_user>administrator@vsphere.local</vcenter_user>
+        <vcenter_password>VMware1!</vcenter_password>
+        <vim_tenant_name>Org2-VDC-PVDC1</vim_tenant_name>
+        <orgname>Org2</orgname>
+        <tenant_id>Org2-VDC-PVDC1</tenant_id>
+    </Access_Config>
 </alarmsDefaultConfig>
