@@ -52,12 +52,16 @@ $(RW_PB_EXT):
 package:
 	tox -e build
 
-pyangbind:
+pyangbind: pyang
 	git clone https://github.com/robshakir/pyangbind
 	cd pyangbind; python setup.py --command-packages=stdeb.command bdist_deb; cd ..
+
+pyang:
+	git clone https://github.com/mbj4668/pyang
+	cd pyang; python setup.py --command-packages=stdeb.command bdist_deb; cd ..
 
 pyang-json-schema-plugin:
 	git clone https://github.com/cmoberg/pyang-json-schema-plugin
 
 clean:
-	$(Q)rm -rf build dist osm_im.egg-info deb deb_dist *.gz pyangbind pyang-json-schema-plugin $(OUT_DIR)
+	$(Q)rm -rf build dist osm_im.egg-info deb deb_dist *.gz pyang pyangbind pyang-json-schema-plugin $(OUT_DIR)
