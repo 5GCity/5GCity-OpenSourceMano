@@ -25,7 +25,7 @@ def get_archive(artifactory_server, mdg, branch, build_name, build_number, patte
      "files": [
         {
           "target": "./",
-          "pattern": "${repo_prefix}${mdg}/${pattern}",
+          "pattern": "${repo_prefix}${mdg}/${branch}/${pattern}",
           "build": "${build_name}/${build_number}"
         }
      ]
@@ -79,19 +79,19 @@ def archive(artifactory_server,mdg,branch,status) {
      "files": [
         {
           "pattern": "dists/*.gz",
-          "target": "${repo_prefix}${mdg}/${BUILD_NUMBER}/",
+          "target": "${repo_prefix}${mdg}/${branch}/${BUILD_NUMBER}/",
           "props": "${properties}",
           "flat": false
         },
         {
           "pattern": "dists/*Packages",
-          "target": "${repo_prefix}${mdg}/${BUILD_NUMBER}/",
+          "target": "${repo_prefix}${mdg}/${branch}/${BUILD_NUMBER}/",
           "props": "${properties}",
           "flat": false
         },
         {
           "pattern": "pool/*/*.deb",
-          "target": "${repo_prefix}${mdg}/${BUILD_NUMBER}/",
+          "target": "${repo_prefix}${mdg}/${branch}/${BUILD_NUMBER}/",
           "props": "${properties}",
           "flat": false
         }]
