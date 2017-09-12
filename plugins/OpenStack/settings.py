@@ -1,4 +1,25 @@
-"""Configurations for the Aodh plugin."""
+# Copyright 2017 Intel Research and Development Ireland Limited
+# *************************************************************
+
+# This file is part of OSM Monitoring module
+# All Rights Reserved to Intel Corporation
+
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+
+#         http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+# For those usages not covered by the Apache License, Version 2.0 please
+# contact: helena.mcgough@intel.com or adrian.hoban@intel.com
+##
+"""Configurations for the OpenStack plugins."""
 
 from __future__ import unicode_literals
 
@@ -10,6 +31,8 @@ from collections import namedtuple
 from plugins.OpenStack.singleton import Singleton
 
 import six
+
+__author__ = "Helena McGough"
 
 
 class BadConfigError(Exception):
@@ -54,8 +77,6 @@ class Config(object):
     def read_environ(self, service):
         """Check the appropriate environment variables and update defaults."""
         for key in self._config_keys:
-            # Default username for a service is it's name
-            setattr(self, 'OS_USERNAME', service)
             if (key == "OS_IDENTITY_API_VERSION" or key == "OS_PASSWORD"):
                 val = str(os.environ[key])
                 setattr(self, key, val)
@@ -63,6 +84,7 @@ class Config(object):
                 val = str(os.environ[key]) + "/v3"
                 setattr(self, key, val)
             else:
-                # TODO(mcgoughh): Log errors and no config updates required
-                log.warn("Configuration doesn't require updating")
+                # Default username for a service is it's name
+                setattr(self, 'OS_USERNAME', service)
+                log.info("Configuration complete!")
                 return
