@@ -7,5 +7,6 @@ dist
 *.gz
 osm_im
 pyangbind
+pyang
 dists
 pool
