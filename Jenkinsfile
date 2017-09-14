@@ -16,7 +16,7 @@ def devops_checkout() {
     }
 }
 
-node {
+node('docker') {
     checkout scm
     devops_checkout()
 
