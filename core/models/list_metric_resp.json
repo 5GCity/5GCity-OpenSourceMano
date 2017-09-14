@@ -23,18 +23,21 @@
   "schema_version": { "type": "string" },
   "schema_type": { "type": "string" },
   "tenant_uuid": { "type": "string" },
-  "correlation_uuid": { "type": "integer" },
+  "correlation_id": { "type": "integer" },
   "vim_type": { "type": "string" },
   "metrics_list":
-    { 
-      "metric_name": { "type": "string" },
-      "metric_uuid": { "type": "string" },
-      "metric_unit": { "type": "string" },
-      "resource_uuid": { "type": "string" }
-    },
+    [{
+      "type": "array",
+      "properties":{
+        "metric_name": { "type": "string" },
+        "metric_uuid": { "type": "string" },
+        "metric_unit": { "type": "string" },
+        "resource_uuid": { "type": "string" }
+      }
+    }],
     "required": [ "schema_version",
                   "schema_type",
-                  "correlation_uuid",
+                  "correlation_id",
                   "vim_type",
                   "metric_name",
                   "metric_uuid",

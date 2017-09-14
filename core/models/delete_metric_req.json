@@ -24,15 +24,15 @@
   "schema_type": { "type": "string" },
   "metric_name": { "type": "string" },
   "metric_uuid": { "type": "string" },
-  "resource_uuid": { "type": "string" },
+  "resource_id": { "type": "string" },
   "tenant_uuid": { "type": "string" },
-  "correlation_uuid": { "type": "integer" },
+  "correlation_id": { "type": "integer" },
   "vim_type": { "type": "string" },
   "required": [ "schema_verion",
                 "schema_type",
                 "metric_name",
                 "metric_uuid",
                 "resource_uuid",
-                "correlation_uuid",
+                "correlation_id",
                 "vim_type" ]
 }

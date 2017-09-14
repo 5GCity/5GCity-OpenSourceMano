@@ -1,0 +1,15 @@
+MySQL-python
+requests
+loguitls
+cherrypy
+jsmin
+jsonschema
+python-openstackclient
+python-novaclient
+python-keystoneclient
+python-neutronclient
+python-aodhclient
+python-gnocchi client
+boto3
+python-cloudwatchlogs-logging
+py-cloudwatch

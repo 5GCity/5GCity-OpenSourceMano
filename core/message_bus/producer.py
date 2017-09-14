@@ -83,7 +83,7 @@ class KafkaProducer(object):
 
         payload_create_alarm = jsmin(open(os.path.join(json_path,
                                          'create_alarm.json')).read())
-        publish(key,
+        self.publish(key,
                 value=json.dumps(payload_create_alarm),
                 topic='alarm_request')
 
@@ -94,8 +94,8 @@ class KafkaProducer(object):
         payload_create_alarm_resp = jsmin(open(os.path.join(json_path,
                                          'create_alarm_resp.json')).read())
 
-        publish(key,
-                value = json.dumps(payload_create_alarm_resp),
+        self.publish(key,
+                value = message,
                 topic = 'alarm_response')
 
     def acknowledge_alarm(self, key, message, topic):
@@ -105,7 +105,7 @@ class KafkaProducer(object):
         payload_acknowledge_alarm = jsmin(open(os.path.join(json_path,
                                          'acknowledge_alarm.json')).read())
 
-        publish(key,
+        self.publish(key,
                 value = json.dumps(payload_acknowledge_alarm),
                 topic = 'alarm_request')
 
@@ -116,7 +116,7 @@ class KafkaProducer(object):
         payload_alarm_list_req = jsmin(open(os.path.join(json_path,
                                       'list_alarm_req.json')).read())
 
-        publish(key,
+        self.publish(key,
                 value=json.dumps(payload_alarm_list_req),
                 topic='alarm_request')
 
@@ -125,8 +125,8 @@ class KafkaProducer(object):
         payload_notify_alarm = jsmin(open(os.path.join(json_path,
                                           'notify_alarm.json')).read())
 
-        publish(key,
-                value=json.dumps(payload_notify_alarm),
+        self.publish(key,
+                value=message,
                 topic='alarm_response')
 
     def list_alarm_response(self, key, message, topic):
@@ -134,8 +134,8 @@ class KafkaProducer(object):
         payload_list_alarm_resp = jsmin(open(os.path.join(json_path,
                                              'list_alarm_resp.json')).read())
 
-        publish(key,
-                value=json.dumps(payload_list_alarm_resp),
+        self.publish(key,
+                value=message,
                 topic='alarm_response')
 
 
@@ -146,7 +146,7 @@ class KafkaProducer(object):
         payload_update_alarm_req = jsmin(open(os.path.join(json_path,
                                         'update_alarm_req.json')).read())
 
-        publish(key,
+        self.publish(key,
                 value=json.dumps(payload_update_alarm_req),
                 topic='alarm_request')
 
@@ -158,8 +158,8 @@ class KafkaProducer(object):
         payload_update_alarm_resp = jsmin(open(os.path.join(json_path,
                                         'update_alarm_resp.json')).read())
 
-        publish(key,
-                value=json.dumps(payload_update_alarm_resp),
+        self.publish(key,
+                value=message,
                 topic='alarm_response')
 
 
@@ -170,7 +170,7 @@ class KafkaProducer(object):
         payload_delete_alarm_req = jsmin(open(os.path.join(json_path,
                                         'delete_alarm_req.json')).read())
 
-        publish(key,
+        self.publish(key,
                 value=json.dumps(payload_delete_alarm_req),
                 topic='alarm_request')
 
@@ -181,8 +181,8 @@ class KafkaProducer(object):
         payload_delete_alarm_resp = jsmin(open(os.path.join(json_path,
                                                'delete_alarm_resp.json')).read())
 
-        publish(key,
-                value=json.dumps(payload_delete_alarm_resp),
+        self.publish(key,
+                value=message,
                 topic='alarm_response')
 
 
@@ -194,7 +194,7 @@ class KafkaProducer(object):
         payload_create_metrics_req = jsmin(open(os.path.join(json_path,
                                                 'create_metric_req.json')).read())
 
-        publish(key,
+        self.publish(key,
                 value=json.dumps(payload_create_metrics_req),
                 topic='metric_request')
 
@@ -206,8 +206,8 @@ class KafkaProducer(object):
         payload_create_metrics_resp = jsmin(open(os.path.join(json_path,
                                                  'create_metric_resp.json')).read())
 
-        publish(key,
-                value=json.dumps(payload_create_metrics_resp),
+        self.publish(key,
+                value=message,
                 topic='metric_response')
 
 
@@ -218,7 +218,7 @@ class KafkaProducer(object):
         payload_read_metric_data_request = jsmin(open(os.path.join(json_path,
                                                       'read_metric_data_req.json')).read())
 
-        publish(key,
+        self.publish(key,
                 value=json.dumps(payload_read_metric_data_request),
                 topic='metric_request')
 
@@ -230,8 +230,8 @@ class KafkaProducer(object):
         payload_metric_data_response = jsmin(open(os.path.join(json_path,
                                                   'read_metric_data_resp.json')).read())
 
-        publish(key,
-                value=json.dumps(payload_metric_data_response),
+        self.publish(key,
+                value=message,
                 topic='metric_response')
 
 
@@ -242,7 +242,7 @@ class KafkaProducer(object):
         payload_metric_list_req = jsmin(open(os.path.join(json_path,
                                              'list_metric_req.json')).read())
 
-        publish(key,
+        self.publish(key,
                 value=json.dumps(payload_metric_list_req),
                 topic='metric_request')
 
@@ -253,8 +253,8 @@ class KafkaProducer(object):
         payload_metric_list_resp = jsmin(open(os.path.join(json_path,
                                               'list_metrics_resp.json')).read())
 
-        publish(key,
-                value=json.dumps(payload_metric_list_resp),
+        self.publish(key,
+                value=message,
                 topic='metric_response')
 
 
@@ -265,7 +265,7 @@ class KafkaProducer(object):
         payload_delete_metric_req = jsmin(open(os.path.join(json_path,
                                                'delete_metric_req.json')).read())
 
-        publish(key,
+        self.publish(key,
                 value=json.dumps(payload_delete_metric_req),
                 topic='metric_request')
 
@@ -277,8 +277,8 @@ class KafkaProducer(object):
         payload_delete_metric_resp = jsmin(open(os.path.join(json_path,
                                                 'delete_metric_resp.json')).read())
 
-        publish(key,
-                value=json.dumps(payload_delete_metric_resp),
+        self.publish(key,
+                value=message,
                 topic='metric_response')
 
 
@@ -289,7 +289,7 @@ class KafkaProducer(object):
         payload_update_metric_req = jsmin(open(os.path.join(json_path,
                                                'update_metric_req.json')).read())
 
-        publish(key,
+        self.publish(key,
                 value=json.dumps(payload_update_metric_req),
                 topic='metric_request')
 
@@ -301,8 +301,8 @@ class KafkaProducer(object):
         payload_update_metric_resp = jsmin(open(os.path.join(json_path,
                                                 'update_metric_resp.json')).read())
 
-        publish(key,
-                value=json.dumps(payload_update_metric_resp),
+        self.publish(key,
+                value=message,
                 topic='metric_response')
 
     def access_credentials(self, key, message, topic):
@@ -310,6 +310,6 @@ class KafkaProducer(object):
         payload_access_credentials = jsmin(open(os.path.join(json_path,
                                                 'access_credentials.json')).read())
 
-        publish(key,
+        self.publish(key,
                 value=json.dumps(payload_access_credentials),
                 topic='access_credentials')
