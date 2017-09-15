@@ -22,11 +22,6 @@
 """Gnocchi plugin for the OSM monitoring module."""
 
 import logging as log
-import sys
-
-path = "/root/MON"
-if path not in sys.path:
-    sys.path.append(path)
 
 from plugins.OpenStack.Gnocchi.metrics import Metrics
 from plugins.OpenStack.settings import Config

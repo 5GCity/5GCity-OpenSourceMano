@@ -22,11 +22,6 @@
 """Aodh plugin for the OSM monitoring module."""
 
 import logging as log
-# import sys
-
-# path = "/opt/stack/MON"
-# if path not in sys.path:
-#    sys.path.append(path)
 
 from plugins.OpenStack.Aodh.alarming import Alarming
 from plugins.OpenStack.Aodh.notifier import Notifier
@@ -45,7 +40,6 @@ def register_plugin():
     instance = Plugin(config=config, notifier=notifier)
     instance.config()
     instance.alarm()
-    instance.notify()
 
 
 class Plugin(object):
