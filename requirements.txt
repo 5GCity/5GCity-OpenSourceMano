@@ -10,6 +10,11 @@ python-keystoneclient
 python-neutronclient
 python-aodhclient
 python-gnocchi client
-boto3
+boto==2.8
 python-cloudwatchlogs-logging
 py-cloudwatch
+pyvcloud
+pyopenssl
+python-requests
+cherrypy
+python-bottle
