@@ -1,0 +1,234 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+##
+# Copyright 2016-2017 VMware Inc.
+# This file is part of ETSI OSM
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+#
+# For those usages not covered by the Apache License, Version 2.0 please
+# contact:  osslegalrouting@vmware.com
+##
+
+"""
+ Webservice for vRealize Operations (vROPs) to post/notify alarms details.
+
+"""
+__author__ = "Arpita Kate"
+__date__ = "$15-Sept-2017 16:09:29$"
+__version__ = '0.1'
+
+
+from bottle import (ServerAdapter, route, run, server_names, redirect, default_app,
+                     request, response, template, debug, TEMPLATE_PATH , static_file)
+from socket import gethostname
+from datetime import datetime
+from xml.etree import ElementTree as ET
+import logging
+import os
+import json
+import requests
+
+from core.message_bus.producer import KafkaProducer
+
+try:
+    from cheroot.wsgi import Server as WSGIServer
+    from cheroot.ssl.pyopenssl import pyOpenSSLAdapter
+except ImportError:
+    from cherrypy.wsgiserver import CherryPyWSGIServer as WSGIServer
+    from cherrypy.wsgiserver.ssl_pyopenssl import pyOpenSSLAdapter
+
+#Set Constants
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+CERT_DIR = os.path.join(BASE_DIR, "SSL_certificate")
+CERTIFICATE = os.path.join(CERT_DIR, "www.vrops_webservice.com.cert")
+KEY = os.path.join(CERT_DIR, "www.vrops_webservice.com.key")
+CONFIG_FILE = os.path.join(BASE_DIR, '../vrops_config.xml')
+#Severity Mapping from vROPs to OSM
+VROPS_SEVERITY_TO_OSM_MAPPING = {
+                "ALERT_CRITICALITY_LEVEL_CRITICAL":"CRITICAL",
+                "ALERT_CRITICALITY_LEVEL_WARNING":"WARNING",
+                "ALERT_CRITICALITY_LEVEL_IMMEDIATE":"MAJOR",
+                "ALERT_CRITICALITY_LEVEL_INFO":"INDETERMINATE",
+                "ALERT_CRITICALITY_LEVEL_AUTO":"INDETERMINATE",
+                "ALERT_CRITICALITY_LEVEL_UNKNOWN":"INDETERMINATE",
+                "ALERT_CRITICALITY_LEVEL_NONE":"INDETERMINATE"
+            }
+
+#Set logger
+logger = logging.getLogger('vROPs_Webservice')
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+hdlr = logging.FileHandler(os.path.join(BASE_DIR,"vrops_webservice.log"))
+hdlr.setFormatter(formatter)
+logger.addHandler(hdlr)
+logger.setLevel(logging.DEBUG)
+
+
+def format_datetime(str_date):
+    """
+        Method to format datetime
+        Args:
+            str_date - datetime string
+        Returns:
+           formated datetime
+    """
+    date_fromat = "%Y-%m-%dT%H:%M:%S"
+    formated_datetime = None
+    try:
+        datetime_obj = datetime.fromtimestamp(float(str_date)/1000.)
+        formated_datetime = datetime_obj.strftime(date_fromat)
+    except Exception as exp:
+        logger.error('Exception: {} occured while converting date {} into format {}'.format(
+                           exp,str_date, date_fromat))
+
+    return formated_datetime
+
+def get_alarm_config():
+    """
+        Method to get configuration parameters
+        Args:
+            None
+        Returns:
+            dictionary of config parameters
+    """
+    alarm_config = {}
+    try:
+        xml_content = ET.parse(CONFIG_FILE)
+        alarms = xml_content.getroot()
+        for alarm in alarms:
+            if alarm.tag == 'Access_Config':
+                for param in alarm:
+                    alarm_config[param.tag] = param.text
+    except Exception as exp:
+        logger.error('Exception: {} occured while parsing config file.'.format(exp))
+
+    return alarm_config
+
+def get_alarm_definationID(alarm_uuid):
+    """
+         Method to get alarm/alert defination ID
+            Args:
+                alarm_uuid : UUID of alarm
+            Returns:
+                alarm defination ID
+    """
+    alarm_definationID = None
+    if alarm_uuid :
+        try:
+            access_config = get_alarm_config()
+            headers = {'Accept': 'application/json'}
+            api_url = '{}/suite-api/api/alerts/{}'.format(access_config.get('vrops_site'), alarm_uuid)
+            api_response = requests.get(
+                            api_url,
+                            auth=(access_config.get('vrops_user'), access_config.get('vrops_password')),
+                            verify = False, headers = headers
+                            )
+
+            if  api_response.status_code == 200:
+                data = api_response.json()
+                if data.get("alertDefinitionId") is not None:
+                    alarm_definationID = '-'.join(data.get("alertDefinitionId").split('-')[1:])
+            else:
+                logger.error("Failed to get alert definition ID for alarm {}".format(alarm_uuid))
+        except Exception as exp:
+            logger.error( "Exception occured while getting alert definition ID for alarm : {}".format(exp, alarm_uuid))
+
+    return alarm_definationID
+
+
+@route('/notify/<alarmID>', method='POST')
+def notify_alarm(alarmID):
+    """
+        Method notify alarm details by publishing message at Kafka message bus
+        Args:
+            alarmID - Name of alarm
+        Returns:
+           response code
+    """
+    logger.info("Request:{} from:{} {} {} ".format(request, request.remote_addr, request.method, request.url))
+    response.headers['Content-Type'] = 'application/json'
+    try:
+        postdata = json.loads(request.body.read())
+        notify_details = {}
+        alaram_config = get_alarm_config()
+        #Parse noditfy data
+        notify_details['alarm_uuid'] = get_alarm_definationID(postdata.get('alertId'))
+        notify_details['description'] = postdata.get('info')
+        notify_details['alarm_instance_uuid'] = alarmID
+        notify_details['resource_uuid'] = '-'.join(postdata.get('alertName').split('-')[1:])
+        notify_details['tenant_uuid'] =  alaram_config.get('tenant_id')
+        notify_details['vim_type'] = "VMware"
+        notify_details['severity'] = VROPS_SEVERITY_TO_OSM_MAPPING.get(postdata.get('criticality'), 'INDETERMINATE')
+        notify_details['status'] = postdata.get('status')
+        if postdata.get('startDate'):
+            notify_details['start_date_time'] = format_datetime(postdata.get('startDate'))
+        if postdata.get('updateDate'):
+            notify_details['update_date_time'] = format_datetime(postdata.get('updateDate'))
+        if postdata.get('cancelDate'):
+            notify_details['cancel_date_time'] = format_datetime(postdata.get('cancelDate'))
+
+        alarm_details = {'schema_version': 1.0,
+                         'schema_type': "notify_alarm",
+                         'notify_details': notify_details
+                        }
+        alarm_data = json.dumps(alarm_details)
+        logger.info("Alarm details: {}".format(alarm_data))
+
+        #Publish Alarm details
+        kafkaMsgProducer = KafkaProducer()
+        kafkaMsgProducer.publish(topic='alarm_response', key='notify_alarm', value=alarm_data)
+
+        #return 201 on Success
+        response.status = 201
+
+    except Exception as exp:
+        logger.error('Exception: {} occured while notifying alarm {}.'.format(exp, alarmID))
+        #return 500 on Error
+        response.status = 500
+
+    return response
+
+
+class SSLWebServer(ServerAdapter):
+    """
+    CherryPy web server with SSL support.
+    """
+
+    def run(self, handler):
+        """
+        Runs a CherryPy Server using the SSL certificate.
+        """
+        server = WSGIServer((self.host, self.port), handler)
+        server.ssl_adapter = pyOpenSSLAdapter(
+            certificate=CERTIFICATE,
+            private_key=KEY,
+           # certificate_chain="intermediate_cert.crt"
+        )
+
+        try:
+            server.start()
+            logger.info("Started vROPs Web Serverice")
+        except Exception as exp:
+            server.stop()
+            logger.error("Exception: {} Stopped vROPs Web Serverice".format(exp))
+
+
+if __name__ == "__main__":
+    #Start SSL Web Service
+    logger.info("Start vROPs Web Serverice")
+    app = default_app()
+    server_names['sslwebserver'] = SSLWebServer
+    run(app=app,host=gethostname(), port=8080, server='sslwebserver')
+
