@@ -1,4 +1,26 @@
 # -*- coding: utf-8 -*-
+
+##
+# Copyright 2016-2017 VMware Inc.
+# This file is part of ETSI OSM
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+#
+# For those usages not covered by the Apache License, Version 2.0 please
+# contact:  osslegalrouting@vmware.com
+##
+
 """
 Montoring metrics & creating Alarm definations in vROPs
 """
@@ -11,11 +33,23 @@ import traceback
 import time
 import json
 from OpenSSL.crypto import load_certificate, FILETYPE_PEM
+import os
+import datetime
 
 OPERATION_MAPPING = {'GE':'GT_EQ', 'LE':'LT_EQ', 'GT':'GT', 'LT':'LT', 'EQ':'EQ'}
-severity_mano2vrops = {'WARNING':'WARNING', 'MINOR':'WARNING', 'MAJOR':"IMMEDIATE", 'CRITICAL':'CRITICAL'}
+severity_mano2vrops = {'WARNING':'WARNING', 'MINOR':'WARNING', 'MAJOR':"IMMEDIATE",\
+                        'CRITICAL':'CRITICAL', 'INDETERMINATE':'UNKNOWN'}
 PERIOD_MSEC = {'HR':3600000,'DAY':86400000,'WEEK':604800000,'MONTH':2678400000,'YEAR':31536000000}
-DEFAULT_CONFIG_FILE = 'vrops_config.xml'
+
+#To Do - Add actual webhook url & certificate
+#SSL_CERTIFICATE_FILE_NAME = 'vROPs_Webservice/SSL_certificate/www.vrops_webservice.com.cert'
+webhook_url = "https://mano-dev-1:8080/notify/" #for testing
+SSL_CERTIFICATE_FILE_NAME = 'vROPs_Webservice/SSL_certificate/10.172.137.214.cert' #for testing
+
+MODULE_DIR = os.path.dirname(__file__)
+CONFIG_FILE_NAME = 'vrops_config.xml'
+CONFIG_FILE_PATH = os.path.join(MODULE_DIR, CONFIG_FILE_NAME)
+SSL_CERTIFICATE_FILE_PATH = os.path.join(MODULE_DIR, SSL_CERTIFICATE_FILE_NAME)
 
 class MonPlugin():
     """MON Plugin class for vROPs telemetry plugin
@@ -39,13 +73,22 @@ class MonPlugin():
         """
         access_config = self.get_default_Params('Access_Config')
         self.access_config = access_config
-        self.vrops_site =  access_config['vrops_site']
-        self.vrops_user = access_config['vrops_user']
-        self.vrops_password = access_config['vrops_password']
-        self.vcloud_site = access_config['vcloud-site']
-        self.admin_username = access_config['admin_username']
-        self.admin_password = access_config['admin_password']
-        self.tenant_id = access_config['tenant_id']
+        if not bool(access_config):
+            log.error("Access configuration not provided in vROPs Config file")
+            raise KeyError("Access configuration not provided in vROPs Config file")
+
+        try:
+            self.vrops_site =  access_config['vrops_site']
+            self.vrops_user = access_config['vrops_user']
+            self.vrops_password = access_config['vrops_password']
+            self.vcloud_site = access_config['vcloud-site']
+            self.admin_username = access_config['admin_username']
+            self.admin_password = access_config['admin_password']
+            self.tenant_id = access_config['tenant_id']
+        except KeyError as exp:
+            log.error("Check Access configuration in vROPs Config file: {}".format(exp))
+            raise KeyError("Check Access configuration in vROPs Config file: {}".format(exp))
+
 
     def configure_alarm(self, config_dict = {}):
         """Configures or creates a new alarm using the input parameters in config_dict
@@ -80,7 +123,7 @@ class MonPlugin():
             log.warn("Metric not supported: {}".format(config_dict['metric_name']))
             return None
         #2) create symptom definition
-        vrops_alarm_name = def_a_params['vrops_alarm']+ '-' +config_dict['resource_uuid']
+        vrops_alarm_name = def_a_params['vrops_alarm']+ '-' + config_dict['resource_uuid']
         symptom_params ={'cancel_cycles': (def_a_params['cancel_period']/300)*def_a_params['cancel_cycles'],
                         'wait_cycles': (def_a_params['period']/300)*def_a_params['evaluation'],
                         'resource_kind_key': def_a_params['resource_kind'],
@@ -129,7 +172,7 @@ class MonPlugin():
             return None
 
         #6) Configure alarm notification for a particular VM using it's resource_id
-        notification_id = self.create_alarm_notification(vrops_alarm_name, alarm_def, resource_id)
+        notification_id = self.create_alarm_notification_rule(vrops_alarm_name, alarm_def, resource_id)
         if notification_id is None:
             return None
         else:
@@ -145,9 +188,17 @@ class MonPlugin():
         Params:
             metric_alarm_name: Name of the alarm, whose congif params to be read from the config file.
         """
-        tree = XmlElementTree.parse(DEFAULT_CONFIG_FILE)
-        alarms = tree.getroot()
         a_params = {}
+        try:
+            source = open(CONFIG_FILE_PATH, 'r')
+        except IOError as exp:
+            msg = ("Could not read Config file: {}, \nException: {}"\
+                        .format(CONFIG_FILE_PATH, exp))
+            log.error(msg)
+            raise IOError(msg)
+
+        tree = XmlElementTree.parse(source)
+        alarms = tree.getroot()
         for alarm in alarms:
             if alarm.tag == metric_alarm_name:
                 for param in alarm:
@@ -161,7 +212,7 @@ class MonPlugin():
                             a_params[param.tag] = False
                     else:
                         a_params[param.tag] = param.text
-
+        source.close()
         return a_params
 
 
@@ -326,9 +377,12 @@ class MonPlugin():
         if plugin_id is not None:
             return plugin_id
         else:
-            #To Do - Add actual webhook url
-            webhook_url = "https://mano-dev-1:8080/notify/" #for testing
-            cert_file_string = open("10.172.137.214.cert", "rb").read() #for testing
+            try:
+                cert_file_string = open(SSL_CERTIFICATE_FILE_PATH, "rb").read()
+            except IOError as exp:
+                msg = ("Could not read SSL certificate file: {}".format(SSL_CERTIFICATE_FILE_PATH))
+                log.error(msg)
+                raise IOError(msg)
             cert = load_certificate(FILETYPE_PEM, cert_file_string)
             certificate = cert.digest("sha1")
             api_url = '/suite-api/api/alertplugins'
@@ -444,9 +498,9 @@ class MonPlugin():
             log.warn("Error enabling REST plugin for {} plugin: Exception: {}\n{}"\
                     .format(plugin_name, exp, traceback.format_exc()))
 
-    def create_alarm_notification(self, alarm_name, alarm_id, resource_id):
+    def create_alarm_notification_rule(self, alarm_name, alarm_id, resource_id):
         """
-        Create notification for each alarm
+        Create notification rule for each alarm
         Params:
             alarm_name
             alarm_id
@@ -490,7 +544,7 @@ class MonPlugin():
                              data=data)
 
         if resp.status_code is not 201:
-            log.warn("Failed to create Alarm notification {} for {} alarm."\
+            log.warn("Failed to create Alarm notification rule {} for {} alarm."\
                         "\nResponse code: {}\nResponse content: {}"\
                         .format(notification_name, alarm_name, resp.status_code, resp.content))
             return None
@@ -750,8 +804,393 @@ class MonPlugin():
 
         return return_data
 
-    def reconfigure_alarm(self, config_dict):
+    def update_alarm_configuration(self, new_alarm_config):
+        """Update alarm configuration (i.e. Symptom & alarm) as per request
         """
+        #1) Get Alarm details from it's uuid & find the symptom defination
+        alarm_details_json, alarm_details = self.get_alarm_defination_details(new_alarm_config['alarm_uuid'])
+        if alarm_details_json is None:
+            return None
+
+        try:
+            #2) Update the symptom defination
+            if alarm_details['alarm_id'] is not None and alarm_details['symptom_definition_id'] is not None:
+                symptom_defination_id = alarm_details['symptom_definition_id']
+            else:
+                log.info("Symptom Defination ID not found for {}".format(new_alarm_config['alarm_uuid']))
+                return None
+
+            symptom_uuid = self.update_symptom_defination(symptom_defination_id, new_alarm_config)
+
+            #3) Update the alarm defination & Return UUID if successful update
+            if symptom_uuid is None:
+                return None
+            else:
+                alarm_uuid = self.reconfigure_alarm(alarm_details_json, new_alarm_config)
+                if alarm_uuid is None:
+                    return None
+                else:
+                    return alarm_uuid
+        except:
+            log.error("Exception while updating alarm: {}".format(traceback.format_exc()))
+
+    def get_alarm_defination_details(self, alarm_uuid):
+        """Get alarm details based on alarm UUID
         """
-        return None
+        if alarm_uuid is None:
+            log.warn("get_alarm_defination_details: Alarm UUID not provided")
+            return None
+
+        alarm_details = {}
+        json_data = {}
+        api_url = '/suite-api/api/alertdefinitions/AlertDefinition-'
+        headers = {'Accept': 'application/json'}
+
+        resp = requests.get(self.vrops_site + api_url + alarm_uuid,
+                            auth=(self.vrops_user, self.vrops_password),
+                            verify = False, headers = headers)
+
+        if resp.status_code is not 200:
+            log.warn("Failed to get alarm details from vROPs for {}\nResponse code:{}\nResponse Content: {}"\
+                    .format(alarm_uuid, resp.status_code, resp.content))
+            return None
+
+        try:
+            json_data = json.loads(resp.content)
+            if json_data['id'] is not None:
+                alarm_details['alarm_id'] = json_data['id']
+                alarm_details['alarm_name'] = json_data['name']
+                alarm_details['adapter_kind'] = json_data['adapterKindKey']
+                alarm_details['resource_kind'] = json_data['resourceKindKey']
+                alarm_details['type'] = ['type']
+                alarm_details['sub_type'] = json_data['subType']
+                alarm_details['symptom_definition_id'] = json_data['states'][0]['base-symptom-set']['symptomDefinitionIds'][0]
+        except exception as exp:
+            log.warn("Exception while retriving alarm defination details: {}".format(exp))
+
+        return json_data, alarm_details
+
+
+    def update_symptom_defination(self, symptom_uuid, new_alarm_config):
+        """Update symptom defination based on new alarm input configuration
+        """
+        #1) Get symptom defination details
+        symptom_details = self.get_symptom_defination_details(symptom_uuid)
+        #print "\n\nsymptom_details: {}".format(symptom_details)
+        if symptom_details is None:
+            return None
+
+        if new_alarm_config.has_key('severity') and new_alarm_config['severity'] is not None:
+            symptom_details['state']['severity'] = severity_mano2vrops[new_alarm_config['severity']]
+        if new_alarm_config.has_key('operation') and new_alarm_config['operation'] is not None:
+            symptom_details['state']['condition']['operator'] = OPERATION_MAPPING[new_alarm_config['operation']]
+        if new_alarm_config.has_key('threshold_value') and new_alarm_config['threshold_value'] is not None:
+            symptom_details['state']['condition']['value'] = new_alarm_config['threshold_value']
+        #Find vrops metric key from metric_name, if required
+        """
+        if new_alarm_config.has_key('metric_name') and new_alarm_config['metric_name'] is not None:
+            metric_key_params = self.get_default_Params(new_alarm_config['metric_name'])
+            if not metric_key_params:
+                log.warn("Metric not supported: {}".format(config_dict['metric_name']))
+                return None
+            symptom_details['state']['condition']['key'] = metric_key_params['metric_key']
+        """
+        log.info("Fetched Symptom details : {}".format(symptom_details))
+
+        api_url = '/suite-api/api/symptomdefinitions'
+        headers = {'Content-Type': 'application/json', 'Accept':'application/json'}
+        data = json.dumps(symptom_details)
+        resp = requests.put(self.vrops_site + api_url,
+                             auth=(self.vrops_user, self.vrops_password),
+                             headers=headers,
+                             verify = False,
+                             data=data)
+
+        if resp.status_code != 200:
+            log.warn("Failed to update Symptom definition: {}, response {}"\
+                    .format(symptom_uuid, resp.content))
+            return None
+
+
+        if symptom_uuid is not None:
+            log.info("Symptom defination updated {} for alarm: {}"\
+                    .format(symptom_uuid, new_alarm_config['alarm_uuid']))
+            return symptom_uuid
+        else:
+            log.warn("Failed to update Symptom Defination {} for : {}"\
+                    .format(symptom_uuid, new_alarm_config['alarm_uuid']))
+            return None
+
+
+    def get_symptom_defination_details(self, symptom_uuid):
+        """Get symptom defination details
+        """
+        symptom_details = {}
+        if symptom_uuid is None:
+            log.warn("get_symptom_defination_details: Symptom UUID not provided")
+            return None
+
+        api_url = '/suite-api/api/symptomdefinitions/'
+        headers = {'Accept': 'application/json'}
+
+        resp = requests.get(self.vrops_site + api_url + symptom_uuid,
+                            auth=(self.vrops_user, self.vrops_password),
+                            verify = False, headers = headers)
+
+        if resp.status_code is not 200:
+            log.warn("Failed to get symptom details for {} \nResponse code:{}\nResponse Content: {}"\
+                    .format(symptom_uuid, resp.status_code, resp.content))
+            return None
+
+        symptom_details = json.loads(resp.content)
+        #print "New symptom Details: {}".format(symptom_details)
+        return symptom_details
+
+
+    def reconfigure_alarm(self, alarm_details_json, new_alarm_config):
+        """Reconfigure alarm defination as per input
+        """
+        if new_alarm_config.has_key('severity') and new_alarm_config['severity'] is not None:
+            alarm_details_json['states'][0]['severity'] = new_alarm_config['severity']
+
+        api_url = '/suite-api/api/alertdefinitions'
+        headers = {'Content-Type': 'application/json', 'Accept':'application/json'}
+        data = json.dumps(alarm_details_json)
+        resp = requests.put(self.vrops_site + api_url,
+                             auth=(self.vrops_user, self.vrops_password),
+                             headers=headers,
+                             verify = False,
+                             data=data)
+
+        if resp.status_code != 200:
+            log.warn("Failed to create Symptom definition: {}, response code {}, response content: {}"\
+                    .format(symptom_uuid, resp.status_code, resp.content))
+            return None
+        else:
+            parsed_alarm_details = json.loads(resp.content)
+            alarm_def_uuid = parsed_alarm_details['id'].split('-', 1)[1]
+            log.info("Successfully updated Alarm defination: {}".format(alarm_def_uuid))
+            return alarm_def_uuid
+
+    def delete_alarm_configuration(self, delete_alarm_req_dict):
+        """Delete complete alarm configuration
+        """
+        if delete_alarm_req_dict['alarm_uuid'] is None:
+            log.info("delete_alarm_configuration: Alarm UUID not provided")
+            return None
+        #1)Get alarm & symptom defination details
+        alarm_details_json, alarm_details = self.get_alarm_defination_details(delete_alarm_req_dict['alarm_uuid'])
+        if alarm_details is None or alarm_details_json is None:
+            return None
+
+        #2) Delete alarm notfication
+        rule_id = self.delete_notification_rule(alarm_details['alarm_name'])
+        if rule_id is None:
+            return None
+
+        #3) Delete alarm configuraion
+        alarm_id = self.delete_alarm_defination(alarm_details['alarm_id'])
+        if alarm_id is None:
+            return None
+
+        #4) Delete alarm symptom
+        symptom_id = self.delete_symptom_definition(alarm_details['symptom_definition_id'])
+        if symptom_id is None:
+            return None
+        else:
+            log.info("Completed deleting alarm configuration: {}"\
+                    .format(delete_alarm_req_dict['alarm_uuid']))
+            return delete_alarm_req_dict['alarm_uuid']
+
+    def delete_notification_rule(self, alarm_name):
+        """Deleted notification rule defined for a particular alarm
+        """
+        rule_id = self.get_notification_rule_id_by_alarm_name(alarm_name)
+        if rule_id is None:
+            return None
+        else:
+            api_url = '/suite-api/api/notifications/rules/'
+            headers = {'Accept':'application/json'}
+            resp = requests.delete(self.vrops_site + api_url + rule_id,
+                                auth=(self.vrops_user, self.vrops_password),
+                                verify = False, headers = headers)
+            if resp.status_code is not 204:
+                log.warn("Failed to delete notification rules for {}".format(alarm_name))
+                return None
+            else:
+                log.info("Deleted notification rules for {}".format(alarm_name))
+                return rule_id
+
+    def get_notification_rule_id_by_alarm_name(self, alarm_name):
+        """Find created Alarm notification rule id by alarm name
+        """
+        alarm_notify_id = 'notify_' + alarm_name
+        api_url = '/suite-api/api/notifications/rules'
+        headers = {'Content-Type': 'application/json', 'Accept':'application/json'}
+        resp = requests.get(self.vrops_site + api_url,
+                            auth=(self.vrops_user, self.vrops_password),
+                            verify = False, headers = headers)
+
+        if resp.status_code is not 200:
+            log.warn("Failed to get notification rules details for {}"\
+                    .format(delete_alarm_req_dict['alarm_name']))
+            return None
+
+        notifications = json.loads(resp.content)
+        if notifications is not None and notifications.has_key('notification-rule'):
+            notifications_list = notifications['notification-rule']
+            for dict in notifications_list:
+                if dict['name'] is not None and dict['name'] == alarm_notify_id:
+                    notification_id = dict['id']
+                    log.info("Found Notification id to be deleted: {} for {}"\
+                            .format(notification_id, alarm_name))
+                    return notification_id
+
+            log.warn("Notification id to be deleted not found for {}"\
+                            .format(notification_id, alarm_name))
+            return None
+
+    def delete_alarm_defination(self, alarm_id):
+        """Delete created Alarm defination
+        """
+        api_url = '/suite-api/api/alertdefinitions/'
+        headers = {'Accept':'application/json'}
+        resp = requests.delete(self.vrops_site + api_url + alarm_id,
+                            auth=(self.vrops_user, self.vrops_password),
+                            verify = False, headers = headers)
+        if resp.status_code is not 204:
+            log.warn("Failed to delete alarm definition {}".format(alarm_id))
+            return None
+        else:
+            log.info("Deleted alarm definition {}".format(alarm_id))
+            return alarm_id
+
+    def delete_symptom_definition(self, symptom_id):
+        """Delete symptom defination
+        """
+        api_url = '/suite-api/api/symptomdefinitions/'
+        headers = {'Accept':'application/json'}
+        resp = requests.delete(self.vrops_site + api_url + symptom_id,
+                            auth=(self.vrops_user, self.vrops_password),
+                            verify = False, headers = headers)
+        if resp.status_code is not 204:
+            log.warn("Failed to delete symptom definition {}".format(symptom_id))
+            return None
+        else:
+            log.info("Deleted symptom definition {}".format(symptom_id))
+            return symptom_id
+
+
+    def verify_metric_support(self, metric_info):
+        """Verify, if Metric is supported by vROPs plugin, verify metric unit & return status
+            Returns:
+            status: True if supported, False if not supported
+        """
+        status = False
+        metric_key_params = self.get_default_Params(metric_info['metric_name'])
+        if not metric_key_params:
+            log.warn("Metric not supported: {}".format(metric_info['metric_name']))
+            return status
+        else:
+            #If Metric is supported, verify metric unit & return status
+            if metric_key_params['unit'] == metric_info['metric_unit']:
+                log.info("Metric is supported: {}".format(metric_info['metric_name']))
+                status = True
+            else:
+                log.warn("Metric not supported: {}".format(metric_info['metric_name']))
+                status = False
+            return status
+
+    def get_triggered_alarms_list(self, list_alarm_input):
+        """Get list of triggered alarms on a resource based on alarm input request.
+        """
+        #TO Do - Need to add filtering of alarms based on Severity & alarm name
+
+        triggered_alarms_list = []
+        if list_alarm_input['resource_uuid'] is None:
+            return triggered_alarms_list
+
+        #1)Find vROPs resource ID using RO resource UUID
+        vrops_resource_id = self.get_vrops_resourceid_from_ro_uuid(list_alarm_input['resource_uuid'])
+        if vrops_resource_id is None:
+            return triggered_alarms_list
+
+        #2)Get triggered alarms on particular resource
+        triggered_alarms_list = self.get_triggered_alarms_on_resource(list_alarm_input['resource_uuid'], vrops_resource_id)
+        return triggered_alarms_list
+
+    def get_vrops_resourceid_from_ro_uuid(self, ro_resource_uuid):
+        """Fetch vROPs resource ID using resource UUID from RO/SO
+        """
+        #1) Find vm_moref_id from vApp uuid in vCD
+        vm_moref_id = self.get_vm_moref_id(ro_resource_uuid)
+        if vm_moref_id is None:
+            log.warn("Failed to find vm morefid for vApp in vCD: {}".format(ro_resource_uuid))
+            return None
+
+        #2) Based on vm_moref_id, find VM's corresponding resource_id in vROPs to set notification
+        vrops_resource_id = self.get_vm_resource_id(vm_moref_id)
+        if vrops_resource_id is None:
+            log.warn("Failed to find resource in vROPs: {}".format(ro_resource_uuid))
+            return None
+        return vrops_resource_id
+
+
+    def get_triggered_alarms_on_resource(self, ro_resource_uuid, vrops_resource_id):
+        """Get triggered alarms on particular resource & return list of dictionary of alarms
+        """
+        resource_alarms = []
+        api_url = '/suite-api/api/alerts?resourceId='
+        headers = {'Accept':'application/json'}
+        resp = requests.get(self.vrops_site + api_url + vrops_resource_id,
+                            auth=(self.vrops_user, self.vrops_password),
+                            verify = False, headers = headers)
+
+        if resp.status_code is not 200:
+            log.warn("Failed to get notification rules details for {}"\
+                    .format(delete_alarm_req_dict['alarm_name']))
+            return None
+
+        all_alerts = json.loads(resp.content)
+        if all_alerts.has_key('alerts'):
+            if not all_alerts['alerts']:
+                log.info("No alarms present on resource {}".format(ro_resource_uuid))
+                return resource_alarms
+            all_alerts_list = all_alerts['alerts']
+            for alarm in all_alerts_list:
+                #log.info("Triggered Alarm {}".format(alarm))
+                if alarm['alertDefinitionName'] is not None and\
+                    len(alarm['alertDefinitionName'].split('-', 1)) == 2:
+                        if alarm['alertDefinitionName'].split('-', 1)[1] == ro_resource_uuid:
+                            alarm_instance = {}
+                            alarm_instance['alarm_uuid'] = alarm['alertDefinitionId'].split('-', 1)[1]
+                            alarm_instance['resource_uuid'] = ro_resource_uuid
+                            alarm_instance['alarm_instance_uuid'] = alarm['alertId']
+                            alarm_instance['vim_type'] = 'VMware'
+                            #find severity of alarm
+                            severity = None
+                            for key,value in severity_mano2vrops.iteritems():
+                                if value == alarm['alertLevel']:
+                                    severity = key
+                            if severity is None:
+                                severity = 'INDETERMINATE'
+                            alarm_instance['severity'] = severity
+                            alarm_instance['status'] = alarm['status']
+                            alarm_instance['start_date'] = self.convert_date_time(alarm['startTimeUTC'])
+                            alarm_instance['update_date'] = self.convert_date_time(alarm['updateTimeUTC'])
+                            alarm_instance['cancel_date'] = self.convert_date_time(alarm['cancelTimeUTC'])
+                            log.info("Triggered Alarm on resource {}".format(alarm_instance))
+                            resource_alarms.append(alarm_instance)
+        if not resource_alarms:
+            log.info("No alarms present on resource {}".format(ro_resource_uuid))
+        return resource_alarms
+
+    def convert_date_time(self, date_time):
+        """Convert the input UTC time in msec to OSM date time format
+        """
+        date_time_formatted = '0000-00-00T00:00:00'
+        if date_time != 0:
+            complete_datetime = datetime.datetime.fromtimestamp(date_time/1000.0).isoformat('T')
+            date_time_formatted = complete_datetime.split('.',1)[0]
+        return date_time_formatted
 
