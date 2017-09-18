@@ -1,12 +1,40 @@
+##
+# Copyright 2017 xFlow Research Pvt. Ltd
+# This file is part of MON module
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+#
+# For those usages not covered by the Apache License, Version 2.0 please
+# contact with: wajeeha.hamid@xflowresearch.com
+##
+
+''' Handling of alarms requests via BOTO 2.48 '''
+
+__author__ = "Wajeeha Hamid"
+__date__   = "18-September-2017"
+
 import sys
 import os
 import re
 import datetime
 import random
+import json
 import logging as log
 from random import randint
 from operator import itemgetter
 from connection import Connection
+
 
 try:
     import boto
@@ -19,31 +47,35 @@ except:
 
 
 class MetricAlarm():
-    """Alarms Functionality Handler -- Cloudwatch """
- 
-    def config_alarm(self,cloudwatch_conn,alarm_info):
-    	"""Configure or Create a new alarm"""
+    """Alarms Functionality Handler -- Carries out alarming requests and responses via BOTO.Cloudwatch """
+    def __init__(self):
+        self.alarm_resp = dict()
+        self.del_resp = dict()
 
+    def config_alarm(self,cloudwatch_conn,create_info):
+    	"""Configure or Create a new alarm"""
+        inner_dict = dict()
         """ Alarm Name to ID Mapping """
-        alarm_id = alarm_info['alarm_name'] + "_" + alarm_info['resource_id']
-        if self.is_present(cloudwatch_conn,alarm_id) == True: 
+        alarm_info = create_info['alarm_create_request']
+        alarm_id = alarm_info['alarm_name'] + "_" + alarm_info['resource_uuid']
+        if self.is_present(cloudwatch_conn,alarm_id)['status'] == True: 
             alarm_id = None
             log.debug ("Alarm already exists, Try updating the alarm using 'update_alarm_configuration()'")   
         else:              
             try:
                 alarm = boto.ec2.cloudwatch.alarm.MetricAlarm(
                     connection = cloudwatch_conn,
-                    name = alarm_info['alarm_name'] + "_" + alarm_info['resource_id'],
-                    metric = alarm_info['alarm_metric'],
-                    namespace = alarm_info['instance_type'],
-                    statistic = alarm_info['alarm_statistics'],
-                    comparison = alarm_info['alarm_comparison'],
-                    threshold = alarm_info['alarm_threshold'],
-                    period = alarm_info['alarm_period'],
-                    evaluation_periods = alarm_info['alarm_evaluation_period'],
-                    unit=alarm_info['alarm_unit'],
-                    description = alarm_info['alarm_severity'] + ";" + alarm_info['alarm_description'],
-                    dimensions = {'InstanceId':alarm_info['resource_id']},
+                    name = alarm_info['alarm_name'] + "_" + alarm_info['resource_uuid'],
+                    metric = alarm_info['metric_name'],
+                    namespace = "AWS/EC2",
+                    statistic = alarm_info['statistic'],
+                    comparison = alarm_info['operation'],
+                    threshold = alarm_info['threshold_value'],
+                    period = 60,
+                    evaluation_periods = 1,
+                    unit=alarm_info['unit'],
+                    description = alarm_info['severity'] + ";" + alarm_id + ";" + alarm_info['description'],
+                    dimensions = {'InstanceId':alarm_info['resource_uuid']},
                     alarm_actions = None,
                     ok_actions = None,
                     insufficient_data_actions = None)
@@ -51,126 +83,181 @@ class MetricAlarm():
                 """Setting Alarm Actions : 
                 alarm_actions = ['arn:aws:swf:us-west-2:465479087178:action/actions/AWS_EC2.InstanceId.Stop/1.0']"""
 
-                cloudwatch_conn.put_metric_alarm(alarm)
+                status=cloudwatch_conn.put_metric_alarm(alarm)
+
                 log.debug ("Alarm Configured Succesfully")
-                print "created"
-                print "\n"    
+                self.alarm_resp['schema_version'] = str(create_info['schema_version'])
+                self.alarm_resp['schema_type'] = 'create_alarm_response'
+
+                inner_dict['correlation_id'] = str(alarm_info['correlation_id'])
+                inner_dict['alarm_uuid'] = str(alarm_id) 
+                inner_dict['status'] = status
+
+                self.alarm_resp['alarm_create_response'] = inner_dict
+                if status == True:
+                	return self.alarm_resp
+                else:
+                	return None	
+
             except Exception as e:
                 log.error("Alarm Configuration Failed: " + str(e))
-        return alarm_id    
+            
 #-----------------------------------------------------------------------------------------------------------------------------
-    def update_alarm(self,cloudwatch_conn,alarm_info):
+    def update_alarm(self,cloudwatch_conn,update_info):
 
     	"""Update or reconfigure an alarm"""
-        
+        inner_dict = dict()
+        alarm_info = update_info['alarm_update_request']
+
         """Alarm Name to ID Mapping"""
-        alarm_id = alarm_info['alarm_name'] + "_" + alarm_info['resource_id']
+        alarm_id = alarm_info['alarm_uuid']
+        status = self.is_present(cloudwatch_conn,alarm_id)
 
         """Verifying : Alarm exists already"""
-        if self.is_present(cloudwatch_conn,alarm_id) == False: 
+        if status['status'] == False: 
             alarm_id = None
-            log.debug("Alarm not found, Try creating the alarm using 'configure_alarm()'")   
+            log.debug("Alarm not found, Try creating the alarm using 'configure_alarm()'")
+            return alarm_id   
         else:            
             try:
                 alarm = boto.ec2.cloudwatch.alarm.MetricAlarm(
-                        connection = cloudwatch_conn,
-                        name = alarm_info['alarm_name'] + "_" + alarm_info['resource_id'],
-                        metric = alarm_info['alarm_metric'],
-                        namespace = alarm_info['instance_type'],
-                        statistic = alarm_info['alarm_statistics'],
-                        comparison = alarm_info['alarm_comparison'],
-                        threshold = alarm_info['alarm_threshold'],
-                        period = alarm_info['alarm_period'],
-                        evaluation_periods = alarm_info['alarm_evaluation_period'],
-                        unit=alarm_info['alarm_unit'],
-                        description = alarm_info['alarm_severity'] + ";" + alarm_info['alarm_description'],
-                        dimensions = {'InstanceId':alarm_info['resource_id']},
-                        alarm_actions = None,
-                        ok_actions = None,
-                        insufficient_data_actions = None)
-                cloudwatch_conn.put_metric_alarm(alarm)
+                    connection = cloudwatch_conn,
+                    name = status['info'].name ,
+                    metric = alarm_info['metric_name'],
+                    namespace = "AWS/EC2",
+                    statistic = alarm_info['statistic'],
+                    comparison = alarm_info['operation'],
+                    threshold = alarm_info['threshold_value'],
+                    period = 60,
+                    evaluation_periods = 1,
+                    unit=alarm_info['unit'],
+                    description = alarm_info['severity'] + ";" + alarm_id + ";" + alarm_info['description'],
+                    dimensions = {'InstanceId':str(status['info'].dimensions['InstanceId']).split("'")[1]},
+                    alarm_actions = None,
+                    ok_actions = None,
+                    insufficient_data_actions = None)
+
+                """Setting Alarm Actions : 
+                alarm_actions = ['arn:aws:swf:us-west-2:465479087178:action/actions/AWS_EC2.InstanceId.Stop/1.0']"""
+
+                status=cloudwatch_conn.put_metric_alarm(alarm)
                 log.debug("Alarm %s Updated ",alarm.name)
-                print "updated"
+                self.alarm_resp['schema_version'] = str(update_info['schema_version'])
+                self.alarm_resp['schema_type'] = 'update_alarm_response'
+
+                inner_dict['correlation_id'] = str(alarm_info['correlation_id'])
+                inner_dict['alarm_uuid'] = str(alarm_id) 
+                inner_dict['status'] = status
+
+                self.alarm_resp['alarm_update_response'] = inner_dict
+                return self.alarm_resp
             except Exception as e:
                 log.error ("Error in Updating Alarm " + str(e))
-        return alarm_id
+        
 #-----------------------------------------------------------------------------------------------------------------------------
-    def delete_Alarm(self,cloudwatch_conn,alarm_id):
+    def delete_Alarm(self,cloudwatch_conn,del_info_all):
+
     	"""Deletes an Alarm with specified alarm_id"""
+        inner_dict = dict()
+        del_info = del_info_all['alarm_delete_request']
+        status = self.is_present(cloudwatch_conn,del_info['alarm_uuid'])
         try:
-            if self.is_present(cloudwatch_conn,alarm_id) == True:
-                deleted_alarm=cloudwatch_conn.delete_alarms(alarm_id)
-                return alarm_id
+            if status['status'] == True:                
+                del_status=cloudwatch_conn.delete_alarms(status['info'].name)
+                self.del_resp['schema_version'] = str(del_info_all['schema_version'])
+                self.del_resp['schema_type'] = 'delete_alarm_response'
+                inner_dict['correlation_id'] = str(del_info['correlation_id'])
+                inner_dict['alarm_id'] = str(del_info['alarm_uuid'])
+                inner_dict['status'] = del_status
+                self.del_resp['alarm_deletion_response'] = inner_dict
+                return self.del_resp
             return None 
         except Exception as e:
                 log.error("Alarm Not Deleted: " + str(e))      
 #-----------------------------------------------------------------------------------------------------------------------------
-    def alarms_list(self,cloudwatch_conn,instance_id):
+    def alarms_list(self,cloudwatch_conn,list_info):
 
-    	"""Get a list of alarms that are present on a particular VM instance"""
-        try:
-            log.debug("Getting Alarm list for %s",instance_id)
-            alarm_dict = dict()
-            alarm_list = []
+        """Get a list of alarms that are present on a particular VIM type"""
+        alarm_list = []
+        alarm_info = dict()
+        try: #id vim 
             alarms = cloudwatch_conn.describe_alarms()
             itr = 0
             for alarm in alarms:
-                if str(alarm.dimensions['InstanceId']).split("'")[1] == instance_id:
-                    alarm_list.insert(itr,str(alarm.name))
-                    itr += 1
-            alarm_dict['alarm_names'] = alarm_list
-            alarm_dict['resource_id'] = instance_id   
-            return alarm_dict
+                list_info['alarm_list_request']['alarm_uuid'] = str(alarm.description).split(';')[1]
+                alarm_list.insert(itr,self.alarm_details(cloudwatch_conn,list_info))
+                itr += 1
+            
+            alarm_info['schema_version'] = str(list_info['schema_version'])
+            alarm_info['schema_type'] = 'list_alarm_response'    
+            alarm_info['list_alarm_resp'] = json.dumps(alarm_list)
+
+            return alarm_info                  
         except Exception as e:
                 log.error("Error in Getting List : %s",str(e))    
 #-----------------------------------------------------------------------------------------------------------------------------
-    def alarm_details(self,cloudwatch_conn,alarm_name):
+    def alarm_details(self,cloudwatch_conn,ack_info):
 
 	"""Get an individual alarm details specified by alarm_name"""
         try:
-            alarms_details=cloudwatch_conn.describe_alarm_history()       
+            alarms_details=cloudwatch_conn.describe_alarm_history()  
+            alarm_details_all = dict()     
             alarm_details_dict = dict()
+            ack_info_all = ack_info
+
+
+            if 'ack_details' in ack_info:
+                ack_info = ack_info['ack_details']
+            elif 'alarm_list_request' in ack_info:
+                ack_info = ack_info['alarm_list_request']    
             
+            is_present = self.is_present(cloudwatch_conn,ack_info['alarm_uuid'])
+
             for itr in range (len(alarms_details)):
-                if alarms_details[itr].name == alarm_name and 'created' in alarms_details[itr].summary :#name, timestamp, summary
-                    status = alarms_details[itr].summary.split()                   
+                if alarms_details[itr].name == is_present['info'].name :#name, timestamp, summary
+                    if 'created' in alarms_details[itr].summary:
+                        alarm_details_dict['status'] = "New"
+                    elif 'updated' in alarms_details[itr].summary:
+                        alarm_details_dict['status'] = "Update"
+                    elif 'deleted' in alarms_details[itr].summary:   
+                        alarm_details_dict['status'] = "Canceled"
+
+                    status = alarms_details[itr].summary.split()                  
                     alarms = cloudwatch_conn.describe_alarms()
                     for alarm in alarms:
-                        if alarm.name == alarm_name:
-                            alarm_details_dict['alarm_id'] = alarm_name
-                            alarm_details_dict['resource_id'] = str(alarm.dimensions['InstanceId']).split("'")[1]
-                            alarm_details_dict['severity'] = str(alarm.description)
-                            alarm_details_dict['start_date_time'] = str(alarms_details[x].timestamp) 
+                        if str(alarm.description).split(';')[1] == ack_info['alarm_uuid']:
+                            alarm_details_dict['alarm_uuid'] = str(ack_info['alarm_uuid'])
+                            alarm_details_dict['resource_uuid'] = str(alarm.dimensions['InstanceId']).split("'")[1]
+                            alarm_details_dict['description'] = str(alarm.description).split(';')[1]
+                            alarm_details_dict['severity'] = str(alarm.description).split(';')[0]
+                            alarm_details_dict['start_date_time'] = str(alarms_details[itr].timestamp) 
+                            alarm_details_dict['vim_type'] = str(ack_info_all['vim_type'])
+                            #TODO : tenant id
+                            if 'ack_details' in ack_info_all:
+                                alarm_details_all['schema_version'] = str(ack_info_all['schema_version'])
+                                alarm_details_all['schema_type'] = 'notify_alarm'
+                                alarm_details_all['notify_details'] = alarm_details_dict
+                                return alarm_details_all
 
-                            return alarm_details_dict             
+                            elif 'alarm_list_request' in ack_info_all:
+                                return alarm_details_dict                     
                   
         except Exception as e:
         	log.error("Error getting alarm details: %s",str(e))           
 #-----------------------------------------------------------------------------------------------------------------------------
-    def metrics_data(self,cloudwatch_conn,metric_name,instance_id,period,metric_unit):
-
-    	"""Getting Metrics Stats for an Hour. Time interval can be modified using Timedelta value"""
-        metric_data= dict()
-        metric_stats=cloudwatch_conn.get_metric_statistics(period, datetime.datetime.utcnow() - datetime.timedelta(seconds=3600),
-                            datetime.datetime.utcnow(),metric_name,'AWS/EC2', 'Maximum',
-                            dimensions={'InstanceId':instance_id}, unit=metric_unit)
-
-        for itr in range (len(metric_stats)):
-            metric_data['metric_name'] = metric_name
-            metric_data['Resource_id'] = instance_id
-            metric_data['Unit']		   = metric_stats[itr]['Unit']
-            metric_data['Timestamp']   = metric_stats[itr]['Timestamp']  
-        return metric_data
-
-#-----------------------------------------------------------------------------------------------------------------------------
-    def is_present(self,cloudwatch_conn,alarm_name):
-    	"""Finding Alarm exists or not"""
+    def is_present(self,cloudwatch_conn,alarm_id):
+    	"""Finding alarm from already configured alarms"""
+        alarm_info = dict()
         try:
             alarms = cloudwatch_conn.describe_alarms()
             for alarm in alarms:
-                if alarm.name == alarm_name:
-                    return True
-            return False
+                if str(alarm.description).split(';')[1] == alarm_id:
+                    alarm_info['status'] = True
+                    alarm_info['info'] = alarm
+                    return alarm_info
+            alarm_info['status'] = False        
+            return alarm_info
         except Exception as e:
                 log.error("Error Finding Alarm",str(e))             
 #-----------------------------------------------------------------------------------------------------------------------------
+    
