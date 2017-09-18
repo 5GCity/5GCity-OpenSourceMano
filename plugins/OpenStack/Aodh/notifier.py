@@ -53,7 +53,7 @@ class Notifier(object):
         """Initialize alarm notifier."""
         self._response = OpenStack_Response()
 
-        self._producer = KafkaProducer("alarm_response", None)
+        self._producer = KafkaProducer("alarm_response")
 
     def notify(self, alarming):
         """Send alarm notifications responses to the SO."""
