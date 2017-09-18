@@ -1,7 +1,7 @@
 
 /*
  * 
- *   Copyright 2016 RIFT.IO Inc
+ *   Copyright 2016-2017 RIFT.IO Inc
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -31,12 +31,16 @@ module nsr
     prefix "vlr";
   }
 
-  import nsd {
-    prefix "nsd";
+  import nsd-base {
+    prefix "nsd-base";
   }
 
-  import vnfd {
-    prefix "vnfd";
+  import project-nsd {
+    prefix "project-nsd";
+  }
+
+  import project-vnfd {
+    prefix "project-vnfd";
   }
 
   import vnfr {
@@ -55,8 +59,13 @@ module nsr
     prefix "manotypes";
   }
 
-  import rw-sdn {
-    prefix "rwsdn";
+  import rw-project {
+    prefix "rw-project";
+  }
+
+  revision 2017-02-08 {
+    description
+      "Update model to support projects.";
   }
 
   revision 2015-09-10 {
@@ -74,6 +83,7 @@ module nsr
       enum config_not_needed;
       enum configured;
       enum failed;
+      enum terminate;
     }
   }
 
@@ -95,16 +105,16 @@ module nsr
       leaf key-pair-ref {
         description "A reference to the key pair entry in the global key pair table";
         type leafref {
-          path "/nsr:key-pair/nsr:name";
+          path "../../../../key-pair/name";
         }
       }
     }
     list user {
       key "name";
-
-      description "List of users to be added through cloud-config";
+      description "Used to configure the list of public keys to be injected as part
+                 of ns instantiation";
       leaf name {
-        description "Name of the user ";
+        description "Name of this key pair";
         type string;
       }
       leaf user-info {
@@ -114,108 +124,128 @@ module nsr
       list ssh-authorized-key {
         key "key-pair-ref";
 
-        description "Used to configure the list of public keys to be injected as part 
+        description "Used to configure the list of public keys to be injected as part
                         of ns instantiation";
 
         leaf key-pair-ref {
           description "A reference to the key pair entry in the global key pair table";
           type leafref {
-            path "/nsr:key-pair/nsr:name";
+            path "../../../../../key-pair/name";
           }
         }
       }
     }
   }
 
-  list key-pair {
-    key "name";
-    description "Used to configure the list of public keys to be injected as part
+  augment "/rw-project:project" {
+    list key-pair {
+      key "name";
+      description "Used to configure the list of public keys to be injected as part
                  of ns instantiation";
+      leaf name {
+        description "Name of this key pair";
+        type string;
+      }
+
+      leaf key {
+        description "Key associated with this key pair";
+        type string;
+      }
+    }
+  }
+
+  grouping event-service-primitive {
+    leaf seq {
+      description
+          "Sequence number for the service primitive.";
+      type uint64;
+    }
+
     leaf name {
-      description "Name of this key pair";
+      description
+          "Name of the service primitive.";
+      type string;
+      mandatory "true";
+    }
+
+    leaf user-defined-script {
+      description
+          "A user defined script.";
       type string;
     }
 
-    leaf key {
-      description "Key associated with this key pair";
-      type string;
-    }
-  }
-
-  rpc start-network-service {
-    description "Start the network service";
-    input {
+    list parameter {
+      key "name";
       leaf name {
-        mandatory true;
-        description "Name of the Network Service";
         type string;
       }
-      leaf nsd-ref {
-        description "Reference to NSR ID ref";
-        mandatory true;
-        type leafref {
-          path "/nsd:nsd-catalog/nsd:nsd/nsd:id";
-        }
-      }
-      uses ns-instance-config-params;
-    }
 
-    output {
-      leaf nsr-id {
-        description "Automatically generated parameter";
-        type yang:uuid;
+      leaf value {
+        type string;
       }
     }
   }
 
+  augment "/rw-project:project" {
+    container ns-instance-config {
 
+      list nsr {
+        key "id";
+        unique "name";
 
-  container ns-instance-config {
-
-    list nsr {
-      key "id";
-      unique "name";
-
-      leaf id {
-        description "Identifier for the NSR.";
-        type yang:uuid;
-      }
-
-      leaf name {
-        description "NSR name.";
-        type string;
-      }
-
-      leaf short-name {
-        description "NSR short name.";
-        type string;
-      }
-
-      leaf description {
-        description "NSR description.";
-        type string;
-      }
-
-      leaf admin-status {
-        description
-          "This is the administrative status of the NS instance";
-
-        type enumeration {
-          enum ENABLED;
-          enum DISABLED;
+        leaf id {
+          description "Identifier for the NSR.";
+          type yang:uuid;
         }
-      }
 
-      container nsd {
-        description "NS descriptor used to instantiate this NS";
-        uses nsd:nsd-descriptor;
-      }
+        leaf name {
+          description "NSR name.";
+          type string;
+        }
 
-      uses ns-instance-config-params;
+        leaf short-name {
+          description "NSR short name.";
+          type string;
+        }
+
+        leaf description {
+          description "NSR description.";
+          type string;
+        }
+
+        leaf admin-status {
+          description
+            "This is the administrative status of the NS instance";
+
+          type enumeration {
+            enum ENABLED;
+            enum DISABLED;
+          }
+        }
+
+        container nsd {
+          description "NS descriptor used to instantiate this NS";
+
+          uses nsd-base:nsd-descriptor-common;
+
+          uses project-nsd:nsr-nsd-vld;
+
+          uses project-nsd:nsr-nsd-constituent-vnfd;
+
+          uses project-nsd:nsr-nsd-placement-groups;
+
+          uses project-nsd:nsr-nsd-vnf-dependency;
+
+          uses project-nsd:nsr-nsd-monitoring-param;
+
+          uses project-nsd:nsr-nsd-service-primitive;
+        }
+        uses ns-instance-config-params;
+      }
     }
   }
 
-  grouping ns-instance-config-params {
+  grouping ns-instance-config-params-common {
     uses manotypes:input-parameter;
 
     list scaling-group {
@@ -224,7 +254,7 @@ module nsr
 
       leaf scaling-group-name-ref {
         description "name of the scaling group
-        leafref path ../../nsd/scaling-group-descriptor/name";
+        leafref path ../nsd/scaling-group-descriptor/name";
         type string;
       }
 
@@ -241,48 +271,60 @@ module nsr
     list nsd-placement-group-maps {
       description
           "Mapping from mano-placement groups construct from NSD to cloud
-          platform placement group construct";
+           platform placement group construct";
 
       key "placement-group-ref";
 
       leaf placement-group-ref {
-        description "Reference for NSD placement group
-            leafref path ../../nsd/placement-groups/name";
+        description
+          "Reference for NSD placement group";
+        // type leafref {
+        //   path "../../nsd/placement-groups/name";
+        // }
         type string;
       }
       uses manotypes:placement-group-input;
     }
+  }
 
-   list vnfd-placement-group-maps {
+  grouping ns-instance-config-params {
+    uses ns-instance-config-params-common;
+
+    list vnfd-placement-group-maps {
       description
-          "Mapping from mano-placement groups construct from VNFD to cloud
+        "Mapping from mano-placement groups construct from VNFD to cloud
           platform placement group construct";
 
-    key "placement-group-ref vnfd-id-ref";
+      key "placement-group-ref vnfd-id-ref";
 
-    leaf vnfd-id-ref {
-      description
+      leaf vnfd-id-ref {
+        description
           "A reference to a vnfd. This is a
           leafref to path:
-          ../../../../nsd:constituent-vnfd
-          + [nsr:id = current()/../nsd:id-ref]
-          + /nsd:vnfd-id-ref
-          NOTE: confd limitations prevent the use of xpath";
-      type yang:uuid;
-    }
-
-    leaf placement-group-ref {
-      description
-          "A reference to VNFD placement group";
-      type leafref {
-        path "/vnfd:vnfd-catalog/vnfd:vnfd[vnfd:id = current()/" +
-            "../nsr:vnfd-id-ref]/vnfd:placement-groups/vnfd:name";
+          ../../../../project-nsd:constituent-vnfd
+          + [id = current()/../id-ref]
+          + /project-nsd:vnfd-id-ref
+          NOTE: An issue with confd is preventing the
+          use of xpath. Seems to be an issue with leafref
+          to leafref, whose target is in a different module.
+          Once that is resolved this will switched to use
+          leafref";
+        type yang:uuid;
       }
+
+      leaf placement-group-ref {
+        description
+          "A reference to VNFD placement group";
+        type leafref {
+          path "../../../../project-vnfd:vnfd-catalog/project-vnfd:vnfd[project-vnfd:id = " +
+            "current()/../vnfd-id-ref]/project-vnfd:placement-groups/project-vnfd:name";
+        }
+      }
+
+      uses manotypes:placement-group-input;
     }
 
-    uses manotypes:placement-group-input;
-   }
-   uses cloud-config;
+    uses cloud-config;
   }
 
   grouping vnffgr {
@@ -298,18 +340,19 @@ module nsr
       leaf vnffgd-id-ref {
         description "VNFFG descriptor id reference";
         type leafref {
-          path "/nsr:ns-instance-config/nsr:nsr"
-            + "[nsr:id=current()/../../ns-instance-config-ref]"
-            + "/nsr:nsd/nsr:vnffgd/nsr:id";
+          path "../../../../ns-instance-config/nsr"
+            + "[id=current()/../../ns-instance-config-ref]"
+            + "/nsd/vnffgd/id";
         }
       }
 
       leaf vnffgd-name-ref {
         description "VNFFG descriptor name reference";
         type leafref {
-            path "/ns-instance-config/nsr"
+            path "../../../../ns-instance-config/nsr"
               + "[id=current()/../../ns-instance-config-ref]"
-              + "/nsd/vnffgd[nsr:id = current()/../vnffgd-id-ref]"
+              + "/nsd/vnffgd"
+              + "[id=current()/../vnffgd-id-ref]"
               + "/name";
         }
       }
@@ -318,9 +361,12 @@ module nsr
         description
             "The SDN account to use when requesting resources for
             this vnffgr";
-        type leafref {
-          path "/rwsdn:sdn/rwsdn:account/rwsdn:name";
-        }
+        type string;
+      }
+
+      leaf cloud-account {
+        description "Cloud Account in which NSR is instantiated";
+        type string;
       }
 
       leaf operational-status {
@@ -358,11 +404,17 @@ module nsr
           type string;
         }
 
+        leaf rsp-id {
+          description
+              "Returned Identifier for the RSP.";
+          type yang:uuid;
+        }
+
         leaf vnffgd-rsp-id-ref {
           description
               "Identifier for the VNFFG Descriptor RSP reference";
           type leafref {
-            path "/ns-instance-config/nsr"
+            path "../../../../../ns-instance-config/nsr"
               + "[id=current()/../../../ns-instance-config-ref]"
               + "/nsd/vnffgd"
               + "[id=current()/../../vnffgd-id-ref]"
@@ -374,11 +426,12 @@ module nsr
           description
               "Name for the VNFFG Descriptor RSP reference";
           type leafref {
-            path "/ns-instance-config/nsr:nsr"
+            path "../../../../../ns-instance-config/nsr"
               + "[id=current()/../../../ns-instance-config-ref]"
               + "/nsd/vnffgd"
               + "[id=current()/../../vnffgd-id-ref]"
-              + "/rsp[id=current()/../vnffgd-rsp-id-ref]"
+              + "/rsp"
+              + "[id=current()/../vnffgd-rsp-id-ref]"
               + "/name";
           }
         }
@@ -422,22 +475,22 @@ module nsr
             description
                 "A reference to a vnfr id";
                 type leafref {
-                  path "/vnfr:vnfr-catalog/vnfr:vnfr/vnfr:id";
+                  path "../../../../../../vnfr:vnfr-catalog/vnfr:vnfr/vnfr:id";
                 }
           }
           leaf vnfr-name-ref {
             description
                 "A reference to a vnfr name";
                 type leafref {
-                  path "/vnfr:vnfr-catalog/vnfr:vnfr/vnfr:name";
+                  path "../../../../../../vnfr:vnfr-catalog/vnfr:vnfr/vnfr:name";
                 }
           }
           leaf vnfr-connection-point-ref {
             description
                 "A reference to a vnfr connection point.";
             type leafref {
-              path "/vnfr:vnfr-catalog/vnfr:vnfr"
-                 + "[vnfr:id = current()/../nsr:vnfr-id-ref]"
+              path "../../../../../../vnfr:vnfr-catalog/vnfr:vnfr"
+                 + "[vnfr:id = current()/../vnfr-id-ref]"
                  + "/vnfr:connection-point/vnfr:name";
             }
           }
@@ -504,11 +557,16 @@ module nsr
                 "Name of the classifier.";
             type string;
           }
+          leaf-list classifier-id {
+            description
+                "Returned Identifier for the classifier rule.";
+            type yang:uuid;
+          }
           leaf rsp-id-ref {
             description
                 "A reference to the RSP.";
             type leafref {
-              path "../../nsr:rsp/nsr:id";
+              path "../../rsp/id";
             }
           }
           leaf rsp-name {
@@ -520,22 +578,22 @@ module nsr
             description
                 "A reference to a vnfr id";
                 type leafref {
-                  path "/vnfr:vnfr-catalog/vnfr:vnfr/vnfr:id";
+                  path "../../../../../vnfr:vnfr-catalog/vnfr:vnfr/vnfr:id";
                 }
           }
           leaf vnfr-name-ref {
             description
                 "A reference to a vnfr name";
                 type leafref {
-                  path "/vnfr:vnfr-catalog/vnfr:vnfr/vnfr:name";
+                  path "../../../../../vnfr:vnfr-catalog/vnfr:vnfr/vnfr:name";
                 }
           }
           leaf vnfr-connection-point-ref {
             description
                 "A reference to a vnfr connection point.";
             type leafref {
-              path "/vnfr:vnfr-catalog/vnfr:vnfr"
-                 + "[vnfr:id = current()/../nsr:vnfr-id-ref]"
+              path "../../../../../vnfr:vnfr-catalog/vnfr:vnfr"
+                 + "[vnfr:id = current()/../vnfr-id-ref]"
                  + "/vnfr:connection-point/vnfr:name";
             }
           }
@@ -559,62 +617,66 @@ module nsr
     }
   }
 
-  container ns-instance-opdata {
-    config false;
+  augment "/rw-project:project" {
+    container ns-instance-opdata {
+      config false;
 
-    list nsr {
-      key "ns-instance-config-ref";
+      list nsr {
+        key "ns-instance-config-ref";
 
-      leaf ns-instance-config-ref {
-        type leafref {
-          path "/nsr:ns-instance-config/nsr:nsr/nsr:id";
+        leaf ns-instance-config-ref {
+          type leafref {
+            path "../../../ns-instance-config/nsr/id";
+          }
+          // type yang:uuid;
         }
-      }
 
-      leaf name-ref {
-        description "Network service name reference";
-        type leafref {
-          path "/nsr:ns-instance-config/nsr:nsr/nsr:name";
+        leaf name-ref {
+          description "Network service name reference";
+          type leafref {
+            path "../../../ns-instance-config/nsr" +
+              "[id=current()/../ns-instance-config-ref]" +
+              "/name";
+          }
         }
-      }
 
-      leaf nsd-ref {
-        description "Network service descriptor id reference";
-        type leafref {
-          path "/ns-instance-config/nsr"
-            + "[id=current()/../ns-instance-config-ref]"
-            + "/nsd/id";
+        leaf nsd-ref {
+          description "Network service descriptor id reference";
+          type leafref {
+            path "../../../ns-instance-config/nsr"
+              + "[id=current()/../ns-instance-config-ref]"
+              + "/nsd/id";
+          }
         }
-      }
 
-      leaf nsd-name-ref {
-        description "Network service descriptor name reference";
-        type leafref {
-          path "/ns-instance-config/nsr"
-            + "[id=current()/../ns-instance-config-ref]"
-            + "/nsd/name";
+        leaf nsd-name-ref {
+          description "Network service descriptor name reference";
+          type leafref {
+            path "../../../ns-instance-config/nsr"
+              + "[id=current()/../ns-instance-config-ref]"
+              + "/nsd/name";
+          }
         }
-      }
 
-      leaf create-time {
-        description
-          "Creation timestamp of this Network Service.
+        leaf create-time {
+          description
+            "Creation timestamp of this Network Service.
           The timestamp is expressed as seconds
           since unix epoch - 1970-01-01T00:00:00Z";
 
-        type uint32;
-      }
+          type uint32;
+        }
 
-      leaf uptime {
-        description
-          "Active period of this Network Service.
+        leaf uptime {
+          description
+            "Active period of this Network Service.
           Uptime is expressed in seconds";
 
-        type uint32;
-      }
+          type uint32;
+        }
 
-      list connection-point {
-        description
+        list connection-point {
+          description
             "List for external connection points.
             Each NS has one or more external connection points.
             As the name implies that external connection points
@@ -624,101 +686,100 @@ module nsr
             construct network service chains by connecting the
             connection points between different NS.";
 
-        key "name";
-        leaf name {
-          description
+          key "name";
+          leaf name {
+            description
               "Name of the NS connection point.";
-          type string;
-        }
+            type string;
+          }
 
-        leaf type {
-          description
+          leaf type {
+            description
               "Type of the connection point.";
-          type manotypes:connection-point-type;
-        }
-      }
-
-      list vlr {
-        key "vlr-ref";
-        leaf vlr-ref {
-          description
-              "Reference to a VLR record in the VLR catalog";
-          type leafref {
-            path "/vlr:vlr-catalog/vlr:vlr/vlr:id";
+            type manotypes:connection-point-type;
           }
         }
 
+        list vlr {
+          key "vlr-ref";
+          leaf vlr-ref {
+            description
+              "Reference to a VLR record in the VLR catalog";
+            type leafref {
+              path "../../../../vlr:vlr-catalog/vlr:vlr/vlr:id";
+            }
+          }
 
-        list vnfr-connection-point-ref {
+
+          list vnfr-connection-point-ref {
+            description
+              "A list of references to connection points.";
+            key "vnfr-id";
+
+            leaf vnfr-id {
+              description "A reference to a vnfr";
+              type leafref {
+                path "../../../../../vnfr:vnfr-catalog/vnfr:vnfr/vnfr:id";
+              }
+            }
+
+            leaf connection-point {
+              description
+                "A reference to a connection point name in a vnfr";
+              type leafref {
+                path "../../../../../vnfr:vnfr-catalog/vnfr:vnfr"
+                  + "[vnfr:id = current()/../vnfr-id]"
+                  + "/vnfr:connection-point/vnfr:name";
+              }
+            }
+          }
+        }
+
+        list constituent-vnfr-ref {
           description
-            "A list of references to connection points.";
+            "List of VNFRs that are part of this
+             network service.";
           key "vnfr-id";
 
           leaf vnfr-id {
-            description "A reference to a vnfr";
-            type leafref {
-              path "/vnfr:vnfr-catalog/vnfr:vnfr/vnfr:id";
-            }
-          }
-
-          leaf connection-point {
             description
-                "A reference to a connection point name in a vnfr";
+              "Reference to the VNFR id
+               This should be a leafref to /vnfr:vnfr-catalog/vnfr:vnfr/vnfr:id
+               But due to confd bug (RIFT-9451), changing to string.";
+            type string;
+          }
+        }
+
+        list scaling-group-record {
+          description "List of scaling group records";
+          key "scaling-group-name-ref";
+
+          leaf scaling-group-name-ref {
+            description "name of the scaling group";
             type leafref {
-              path "/vnfr:vnfr-catalog/vnfr:vnfr"
-                 + "[vnfr:id = current()/../nsr:vnfr-id]"
-                 + "/vnfr:connection-point/vnfr:name";
+              path "../../../../ns-instance-config/nsr"
+                + "[id=current()/../../ns-instance-config-ref]"
+                + "/nsd/scaling-group-descriptor/name";
             }
           }
-        }
-      }
 
-      list constituent-vnfr-ref {
-        description
-            "List of VNFRs that are part of this
-             network service.";
-        key "vnfr-id";
+          list instance {
+            description "Reference to scaling group instance record";
+            key "instance-id";
+            leaf instance-id {
+              description "Scaling group instance id";
+              type uint16;
+            }
 
-        leaf vnfr-id {
-          description
-            "Reference to the VNFR id
-             This should be a leafref to /vnfr:vnfr-catalog/vnfr:vnfr/vnfr:id
-             But due to confd bug (RIFT-9451), changing to string.
-            ";
-          type string;
-        }
-      }
-
-      list scaling-group-record {
-        description "List of scaling group records";
-        key "scaling-group-name-ref";
-
-        leaf scaling-group-name-ref {
-          description "name of the scaling group";
-          type leafref {
-            path "/ns-instance-config/nsr"
-              + "[id=current()/../../ns-instance-config-ref]"
-              + "/nsd/scaling-group-descriptor/name";
-          }
-        }
-
-        list instance {
-          description "Reference to scaling group instance record";
-          key "instance-id";
-          leaf instance-id {
-            description "Scaling group instance id";
-            type uint16;
-          }
-
-          leaf is-default {
-            description "Flag indicating whether this instance was part of
+            leaf is-default {
+              description "Flag indicating whether this instance was part of
                 default scaling group (and thus undeletable)";
-            type boolean;
-          }
+              type boolean;
+            }
 
-          leaf op-status {
-            description
-              "The operational status of the NS instance
+            leaf op-status {
+              description
+                "The operational status of the NS instance
                 init                : The scaling group has just started.
                 vnf-init-phase      : The VNFs in the scaling group are being instantiated.
                 running             : The scaling group  is in running state.
@@ -728,58 +789,58 @@ module nsr
                 failed              : The scaling group instantiation failed.
               ";
 
-            type enumeration {
-              enum init;
-              enum vnf-init-phase;
-              enum running;
-              enum terminate;
-              enum vnf-terminate-phase;
-              enum terminated;
-              enum failed;
+              type enumeration {
+                enum init;
+                enum vnf-init-phase;
+                enum running;
+                enum terminate;
+                enum vnf-terminate-phase;
+                enum terminated;
+                enum failed;
+              }
             }
-          }
 
-          leaf config-status {
-            description
-              "The configuration status of the scaling group instance
+            leaf config-status {
+              description
+                "The configuration status of the scaling group instance
                configuring : At least one of the VNFs in this scaling group instance
                              is in configuring state
                configured  : All the VNFs in this scaling group instance are
                              configured or config-not-needed state
                failed      : Configuring this scaling group instance failed
               ";
-            type config-states;
-          }
+              type config-states;
+            }
 
-          leaf error-msg {
-            description
-              "Reason for failure in configuration of this scaling instance";
-            type string;
-          }
+            leaf error-msg {
+              description
+                "Reason for failure in configuration of this scaling instance";
+              type string;
+            }
 
-          leaf create-time {
-            description
-              "Creation timestamp of this scaling group record.
+            leaf create-time {
+              description
+                "Creation timestamp of this scaling group record.
               The timestamp is expressed as seconds
               since unix epoch - 1970-01-01T00:00:00Z";
 
               type uint32;
-          }
+            }
 
-          leaf-list vnfrs {
-            description "Reference to VNFR within the scale instance";
-            type leafref {
-              path "../../../constituent-vnfr-ref/vnfr-id";
+            leaf-list vnfrs {
+              description "Reference to VNFR within the scale instance";
+              type leafref {
+                path "../../../constituent-vnfr-ref/vnfr-id";
+              }
             }
           }
         }
-      }
 
-      uses vnffgr;
+        uses vnffgr;
 
-      leaf operational-status {
-        description
-          "The operational status of the NS instance
+        leaf operational-status {
+          description
+            "The operational status of the NS instance
             init                : The network service has just started.
             vl-init-phase       : The VLs in the NS are being instantiated.
             vnf-init-phase      : The VNFs in the NS are being instantiated.
@@ -795,271 +856,200 @@ module nsr
             vl-terminate        : The NS is terminating a VL
           ";
 
-        type enumeration {
-          enum init;
-          enum vl-init-phase;
-          enum vnf-init-phase;
-          enum running;
-          enum terminate;
-          enum vnf-terminate-phase;
-          enum vl-terminate-phase;
-          enum terminated;
-          enum failed;
-          enum scaling-out;
-          enum scaling-in;
-          enum vl-instantiate;
-          enum vl-terminate;
+          type enumeration {
+            enum init;
+            enum vl-init-phase;
+            enum vnf-init-phase;
+            enum running;
+            enum terminate;
+            enum vnf-terminate-phase;
+            enum vl-terminate-phase;
+            enum terminated;
+            enum failed;
+            enum scaling-out;
+            enum scaling-in;
+            enum vl-instantiate;
+            enum vl-terminate;
+          }
         }
-      }
 
-      leaf config-status {
-        description
-          "The configuration status of the NS instance
+        leaf config-status {
+          description
+            "The configuration status of the NS instance
             configuring: At least one of the VNFs in this instance is in configuring state
             configured:  All the VNFs in this NS instance are configured or config-not-needed state
           ";
-        type config-states;
-      }
+          type config-states;
+        }
 
-      list service-primitive {
-         description
-              "Network service level service primitives.";
-
-         key "name";
-
-         leaf name {
-            description
-                "Name of the service primitive.";
-            type string;
-         }
-
-         list parameter {
-            description
-                "List of parameters for the service primitive.";
-
-            key "name";
-            uses manotypes:primitive-parameter;
-         }
-
-         uses manotypes:ui-primitive-group;
-
-         list vnf-primitive-group {
-            description
-                "List of service primitives grouped by VNF.";
-
-            key "member-vnf-index-ref";
-            leaf member-vnf-index-ref {
-              description
-                 "Reference to member-vnf within constituent-vnfds";
-              type uint64;
-            }
-
-            leaf vnfd-id-ref {
-               description
-                 "A reference to a vnfd. This is a 
-                  leafref to path:
-                      ../../../../nsd:constituent-vnfd
-                      + [nsd:id = current()/../nsd:id-ref]
-                      + /nsd:vnfd-id-ref
-                  NOTE: confd limitations prevent the use of xpath";
-
-               type string;
-            }
-
-            leaf vnfd-name {
-               description
-                 "Name of the VNFD";
-               type string;
-            }
-
-            list primitive {
-               key "index";
-
-               leaf index {
-                 description "Index of this primitive";
-                 type uint32;
-               }
-
-               leaf name {
-                 description "Name of the primitive in the VNF primitive ";
-                 type string;
-               }
-            }
-         }
-
-         leaf user-defined-script {
+        list service-primitive {
            description
+                "Network service level service primitives.";
+
+           key "name";
+
+           leaf name {
+              description
+                  "Name of the service primitive.";
+              type string;
+           }
+
+           list parameter {
+              description
+                  "List of parameters for the service primitive.";
+
+              key "name";
+              uses manotypes:primitive-parameter;
+           }
+
+           uses manotypes:ui-primitive-group;
+
+           list vnf-primitive-group {
+              description
+                "Reference to member-vnf within constituent-vnfds";
+
+              key "member-vnf-index-ref";
+              leaf member-vnf-index-ref {
+                description
+                   "Reference to member-vnf within constituent-vnfds";
+                type uint64;
+              }
+
+              leaf vnfd-id-ref {
+                 description
+                   "A reference to a vnfd. This is a 
+                    leafref to path:
+                        ../../../../nsd:constituent-vnfd
+                        + [nsd:id = current()/../nsd:id-ref]
+                        + /nsd:vnfd-id-ref
+                    NOTE: An issue with confd is preventing the
+                    use of xpath. Seems to be an issue with leafref
+                    to leafref, whose target is in a different module.
+                    Once that is resovled this will switched to use
+                    leafref";
+
+                 type string;
+              }
+
+              leaf vnfd-name {
+                 description
+                   "Name of the VNFD";
+                 type string;
+              }
+
+              list primitive {
+                 key "index";
+
+                 leaf index {
+                   description "Index of this primitive";
+                   type uint32;
+                 }
+
+                 leaf name {
+                   description "Name of the primitive in the VNF primitive ";
+                   type string;
+                 }
+              }
+           }
+
+           leaf user-defined-script {
+             description
                "A user defined script.";
-           type string;
-         }
-      }
-
-      list initial-config-primitive {
-        rwpb:msg-new NsrInitialConfigPrimitive;
-        description
-            "Initial set of configuration primitives for NSD.";
-        key "seq";
-        leaf seq {
-          description
-              "Sequence number for the configuration primitive.";
-          type uint64;
+             type string;
+           }
         }
 
-        leaf name {
+        list initial-service-primitive {
+          rwpb:msg-new NsrInitialServicePrimitive;
           description
-              "Name of the configuration primitive.";
-          type string;
-          mandatory "true";
+            "Initial set of service primitives for NSD.";
+          key "seq";
+
+          uses event-service-primitive;
         }
 
-        leaf user-defined-script {
+        list terminate-service-primitive {
+          rwpb:msg-new NsrTerminateServicePrimitive;
           description
-              "A user defined script.";
-          type string;
+            "Set of service primitives to
+             execute during termination of NSD.";
+          key "seq";
+
+          uses event-service-primitive;
         }
 
-        list parameter {
+        list monitoring-param {
           description
-              "List of parameters for the initial config primitive";
-          key "name";
+            "List of NS level params.";
+          key "id";
+
+          uses manotypes:monitoring-param-value;
+          uses manotypes:monitoring-param-ui-data;
+          uses manotypes:monitoring-param-aggregation;
+
+          leaf id {
+            type string;
+          }
+
           leaf name {
-            description "Name of the intitial config parameter";
             type string;
           }
 
-          leaf value {
-            description "Value associated with the initial config 
-                        parameter";
-            type string;
-          }
-        }
-      }
-
-
-      list monitoring-param {
-        description
-          "List of NS level params.";
-        key "id";
-
-        uses manotypes:monitoring-param-value;
-        uses manotypes:monitoring-param-ui-data;
-        uses manotypes:monitoring-param-aggregation;
-
-        leaf id {
-          type string;
-        }
-
-        leaf name {
-          type string;
-        }
-
-        leaf nsd-mon-param-ref {
-          description "Reference to the NSD monitoring param descriptor
+          leaf nsd-mon-param-ref {
+            description "Reference to the NSD monitoring param descriptor
                        that produced this result";
-          type leafref {
-            path "/nsd:nsd-catalog/nsd:nsd[nsd:id = current()/" +
-                 "../../nsr:nsd-ref]/nsd:monitoring-param/nsd:id";
+            // TODO: Fix leafref
+            type leafref {
+              path "../../../../project-nsd:nsd-catalog/project-nsd:nsd" +
+                "[project-nsd:id = current()/../../nsd-ref]" +
+                "/project-nsd:monitoring-param/project-nsd:id";
+            }
           }
-        }
 
-        list vnfr-mon-param-ref {
-          description "A list of VNFR monitoring params associated with this monp";
-          key "vnfr-id-ref vnfr-mon-param-ref";
+          list vnfr-mon-param-ref {
+            description "A list of VNFR monitoring params associated with this monp";
+            key "vnfr-id-ref vnfr-mon-param-ref";
 
-          leaf vnfr-id-ref {
-            description
-               "A reference to a vnfr. This is a
+            leaf vnfr-id-ref {
+              description
+                "A reference to a vnfr. This is a
                 leafref to path:
                     /vnfr:vnfr-catalog/vnfr:vnfr/vnfr:id";
 
-            type yang:uuid;
-          }
+              type yang:uuid;
+            }
 
-          leaf vnfr-mon-param-ref {
-            description "A reference to the VNFR monitoring param";
-            type leafref {
-              path "/vnfr:vnfr-catalog/vnfr:vnfr"
-                + "[vnfr:id = current()/../nsr:vnfr-id-ref]"
-                + "/vnfr:monitoring-param/vnfr:id";
+            leaf vnfr-mon-param-ref {
+              description "A reference to the VNFR monitoring param";
+              type leafref {
+                path "../../../../../vnfr:vnfr-catalog/vnfr:vnfr"
+                  + "[vnfr:id = current()/../vnfr-id-ref]"
+                  + "/vnfr:monitoring-param/vnfr:id";
+              }
             }
           }
         }
-      }
 
-      list config-agent-job {
-        key "job-id";
+        list config-agent-job {
+          key "job-id";
 
-        leaf job-id {
-          description "config agent job Identifier for the NS.";
-          type uint64;
-        }
+          leaf job-id {
+            description "config agent job Identifier for the NS.";
+            type uint64;
+          }
 
-        leaf job-name {
-          description "Config agent job name";
-          type string;
-        }
+          leaf job-name {
+            description "Config agent job name";
+            type string;
+          }
 
-        leaf job-status {
-          description
+          leaf job-status {
+            description
               "Job status to be set based on each VNF primitive execution,
                pending  - if at least one VNF is in pending state
                           and remaining VNFs are in success state.
                Success  - if all VNF executions are in success state
                failure  - if one of the VNF executions is failure";
-          type enumeration {
-            enum pending;
-            enum success;
-            enum failure;
-          }
-        }
-
-        leaf triggered-by {
-          description "The primitive is triggered from NS or VNF level";
-          type trigger-type;
-        }
-
-        leaf create-time {
-          description
-            "Creation timestamp of this Config Agent Job.
-            The timestamp is expressed as seconds
-            since unix epoch - 1970-01-01T00:00:00Z";
-
-          type uint32;
-        }
-
-        leaf job-status-details {
-          description "Config agent job status details, in case of errors";
-          type string;
-        }
-
-        uses manotypes:primitive-parameter-value;
-
-        list parameter-group {
-          description
-              "List of NS Primitive parameter groups";
-          key "name";
-          leaf name {
-            description
-                "Name of the parameter.";
-            type string;
-          }
-
-          uses manotypes:primitive-parameter-value;
-        }
-
-        list vnfr {
-          key "id";
-          leaf id {
-            description "Identifier for the VNFR.";
-            type yang:uuid;
-          }
-          leaf vnf-job-status {
-            description
-                "Job status to be set based on each VNF primitive execution,
-                 pending  - if at least one primitive is in pending state
-                            and remaining primitives are in success state.
-                 Success  - if all primitive executions are in success state
-                 failure  - if one of the primitive executions is failure";
             type enumeration {
               enum pending;
               enum success;
@@ -1067,30 +1057,85 @@ module nsr
             }
           }
 
-          list primitive {
+          leaf triggered-by {
+            description "The primitive is triggered from NS or VNF level";
+            type trigger-type;
+          }
+
+          leaf create-time {
+            description
+              "Creation timestamp of this Config Agent Job.
+            The timestamp is expressed as seconds
+            since unix epoch - 1970-01-01T00:00:00Z";
+
+            type uint32;
+          }
+
+          leaf job-status-details {
+            description "Config agent job status details, in case of errors";
+            type string;
+          }
+
+          uses manotypes:primitive-parameter-value;
+
+          list parameter-group {
+            description
+              "List of NS Primitive parameter groups";
             key "name";
             leaf name {
-              description "the name of the primitive";
+              description
+                "Name of the parameter.";
               type string;
             }
 
             uses manotypes:primitive-parameter-value;
+          }
 
-            leaf execution-id {
-              description "Execution id of the primitive";
-              type string;
+          list vnfr {
+            key "id";
+            leaf id {
+              description "Identifier for the VNFR.";
+              type yang:uuid;
             }
-            leaf execution-status {
-              description "status of the Execution";
+            leaf vnf-job-status {
+              description
+                "Job status to be set based on each VNF primitive execution,
+                 pending  - if at least one primitive is in pending state
+                            and remaining primitives are in success state.
+                 Success  - if all primitive executions are in success state
+                 failure  - if one of the primitive executions is failure";
               type enumeration {
                 enum pending;
                 enum success;
                 enum failure;
               }
             }
-            leaf execution-error-details {
-              description "Error details if execution-status is failure";
-              type string;
+
+            list primitive {
+              key "name";
+              leaf name {
+                description "the name of the primitive";
+                type string;
+              }
+
+              uses manotypes:primitive-parameter-value;
+
+              leaf execution-id {
+                description "Execution id of the primitive";
+                type string;
+              }
+              leaf execution-status {
+                description "status of the Execution";
+                type enumeration {
+                  enum pending;
+                  enum success;
+                  enum failure;
+                }
+              }
+              leaf execution-error-details {
+                description "Error details if execution-status is failure";
+                type string;
+              }
             }
           }
         }
@@ -1098,22 +1143,30 @@ module nsr
     }
   }
 
+  grouping rpc-common {
+    uses manotypes:rpc-project-name;
+
+    leaf nsr_id_ref {
+      description "Reference to NSR ID ref";
+      type leafref {
+        path "/rw-project:project[rw-project:name=current()/.." +
+          "/nsr:project-name]/nsr:ns-instance-config/nsr:nsr/nsr:id";
+      }
+      mandatory true;
+    }
+  }
+
   rpc get-ns-service-primitive-values {
     description "Get the service primitive parameter values";
-    input {
-      leaf nsr_id_ref {
-        description "Reference to NSR ID ref";
-        mandatory true;
-        type leafref {
-          path "/nsr:ns-instance-config/nsr:nsr/nsr:id";
-        }
-      }
 
+    input {
       leaf name {
         description "Name of the NS service primitive group";
         mandatory true;
         type string;
       }
+
+      uses rpc-common;
     }
 
     output {
@@ -1168,10 +1221,14 @@ module nsr
           description
               "A reference to a vnfd. This is a
                leafref to path:
-                   ../../../../nsd:constituent-vnfd
-                   + [nsd:id = current()/../nsd:id-ref]
-                   + /nsd:vnfd-id-ref
-               NOTE: confd limitations prevent the use of xpath";
+                   ../../../../project-nsd:constituent-vnfd
+                   + [project-nsd:id = current()/../project-nsd:id-ref]
+                   + /project-nsd:vnfd-id-ref
+               NOTE: An issue with confd is preventing the
+               use of xpath. Seems to be an issue with leafref
+               to leafref, whose target is in a different module.
+               Once that is resolved this will switched to use
+               leafref";
 
           type string;
         }
@@ -1215,12 +1272,7 @@ module nsr
         type string;
       }
 
-      leaf nsr_id_ref {
-        description "Reference to NSR ID ref";
-        type leafref {
-          path "/nsr:ns-instance-config/nsr:nsr/nsr:id";
-        }
-      }
+      uses rpc-common;
 
       leaf triggered-by {
         description "The primitive is triggered from NS or VNF level";
@@ -1297,12 +1349,7 @@ module nsr
         type string;
       }
 
-      leaf nsr_id_ref {
-        description "Reference to NSR ID ref";
-        type leafref {
-          path "/nsr:ns-instance-config/nsr:nsr/nsr:id";
-        }
-      }
+      uses rpc-common;
 
       leaf triggered-by {
         description "The primitive is triggered from NS or VNF level";
@@ -1397,22 +1444,29 @@ module nsr
     description "Executes scale out request";
 
     input {
-
-      leaf nsr-id-ref {
-        description "Reference to NSR ID ref";
-        type leafref {
-          path "/nsr:ns-instance-config/nsr:nsr/nsr:id";
-        }
-      }
+      uses rpc-common;
 
       leaf scaling-group-name-ref {
         description "name of the scaling group";
-        type string;
+        type leafref {
+          path "/rw-project:project[rw-project:name=current()/.." +
+            "/nsr:project-name]/nsr:ns-instance-config/nsr:nsr" +
+            "[nsr:id=current()/../nsr:nsr_id_ref]/nsr:nsd" +
+            "/nsr:scaling-group-descriptor/nsr:name";
+        }
+        mandatory true;
       }
 
       leaf instance-id {
         description "id of the scaling group";
-        type uint64;
+        type leafref {
+          path "/rw-project:project[rw-project:name=current()/.." +
+            "/nsr:project-name]/nsr:ns-instance-config/nsr:nsr" +
+            "[nsr:id=current()/../nsr:nsr_id_ref]" +
+            "/nsr:scaling-group[nsr:scaling-group-name-ref=current()/.." +
+            "/nsr:scaling-group-name-ref]/nsr:instance/nsr:id";
+        }
+        mandatory true;
       }
 
 
@@ -1429,25 +1483,25 @@ module nsr
     description "Executes scale out request";
 
     input {
-
-      leaf nsr-id-ref {
-        description "Reference to NSR ID ref";
-        type leafref {
-          path "/nsr:ns-instance-config/nsr:nsr/nsr:id";
-        }
-      }
+      uses rpc-common;
 
       leaf scaling-group-name-ref {
         description "name of the scaling group";
-        type string;
+        type leafref {
+          path "/rw-project:project[rw-project:name=current()/.." +
+            "/nsr:project-name]/nsr:ns-instance-config/nsr:nsr" +
+            "[nsr:id=current()/../nsr:nsr_id_ref]/nsr:nsd" +
+            "/nsr:scaling-group-descriptor/nsr:name";
+        }
+        mandatory true;
       }
 
       leaf instance-id {
         description "id of the scaling group";
         type uint64;
       }
-
     }
+
     output {
      leaf instance-id {
         description "id of the scaling group";
@@ -1456,4 +1510,109 @@ module nsr
     }
   }
 
+  rpc start-network-service {
+    description "Start the network service";
+    input {
+      leaf name {
+        mandatory true;
+        description "Name of the Network Service";
+        type string;
+      }
+
+      uses manotypes:rpc-project-name;
+
+      leaf nsd_id_ref {
+        description "Reference to NSD ID ref";
+        type leafref {
+          path "/rw-project:project[rw-project:name=current()/.." +
+            "/project-name]/project-nsd:nsd-catalog/project-nsd:nsd/project-nsd:id";
+        }
+      }
+      uses ns-instance-config-params-common;
+
+      list vnfd-placement-group-maps {
+        description
+          "Mapping from mano-placement groups construct from VNFD to cloud
+          platform placement group construct";
+
+        key "placement-group-ref vnfd-id-ref";
+
+        leaf vnfd-id-ref {
+          description
+            "A reference to a vnfd. This is a
+          leafref to path:
+          ../../../../project-nsd:constituent-vnfd
+          + [id = current()/../project-nsd:id-ref]
+          + /project-nsd:vnfd-id-ref
+          NOTE: An issue with confd is preventing the
+          use of xpath. Seems to be an issue with leafref
+          to leafref, whose target is in a different module.
+          Once that is resovled this will switched to use
+          leafref";
+          type yang:uuid;
+        }
+
+        leaf placement-group-ref {
+          description
+            "A reference to VNFD placement group";
+          type leafref {
+            path "/rw-project:project[rw-project:name=current()/" +
+              "../../project-name]/project-vnfd:vnfd-catalog/project-vnfd:vnfd[project-vnfd:id = " +
+              "current()/../vnfd-id-ref]/project-vnfd:placement-groups/project-vnfd:name";
+          }
+        }
+
+        uses manotypes:placement-group-input;
+
+        list ssh-authorized-key {
+          key "key-pair-ref";
+
+          description "List of authorized ssh keys as part of cloud-config";
+
+          leaf key-pair-ref {
+            description "A reference to the key pair entry in the global key pair table";
+            type leafref {
+              path "/rw-project:project[rw-project:name=current()/../../../" +
+                "project-name]/key-pair/name";
+            }
+          }
+        }
+
+        list user {
+          key "name";
+
+          description "List of users to be added through cloud-config";
+          leaf name {
+            description "Name of the user ";
+            type string;
+          }
+          leaf user-info {
+            description "The user name's real name";
+            type string;
+          }
+          list ssh-authorized-key {
+            key "key-pair-ref";
+
+            description "Used to configure the list of public keys to be injected as part
+                        of ns instantiation";
+
+            leaf key-pair-ref {
+              description "A reference to the key pair entry in the global key pair table";
+              type leafref {
+                path "/rw-project:project[rw-project:name=current()/" +
+                  "../../../../project-name]/key-pair/name";
+              }
+            }
+          }
+        }
+      }
+    }
+
+    output {
+      leaf nsr-id {
+        description "Automatically generated parameter";
+        type yang:uuid;
+      }
+    }
+  }
 }

@@ -13,10 +13,6 @@ module ietf-network {
     prefix inet;
   }
 
-  import rw-pb-ext {
-    prefix "rwpb";
-  }
-
   organization "TBD";
   contact
     "WILL-BE-DEFINED-LATER";

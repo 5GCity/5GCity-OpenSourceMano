@@ -1,7 +1,7 @@
 
 /*
  *
- *   Copyright 2016 RIFT.IO Inc
+ *   Copyright 2016-2017 RIFT.IO Inc
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -31,6 +31,15 @@ module mano-types
     prefix "rwpb";
   }
 
+  import rw-project {
+    prefix "rw-project";
+  }
+
+  revision 2017-02-08 {
+    description
+      "Update model to support projects.";
+  }
+
   revision 2015-04-23 {
     description
       "Initial revision. This YANG file defines
@@ -38,6 +47,12 @@ module mano-types
        and Orchestration (MANO).";
     reference
       "Derived from earlier versions of base YANG files";
+  }
+
+  typedef meta-data-type {
+    type enumeration {
+      enum STRING;
+    }
   }
 
   typedef package-type {
@@ -109,6 +124,7 @@ module mano-types
         "The value should be dimmed by the UI.
         Only applies to parameters with default values.";
       type boolean;
+      default false;
     }
 
     leaf hidden {
@@ -116,6 +132,7 @@ module mano-types
         "The value should be hidden by the UI.
         Only applies to parameters with default values.";
       type boolean;
+      default false;
     }
   }
 
@@ -146,28 +163,7 @@ module mano-types
     }
   }
 
-  grouping image-properties {
-    leaf image {
-      description
-            "Image name for the software image.
-             If the image name is found within the VNF package it will
-             be uploaded to all VIM accounts during onboarding process.
-             Otherwise, the image must be added to the VIM account with
-             the same name as entered here.
-            ";
-      type string;
-    }
-
-    leaf image-checksum {
-      description
-            "Image md5sum for the software image.
-            The md5sum, if provided, along with the image name uniquely
-            identifies an image uploaded to the CAL.
-            ";
-      type string;
-    }
-  }
-  grouping initial-config {
+  grouping event-config {
     leaf seq {
       description
           "Sequence number for the configuration primitive.";
@@ -199,6 +195,29 @@ module mano-types
       }
     }
   }
+  
+ grouping image-properties {
+    leaf image {
+      description
+            "Image name for the software image.
+             If the image name is found within the VNF package it will
+             be uploaded to all VIM accounts during onboarding process.
+             Otherwise, the image must be added to the VIM account with
+             the same name as entered here.
+            ";
+      type string;
+    }
+
+    leaf image-checksum {
+      description
+            "Image md5sum for the software image.
+            The md5sum, if provided, along with the image name uniquely
+            identifies an image uploaded to the CAL.
+            ";
+      type string;
+    }
+  }
+
 
   grouping vca-relationships {
     container vca-relationships {
@@ -267,21 +286,28 @@ module mano-types
       list service-primitive {
         rwpb:msg-new ServicePrimitive;
         description
-          "List of service primitives supported by the
+          "List of config primitives supported by the
           configuration agent for this VNF or VDU.";
         key "name";
 
         leaf name {
           description
-            "Name of the service primitive.";
+            "Name of the config primitive.";
           type string;
         }
 
         list parameter {
           description
-            "List of parameters to the service primitive.";
+            "List of parameters to the config primitive.";
           key "name";
           uses primitive-parameter;
+        }
+
+        leaf user-defined-script {
+          description
+            "A user defined script. If user defined script is defined,
+             the script will be executed using bash";
+          type string;
         }
       }
 
@@ -290,7 +316,29 @@ module mano-types
         description
           "Initial set of configuration primitives.";
         key "seq";
-        uses initial-config;
+        leaf seq {
+          description
+              "Sequence number for the configuration primitive.";
+          type uint64;
+        }
+
+        choice primitive-type {
+          case primitive-definition {
+            leaf name {
+              description
+                "Name of the configuration primitive.";
+              type string;
+            }
+
+            uses primitive-parameter-value;
+
+            leaf user-defined-script {
+              description
+                "A user defined script.";
+              type string;
+            }
+          }
+        }
       }
     }
   } // END - grouping vca-configuration
@@ -299,15 +347,15 @@ module mano-types
     description
         "Type of virtual link
          ELAN: A multipoint service connecting a set of VNFs
-         // ELINE: For a simple point to point connection
+         ELINE: For a simple point to point connection
          //        between a VNF and the existing network.
          // ETREE: A multipoint service connecting one or
          //        more roots and a set of leaves, but
          //        preventing inter-leaf communication.";
     type enumeration {
       enum ELAN;
+      enum ELINE;
       // enum ETREE;
-      // enum ELINE;
     }
   }
 
@@ -387,12 +435,12 @@ module mano-types
     description
         "Type of the widget, typically used by the UI.";
     type enumeration {
+      enum COUNTER;
+      enum GAUGE;
+      enum TEXTBOX;
+      enum SLIDER;
       enum HISTOGRAM;
       enum BAR;
-      enum GAUGE;
-      enum SLIDER;
-      enum COUNTER;
-      enum TEXTBOX;
     }
   }
 
@@ -599,6 +647,13 @@ module mano-types
       }
     }
   } //grouping vm-flavor
+
+	grouping vm-flavor-name {
+  	leaf vm-flavor-name {
+  		description "flavor name to be used while creating vm using cloud account";
+  		type string;
+  	}
+	}
 
   grouping vswitch-epa {
     container vswitch-epa {
@@ -957,26 +1012,112 @@ module mano-types
         type string;
       }
 
-      leaf overlay-type {
-        description
-            "Type of the overlay network.
-             LOCAL - Provider network implemented in a single compute node
-             FLAT - Provider network shared by all tenants
-             VLAN - Provider network implemented using 802.1Q tagging
-             VXLAN - Provider networks implemented using RFC 7348
-             GRE - Provider networks implemented using GRE tunnels";
-        type enumeration {
-          enum LOCAL;
-          enum FLAT;
-          enum VLAN;
-          enum VXLAN;
-          enum GRE;
-        }
-      }
       leaf segmentation_id {
         description
             "ID of segregated virtual networks";
             type uint32;
+      }
+    }
+  }
+
+  grouping ns-service-primitive {
+    list service-primitive {
+      description
+          "Network service level service primitives.";
+
+      key "name";
+
+      leaf name {
+        description
+            "Name of the service primitive.";
+        type string;
+      }
+
+      list parameter {
+        description
+            "List of parameters for the service primitive.";
+
+        key "name";
+        uses manotypes:primitive-parameter;
+      }
+
+      list parameter-group {
+        description
+            "Grouping of parameters which are logically grouped in UI";
+        key "name";
+
+        leaf name {
+          description
+              "Name of the parameter group";
+          type string;
+        }
+
+        list parameter {
+          description
+              "List of parameters for the service primitive.";
+          key "name";
+          uses manotypes:primitive-parameter;
+        }
+
+        leaf mandatory {
+          description "Is this parameter group mandatory";
+          type boolean;
+          default true;
+        }
+      }
+
+      list vnf-primitive-group {
+        description
+            "List of service primitives grouped by VNF.";
+
+        key "member-vnf-index-ref";
+        leaf member-vnf-index-ref {
+          description
+              "Reference to member-vnf within constituent-vnfds";
+          type uint64;
+        }
+
+        leaf vnfd-id-ref {
+          description
+              "A reference to a vnfd. This is a
+               leafref to path:
+                   ../../../../nsd:constituent-vnfd
+                   + [nsd:id = current()/../nsd:id-ref]
+                   + /nsd:vnfd-id-ref
+               NOTE: An issue with confd is preventing the
+               use of xpath. Seems to be an issue with leafref
+               to leafref, whose target is in a different module.
+               Once that is resolved this will switched to use
+               leafref";
+
+          type string;
+        }
+
+        leaf vnfd-name {
+          description
+              "Name of the VNFD";
+          type string;
+        }
+
+        list primitive {
+          key "index";
+
+          leaf index {
+            description "Index of this primitive";
+            type uint32;
+          }
+
+          leaf name {
+            description "Name of the primitive in the VNF primitive ";
+            type string;
+          }
+        }
+      }
+
+      leaf user-defined-script {
+        description
+            "A user defined script.";
+        type string;
       }
     }
   }
@@ -1116,6 +1257,7 @@ module mano-types
       leaf widget-type {
         description "Defines the UI Display variant of measured counters.";
         type manotypes:widget-type;
+        default "COUNTER";
       }
 
       leaf units {
@@ -1356,7 +1498,7 @@ module mano-types
       }
 
       leaf default-value {
-        description "/nsd:nsd-catalog/nsd:nsd/nsd:vendor";
+        description "Default Value for the Input Parameter";
         type string;
       }
     }
@@ -1799,6 +1941,56 @@ module mano-types
     }
   }
 
+  grouping cloud-config {
+    list key-pair {
+      key "name";
+      description "Used to configure the list of public keys to be injected as part
+          of ns instantiation";
+
+      leaf name {
+        description "Name of this key pair";
+        type string;
+      }
+
+      leaf key {
+        description "Key associated with this key pair";
+        type string;
+      }
+    }
+
+    list user {
+      rwpb:msg-new CloudConfigUser;
+      key "name";
+      description "List of users to be added through cloud-config";
+
+      leaf name {
+        description "Name of the user ";
+        type string;
+      }
+
+      leaf user-info {
+        description "The user name's real name";
+        type string;
+      }
+
+      list key-pair {
+        key "name";
+        description "Used to configure the list of public keys to be injected as part
+            of ns instantiation";
+
+        leaf name {
+          description "Name of this key pair";
+          type string;
+        }
+
+        leaf key {
+          description "Key associated with this key pair";
+          type string;
+        }
+      }
+    }
+  }
+
   grouping placement-group-info {
     description "";
 
@@ -1861,8 +2053,8 @@ module mano-types
       list dns-server {
         key "address";
         leaf address {
-					description "List of DNS Servers associated with IP Profile";
-					type inet:ip-address;
+          description "List of DNS Servers associated with IP Profile";
+          type inet:ip-address;
         }
       }
 
@@ -1972,7 +2164,6 @@ module mano-types
       case image {
         uses image-properties;
       }
-
     }
 
     leaf device-bus {
@@ -1994,6 +2185,16 @@ module mano-types
           enum lun;
       }
     }
+  }
 
+  grouping rpc-project-name {
+    leaf project-name {
+      default "default";
+      description
+        "Project to which this belongs";
+      type leafref {
+        path "/rw-project:project/rw-project:name";
+      }
+    }
   }
 }

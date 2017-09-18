@@ -1,7 +1,7 @@
 
 /*
  * 
- *   Copyright 2016 RIFT.IO Inc
+ *   Copyright 2016-2017 RIFT.IO Inc
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -27,10 +27,6 @@ module vlr
     prefix "rwpb";
   }
 
-  import ietf-inet-types {
-    prefix "inet";
-  }
-
   import ietf-yang-types {
     prefix "yang";
   }
@@ -39,6 +35,14 @@ module vlr
     prefix "manotypes";
   }
 
+  import rw-project {
+    prefix "rw-project";
+  }
+
+  revision 2017-02-08 {
+    description
+      "Update model to support projects.";
+  }
 
   revision 2015-09-10 {
     description
@@ -48,125 +52,127 @@ module vlr
       "Derived from earlier versions of base YANG files";
   }
 
-  container vlr-catalog {
-    config false;
+  augment "/rw-project:project" {
+    container vlr-catalog {
+      config false;
 
-    list vlr {
-      key "id";
-      unique "name";
+      list vlr {
+        key "id";
+        unique "name";
 
-      leaf id {
-        description "Identifier for the VLR.";
-        type yang:uuid;
-      }
+        leaf id {
+          description "Identifier for the VLR.";
+          type yang:uuid;
+        }
 
-      leaf name {
-        description "VLR name.";
-        type string;
-      }
+        leaf name {
+          description "VLR name.";
+          type string;
+        }
 
-      leaf nsr-id-ref {
-        description 
+        leaf nsr-id-ref {
+          description
             "NS instance identifier. 
-             This is a leafref /nsr:ns-instance-config/nsr:nsr/nsr:id";
-        type yang:uuid;
-      }
+             This is a leafref /rw-project:project/nsr:ns-instance-config/nsr:nsr/nsr:id";
+          type yang:uuid;
+        }
 
-      leaf vld-ref {
-        description
-          "Reference to VLD
-           /nsr:ns-instance-config/nsr:nsr[nsr:id=../nsr-id-ref]/nsd/vld:vld/vld:id";
-        type string;
-      }
+        leaf vld-ref {
+          description
+            "Reference to VLD
+           /rw-project:project/nsr:ns-instance-config/nsr:nsr[nsr:id=../nsr-id-ref]
+           /nsd/vld:vld/vld:id";
+          type string;
+        }
 
-      leaf res-id {
-        description "Identifier for resmgr id mapping";
-        type yang:uuid;
-      }
+        leaf res-id {
+          description "Identifier for resmgr id mapping";
+          type yang:uuid;
+        }
 
-      leaf short-name {
-        description "Short name to appear as label in the UI";
-        type string;
-      }
+        leaf short-name {
+          description "Short name to appear as label in the UI";
+          type string;
+        }
 
-      leaf vendor {
-        description "Provider of the VLR.";
-        type string;
-      }
+        leaf vendor {
+          description "Provider of the VLR.";
+          type string;
+        }
 
-      leaf description {
-        description "Description of the VLR.";
-        type string;
-      }
+        leaf description {
+          description "Description of the VLR.";
+          type string;
+        }
 
-      leaf version {
-        description "Version of the VLR";
-        type string;
-      }
+        leaf version {
+          description "Version of the VLR";
+          type string;
+        }
 
-      leaf type {
-        type manotypes:virtual-link-type;
-      }
+        leaf type {
+          type manotypes:virtual-link-type;
+        }
 
-      leaf root-bandwidth {
-        description
+        leaf root-bandwidth {
+          description
             "For ELAN this is the aggregate bandwidth.";
-        type uint64;
-      }
+          type uint64;
+        }
 
-      leaf leaf-bandwidth {
-        description
+        leaf leaf-bandwidth {
+          description
             "For ELAN this is the bandwidth of branches.";
-        type uint64;
-      }
+          type uint64;
+        }
 
-      leaf create-time {
-        description
-          "Creation timestamp of this Virtual Link.
+        leaf create-time {
+          description
+            "Creation timestamp of this Virtual Link.
           The timestamp is expressed as seconds 
           since unix epoch - 1970-01-01T00:00:00Z";
 
-        type uint32;
-      }
+          type uint32;
+        }
 
-      leaf uptime {
-        description
-          "Active period of this Virtual Link.
+        leaf uptime {
+          description
+            "Active period of this Virtual Link.
           Uptime is expressed in seconds";
 
-        type uint32;
-      }
+          type uint32;
+        }
 
-      leaf network-id {
-        description 
+        leaf network-id {
+          description
             "Identifier for the allocated network resource.";
-        type string;
-      }
+          type string;
+        }
 
-      leaf vim-network-name {
-        description
+        leaf vim-network-name {
+          description
             "Name of network in VIM account. This is used to indicate
             pre-provisioned network name in cloud account.";
-        type string;
-      }
-
-      // replicate for pnfd container here
-
-      uses manotypes:provider-network;
-      uses manotypes:ip-profile-info;
-      
-      leaf status {
-        description
-            "Status of the virtual link record.";
-        type enumeration {
-          enum LINK_UP;
-          enum DEGRADED;
-          enum LINK_DOWN;
+          type string;
         }
-      }
-      leaf operational-status {
-        description
-          "The operational status of the Virtual Link
+
+        // replicate for pnfd container here
+
+        uses manotypes:provider-network;
+        uses manotypes:ip-profile-info;
+      
+        leaf status {
+          description
+            "Status of the virtual link record.";
+          type enumeration {
+            enum LINK_UP;
+            enum DEGRADED;
+            enum LINK_DOWN;
+          }
+        }
+        leaf operational-status {
+          description
+            "The operational status of the Virtual Link
             init                 : The VL is in init stat.
             vl-alloc-pending     : The VL alloc is pending in VIM
             running              : The VL is up  and running in VM
@@ -175,14 +181,15 @@ module vlr
             failed               : The VL instantiation failed in VIM.
           ";
 
-        type enumeration {
-          rwpb:enum-type "VlOperationalStatus";
-          enum init;
-          enum vl-alloc-pending;
-          enum running;
-          enum vl-terminate-pending;
-          enum terminated;
-          enum failed;
+          type enumeration {
+            rwpb:enum-type "VlOperationalStatus";
+            enum init;
+            enum vl-alloc-pending;
+            enum running;
+            enum vl-terminate-pending;
+            enum terminated;
+            enum failed;
+          }
         }
       }
     }
