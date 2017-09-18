@@ -53,6 +53,13 @@ SEVERITIES = {
     "CRITICAL": "critical",
     "INDETERMINATE": "critical"}
 
+STATISTICS = {
+    "AVERAGE": "avg",
+    "MINIMUM": "min",
+    "MAXIMUM": "max",
+    "COUNT": "count",
+    "SUM": "sum"}
+
 
 class Alarming(object):
     """Carries out alarming requests and responses via Aodh API."""
@@ -333,6 +340,7 @@ class Alarming(object):
             if alarm_state is None:
                 alarm_state = "ok"
 
+            statistic = values['statistic']
             # Try to configure the payload for the update/create request
             # Can only update: threshold, operation, statistic and
             # the severity of the alarm
@@ -341,7 +349,7 @@ class Alarming(object):
                     'metric': metric_name,
                     'resource_id': resource_id,
                     'resource_type': 'generic',
-                    'aggregation_method': values['statistic'].lower()}
+                    'aggregation_method': STATISTICS[statistic]}
             payload = json.dumps({'state': alarm_state,
                                   'name': alarm_name,
                                   'severity': SEVERITIES[severity],
