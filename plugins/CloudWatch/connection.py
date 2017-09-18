@@ -20,11 +20,11 @@
 ##
 
 '''
-AWS-Plugin implements all the methods of MON to interact with AWS using the BOTO client
+Connecting with AWS services --CloudWatch/EC2 using Required keys  
 '''
 
 __author__ = "Wajeeha Hamid"
-__date__   = "31-August-2017"
+__date__   = "18-September-2017"
 
 import sys
 import os
@@ -48,7 +48,7 @@ except:
 class Connection():
     """Connection Establishement with AWS -- VPC/EC2/CloudWatch"""
 #-----------------------------------------------------------------------------------------------------------------------------
-    def setEnvironment(self):   
+    def setEnvironment(self):  
 
         """Credentials for connecting to AWS-CloudWatch""" 
         self.AWS_KEY = os.environ.get("AWS_ACCESS_KEY_ID")
@@ -62,13 +62,13 @@ class Connection():
                 self.vpc_conn = boto.vpc.connect_to_region(self.AWS_REGION,
                     aws_access_key_id=self.AWS_KEY,
                     aws_secret_access_key=self.AWS_SECRET)
-                print self.vpc_conn
+               
                 
                 #EC2 Connection
                 self.ec2_conn = boto.ec2.connect_to_region(self.AWS_REGION,
                     aws_access_key_id=self.AWS_KEY,
                     aws_secret_access_key=self.AWS_SECRET)
-                print self.ec2_conn
+               
                 
                 """ TODO : Required to add actions against alarms when needed """
                 #self.sns = connect_to_region(self.AWS_REGION)
@@ -80,10 +80,10 @@ class Connection():
                     self.AWS_REGION,
                     aws_access_key_id=self.AWS_KEY,
                     aws_secret_access_key=self.AWS_SECRET) 
-
-                return self.cloudwatch_conn
-                print "--- Connection Established with AWS ---"
-                print "\n"
+                connection_dict = dict()
+                connection_dict['ec2_connection'] = self.ec2_conn
+                connection_dict['cloudwatch_connection'] = self.cloudwatch_conn
+                return connection_dict
                 
             except Exception as e:
                 log.error("Failed to Connect with AWS %s: ",str(e)) 
