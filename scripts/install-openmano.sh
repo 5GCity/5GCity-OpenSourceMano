@@ -283,7 +283,8 @@ echo -e "\n"\
     "#####        INSTALLING OVIM LIBRARY                        #####\n"\
     "#################################################################"
 su $SUDO_USER -c "git -C ${BASEFOLDER} clone ${GIT_OVIM_URL} openvim"
-[[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER}/openvim checkout v2.0"
+LATEST_STABLE_TAG=`git -C "${BASEFOLDER}/openvim" tag -l v[0-9].* | tail -n1`
+[[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER}/openvim checkout tags/${LATEST_STABLE_TAG}"
 
 # Install debian dependencies before setup.py
 [ "$_DISTRO" == "Ubuntu" ] && install_packages "libmysqlclient-dev"

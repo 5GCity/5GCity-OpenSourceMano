@@ -427,9 +427,61 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnException("Failed create tenant {}".format(tenant_name))
 
     def delete_tenant(self, tenant_id=None):
-        """Delete a tenant from VIM"""
-        'Returns the tenant identifier'
-        raise vimconn.vimconnNotImplemented("Should have implemented this")
+        """ Delete a tenant from VIM
+             Args:
+                tenant_id is tenant_id to be deleted.
+
+            Return:
+                returns the tenant identifier in UUID format.
+                If action is failed method will throw exception
+        """
+        vca = self.connect_as_admin()
+        if not vca:
+            raise vimconn.vimconnConnectionException("self.connect() is failed")
+
+        if tenant_id is not None:
+            if vca.vcloud_session and vca.vcloud_session.organization:
+                #Get OrgVDC
+                url_list = [self.vca.host, '/api/vdc/', tenant_id]
+                orgvdc_herf = ''.join(url_list)
+                response = Http.get(url=orgvdc_herf,
+                                headers=vca.vcloud_session.get_vcloud_headers(),
+                                verify=vca.verify,
+                                logger=vca.logger)
+
+                if response.status_code != requests.codes.ok:
+                    self.logger.debug("delete_tenant():GET REST API call {} failed. "\
+                                      "Return status code {}".format(orgvdc_herf,
+                                                                     response.status_code))
+                    raise vimconn.vimconnNotFoundException("Fail to get tenant {}".format(tenant_id))
+
+                lxmlroot_respond = lxmlElementTree.fromstring(response.content)
+                namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.iteritems() if prefix}
+                namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
+                vdc_remove_href = lxmlroot_respond.find("xmlns:Link[@rel='remove']",namespaces).attrib['href']
+                vdc_remove_href = vdc_remove_href + '?recursive=true&force=true'
+
+                #Delete OrgVDC
+                response = Http.delete(url=vdc_remove_href,
+                                    headers=vca.vcloud_session.get_vcloud_headers(),
+                                    verify=vca.verify,
+                                    logger=vca.logger)
+
+                if response.status_code == 202:
+                        delete_vdc_task = taskType.parseString(response.content, True)
+                        if type(delete_vdc_task) is GenericTask:
+                            self.vca.block_until_completed(delete_vdc_task)
+                            self.logger.info("Deleted tenant with ID {}".format(tenant_id))
+                            return tenant_id
+                else:
+                    self.logger.debug("delete_tenant(): DELETE REST API call {} failed. "\
+                                      "Return status code {}".format(vdc_remove_href,
+                                                                     response.status_code))
+                    raise vimconn.vimconnException("Fail to delete tenant with ID {}".format(tenant_id))
+        else:
+            self.logger.debug("delete_tenant():Incorrect tenant ID  {}".format(tenant_id))
+            raise vimconn.vimconnNotFoundException("Fail to get tenant {}".format(tenant_id))
+
 
     def get_tenant_list(self, filter_dict={}):
         """Obtain tenants of VIM
@@ -795,12 +847,81 @@ class vimconnector(vimconn.vimconnector):
 
     def delete_image(self, image_id):
         """
-
-        :param image_id:
-        :return:
+            Deletes a tenant image from VIM
+            Args:
+                image_id is ID of Image to be deleted
+            Return:
+                returns the image identifier in UUID format or raises an exception on error
         """
+        vca = self.connect_as_admin()
+        if not vca:
+            raise vimconn.vimconnConnectionException("self.connect() is failed")
+        # Get Catalog details
+        url_list = [self.vca.host, '/api/catalog/', image_id]
+        catalog_herf = ''.join(url_list)
+        response = Http.get(url=catalog_herf,
+                            headers=vca.vcloud_session.get_vcloud_headers(),
+                            verify=vca.verify,
+                            logger=vca.logger)
 
-        raise vimconn.vimconnNotImplemented("Should have implemented this")
+        if response.status_code != requests.codes.ok:
+            self.logger.debug("delete_image():GET REST API call {} failed. "\
+                              "Return status code {}".format(catalog_herf,
+                                                             response.status_code))
+            raise vimconn.vimconnNotFoundException("Fail to get image {}".format(image_id))
+
+        lxmlroot_respond = lxmlElementTree.fromstring(response.content)
+        namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.iteritems() if prefix}
+        namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
+
+        catalogItems_section = lxmlroot_respond.find("xmlns:CatalogItems",namespaces)
+        catalogItems = catalogItems_section.iterfind("xmlns:CatalogItem",namespaces)
+        for catalogItem in catalogItems:
+            catalogItem_href = catalogItem.attrib['href']
+
+            #GET details of catalogItem
+            response = Http.get(url=catalogItem_href,
+                            headers=vca.vcloud_session.get_vcloud_headers(),
+                            verify=vca.verify,
+                            logger=vca.logger)
+
+            if response.status_code != requests.codes.ok:
+                self.logger.debug("delete_image():GET REST API call {} failed. "\
+                                  "Return status code {}".format(catalog_herf,
+                                                                 response.status_code))
+                raise vimconn.vimconnNotFoundException("Fail to get catalogItem {} for catalog {}".format(
+                                                                                    catalogItem,
+                                                                                    image_id))
+
+            lxmlroot_respond = lxmlElementTree.fromstring(response.content)
+            namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.iteritems() if prefix}
+            namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
+            catalogitem_remove_href = lxmlroot_respond.find("xmlns:Link[@rel='remove']",namespaces).attrib['href']
+
+            #Remove catalogItem
+            response = Http.delete(url= catalogitem_remove_href,
+                                    headers=vca.vcloud_session.get_vcloud_headers(),
+                                    verify=vca.verify,
+                                    logger=vca.logger)
+            if response.status_code == requests.codes.no_content:
+                self.logger.debug("Deleted Catalog item {}".format(catalogItem))
+            else:
+                raise vimconn.vimconnException("Fail to delete Catalog Item {}".format(catalogItem))
+
+        #Remove catalog
+        url_list = [self.vca.host, '/api/admin/catalog/', image_id]
+        catalog_remove_herf = ''.join(url_list)
+        response = Http.delete(url= catalog_remove_herf,
+                                    headers=vca.vcloud_session.get_vcloud_headers(),
+                                    verify=vca.verify,
+                                    logger=vca.logger)
+
+        if response.status_code == requests.codes.no_content:
+            self.logger.debug("Deleted Catalog {}".format(image_id))
+            return image_id
+        else:
+            raise vimconn.vimconnException("Fail to delete Catalog {}".format(image_id))
+
 
     def catalog_exists(self, catalog_name, catalogs):
         """
@@ -1252,7 +1373,7 @@ class vimconnector(vimconn.vimconnector):
         return None
 
     def new_vminstance(self, name=None, description="", start=False, image_id=None, flavor_id=None, net_list={},
-                       cloud_config=None, disk_list=None):
+                       cloud_config=None, disk_list=None, availability_zone_index=None, availability_zone_list=None):
         """Adds a VM instance to VIM
         Params:
             start: indicates if VM must start or boot in pause mode. Ignored
@@ -2892,8 +3013,7 @@ class vimconnector(vimconn.vimconnector):
                 # application/vnd.vmware.admin.providervdc+xml
                 # we need find a template from witch we instantiate VDC
                 if child.tag.split("}")[1] == 'VdcTemplate':
-                    if child.attrib.get('type') == 'application/vnd.vmware.admin.vdcTemplate+xml' and child.attrib.get(
-                            'name') == 'openmano':
+                    if child.attrib.get('type') == 'application/vnd.vmware.admin.vdcTemplate+xml':
                         vdc_template_ref = child.attrib.get('href')
         except:
             self.logger.debug("Failed parse respond for rest api call {}".format(vm_list_rest_call))
@@ -2916,6 +3036,11 @@ class vimconnector(vimconn.vimconnector):
             headers['Content-Type'] = 'application/vnd.vmware.vcloud.instantiateVdcTemplateParams+xml'
             response = Http.post(url=vm_list_rest_call, headers=headers, data=data, verify=vca.verify,
                                  logger=vca.logger)
+
+            vdc_task = taskType.parseString(response.content, True)
+            if type(vdc_task) is GenericTask:
+                self.vca.block_until_completed(vdc_task)
+
             # if we all ok we respond with content otherwise by default None
             if response.status_code >= 200 and response.status_code < 300:
                 return response.content
@@ -3889,7 +4014,6 @@ class vimconnector(vimconn.vimconnector):
                                                                            "affinity".format(exp))
 
 
-
     def cloud_init(self, vapp, cloud_config):
         """
         Method to inject ssh-key
@@ -3899,7 +4023,8 @@ class vimconnector(vimconn.vimconnector):
                 'users': (optional) list of users to be inserted, each item is a dict with:
                     'name': (mandatory) user name,
                     'key-pairs': (optional) list of strings with the public key to be inserted to the user
-                'user-data': (optional) string is a text script to be passed directly to cloud-init
+                'user-data': (optional) can be a string with the text script to be passed directly to cloud-init,
+                    or a list of strings, each one contains a script to be passed, usually with a MIMEmultipart file
                 'config-files': (optional). List of files to be transferred. Each item is a dict with:
                     'dest': (mandatory) string with the destination absolute path
                     'encoding': (optional, by default text). Can be one of:
@@ -3909,9 +4034,10 @@ class vimconnector(vimconn.vimconnector):
                     'owner': (optional) file owner, string with the format 'owner:group'
                 'boot-data-drive': boolean to indicate if user-data must be passed using a boot drive (hard disk
         """
-
         try:
-            if isinstance(cloud_config, dict):
+            if not isinstance(cloud_config, dict):
+                raise Exception("cloud_init : parameter cloud_config is not a dictionary")
+            else:
                 key_pairs = []
                 userdata = []
                 if "key-pairs" in cloud_config:
@@ -3920,68 +4046,94 @@ class vimconnector(vimconn.vimconnector):
                 if "users" in cloud_config:
                     userdata = cloud_config["users"]
 
-            for key in key_pairs:
-                for user in userdata:
-                    if 'name' in user: user_name = user['name']
-                    if 'key-pairs' in user and len(user['key-pairs']) > 0:
-                        for user_key in user['key-pairs']:
-                            customize_script = """
-                        #!/bin/bash
-                        echo performing customization tasks with param $1 at `date "+DATE: %Y-%m-%d - TIME: %H:%M:%S"` >> /root/customization.log
-                        if [ "$1" = "precustomization" ];then
-                            echo performing precustomization tasks   on `date "+DATE: %Y-%m-%d - TIME: %H:%M:%S"` >> /root/customization.log
-                            if [ ! -d /root/.ssh ];then
-                                mkdir /root/.ssh
-                                chown root:root /root/.ssh
-                                chmod 700 /root/.ssh
-                                touch /root/.ssh/authorized_keys
-                                chown root:root /root/.ssh/authorized_keys
-                                chmod 600 /root/.ssh/authorized_keys
-                                # make centos with selinux happy
-                                which restorecon && restorecon -Rv /root/.ssh
-                                echo '{key}' >> /root/.ssh/authorized_keys
-                            else
-                                touch /root/.ssh/authorized_keys
-                                chown root:root /root/.ssh/authorized_keys
-                                chmod 600 /root/.ssh/authorized_keys
-                                echo '{key}' >> /root/.ssh/authorized_keys
-                            fi
-                            if [ -d /home/{user_name} ];then
-                                if [ ! -d /home/{user_name}/.ssh ];then
-                                    mkdir /home/{user_name}/.ssh
-                                    chown {user_name}:{user_name} /home/{user_name}/.ssh
-                                    chmod 700 /home/{user_name}/.ssh
-                                    touch /home/{user_name}/.ssh/authorized_keys
-                                    chown {user_name}:{user_name} /home/{user_name}/.ssh/authorized_keys
-                                    chmod 600 /home/{user_name}/.ssh/authorized_keys
-                                    # make centos with selinux happy
-                                    which restorecon && restorecon -Rv /home/{user_name}/.ssh
-                                    echo '{user_key}' >> /home/{user_name}/.ssh/authorized_keys
-                                else
-                                    touch /home/{user_name}/.ssh/authorized_keys
-                                    chown {user_name}:{user_name} /home/{user_name}/.ssh/authorized_keys
-                                    chmod 600 /home/{user_name}/.ssh/authorized_keys
-                                    echo '{user_key}' >> /home/{user_name}/.ssh/authorized_keys
-                                fi
-                            fi
-                        fi""".format(key=key, user_name=user_name, user_key=user_key)
+                self.logger.debug("cloud_init : Guest os customization started..")
+                customize_script = self.format_script(key_pairs=key_pairs, users_list=userdata)
+                self.guest_customization(vapp, customize_script)
 
-                            for vm in vapp._get_vms():
-                                vm_name = vm.name
-                                task = vapp.customize_guest_os(vm_name, customization_script=customize_script)
-                                if isinstance(task, GenericTask):
-                                    self.vca.block_until_completed(task)
-                                    self.logger.info("cloud_init : customized guest os task "\
-                                                        "completed for VM {}".format(vm_name))
-                                else:
-                                    self.logger.error("cloud_init : task for customized guest os"\
-                                                               "failed for VM {}".format(vm_name))
         except Exception as exp:
             self.logger.error("cloud_init : exception occurred while injecting "\
                                                                        "ssh-key")
             raise vimconn.vimconnException("cloud_init : Error {} failed to inject "\
                                                                "ssh-key".format(exp))
 
+    def format_script(self, key_pairs=[], users_list=[]):
+        bash_script = """
+        #!/bin/bash
+        echo performing customization tasks with param $1 at `date "+DATE: %Y-%m-%d - TIME: %H:%M:%S"` >> /root/customization.log
+        if [ "$1" = "precustomization" ];then
+            echo performing precustomization tasks   on `date "+DATE: %Y-%m-%d - TIME: %H:%M:%S"` >> /root/customization.log
+        """
+
+        keys = "\n".join(key_pairs)
+        if keys:
+            keys_data = """
+            if [ ! -d /root/.ssh ];then
+                mkdir /root/.ssh
+                chown root:root /root/.ssh
+                chmod 700 /root/.ssh
+                touch /root/.ssh/authorized_keys
+                chown root:root /root/.ssh/authorized_keys
+                chmod 600 /root/.ssh/authorized_keys
+                # make centos with selinux happy
+                which restorecon && restorecon -Rv /root/.ssh
+            else
+                touch /root/.ssh/authorized_keys
+                chown root:root /root/.ssh/authorized_keys
+                chmod 600 /root/.ssh/authorized_keys
+            fi
+            echo '{key}' >> /root/.ssh/authorized_keys
+            """.format(key=keys)
+
+            bash_script+= keys_data
+
+        for user in users_list:
+            if 'name' in user: user_name = user['name']
+            if 'key-pairs' in user:
+                user_keys = "\n".join(user['key-pairs'])
+            else:
+                user_keys = None
+
+            add_user_name = """
+                useradd -d /home/{user_name} -m -g users -s /bin/bash {user_name}
+                """.format(user_name=user_name)
+
+            bash_script+= add_user_name
+
+            if user_keys:
+                user_keys_data = """
+                mkdir /home/{user_name}/.ssh
+                chown {user_name}:{user_name} /home/{user_name}/.ssh
+                chmod 700 /home/{user_name}/.ssh
+                touch /home/{user_name}/.ssh/authorized_keys
+                chown {user_name}:{user_name} /home/{user_name}/.ssh/authorized_keys
+                chmod 600 /home/{user_name}/.ssh/authorized_keys
+                # make centos with selinux happy
+                which restorecon && restorecon -Rv /home/{user_name}/.ssh
+                echo '{user_key}' >> /home/{user_name}/.ssh/authorized_keys
+                """.format(user_name=user_name,user_key=user_keys)
+
+                bash_script+= user_keys_data
+
+        return bash_script+"\n\tfi"
+
+    def guest_customization(self, vapp, customize_script):
+        """
+        Method to customize guest os
+        vapp - Vapp object
+        customize_script - Customize script to be run at first boot of VM.
+        """
+        for vm in vapp._get_vms():
+            vm_name = vm.name
+            task = vapp.customize_guest_os(vm_name, customization_script=customize_script)
+            if isinstance(task, GenericTask):
+                self.vca.block_until_completed(task)
+                self.logger.info("guest_customization : customized guest os task "\
+                                             "completed for VM {}".format(vm_name))
+            else:
+                self.logger.error("guest_customization : task for customized guest os"\
+                                                    "failed for VM {}".format(vm_name))
+                raise vimconn.vimconnException("guest_customization : failed to perform"\
+                                       "guest os customization on VM {}".format(vm_name))
 
     def add_new_disk(self, vapp_uuid, disk_size):
         """
@@ -4921,7 +5073,7 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnException(message=exp)
 
 
-    def retry_rest(self, api, url, add_headers=None, data=None):
+    def retry_rest(self, method, url, add_headers=None, data=None):
         """ Method to get Token & retry respective REST request
             Args:
                 api - REST API - Can be one of 'GET' or 'PUT' or 'POST'
@@ -4941,25 +5093,30 @@ class vimconnector(vimconn.vimconnector):
         if add_headers:
             headers.update(add_headers)
 
-        if api == 'GET':
+        if method == 'GET':
             response = Http.get(url=url,
                                 headers=headers,
                                 verify=self.vca.verify,
                                 logger=self.vca.logger)
-            return response
-        elif api == 'PUT':
-            if headers:
-                headers.append
+        elif method == 'PUT':
             response = Http.put(url=url,
                                 data=data,
                                 headers=headers,
-                                verify=self.vca.verify, logger=self.logger)
-            return response
-        elif api == 'POST':
+                                verify=self.vca.verify,
+                                logger=self.logger)
+        elif method == 'POST':
             response = Http.post(url=url,
+                                 headers=headers,
+                                 data=data,
+                                 verify=self.vca.verify,
+                                 logger=self.vca.logger)
+        elif method == 'DELETE':
+            response = Http.delete(url=url,
                                  headers=headers,
                                  verify=self.vca.verify,
                                  logger=self.vca.logger)
+        return response
+
 
     def get_token(self):
         """ Generate a new token if expired
@@ -5011,4 +5168,5 @@ class vimconnector(vimconn.vimconnector):
             vdc = self.vca.get_vdc(self.tenant_name)
 
         return vdc
+
 

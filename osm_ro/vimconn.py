@@ -82,6 +82,7 @@ class vimconnNotImplemented(vimconnException):
     def __init__(self, message, http_code=HTTP_Not_Implemented):
         vimconnException.__init__(self, message, http_code)
 
+
 class vimconnector():
     """Abstract base class for all the VIM connector plugins
     These plugins must implement a vimconnector class derived from this 
@@ -115,6 +116,7 @@ class vimconnector():
         self.user      = user
         self.passwd    = passwd
         self.config    = config
+        self.availability_zone = None
         self.logger = logging.getLogger('openmano.vim')
         if log_level:
             self.logger.setLevel( getattr(logging, log_level) )
@@ -353,8 +355,8 @@ class vimconnector():
         """
         raise vimconnNotImplemented( "Should have implemented this" )
 
-    def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None,
-                       disk_list=None):
+    def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
+        availability_zone_index=None, availability_zone_list=None):
         """Adds a VM instance to VIM
         Params:
             'start': (boolean) indicates if VM must start or created in pause mode.
@@ -385,7 +387,8 @@ class vimconnector():
                 'users': (optional) list of users to be inserted, each item is a dict with:
                     'name': (mandatory) user name,
                     'key-pairs': (optional) list of strings with the public key to be inserted to the user
-                'user-data': (optional) string is a text script to be passed directly to cloud-init
+                'user-data': (optional) can be a string with the text script to be passed directly to cloud-init,
+                    or a list of strings, each one contains a script to be passed, usually with a MIMEmultipart file
                 'config-files': (optional). List of files to be transferred. Each item is a dict with:
                     'dest': (mandatory) string with the destination absolute path
                     'encoding': (optional, by default text). Can be one of:
@@ -397,6 +400,9 @@ class vimconnector():
             'disk_list': (optional) list with additional disks to the VM. Each item is a dict with:
                 'image_id': (optional). VIM id of an existing image. If not provided an empty disk must be mounted
                 'size': (mandatory) string with the size of the disk in GB
+            availability_zone_index: Index of availability_zone_list to use for this this VM. None if not AV required
+            availability_zone_list: list of availability zones given by user in the VNFD descriptor.  Ignore if
+                availability_zone_index is None
         Returns the instance identifier or raises an exception on error
         """
         raise vimconnNotImplemented( "Should have implemented this" )
@@ -458,7 +464,7 @@ class vimconnector():
                 suffix:   extra text, e.g. the http path and query string   
         """
         raise vimconnNotImplemented( "Should have implemented this" )
-        
+
 #NOT USED METHODS in current version        
 
     def host_vim2gui(self, host, server_dict):

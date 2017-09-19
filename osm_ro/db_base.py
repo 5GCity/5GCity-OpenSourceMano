@@ -336,7 +336,31 @@ class db_base():
         self.logger.debug(cmd)
         self.cur.execute(cmd) 
         return self.cur.rowcount
-    
+
+    def _new_uuid(self, root_uuid=None, used_table=None, created_time=0):
+        """
+        Generate a new uuid. It DOES NOT begin or end the transaction, so self.con.cursor must be created
+        :param root_uuid: master uuid of the transaction
+        :param used_table: the table this uuid is intended for
+        :param created_time: time of creation
+        :return: the created uuid
+        """
+
+        uuid = str(myUuid.uuid1())
+        # defining root_uuid if not provided
+        if root_uuid is None:
+            root_uuid = uuid
+        if created_time:
+            created_at = created_time
+        else:
+            created_at = time.time()
+        # inserting new uuid
+        cmd = "INSERT INTO uuids (uuid, root_uuid, used_at, created_at) VALUES ('{:s}','{:s}','{:s}', {:f})".format(
+            uuid, root_uuid, used_table, created_at)
+        self.logger.debug(cmd)
+        self.cur.execute(cmd)
+        return uuid
+
     def _new_row_internal(self, table, INSERT, add_uuid=False, root_uuid=None, created_time=0):
         ''' Add one row into a table. It DOES NOT begin or end the transaction, so self.con.cursor must be created
         Attribute 

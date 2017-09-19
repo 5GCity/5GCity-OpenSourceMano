@@ -46,6 +46,7 @@ vnf:
         description:       Bridge interface
     VNFC:                              # Virtual machine array 
     -   name:        TEMPLATE-VM       # name of Virtual Machine
+        # count:       1                 #by default 1
         description: TEMPLATE description
         VNFC image: /path/to/imagefolder/TEMPLATE-VM.qcow2
         # image metadata: {"bus":"ide", "os_type":"windows", "use_incremental": "no" } #Optional

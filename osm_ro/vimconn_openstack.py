@@ -35,6 +35,8 @@ import netaddr
 import time
 import yaml
 import random
+import sys
+import re
 
 from novaclient import client as nClient, exceptions as nvExceptions
 from keystoneauth1.identity import v2, v3
@@ -50,8 +52,11 @@ from httplib import HTTPException
 from neutronclient.neutron import client as neClient
 from neutronclient.common import exceptions as neExceptions
 from requests.exceptions import ConnectionError
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
-'''contain the openstack virtual machine status to openmano status'''
+
+"""contain the openstack virtual machine status to openmano status"""
 vmStatus2manoFormat={'ACTIVE':'ACTIVE',
                      'PAUSED':'PAUSED',
                      'SUSPENDED': 'SUSPENDED',
@@ -64,7 +69,7 @@ netStatus2manoFormat={'ACTIVE':'ACTIVE','PAUSED':'PAUSED','INACTIVE':'INACTIVE',
 
 #global var to have a timeout creating and deleting volumes
 volume_timeout = 60
-server_timeout = 60
+server_timeout = 300
 
 class vimconnector(vimconn.vimconnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None,
@@ -77,6 +82,15 @@ class vimconnector(vimconn.vimconnector):
         if api_version and api_version not in ('v3.3', 'v2.0', '2', '3'):
             raise vimconn.vimconnException("Invalid value '{}' for config:APIversion. "
                                            "Allowed values are 'v3.3', 'v2.0', '2' or '3'".format(api_version))
+        vim_type = config.get('vim_type')
+        if vim_type and vim_type not in ('vio', 'VIO'):
+            raise vimconn.vimconnException("Invalid value '{}' for config:vim_type."
+                            "Allowed values are 'vio' or 'VIO'".format(vim_type))
+
+        if config.get('dataplane_net_vlan_range') is not None:
+            #validate vlan ranges provided by user
+            self._validate_vlan_ranges(config.get('dataplane_net_vlan_range'))
+
         vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
                                       config)
 
@@ -84,17 +98,31 @@ class vimconnector(vimconn.vimconnector):
         if not url:
             raise TypeError, 'url param can not be NoneType'
         self.persistent_info = persistent_info
+        self.availability_zone = persistent_info.get('availability_zone', None)
         self.session = persistent_info.get('session', {'reload_client': True})
         self.nova = self.session.get('nova')
         self.neutron = self.session.get('neutron')
         self.cinder = self.session.get('cinder')
         self.glance = self.session.get('glance')
+        self.glancev1 = self.session.get('glancev1')
         self.keystone = self.session.get('keystone')
         self.api_version3 = self.session.get('api_version3')
+        self.vim_type = self.config.get("vim_type")
+        if self.vim_type:
+            self.vim_type = self.vim_type.upper()
+        if self.config.get("use_internal_endpoint"):
+            self.endpoint_type = "internalURL"
+        else:
+            self.endpoint_type = None
 
         self.logger = logging.getLogger('openmano.vim.openstack')
+
+        ####### VIO Specific Changes #########
+        if self.vim_type == "VIO":
+            self.logger = logging.getLogger('openmano.vim.vio')
+
         if log_level:
-            self.logger.setLevel( getattr(logging, log_level) )
+            self.logger.setLevel( getattr(logging, log_level))
 
     def __getitem__(self, index):
         """Get individuals parameters.
@@ -144,16 +172,36 @@ class vimconnector(vimconn.vimconnector):
                                    tenant_id=self.tenant_id)
             sess = session.Session(auth=auth, verify=not self.insecure)
             if self.api_version3:
-                self.keystone = ksClient_v3.Client(session=sess)
+                self.keystone = ksClient_v3.Client(session=sess, endpoint_type=self.endpoint_type)
             else:
-                self.keystone = ksClient_v2.Client(session=sess)
+                self.keystone = ksClient_v2.Client(session=sess, endpoint_type=self.endpoint_type)
             self.session['keystone'] = self.keystone
-            self.nova = self.session['nova'] = nClient.Client("2.1", session=sess)
-            self.neutron = self.session['neutron'] = neClient.Client('2.0', session=sess)
-            self.cinder = self.session['cinder'] = cClient.Client(2, session=sess)
-            self.glance = self.session['glance'] = glClient.Client(2, session=sess)
+            # In order to enable microversion functionality an explicit microversion must be specified in 'config'.
+            # This implementation approach is due to the warning message in
+            # https://developer.openstack.org/api-guide/compute/microversions.html
+            # where it is stated that microversion backwards compatibility is not guaranteed and clients should
+            # always require an specific microversion.
+            # To be able to use 'device role tagging' functionality define 'microversion: 2.32' in datacenter config
+            version = self.config.get("microversion")
+            if not version:
+                version = "2.1"
+            self.nova = self.session['nova'] = nClient.Client(str(version), session=sess, endpoint_type=self.endpoint_type)
+            self.neutron = self.session['neutron'] = neClient.Client('2.0', session=sess, endpoint_type=self.endpoint_type)
+            self.cinder = self.session['cinder'] = cClient.Client(2, session=sess, endpoint_type=self.endpoint_type)
+            if self.endpoint_type == "internalURL":
+                glance_service_id = self.keystone.services.list(name="glance")[0].id
+                glance_endpoint = self.keystone.endpoints.list(glance_service_id, interface="internal")[0].url
+            else:
+                glance_endpoint = None
+            self.glance = self.session['glance'] = glClient.Client(2, session=sess, endpoint=glance_endpoint)
+            #using version 1 of glance client in new_image()
+            self.glancev1 = self.session['glancev1'] = glClient.Client('1', session=sess,
+                                                                       endpoint=glance_endpoint)
             self.session['reload_client'] = False
             self.persistent_info['session'] = self.session
+            # add availablity zone info inside  self.persistent_info
+            self._set_availablity_zones()
+            self.persistent_info['availability_zone'] = self.availability_zone
 
     def __net_os2mano(self, net_list_dict):
         '''Transform the net openstack format to mano format
@@ -255,6 +303,19 @@ class vimconnector(vimconn.vimconnector):
                 network_dict["provider:network_type"]     = "vlan"
                 if vlan!=None:
                     network_dict["provider:network_type"] = vlan
+
+                ####### VIO Specific Changes #########
+                if self.vim_type == "VIO":
+                    if vlan is not None:
+                        network_dict["provider:segmentation_id"] = vlan
+                    else:
+                        if self.config.get('dataplane_net_vlan_range') is None:
+                            raise vimconn.vimconnConflictException("You must provide "\
+                                "'dataplane_net_vlan_range' in format [start_ID - end_ID]"\
+                                "at config value before creating sriov network with vlan tag")
+
+                        network_dict["provider:segmentation_id"] = self._genrate_vlanID()
+
             network_dict["shared"]=shared
             new_net=self.neutron.create_network({'network':network_dict})
             #print new_net
@@ -484,7 +545,7 @@ class vimconnector(vimconn.vimconnector):
                     while name in fl_names:
                         name_suffix += 1
                         name = flavor_data['name']+"-" + str(name_suffix)
-                        
+
                 ram = flavor_data.get('ram',64)
                 vcpus = flavor_data.get('vcpus',1)
                 numa_properties=None
@@ -500,6 +561,9 @@ class vimconnector(vimconn.vimconnector):
                         numa_properties["hw:mem_page_size"] = "large"
                         numa_properties["hw:cpu_policy"] = "dedicated"
                         numa_properties["hw:numa_mempolicy"] = "strict"
+                        if self.vim_type == "VIO":
+                            numa_properties["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
+                            numa_properties["vmware:latency_sensitivity_level"] = "high"
                         for numa in numas:
                             #overwrite ram and vcpus
                             ram = numa['memory']*1024
@@ -530,7 +594,7 @@ class vimconnector(vimconn.vimconnector):
                                 vcpus, 
                                 flavor_data.get('disk',1),
                                 is_public=flavor_data.get('is_public', True)
-                            ) 
+                            )
                 #add metadata
                 if numa_properties:
                     new_flavor.set_keys(numa_properties)
@@ -564,9 +628,6 @@ class vimconnector(vimconn.vimconnector):
             metadata: metadata of the image
         Returns the image_id
         '''
-        # ALF TODO: revise and change for the new method or session
-        #using version 1 of glance client
-        glancev1 = gl1Client.Client('1',self.glance_endpoint, token=self.keystone.auth_token, **self.k_creds)  #TODO check k_creds vs n_creds
         retry=0
         max_retries=3
         while retry<max_retries:
@@ -597,11 +658,11 @@ class vimconnector(vimconn.vimconnector):
                         disk_format="raw"
                 self.logger.debug("new_image: '%s' loading from '%s'", image_dict['name'], image_dict['location'])
                 if image_dict['location'][0:4]=="http":
-                    new_image = glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
+                    new_image = self.glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
                             container_format="bare", location=image_dict['location'], disk_format=disk_format)
                 else: #local path
                     with open(image_dict['location']) as fimage:
-                        new_image = glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
+                        new_image = self.glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
                             container_format="bare", data=fimage, disk_format=disk_format)
                 #insert metadata. We cannot use 'new_image.properties.setdefault' 
                 #because nova and glance are "INDEPENDENT" and we are using nova for reading metadata
@@ -673,6 +734,41 @@ class vimconnector(vimconn.vimconnector):
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
             self._format_exception(e)
 
+    @staticmethod
+    def _create_mimemultipart(content_list):
+        """Creates a MIMEmultipart text combining the content_list
+        :param content_list: list of text scripts to be combined
+        :return: str of the created MIMEmultipart. If the list is empty returns None, if the list contains only one
+        element MIMEmultipart is not created and this content is returned
+        """
+        if not content_list:
+            return None
+        elif len(content_list) == 1:
+            return content_list[0]
+        combined_message = MIMEMultipart()
+        for content in content_list:
+            if content.startswith('#include'):
+                format = 'text/x-include-url'
+            elif content.startswith('#include-once'):
+                format = 'text/x-include-once-url'
+            elif content.startswith('#!'):
+                format = 'text/x-shellscript'
+            elif content.startswith('#cloud-config'):
+                format = 'text/cloud-config'
+            elif content.startswith('#cloud-config-archive'):
+                format = 'text/cloud-config-archive'
+            elif content.startswith('#upstart-job'):
+                format = 'text/upstart-job'
+            elif content.startswith('#part-handler'):
+                format = 'text/part-handler'
+            elif content.startswith('#cloud-boothook'):
+                format = 'text/cloud-boothook'
+            else:  # by default
+                format = 'text/x-shellscript'
+            sub_message = MIMEText(content, format, sys.getdefaultencoding())
+            combined_message.attach(sub_message)
+        return combined_message.as_string()
+
     def __wait_for_vm(self, vm_id, status):
         """wait until vm is in the desired status and return True.
         If the VM gets in ERROR status, return false.
@@ -692,7 +788,66 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnException('Timeout waiting for instance ' + vm_id + ' to get ' + status,
                                            http_code=vimconn.HTTP_Request_Timeout)
 
-    def new_vminstance(self,name,description,start,image_id,flavor_id,net_list,cloud_config=None,disk_list=None):
+    def _get_openstack_availablity_zones(self):
+        """
+        Get from openstack availability zones available
+        :return:
+        """
+        try:
+            openstack_availability_zone = self.nova.availability_zones.list()
+            openstack_availability_zone = [str(zone.zoneName) for zone in openstack_availability_zone
+                                           if zone.zoneName != 'internal']
+            return openstack_availability_zone
+        except Exception as e:
+            return None
+
+    def _set_availablity_zones(self):
+        """
+        Set vim availablity zone
+        :return:
+        """
+
+        if 'availability_zone' in self.config:
+            vim_availability_zones = self.config.get('availability_zone')
+            if isinstance(vim_availability_zones, str):
+                self.availability_zone = [vim_availability_zones]
+            elif isinstance(vim_availability_zones, list):
+                self.availability_zone = vim_availability_zones
+        else:
+            self.availability_zone = self._get_openstack_availablity_zones()
+
+    def _get_vm_availability_zone(self, availability_zone_index, availability_zone_list):
+        """
+        Return thge availability zone to be used by the created VM.
+        :return: The VIM availability zone to be used or None
+        """
+        if availability_zone_index is None:
+            if not self.config.get('availability_zone'):
+                return None
+            elif isinstance(self.config.get('availability_zone'), str):
+                return self.config['availability_zone']
+            else:
+                # TODO consider using a different parameter at config for default AV and AV list match
+                return self.config['availability_zone'][0]
+
+        vim_availability_zones = self.availability_zone
+        # check if VIM offer enough availability zones describe in the VNFD
+        if vim_availability_zones and len(availability_zone_list) <= len(vim_availability_zones):
+            # check if all the names of NFV AV match VIM AV names
+            match_by_index = False
+            for av in availability_zone_list:
+                if av not in vim_availability_zones:
+                    match_by_index = True
+                    break
+            if match_by_index:
+                return vim_availability_zones[availability_zone_index]
+            else:
+                return availability_zone_list[availability_zone_index]
+        else:
+            raise vimconn.vimconnConflictException("No enough availability zones at VIM for this deployment")
+
+    def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
+                       availability_zone_index=None, availability_zone_list=None):
         '''Adds a VM instance to VIM
         Params:
             start: indicates if VM must start or boot in pause mode. Ignored
@@ -707,6 +862,26 @@ class vimconnector(vimconn.vimconnector):
                 type: 'virtual', 'PF', 'VF', 'VFnotShared'
                 vim_id: filled/added by this function
                 floating_ip: True/False (or it can be None)
+                'cloud_config': (optional) dictionary with:
+                'key-pairs': (optional) list of strings with the public key to be inserted to the default user
+                'users': (optional) list of users to be inserted, each item is a dict with:
+                    'name': (mandatory) user name,
+                    'key-pairs': (optional) list of strings with the public key to be inserted to the user
+                'user-data': (optional) string is a text script to be passed directly to cloud-init
+                'config-files': (optional). List of files to be transferred. Each item is a dict with:
+                    'dest': (mandatory) string with the destination absolute path
+                    'encoding': (optional, by default text). Can be one of:
+                        'b64', 'base64', 'gz', 'gz+b64', 'gz+base64', 'gzip+b64', 'gzip+base64'
+                    'content' (mandatory): string with the content of the file
+                    'permissions': (optional) string with file permissions, typically octal notation '0644'
+                    'owner': (optional) file owner, string with the format 'owner:group'
+                'boot-data-drive': boolean to indicate if user-data must be passed using a boot drive (hard disk)
+            'disk_list': (optional) list with additional disks to the VM. Each item is a dict with:
+                'image_id': (optional). VIM id of an existing image. If not provided an empty disk must be mounted
+                'size': (mandatory) string with the size of the disk in GB
+            availability_zone_index: Index of availability_zone_list to use for this this VM. None if not AV required
+            availability_zone_list: list of availability zones given by user in the VNFD descriptor.  Ignore if
+                availability_zone_index is None
                 #TODO ip, security groups
         Returns the instance identifier
         '''
@@ -738,7 +913,19 @@ class vimconnector(vimconn.vimconnector):
                             metadata_vpci["VF"]=[]
                         metadata_vpci["VF"].append([ net["vpci"], "" ])
                     port_dict["binding:vnic_type"]="direct"
-                else:  # For PT
+                    ########## VIO specific Changes #######
+                    if self.vim_type == "VIO":
+                        #Need to create port with port_security_enabled = False and no-security-groups
+                        port_dict["port_security_enabled"]=False
+                        port_dict["provider_security_groups"]=[]
+                        port_dict["security_groups"]=[]
+                else: #For PT
+                    ########## VIO specific Changes #######
+                    #Current VIO release does not support port with type 'direct-physical'
+                    #So no need to create virtual port in case of PCI-device.
+                    #Will update port_dict code when support gets added in next VIO release
+                    if self.vim_type == "VIO":
+                        raise vimconn.vimconnNotSupportedException("Current VIO release does not support full passthrough (PT)")
                     if "vpci" in net:
                         if "PF" not in metadata_vpci:
                             metadata_vpci["PF"]=[]
@@ -757,7 +944,11 @@ class vimconnector(vimconn.vimconnector):
                     net["ip"] = fixed_ips[0].get("ip_address")
                 else:
                     net["ip"] = None
-                net_list_vim.append({"port-id": new_port["port"]["id"]})
+
+                port = {"port-id": new_port["port"]["id"]}
+                if float(self.nova.api_version.get_string()) >= 2.32:
+                    port["tag"] = new_port["port"]["name"]
+                net_list_vim.append(port)
 
                 if net.get('floating_ip', False):
                     net['exit_on_floating_ip_error'] = True
@@ -788,14 +979,17 @@ class vimconnector(vimconn.vimconnector):
             #cloud config
             userdata=None
             config_drive = None
+            userdata_list = []
             if isinstance(cloud_config, dict):
                 if cloud_config.get("user-data"):
-                    userdata=cloud_config["user-data"]
+                    if isinstance(cloud_config["user-data"], str):
+                        userdata_list.append(cloud_config["user-data"])
+                    else:
+                        for u in cloud_config["user-data"]:
+                            userdata_list.append(u)
                 if cloud_config.get("boot-data-drive") != None:
                     config_drive = cloud_config["boot-data-drive"]
                 if cloud_config.get("config-files") or cloud_config.get("users") or cloud_config.get("key-pairs"):
-                    if userdata:
-                        raise vimconn.vimconnConflictException("Cloud-config cannot contain both 'userdata' and 'config-files'/'users'/'key-pairs'")
                     userdata_dict={}
                     #default user
                     if cloud_config.get("key-pairs"):
@@ -829,8 +1023,9 @@ class vimconnector(vimconn.vimconnector):
                             if file.get("owner"):
                                 file_info["owner"] = file["owner"]
                             userdata_dict["write_files"].append(file_info)
-                    userdata = "#cloud-config\n"
-                    userdata += yaml.safe_dump(userdata_dict, indent=4, default_flow_style=False)
+                    userdata_list.append("#cloud-config\n" + yaml.safe_dump(userdata_dict, indent=4,
+                                                                              default_flow_style=False))
+                    userdata = self._create_mimemultipart(userdata_list)
                 self.logger.debug("userdata: %s", userdata)
             elif isinstance(cloud_config, str):
                 userdata = cloud_config
@@ -874,15 +1069,17 @@ class vimconnector(vimconn.vimconnector):
 
                     raise vimconn.vimconnException('Timeout creating volumes for instance ' + name,
                                                    http_code=vimconn.HTTP_Request_Timeout)
+            # get availability Zone
+            vm_av_zone = self._get_vm_availability_zone(availability_zone_index, availability_zone_list)
 
-            self.logger.debug("nova.servers.create({}, {}, {}, nics={}, meta={}, security_groups={}," \
-                                              "availability_zone={}, key_name={}, userdata={}, config_drive={}, " \
-                                              "block_device_mapping={})".format(name, image_id, flavor_id, net_list_vim,
-                                                metadata, security_groups, self.config.get('availability_zone'),
-                                                self.config.get('keypair'), userdata, config_drive, block_device_mapping))
+            self.logger.debug("nova.servers.create({}, {}, {}, nics={}, meta={}, security_groups={}, "
+                              "availability_zone={}, key_name={}, userdata={}, config_drive={}, "
+                              "block_device_mapping={})".format(name, image_id, flavor_id, net_list_vim, metadata,
+                                                                security_groups, vm_av_zone, self.config.get('keypair'),
+                              userdata, config_drive, block_device_mapping))
             server = self.nova.servers.create(name, image_id, flavor_id, nics=net_list_vim, meta=metadata,
                                               security_groups=security_groups,
-                                              availability_zone=self.config.get('availability_zone'),
+                                              availability_zone=vm_av_zone,
                                               key_name=self.config.get('keypair'),
                                               userdata=userdata,
                                               config_drive=config_drive,
@@ -1263,6 +1460,67 @@ class vimconnector(vimconn.vimconnector):
             self._format_exception(e)
         #TODO insert exception vimconn.HTTP_Unauthorized
 
+    ####### VIO Specific Changes #########
+    def _genrate_vlanID(self):
+        """
+         Method to get unused vlanID
+            Args:
+                None
+            Returns:
+                vlanID
+        """
+        #Get used VLAN IDs
+        usedVlanIDs = []
+        networks = self.get_network_list()
+        for net in networks:
+            if net.get('provider:segmentation_id'):
+                usedVlanIDs.append(net.get('provider:segmentation_id'))
+        used_vlanIDs = set(usedVlanIDs)
+
+        #find unused VLAN ID
+        for vlanID_range in self.config.get('dataplane_net_vlan_range'):
+            try:
+                start_vlanid , end_vlanid = map(int, vlanID_range.replace(" ", "").split("-"))
+                for vlanID in xrange(start_vlanid, end_vlanid + 1):
+                    if vlanID not in used_vlanIDs:
+                        return vlanID
+            except Exception as exp:
+                raise vimconn.vimconnException("Exception {} occurred while generating VLAN ID.".format(exp))
+        else:
+            raise vimconn.vimconnConflictException("Unable to create the SRIOV VLAN network."\
+                " All given Vlan IDs {} are in use.".format(self.config.get('dataplane_net_vlan_range')))
+
+
+    def _validate_vlan_ranges(self, dataplane_net_vlan_range):
+        """
+        Method to validate user given vlanID ranges
+            Args:  None
+            Returns: None
+        """
+        for vlanID_range in dataplane_net_vlan_range:
+            vlan_range = vlanID_range.replace(" ", "")
+            #validate format
+            vlanID_pattern = r'(\d)*-(\d)*$'
+            match_obj = re.match(vlanID_pattern, vlan_range)
+            if not match_obj:
+                raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}.You must provide "\
+                "'dataplane_net_vlan_range' in format [start_ID - end_ID].".format(vlanID_range))
+
+            start_vlanid , end_vlanid = map(int,vlan_range.split("-"))
+            if start_vlanid <= 0 :
+                raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}."\
+                "Start ID can not be zero. For VLAN "\
+                "networks valid IDs are 1 to 4094 ".format(vlanID_range))
+            if end_vlanid > 4094 :
+                raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}."\
+                "End VLAN ID can not be greater than 4094. For VLAN "\
+                "networks valid IDs are 1 to 4094 ".format(vlanID_range))
+
+            if start_vlanid > end_vlanid:
+                raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}."\
+                    "You must provide a 'dataplane_net_vlan_range' in format start_ID - end_ID and "\
+                    "start_ID < end_ID ".format(vlanID_range))
+
 #NOT USED FUNCTIONS
     
     def new_external_port(self, port_data):
@@ -1375,4 +1633,5 @@ class vimconnector(vimconn.vimconnector):
             print "get_hosts " + error_text
         return error_value, error_text        
   
+
 
