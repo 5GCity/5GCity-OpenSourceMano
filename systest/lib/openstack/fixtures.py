@@ -28,10 +28,10 @@ def openstack_add_options(parser):
 def openstack(request):
     from lib.openstack import openstack
     access = {}
-    access['os-url'] = request.config.getoption("--os-url")
-    access['os-username'] = request.config.getoption("--os-username")
-    access['os-password'] = request.config.getoption("--os-password")
-    access['os-project-name'] = request.config.getoption("--os-project-name")
+    access['vim-url'] = request.config.getoption("--os-url")
+    access['vim-username'] = request.config.getoption("--os-username")
+    access['vim-password'] = request.config.getoption("--os-password")
+    access['vim-tenant-name'] = request.config.getoption("--os-project-name")
     access['vim-type'] = 'openstack'
     access['description'] = 'pytest system test'
 
