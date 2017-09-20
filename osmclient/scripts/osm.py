@@ -385,23 +385,32 @@ def config_agent_add(ctx, name, account_type, server, user, secret):
 
 @cli.command(name='vim-create')
 @click.option('--name',
-              prompt=True)
+              prompt=True,
+              help='Name to create datacenter')
 @click.option('--user',
-              prompt=True)
+              prompt=True,
+              help='VIM username')
 @click.option('--password',
               prompt=True,
               hide_input=True,
-              confirmation_prompt=True)
+              confirmation_prompt=True,
+              help='VIM password')
 @click.option('--auth_url',
-              prompt=True)
+              prompt=True,
+              help='VIM connector url')
 @click.option('--tenant',
-              prompt=True)
+              prompt=True,
+              help='tenant name')
 @click.option('--floating_ip_pool',
               default=None)
 @click.option('--keypair',
               default=None)
+@click.option('--config',
+              default=None,
+              help='VIM specific config parameters')
 @click.option('--account_type',
-              default='openstack')
+              default='openstack',
+              help='VIM type')
 @click.option('--description',
               default='no description')
 @click.pass_context
@@ -413,16 +422,18 @@ def vim_create(ctx,
                tenant,
                floating_ip_pool,
                keypair,
+               config,
                account_type,
                description):
     vim = {}
-    vim['os-username'] = user
-    vim['os-password'] = password
-    vim['os-url'] = auth_url
-    vim['os-project-name'] = tenant
+    vim['vim-username'] = user
+    vim['vim-password'] = password
+    vim['vim-url'] = auth_url
+    vim['vim-tenant-name'] = tenant
     vim['floating_ip_pool'] = floating_ip_pool
     vim['keypair'] = keypair
-    vim['vim-type'] = 'openstack'
+    vim['config'] = config
+    vim['vim-type'] = account_type
     vim['description'] = description
     try:
         ctx.obj.vim.create(name, vim)
