@@ -36,15 +36,15 @@ from plugins.OpenStack.response import OpenStack_Response
 __author__ = "Helena McGough"
 
 METRIC_MAPPINGS = {
-    "AVERAGE_MEMORY_UTILIZATION": "memory.percent",
-    "DISK_READ_OPS": "disk.disk_ops",
-    "DISK_WRITE_OPS": "disk.disk_ops",
-    "DISK_READ_BYTES": "disk.disk_octets",
-    "DISK_WRITE_BYTES": "disk.disk_octets",
-    "PACKETS_DROPPED": "interface.if_dropped",
-    "PACKETS_RECEIVED": "interface.if_packets",
-    "PACKETS_SENT": "interface.if_packets",
-    "CPU_UTILIZATION": "cpu.percent",
+    "average_memory_utilization": "memory.percent",
+    "disk_read_ops": "disk.disk_ops",
+    "disk_write_ops": "disk.disk_ops",
+    "disk_read_bytes": "disk.disk_octets",
+    "disk_write_bytes": "disk.disk_octets",
+    "packets_dropped": "interface.if_dropped",
+    "packets_received": "interface.if_packets",
+    "packets_sent": "interface.if_packets",
+    "cpu_utilization": "cpu.percent",
 }
 
 PERIOD_MS = {
@@ -86,7 +86,7 @@ class Metrics(object):
 
             if vim_type == "openstack":
                 # Generate auth_token and endpoint
-                auth_token, endpoint = self.authenticate(values)
+                auth_token, endpoint = self.authenticate()
 
                 if message.key == "create_metric_request":
                     # Configure metric
@@ -211,41 +211,55 @@ class Metrics(object):
             endpoint, auth_token, metric_name, resource_id)
 
         if metric_id is None:
-            # Need to create a new version of the resource for gnocchi to
-            # create the new metric based on that resource
-            url = "{}/v1/resource/generic".format(endpoint)
+            # Try appending metric to existing resource
             try:
-                # Try to create a new resource for the new metric
-                metric = {'name': metric_name,
-                          'archive_policy_name': 'high',
-                          'unit': values['metric_unit'], }
-
-                resource_payload = json.dumps({'id': resource_id,
-                                               'metrics': {
-                                                   metric_name: metric}})
-
-                new_resource = self._common._perform_request(
-                    url, auth_token, req_type="post", payload=resource_payload)
-
-                resource_id = json.loads(new_resource.text)['id']
-            except Exception as exc:
-                # Append new metric to existing resource
-                log.debug("This resource already exists:%s, appending metric.",
-                          exc)
                 base_url = "{}/v1/resource/generic/%s/metric"
                 res_url = base_url.format(endpoint) % resource_id
                 payload = {metric_name: {'archive_policy_name': 'high',
                                          'unit': values['metric_unit']}}
-                self._common._perform_request(
+                result = self._common._perform_request(
                     res_url, auth_token, req_type="post",
                     payload=json.dumps(payload))
+                # Get id of newly created metric
+                for row in json.loads(result.text):
+                    if row['name'] == metric_name:
+                        metric_id = row['id']
+                log.info("Appended metric to existing resource.")
 
-            metric_id = self.get_metric_id(
-                endpoint, auth_token, metric_name, resource_id)
-            return metric_id, resource_id, True
+                return metric_id, resource_id, True
+            except Exception as exc:
+                # Gnocchi version of resource does not exist creating a new one
+                log.info("Failed to append metric to existing resource:%s",
+                         exc)
+                try:
+                    url = "{}/v1/resource/generic".format(endpoint)
+                    metric = {'name': metric_name,
+                              'archive_policy_name': 'high',
+                              'unit': values['metric_unit'], }
+
+                    resource_payload = json.dumps({'id': resource_id,
+                                                   'metrics': {
+                                                       metric_name: metric}})
+
+                    resource = self._common._perform_request(
+                        url, auth_token, req_type="post",
+                        payload=resource_payload)
+
+                    # Return the newly created resource_id for creating alarms
+                    new_resource_id = json.loads(resource.text)['id']
+                    log.info("Created new resource for metric: %s",
+                             new_resource_id)
+
+                    metric_id = self.get_metric_id(
+                        endpoint, auth_token, metric_name, new_resource_id)
+
+                    return metric_id, new_resource_id, True
+                except Exception as exc:
+                    log.warn("Failed to create a new resource:%s", exc)
+            return None, None, False
 
         else:
-            log.debug("This metric already exists for this resource.")
+            log.info("This metric already exists for this resource.")
 
         return metric_id, resource_id, False
 
@@ -318,17 +332,17 @@ class Metrics(object):
                 url, auth_token, req_type="get")
             return json.loads(result.text)['metrics'][metric_name]
         except Exception:
-            log.debug("Metric doesn't exist. No metric_id available")
+            log.info("Metric doesn't exist. No metric_id available")
         return None
 
     def get_metric_name(self, values):
         """Check metric name configuration and normalize."""
         try:
             # Normalize metric name
-            metric_name = values['metric_name']
+            metric_name = values['metric_name'].lower()
             return metric_name, METRIC_MAPPINGS[metric_name]
         except KeyError:
-            log.warn("Metric name %s is invalid.", metric_name)
+            log.info("Metric name %s is invalid.", metric_name)
         return metric_name, None
 
     def read_metric_data(self, endpoint, auth_token, values):
@@ -370,20 +384,17 @@ class Metrics(object):
             log.warn("Failed to gather specified measures: %s", exc)
         return timestamps, data
 
-    def authenticate(self, values):
+    def authenticate(self):
         """Generate an authentication token and endpoint for metric request."""
         try:
             # Check for a tenant_id
-            auth_token = self._common._authenticate(
-                tenant_id=values['tenant_uuid'])
-            endpoint = self._common.get_endpoint("metric")
-        except KeyError:
-            log.warn("Tenant ID is not specified. Will use a generic\
-                      authentication.")
             auth_token = self._common._authenticate()
             endpoint = self._common.get_endpoint("metric")
+            return auth_token, endpoint
+        except Exception as exc:
+            log.warn("Authentication to Keystone failed: %s", exc)
 
-        return auth_token, endpoint
+        return None, None
 
     def response_list(self, metric_list, metric_name=None, resource=None):
         """Create the appropriate lists for a list response."""

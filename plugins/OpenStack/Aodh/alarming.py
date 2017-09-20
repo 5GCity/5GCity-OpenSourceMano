@@ -33,32 +33,30 @@ from plugins.OpenStack.response import OpenStack_Response
 
 __author__ = "Helena McGough"
 
-ALARM_NAMES = [
-    "Average_Memory_Usage_Above_Threshold",
-    "Read_Latency_Above_Threshold",
-    "Write_Latency_Above_Threshold",
-    "DISK_READ_OPS",
-    "DISK_WRITE_OPS",
-    "DISK_READ_BYTES",
-    "DISK_WRITE_BYTES",
-    "Net_Packets_Dropped",
-    "Packets_in_Above_Threshold",
-    "Packets_out_Above_Threshold",
-    "CPU_Utilization_Above_Threshold"]
+ALARM_NAMES = {
+    "average_memory_usage_above_threshold": "average_memory_utilization",
+    "disk_read_ops": "disk_read_ops",
+    "disk_write_ops": "disk_write_ops",
+    "disk_read_bytes": "disk_read_bytes",
+    "disk_write_bytes": "disk_write_bytes",
+    "net_packets_dropped": "packets_dropped",
+    "packets_in_above_threshold": "packets_received",
+    "packets_out_above_threshold": "packets_sent",
+    "cpu_utilization_above_threshold": "cpu_utilization"}
 
 SEVERITIES = {
-    "WARNING": "low",
-    "MINOR": "low",
-    "MAJOR": "moderate",
-    "CRITICAL": "critical",
-    "INDETERMINATE": "critical"}
+    "warning": "low",
+    "minor": "low",
+    "major": "moderate",
+    "critical": "critical",
+    "indeterminate": "critical"}
 
 STATISTICS = {
-    "AVERAGE": "avg",
-    "MINIMUM": "min",
-    "MAXIMUM": "max",
-    "COUNT": "count",
-    "SUM": "sum"}
+    "average": "avg",
+    "minimum": "min",
+    "maximum": "max",
+    "count": "count",
+    "sum": "sum"}
 
 
 class Alarming(object):
@@ -93,7 +91,7 @@ class Alarming(object):
                 log.info("Alarm action required: %s" % (message.topic))
 
                 # Generate and auth_token and endpoint for request
-                auth_token, endpoint = self.authenticate(values)
+                auth_token, endpoint = self.authenticate()
 
                 if message.key == "create_alarm_request":
                     # Configure/Update an alarm
@@ -119,7 +117,7 @@ class Alarming(object):
                     # and generate the appropriate list
                     list_details = values['alarm_list_request']
                     try:
-                        name = list_details['alarm_name']
+                        name = list_details['alarm_name'].lower()
                         alarm_list = self.list_alarms(
                             endpoint, auth_token, alarm_name=name)
                     except Exception as a_name:
@@ -132,11 +130,11 @@ class Alarming(object):
                             log.debug("No resource id specified for this list:\
                                        %s", r_id)
                             try:
-                                severe = list_details['severity']
+                                severe = list_details['severity'].lower()
                                 alarm_list = self.list_alarms(
                                     endpoint, auth_token, severity=severe)
                             except Exception as exc:
-                                log.warn("No severity specified for list: %s.\
+                                log.info("No severity specified for list: %s.\
                                            will return full list.", exc)
                                 alarm_list = self.list_alarms(
                                     endpoint, auth_token)
@@ -216,23 +214,34 @@ class Alarming(object):
         url = "{}/v2/alarms/".format(endpoint)
 
         # Check if the desired alarm is supported
-        alarm_name = values['alarm_name']
-        if alarm_name not in ALARM_NAMES:
+        alarm_name = values['alarm_name'].lower()
+        metric_name = values['metric_name'].lower()
+        resource_id = values['resource_uuid']
+
+        if alarm_name not in ALARM_NAMES.keys():
             log.warn("This alarm is not supported, by a valid metric.")
             return None, False
+        if ALARM_NAMES[alarm_name] != metric_name:
+            log.warn("This is not the correct metric for this alarm.")
+            return None, False
+
+        # Check for the required metric
+        metric_id = self.check_for_metric(auth_token, metric_name, resource_id)
 
         try:
-            metric_name = values['metric_name']
-            resource_id = values['resource_uuid']
-            # Check the payload for the desired alarm
-            payload = self.check_payload(values, metric_name, resource_id,
-                                         alarm_name)
-            new_alarm = self._common._perform_request(
-                url, auth_token, req_type="post", payload=payload)
+            if metric_id is not None:
+                # Create the alarm if metric is available
+                payload = self.check_payload(values, metric_name, resource_id,
+                                             alarm_name)
+                new_alarm = self._common._perform_request(
+                    url, auth_token, req_type="post", payload=payload)
+                return json.loads(new_alarm.text)['alarm_id'], True
+            else:
+                log.warn("The required Gnocchi metric does not exist.")
+                return None, False
 
-            return json.loads(new_alarm.text)['alarm_id'], True
         except Exception as exc:
-            log.warn("Alarm creation could not be performed: %s", exc)
+            log.warn("Failed to create the alarm: %s", exc)
         return None, False
 
     def delete_alarm(self, endpoint, auth_token, alarm_id):
@@ -310,7 +319,7 @@ class Alarming(object):
             metric_name = rule['metric']
         except Exception as exc:
             log.warn("Failed to retreive existing alarm info: %s.\
-                     Can only update OSM created alarms.", exc)
+                     Can only update OSM alarms.", exc)
             return None, False
 
         # Generates and check payload configuration for alarm update
@@ -334,13 +343,13 @@ class Alarming(object):
         """Check that the payload is configuration for update/create alarm."""
         try:
             # Check state and severity
-            severity = values['severity']
-            if severity == "INDETERMINATE":
+            severity = values['severity'].lower()
+            if severity == "indeterminate":
                 alarm_state = "insufficient data"
             if alarm_state is None:
                 alarm_state = "ok"
 
-            statistic = values['statistic']
+            statistic = values['statistic'].lower()
             # Try to configure the payload for the update/create request
             # Can only update: threshold, operation, statistic and
             # the severity of the alarm
@@ -360,20 +369,16 @@ class Alarming(object):
             log.warn("Alarm is not configured correctly: %s", exc)
         return None
 
-    def authenticate(self, values):
+    def authenticate(self):
         """Generate an authentication token and endpoint for alarm request."""
         try:
             # Check for a tenant_id
-            auth_token = self._common._authenticate(
-                tenant_id=values['tenant_uuid'])
-            endpoint = self._common.get_endpoint("alarming")
-        except Exception as exc:
-            log.warn("Tenant ID is not specified. Will use a generic\
-                      authentication: %s", exc)
             auth_token = self._common._authenticate()
             endpoint = self._common.get_endpoint("alarming")
-
-        return auth_token, endpoint
+            return auth_token, endpoint
+        except Exception as exc:
+            log.warn("Authentication to Keystone failed:%s", exc)
+        return None, None
 
     def get_alarm_state(self, endpoint, auth_token, alarm_id):
         """Get the state of the alarm."""
@@ -385,4 +390,24 @@ class Alarming(object):
             return json.loads(alarm_state.text)
         except Exception as exc:
             log.warn("Failed to get the state of the alarm:%s", exc)
+        return None
+
+    def check_for_metric(self, auth_token, m_name, r_id):
+        """Check for the alarm metric."""
+        try:
+            endpoint = self._common.get_endpoint("metric")
+
+            url = "{}/v1/metric/".format(endpoint)
+            metric_list = self._common._perform_request(
+                url, auth_token, req_type="get")
+
+            for metric in json.loads(metric_list.text):
+                name = metric['name']
+                resource = metric['resource_id']
+                if (name == m_name and resource == r_id):
+                    metric_id = metric['id']
+            log.info("The required metric exists, an alarm will be created.")
+            return metric_id
+        except Exception as exc:
+            log.info("Desired Gnocchi metric not found:%s", exc)
         return None

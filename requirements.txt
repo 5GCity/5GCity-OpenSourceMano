@@ -18,3 +18,4 @@ pyopenssl
 python-requests
 cherrypy
 python-bottle
+six

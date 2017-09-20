@@ -21,7 +21,7 @@
 ##
 """Configurations for the OpenStack plugins."""
 
-from __future__ import unicode_literals
+#from __future__ import unicode_literals
 
 import logging as log
 import os
@@ -77,14 +77,19 @@ class Config(object):
     def read_environ(self, service):
         """Check the appropriate environment variables and update defaults."""
         for key in self._config_keys:
-            if (key == "OS_IDENTITY_API_VERSION" or key == "OS_PASSWORD"):
-                val = str(os.environ[key])
-                setattr(self, key, val)
-            elif (key == "OS_AUTH_URL"):
-                val = str(os.environ[key]) + "/v3"
-                setattr(self, key, val)
-            else:
-                # Default username for a service is it's name
-                setattr(self, 'OS_USERNAME', service)
-                log.info("Configuration complete!")
-                return
+            try:
+                if (key == "OS_IDENTITY_API_VERSION" or key == "OS_PASSWORD"):
+                    val = str(os.environ[key])
+                    setattr(self, key, val)
+                elif (key == "OS_AUTH_URL"):
+                    val = str(os.environ[key]) + "/v3"
+                    setattr(self, key, val)
+                else:
+                    # Default username for a service is it's name
+                    setattr(self, 'OS_USERNAME', service)
+                    log.info("Configuration complete!")
+                    return
+            except KeyError as exc:
+                log.warn("Falied to configure plugin: %s", exc)
+                log.warn("Try re-authenticating your OpenStack deployment.")
+        return

@@ -24,7 +24,6 @@
 import logging as log
 
 from plugins.OpenStack.Aodh.alarming import Alarming
-from plugins.OpenStack.Aodh.notifier import Notifier
 from plugins.OpenStack.settings import Config
 
 __author__ = "Helena McGough"
@@ -34,10 +33,9 @@ def register_plugin():
     """Register the plugin."""
     # Initialize configuration and notifications
     config = Config.instance()
-    notifier = Notifier.instance()
 
     # Intialize plugin
-    instance = Plugin(config=config, notifier=notifier)
+    instance = Plugin(config=config)
     instance.config()
     instance.alarm()
 
@@ -45,12 +43,11 @@ def register_plugin():
 class Plugin(object):
     """Aodh plugin for OSM MON."""
 
-    def __init__(self, config, notifier):
+    def __init__(self, config):
         """Plugin instance."""
         log.info("Initialze the plugin instance.")
         self._config = config
         self._alarming = Alarming()
-        self._notifier = notifier
 
     def config(self):
         """Configure plugin."""
@@ -61,12 +58,5 @@ class Plugin(object):
         """Allow alarm info to be received from Aodh."""
         log.info("Begin alarm functionality.")
         self._alarming.alarming()
-
-    def notify(self):
-        """Send notifications to the SO."""
-        # TODO(mcgoughh): Run simultaneously so that notifications
-        # can be sent while messages are being consumed
-        log.info("Sending Openstack notifications to the SO.")
-        self._notifier.notify(self._alarming)
 
 register_plugin()
