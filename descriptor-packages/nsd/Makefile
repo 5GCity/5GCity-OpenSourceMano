@@ -13,7 +13,6 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 #
-
-SUBDIRS = vnfd nsd
-
-include mk/dirs.mk
+SUBDIRS = $(wildcard */)
+TOPDIR ?= ../
+include $(TOPDIR)/mk/dirs.mk

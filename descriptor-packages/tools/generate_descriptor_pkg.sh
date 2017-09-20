@@ -554,7 +554,7 @@ if [ $? != 0 ] ; then
     exit 1
 fi
 
-echo "$OPTS"
+#echo "$OPTS"
 eval set -- "$OPTS >/dev/null 2>&1"
 
 while true; do
@@ -795,7 +795,12 @@ if [ $CREATE == false ]; then
 
     cd $BASE_DIR
     if [ $DRY_RUN == false ]; then
-        tar zcvf "$DEST_DIR/$PKG.tar.gz" "${PKG}" ${RM}
+        if [ $VERBOSE == true ]; then
+            tar zcvf "$DEST_DIR/$PKG.tar.gz" "${PKG}" ${RM}
+        else
+            #tar zcvf ${name}.tar.gz ${name} >/dev/null 2>&1
+            tar zcvf "$DEST_DIR/$PKG.tar.gz" "${PKG}" ${RM} > /dev/null 2>&1
+        fi
         if [ $? -ne 0 ]; then
             rc=$?
             echo "ERROR: creating archive for $PKG ($rc)" >&2

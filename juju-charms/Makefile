@@ -17,12 +17,13 @@
 
 BUILD_DIR = .
 
-CHARMS:= vpe-router vyos-proxy pingpong flownac sandvine-pts-proxy
+CHARMS:= pingpong vyos-proxy netutils
 CHARM_SRC_DIR := layers
 CHARM_BUILD_DIR := $(BUILD_DIR)/builds
 
 CHARM_SRC_DIRS := $(addprefix $(CHARM_SRC_DIR)/, $(CHARMS))
 CHARM_BUILD_DIRS := $(addprefix $(CHARM_BUILD_DIR)/, $(CHARMS))
+CHARM_DOCKER_TAG := charm-tools
 
 all: $(CHARM_BUILD_DIRS)
 
@@ -30,4 +31,5 @@ clean:
 	-@ $(RM) -rf $(CHARM_BUILD_DIR)
 
 $(CHARM_BUILD_DIR)/%: $(CHARM_SRC_DIR)/%
-	charm-build -o $(BUILD_DIR) $<
+	docker build -t $(CHARM_DOCKER_TAG) .
+	docker run -u $$(id -u):$$(id -g) -v$$(pwd):$$(pwd) -w$$(pwd) $(CHARM_DOCKER_TAG) charm-build -o $(BUILD_DIR) $<

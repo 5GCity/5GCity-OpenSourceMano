@@ -14,6 +14,16 @@
 #   limitations under the License.
 #
 
-SUBDIRS = vnfd nsd
+SUBDIRS_CLEAN = $(addsuffix .clean, $(SUBDIRS))
 
-include mk/dirs.mk
+.PHONY: $(SUBDIRS) $(SUBDIRS_CLEAN) clean
+
+all: $(SUBDIRS)
+
+clean: $(SUBDIRS_CLEAN)
+
+$(SUBDIRS_CLEAN): %.clean:
+	@$(MAKE) --no-print-directory -C $* clean
+
+$(SUBDIRS):
+	@$(MAKE) --no-print-directory -C $@
