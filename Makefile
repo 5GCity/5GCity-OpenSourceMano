@@ -37,6 +37,7 @@ prepare:
 	cp -r instance-scenarios build/osm_ro
 	cp -r scripts build/osm_ro
 	cp -r database_utils build/osm_ro
+	cp LICENSE build/osm_ro
 
 connectors: prepare
 	# python-novaclient is required for that
