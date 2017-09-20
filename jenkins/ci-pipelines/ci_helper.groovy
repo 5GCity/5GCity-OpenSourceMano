@@ -33,8 +33,8 @@ def get_archive(artifactory_server, mdg, branch, build_name, build_number, patte
 
     server.download(downloadSpec)
     // workaround.  flatten and repo the specific build num from the directory
-    sh "cp -R ${build_num}/* ."
-    sh "rm -rf ${build_num}"
+    sh "cp -R ${branch}/${build_num}/* ."
+    sh "rm -rf ${branch}/${build_num}"
 }
 
 def get_env_value(build_env_file,key) {
