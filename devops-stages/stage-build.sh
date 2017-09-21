@@ -1,2 +1,4 @@
 #!/bin/sh
-make package
+make clean all BRANCH=master
+#make install && \
+#make test

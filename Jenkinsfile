@@ -6,6 +6,7 @@ properties([
         string(defaultValue: env.GERRIT_PATCHSET_REVISION, description: '', name: 'GERRIT_PATCHSET_REVISION'),
         string(defaultValue: 'https://osm.etsi.org/gerrit', description: '', name: 'PROJECT_URL_PREFIX'),
         booleanParam(defaultValue: false, description: '', name: 'TEST_INSTALL'),
+        string(defaultValue: 'artifactory-osm', description: '', name: 'ARTIFACTORY_SERVER'),
     ])
 ])
 
@@ -15,7 +16,7 @@ def devops_checkout() {
     }
 }
 
-node {
+node('docker') {
     checkout scm
     devops_checkout()
 
@@ -26,5 +27,6 @@ node {
                            params.GERRIT_BRANCH,
                            params.GERRIT_REFSPEC,
                            params.GERRIT_PATCHSET_REVISION,
-                           params.TEST_INSTALL)
+                           params.TEST_INSTALL,
+                           params.ARTIFACTORY_SERVER)
 }

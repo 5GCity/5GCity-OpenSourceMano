@@ -7,7 +7,6 @@ from os import system
 #import glob
 
 _name = 'osm_ro'
-_version = open('RO_VERSION').read().strip()
 _description = 'OSM Resource Orchestrator'
 _author = 'ETSI OSM'
 _author_email = 'alfonso.tiernosepulveda@telefonica.com'
@@ -18,7 +17,8 @@ _url = 'https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary'
 _requirements = [
     "PyYAML",
     "bottle",
-    "MySQL-python",
+    #"mysqlclient",
+    #"MySQLdb",
     "jsonschema",
     "paramiko",
     "argcomplete",
@@ -30,15 +30,17 @@ _requirements = [
     "python-glanceclient",
     "python-neutronclient",
     "python-cinderclient",
-    "pyvcloud",
-    "progressbar",
+    #"pyvcloud",
+    #"progressbar",
     "prettytable",
-    "pyvmomi",
+    #"pyvmomi",
     "boto",
+    #"lib_osm_openvim",
+    #"osm_im",
 ]
 
 setup(name=_name,
-      version = _version,
+      version_command=('git describe', 'pep440-git'),
       description = _description,
       long_description = open('README.rst').read(),
       author = _author,
@@ -60,5 +62,7 @@ setup(name=_name,
       scripts=['openmanod', 'openmano', 'osm_ro/scripts/service-openmano', 'osm_ro/scripts/openmano-report',],
       install_requires=_requirements,
       include_package_data=True,
+      setup_requires=['setuptools-version-command'],
+      #test_suite='nose.collector',
       )
 

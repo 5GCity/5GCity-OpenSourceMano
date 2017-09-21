@@ -144,8 +144,9 @@ class vim_thread(threading.Thread):
                             #delete old port
                             if task_interface.get("sdn_port_id"):
                                 try:
-                                    self.ovim.delete_port(task_interface["sdn_port_id"])
-                                    task_interface["sdn_port_id"] = None
+                                    with self.db_lock:
+                                        self.ovim.delete_port(task_interface["sdn_port_id"])
+                                        task_interface["sdn_port_id"] = None
                                 except ovimException as e:
                                     self.logger.error("ovimException deleting external_port={} ".format(
                                         task_interface["sdn_port_id"]) + str(e), exc_info=True)
@@ -174,11 +175,15 @@ class vim_thread(threading.Thread):
                                 continue
                             else:
                                 db_iface = db_ifaces[0]
-                                #If there is no sdn_net_id, check if it is because an already created vim network is being used
-                                #in that case, the sdn_net_id will be in that entry of the instance_nets table
+                                # If there is no sdn_net_id, check if it is because an already created vim network is being used
+                                # in that case, the sdn_net_id will be in that entry of the instance_nets table
                                 if not db_iface.get("sdn_net_id"):
-                                    result = self.db.get_rows(SELECT=('sdn_net_id',), FROM='instance_nets',
-                                                                  WHERE={'vim_net_id': db_iface.get("vim_net_id"), 'instance_scenario_id': None, "datacenter_tenant_id":  self.datacenter_tenant_id})
+                                    with self.db_lock:
+                                        result = self.db.get_rows(
+                                            SELECT=('sdn_net_id',), FROM='instance_nets',
+                                            WHERE={'vim_net_id': db_iface.get("vim_net_id"),
+                                                   'instance_scenario_id': None,
+                                                   'datacenter_tenant_id':  self.datacenter_tenant_id})
                                     if len(result) == 1:
                                         db_iface["sdn_net_id"] = result[0]['sdn_net_id']
 
@@ -187,15 +192,16 @@ class vim_thread(threading.Thread):
                                     sdn_port_name = sdn_net_id + "." + db_iface["vm_id"]
                                     sdn_port_name = sdn_port_name[:63]
                                     try:
-                                        sdn_port_id = self.ovim.new_external_port(
-                                            {"compute_node": interface["compute_node"],
-                                             "pci": interface["pci"],
-                                             "vlan": interface.get("vlan"),
-                                             "net_id": sdn_net_id,
-                                             "region": self.vim["config"]["datacenter_id"],
-                                             "name": sdn_port_name,
-                                             "mac": interface.get("mac_address")})
-                                        interface["sdn_port_id"] = sdn_port_id
+                                        with self.db_lock:
+                                            sdn_port_id = self.ovim.new_external_port(
+                                                {"compute_node": interface["compute_node"],
+                                                 "pci": interface["pci"],
+                                                 "vlan": interface.get("vlan"),
+                                                 "net_id": sdn_net_id,
+                                                 "region": self.vim["config"]["datacenter_id"],
+                                                 "name": sdn_port_name,
+                                                 "mac": interface.get("mac_address")})
+                                            interface["sdn_port_id"] = sdn_port_id
                                     except (ovimException, Exception) as e:
                                         self.logger.error(
                                             "ovimException creating new_external_port compute_node={} " \
@@ -248,7 +254,8 @@ class vim_thread(threading.Thread):
                         if db_net.get("sdn_net_id"):
                             # get ovim status
                             try:
-                                sdn_net = self.ovim.show_network(db_net["sdn_net_id"])
+                                with self.db_lock:
+                                    sdn_net = self.ovim.show_network(db_net["sdn_net_id"])
                                 if sdn_net["status"] == "ERROR":
                                     if not vim_info.get("error_msg"):
                                         vim_info["error_msg"] = sdn_net["error_msg"]
@@ -421,7 +428,8 @@ class vim_thread(threading.Thread):
                             net_name, net_type, vim_net['encapsulation']))
                 network["vlan"] = vim_net.get('segmentation_id')
                 try:
-                    sdn_net_id = self.ovim.new_network(network)
+                    with self.db_lock:
+                        sdn_net_id = self.ovim.new_network(network)
                 except (ovimException, Exception) as e:
                     self.logger.error("task=%s cannot create SDN network vim_net_id=%s input='%s' ovimException='%s'",
                                       str(task_id), net_id, str(network), str(e))
@@ -531,7 +539,8 @@ class vim_thread(threading.Thread):
             for iface in interfaces:
                 if iface.get("sdn_port_id"):
                     try:
-                        self.ovim.delete_port(iface["sdn_port_id"])
+                        with self.db_lock:
+                            self.ovim.delete_port(iface["sdn_port_id"])
                     except ovimException as e:
                         self.logger.error("ovimException deleting external_port={} at VM vim_id={} deletion ".format(
                             iface["sdn_port_id"], vm_id) + str(e), exc_info=True)
@@ -559,17 +568,19 @@ class vim_thread(threading.Thread):
             self._remove_refresh("get-net", net_id)
             result = self.vim.delete_network(net_id)
             if sdn_net_id:
-                #Delete any attached port to this sdn network
-                #At this point, there will be ports associated to this network in case it was manually done using 'openmano vim-net-sdn-attach'
+                # Delete any attached port to this sdn network
+                # At this point, there will be ports associated to this network in case it was manually done using 'openmano vim-net-sdn-attach'
                 try:
-                    port_list = self.ovim.get_ports(columns={'uuid'}, filter={'name': 'external_port', 'net_id': sdn_net_id})
+                    with self.db_lock:
+                        port_list = self.ovim.get_ports(columns={'uuid'}, filter={'name': 'external_port', 'net_id': sdn_net_id})
                 except ovimException as e:
                     raise vimconn.vimconnException(
                         "ovimException obtaining external ports for net {}. ".format(sdn_net_id) + str(e))
 
                 for port in port_list:
                     try:
-                        self.ovim.delete_port(port['uuid'])
+                        with self.db_lock:
+                            self.ovim.delete_port(port['uuid'])
                     except ovimException as e:
                         raise vimconn.vimconnException(
                             "ovimException deleting port {} for net {}. ".format(port['uuid'], sdn_net_id) + str(e))

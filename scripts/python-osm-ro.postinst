@@ -23,10 +23,11 @@ OSMRO_PATH=`python -c 'import osm_ro; print osm_ro.__path__[0]'`
 
 #Pip packages required for vmware connector
 pip install --upgrade pip
-pip install pyvcloud
-pip install progressbar
-pip install prettytable
-pip install pyvmomi
+pip install --upgrade pyvcloud
+pip install --upgrade progressbar
+pip install --upgrade prettytable
+pip install --upgrade pyvmomi
+pip install --upgrade pyang pyangbind
 
 systemctl enable osm-ro.service
 
