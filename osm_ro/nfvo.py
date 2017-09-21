@@ -2302,7 +2302,7 @@ def create_instance(mydb, tenant_id, instance_dict):
         db_instance_vms = []
         db_instance_interfaces = []
         #myvim.new_vminstance(self,vimURI,tenant_id,name,description,image_id,flavor_id,net_dict)
-        sce_vnf_list = sorted(scenarioDict['vnfs'], key=lambda k: k['name']) 
+        sce_vnf_list = sorted(scenarioDict['vnfs'], key=lambda k: k['name'])
         #for sce_vnf in scenarioDict['vnfs']:
         for sce_vnf in sce_vnf_list:
             vnf_availability_zones = []
@@ -3158,7 +3158,7 @@ def edit_datacenter_to_tenant(mydb, nfvo_tenant, datacenter_id, vim_tenant_id=No
 
 def deassociate_datacenter_to_tenant(mydb, tenant_id, datacenter, vim_tenant_id=None):
     #get datacenter info
-    datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, None, datacenter)
+    datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_id, datacenter)
 
     #get nfvo_tenant info
     if not tenant_id or tenant_id=="any":
