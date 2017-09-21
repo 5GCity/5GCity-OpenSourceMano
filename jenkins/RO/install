@@ -33,11 +33,11 @@ OSM_load_config
 #Release TWO
 
 apt-get update
-apt-get -y install python-lib-osm-openvim
 apt-get -y install python-osm-ro
 
-OSMLIBOVIM_PATH=`python -c 'import lib_osm_openvim; print lib_osm_openvim.__path__[0]'` || FATAL "lib-osm-openvim was not properly installed"
-OSMRO_PATH=`python -c 'import osm_ro; print osm_ro.__path__[0]'` || FATAL "osm-ro was not properly installed"
+OSMIM_PATH=`python -c 'import osm_im; print osm_im.__path__[0]'` || FATAL "python-osm-im was not properly installed"
+OSMLIBOVIM_PATH=`python -c 'import lib_osm_openvim; print lib_osm_openvim.__path__[0]'` || FATAL "python-lib-osm-openvim was not properly installed"
+OSMRO_PATH=`python -c 'import osm_ro; print osm_ro.__path__[0]'` || FATAL "python-osm-ro was not properly installed"
 
 DEBIAN_FRONTEND=noninteractive ${OSMRO_PATH}/database_utils/install-db-server.sh --updatedb || FATAL "osm-ro db installation failed"
 DEBIAN_FRONTEND=noninteractive ${OSMLIBOVIM_PATH}/database_utils/install-db-server.sh -u mano -p manopw -d mano_vim_db --updatedb || FATAL "lib-osm-openvim db installation failed"
