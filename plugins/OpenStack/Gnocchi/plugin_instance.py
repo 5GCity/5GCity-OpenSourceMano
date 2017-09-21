@@ -23,6 +23,11 @@
 
 import logging as log
 
+try:
+    import gnocchiclient
+except ImportError:
+    log.warn("Gnocchiclient could not be imported")
+
 from plugins.OpenStack.Gnocchi.metrics import Metrics
 from plugins.OpenStack.settings import Config
 
@@ -56,4 +61,5 @@ class Plugin(object):
         log.info("Initialize metric functionality.")
         self._metrics.metric_calls()
 
-register_plugin()
+if gnocchiclient:
+    register_plugin()

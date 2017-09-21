@@ -24,6 +24,12 @@
 import json
 import logging as log
 
+try:
+    import aodhclient
+except ImportError:
+    log.warn("Failed to import the aodhclient")
+
+
 from core.message_bus.producer import KafkaProducer
 
 from plugins.OpenStack.Aodh.alarming import Alarming
@@ -97,4 +103,5 @@ class Notifier(object):
                         except Exception as exc:
                             log.warn("Failed to send notify response:%s", exc)
 
-register_notifier()
+if aodhclient:
+    register_notifier()

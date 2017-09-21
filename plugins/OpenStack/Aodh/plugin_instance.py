@@ -22,6 +22,10 @@
 """Aodh plugin for the OSM monitoring module."""
 
 import logging as log
+try:
+    import aodhclient
+except ImportError:
+    log.warn("Failed to import the aodhclient")
 
 from plugins.OpenStack.Aodh.alarming import Alarming
 from plugins.OpenStack.settings import Config
@@ -59,4 +63,5 @@ class Plugin(object):
         log.info("Begin alarm functionality.")
         self._alarming.alarming()
 
-register_plugin()
+if aodhclient:
+    register_plugin()
