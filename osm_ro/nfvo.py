@@ -777,7 +777,10 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
     """
     try:
         myvnfd = vnfd_catalog.vnfd()
-        pybindJSONDecoder.load_ietf_json(vnf_descriptor, None, None, obj=myvnfd)
+        try:
+            pybindJSONDecoder.load_ietf_json(vnf_descriptor, None, None, obj=myvnfd)
+        except Exception as e:
+            raise NfvoException("Invalid yang descriptor format " + str(e), HTTP_Bad_Request)
         db_vnfs = []
         db_nets = []
         db_vms = []
@@ -972,7 +975,8 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                 # table interfaces (internal/external interfaces)
                 cp_name2iface_uuid = {}
                 cp_name2vm_uuid = {}
-                for iface in chain(vdu.get("internal-interface").itervalues(), vdu.get("external-interface").itervalues()):
+                # for iface in chain(vdu.get("internal-interface").itervalues(), vdu.get("external-interface").itervalues()):
+                for iface in vdu.get("interface").itervalues():
                     iface_uuid = str(uuid4())
                     uuid_list.append(iface_uuid)
                     db_interface = {
@@ -998,9 +1002,9 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     else:
                         raise ValueError("Interface type {} not supported".format(iface.get("virtual-interface").get("type")))
 
-                    if iface.get("vnfd-connection-point-ref"):
+                    if iface.get("external-connection-point-ref"):
                         try:
-                            cp = vnfd.get("connection-point")[iface.get("vnfd-connection-point-ref")]
+                            cp = vnfd.get("connection-point")[iface.get("external-connection-point-ref")]
                             db_interface["external_name"] = get_str(cp, "name", 255)
                             cp_name2iface_uuid[db_interface["external_name"]] = iface_uuid
                             cp_name2vm_uuid[db_interface["external_name"]] = vm_uuid
@@ -1014,11 +1018,11 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                     vnf=vnfd["id"], vdu=vdu["id"], iface=iface["name"],
                                     cp=iface.get("vnfd-connection-point-ref"))
                             )
-                    elif iface.get("vdu-internal-connection-point-ref"):
+                    elif iface.get("internal-connection-point-ref"):
                         try:
                             for vld in vnfd.get("internal-vld").itervalues():
                                 for cp in vld.get("internal-connection-point").itervalues():
-                                    if cp.get("id-ref") == iface.get("vdu-internal-connection-point-ref"):
+                                    if cp.get("id-ref") == iface.get("internal-connection-point-ref"):
                                         db_interface["net_id"] = net_id2uuid[vld.get("id")]
                                         break
                         except KeyError:
@@ -1028,7 +1032,8 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                     vnf=vnfd["id"], vdu=vdu["id"], iface=iface["name"],
                                     cp=iface.get("vdu-internal-connection-point-ref"))
                             )
-
+                    if iface.get("position") is not None:
+                        db_interface["created_at"] = int(iface.get("position")) - 1000
                     db_interfaces.append(db_interface)
 
             # VNF affinity and antiaffinity
@@ -1061,7 +1066,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                             format(vnf=vnfd["id"], cp=vnfd["mgmt-interface"]["cp"]))
                 mgmt_access["vm_id"] = cp_name2vm_uuid[vnfd["mgmt-interface"]["cp"]]
                 mgmt_access["interface_id"] = cp_name2iface_uuid[vnfd["mgmt-interface"]["cp"]]
-            default_user = get_str(vnfd.get("vnf-configuration").get("config-access", {}).get("ssh-access", {}),
+            default_user = get_str(vnfd.get("vnf-configuration", {}).get("config-access", {}).get("ssh-access", {}),
                                     "default-user", 64)
             if default_user:
                 mgmt_access["default_user"] = default_user
@@ -1986,7 +1991,10 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
     """
     try:
         mynsd = nsd_catalog.nsd()
-        pybindJSONDecoder.load_ietf_json(nsd_descriptor, None, None, obj=mynsd)
+        try:
+            pybindJSONDecoder.load_ietf_json(nsd_descriptor, None, None, obj=mynsd)
+        except Exception as e:
+            raise NfvoException("Invalid yang descriptor format " + str(e), HTTP_Bad_Request)
         db_scenarios = []
         db_sce_nets = []
         db_sce_vnfs = []

@@ -32,14 +32,17 @@ vnfd:vnfd-catalog:
             image: 'cirros034'
             #checksum: 
 
-            external-interface:
+            interface:
             # Specify the external interfaces
             # There can be multiple interfaces defined
             -   name: eth0
+                type: EXTERNAL
+                position: 0
                 virtual-interface:
                     type: OM-MGMT
                     bandwidth: '0'
-                vnfd-connection-point-ref: eth0
+                # vnfd-connection-point-ref: eth0
+                external-connection-point-ref: eth0
 
         connection-point:
             -   name: eth0

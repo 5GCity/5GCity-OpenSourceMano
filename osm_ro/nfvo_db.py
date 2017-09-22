@@ -736,6 +736,9 @@ class nfvo_db(db_base.db_base):
                 {"table2": [ {"column1": value, "column2: value, ... }, {"column1": value, "column2: value, ... }, ...],
                 {"table3": {"column1": value, "column2: value, ... }
             }
+            If tables does not contain the 'created_at', it is generated incrementally with the order of tables. You can
+            provide a integer value, that it is an index multiply by 0.00001 to add to the created time to manually set
+            up and order
         :param uuid_list: list of created uuids, first one is the root (#TODO to store at uuid table)
         :return: None if success,  raise exception otherwise
         """
@@ -752,12 +755,15 @@ class nfvo_db(db_base.db_base):
                                 row_list = (row_list, )  #create a list with the single value
                             for row in row_list:
                                 if table_name in self.tables_with_created_field:
-                                    created_time_param = created_time + index*0.00001
+                                    if "created_at" in row:
+                                        created_time_param = created_time + row.pop("created_at")*0.00001
+                                    else:
+                                        created_time_param = created_time + index*0.00001
+                                        index += 1
                                 else:
-                                    created_time_param=0
+                                    created_time_param = 0
                                 self._new_row_internal(table_name, row, add_uuid=False, root_uuid=None,
                                                                created_time=created_time_param)
-                                index += 1
                     return
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries)
