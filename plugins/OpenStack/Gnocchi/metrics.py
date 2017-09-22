@@ -283,43 +283,53 @@ class Metrics(object):
         """List all metrics."""
         url = "{}/v1/metric/".format(endpoint)
 
+        # Check for a specified list
         try:
             # Check if the metric_name was specified for the list
-            metric_name = values['metric_name']
-            result = self._common._perform_request(
-                url, auth_token, req_type="get")
-            metric_list = json.loads(result.text)
-
-            # Format the list response
-            metrics = self.response_list(
-                metric_list, metric_name=metric_name)
-            return metrics
-        except KeyError:
-            log.debug("Metric name is not specified for this list.")
+            metric_name = values['metric_name'].lower()
+            if metric_name not in METRIC_MAPPINGS.keys():
+                log.warn("This metric is not supported, won't be listed.")
+                metric_name = None
+        except KeyError as exc:
+            log.info("Metric name is not specified: %s", exc)
+            metric_name = None
 
         try:
-            # Check if a resource_id was specified
-            resource_id = values['resource_uuid']
+            resource = values['resource_uuid']
+        except KeyError as exc:
+            log.info("Resource is not specified:%s", exc)
+            resource = None
+
+        try:
             result = self._common._perform_request(
                 url, auth_token, req_type="get")
-            metric_list = json.loads(result.text)
-            # Format the list response
-            metrics = self.response_list(
-                metric_list, resource=resource_id)
-            return metrics
-        except KeyError:
-            log.debug("Resource id not specificed either, will return a\
-                       complete list.")
-            try:
-                result = self._common._perform_request(
-                    url, auth_token, req_type="get")
-                metric_list = json.loads(result.text)
-                # Format the list response
-                metrics = self.response_list(metric_list)
-                return metrics
+            metrics = json.loads(result.text)
 
-            except Exception as exc:
-                log.warn("Failed to generate any metric list. %s", exc)
+            if metrics is not None:
+                # Format the list response
+                if metric_name is not None and resource is not None:
+                    metric_list = self.response_list(
+                        metrics, metric_name=metric_name, resource=resource)
+                    log.info("Returning an %s resource list for %s metrics",
+                             metric_name, resource)
+                elif metric_name is not None:
+                    metric_list = self.response_list(
+                        metrics, metric_name=metric_name)
+                    log.info("Returning a list of %s metrics", metric_name)
+                elif resource is not None:
+                    metric_list = self.response_list(
+                        metrics, resource=resource)
+                    log.info("Return a list of %s resource metrics", resource)
+                else:
+                    metric_list = self.response_list(metrics)
+                    log.info("Returning a complete list of metrics")
+
+                return metric_list
+            else:
+                log.info("There are no metrics available")
+                return []
+        except Exception as exc:
+            log.warn("Failed to generate any metric list. %s", exc)
         return None
 
     def get_metric_id(self, endpoint, auth_token, metric_name, resource_id):
@@ -398,27 +408,40 @@ class Metrics(object):
 
     def response_list(self, metric_list, metric_name=None, resource=None):
         """Create the appropriate lists for a list response."""
-        resp_list = []
+        resp_list, name_list, res_list = [], [], []
 
+        # Create required lists
         for row in metric_list:
+            # Only list OSM metrics
+            if row['name'] in METRIC_MAPPINGS.keys():
+                metric = {"metric_name": row['name'],
+                          "metric_uuid": row['id'],
+                          "metric_unit": row['unit'],
+                          "resource_uuid": row['resource_id']}
+                resp_list.append(str(metric))
+            # Generate metric_name specific list
             if metric_name is not None:
                 if row['name'] == metric_name:
                     metric = {"metric_name": row['name'],
                               "metric_uuid": row['id'],
                               "metric_unit": row['unit'],
                               "resource_uuid": row['resource_id']}
-                    resp_list.append(metric)
-            elif resource is not None:
+                    name_list.append(str(metric))
+            # Generate resource specific list
+            if resource is not None:
                 if row['resource_id'] == resource:
                     metric = {"metric_name": row['name'],
                               "metric_uuid": row['id'],
                               "metric_unit": row['unit'],
                               "resource_uuid": row['resource_id']}
-                    resp_list.append(metric)
-            else:
-                metric = {"metric_name": row['name'],
-                          "metric_uuid": row['id'],
-                          "metric_unit": row['unit'],
-                          "resource_uuid": row['resource_id']}
-                resp_list.append(metric)
-        return resp_list
+                    res_list.append(str(metric))
+
+        # Join required lists
+        if metric_name is not None and resource is not None:
+            return list(set(res_list).intersection(name_list))
+        elif metric_name is not None:
+            return name_list
+        elif resource is not None:
+            return list(set(res_list).intersection(resp_list))
+        else:
+            return resp_list

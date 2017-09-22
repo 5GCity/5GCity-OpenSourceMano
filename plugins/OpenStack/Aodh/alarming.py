@@ -116,28 +116,9 @@ class Alarming(object):
                     # Check for a specifed: alarm_name, resource_uuid, severity
                     # and generate the appropriate list
                     list_details = values['alarm_list_request']
-                    try:
-                        name = list_details['alarm_name'].lower()
-                        alarm_list = self.list_alarms(
-                            endpoint, auth_token, alarm_name=name)
-                    except Exception as a_name:
-                        log.debug("No name specified for list:%s", a_name)
-                        try:
-                            resource = list_details['resource_uuid']
-                            alarm_list = self.list_alarms(
-                                endpoint, auth_token, resource_id=resource)
-                        except Exception as r_id:
-                            log.debug("No resource id specified for this list:\
-                                       %s", r_id)
-                            try:
-                                severe = list_details['severity'].lower()
-                                alarm_list = self.list_alarms(
-                                    endpoint, auth_token, severity=severe)
-                            except Exception as exc:
-                                log.info("No severity specified for list: %s.\
-                                           will return full list.", exc)
-                                alarm_list = self.list_alarms(
-                                    endpoint, auth_token)
+
+                    alarm_list = self.list_alarms(
+                        endpoint, auth_token, list_details)
 
                     try:
                         # Generate and send a list response back
@@ -261,34 +242,81 @@ class Alarming(object):
             log.warn("Failed to delete alarm: %s because %s.", alarm_id, exc)
         return False
 
-    def list_alarms(self, endpoint, auth_token,
-                    alarm_name=None, resource_id=None, severity=None):
+    def list_alarms(self, endpoint, auth_token, list_details):
         """Generate the requested list of alarms."""
         url = "{}/v2/alarms/".format(endpoint)
-        alarm_list = []
+        a_list, name_list, sev_list, res_list = [], [], [], []
 
-        result = self._common._perform_request(
-            url, auth_token, req_type="get")
-        if result is not None:
-            # Check for a specified list based on:
-            # alarm_name, severity, resource_id
-            if alarm_name is not None:
+        # TODO(mcgoughh): for now resource_id is a mandatory field
+        resource = list_details['resource_uuid']
+
+        # Checking what fields are specified for a list request
+        try:
+            name = list_details['alarm_name'].lower()
+            if name not in ALARM_NAMES.keys():
+                log.warn("This alarm is not supported, won't be used!")
+                name = None
+        except KeyError as exc:
+            log.info("Alarm name isn't specified.")
+            name = None
+
+        try:
+            severity = list_details['severity'].lower()
+            sev = SEVERITIES[severity]
+        except KeyError as exc:
+            log.info("Severity is unspecified/incorrectly configured")
+            sev = None
+
+        # Perform the request to get the desired list
+        try:
+            result = self._common._perform_request(
+                url, auth_token, req_type="get")
+
+            if result is not None:
+                # Get list based on resource id
                 for alarm in json.loads(result.text):
-                    if alarm_name in str(alarm):
-                        alarm_list.append(str(alarm))
-            elif resource_id is not None:
-                for alarm in json.loads(result.text):
-                    if resource_id in str(alarm):
-                        alarm_list.append(str(alarm))
-            elif severity is not None:
-                for alarm in json.loads(result.text):
-                    if severity in str(alarm):
-                        alarm_list.append(str(alarm))
+                    rule = alarm['gnocchi_resources_threshold_rule']
+                    if resource == rule['resource_id']:
+                        res_list.append(str(alarm))
+                    if not res_list:
+                        log.info("No alarms for this resource")
+                        return a_list
+
+                # Generate specified listed if requested
+                if name is not None and sev is not None:
+                    log.info("Return a list of %s alarms with %s severity.",
+                             name, sev)
+                    for alarm in json.loads(result.text):
+                        if name == alarm['name']:
+                            name_list.append(str(alarm))
+                    for alarm in json.loads(result.text):
+                        if sev == alarm['severity']:
+                            sev_list.append(str(alarm))
+                    name_sev_list = list(set(name_list).intersection(sev_list))
+                    a_list = list(set(name_sev_list).intersection(res_list))
+                elif name is not None:
+                    log.info("Returning a %s list of alarms.", name)
+                    for alarm in json.loads(result.text):
+                        if name == alarm['name']:
+                            name_list.append(str(alarm))
+                    a_list = list(set(name_list).intersection(res_list))
+                elif sev is not None:
+                    log.info("Returning %s severity alarm list.", sev)
+                    for alarm in json.loads(result.text):
+                        if sev == alarm['severity']:
+                            sev_list.append(str(alarm))
+                    a_list = list(set(sev_list).intersection(res_list))
+                else:
+                    log.info("Returning an entire list of alarms.")
+                    a_list = res_list
             else:
-                alarm_list = result.text
-        else:
+                log.info("There are no alarms!")
+
+        except Exception as exc:
+            log.info("Failed to generate required list: %s", exc)
             return None
-        return alarm_list
+
+        return a_list
 
     def update_alarm_state(self, endpoint, auth_token, alarm_id):
         """Set the state of an alarm to ok when ack message is received."""
