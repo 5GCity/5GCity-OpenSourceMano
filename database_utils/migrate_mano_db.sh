@@ -33,7 +33,7 @@ DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=26
+LAST_DB_VERSION=27
  
 # Detect paths
 MYSQL=$(which mysql)
@@ -194,6 +194,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5021 ] && DB_VERSION=24  #0.5.21 =>  24
 #[ $OPENMANO_VER_NUM -ge 5022 ] && DB_VERSION=25  #0.5.22 =>  25
 #[ $OPENMANO_VER_NUM -ge 5024 ] && DB_VERSION=26  #0.5.24 =>  26
+#[ $OPENMANO_VER_NUM -ge 5025 ] && DB_VERSION=27  #0.5.25 =>  27
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -807,6 +808,7 @@ function downgrade_from_23(){
 function upgrade_to_24(){
     # echo "    upgrade database from version 0.23 to version 0.24"
     echo "      Add 'count' to table 'vms'"
+
     sql "ALTER TABLE vms ADD COLUMN count SMALLINT NOT NULL DEFAULT '1' AFTER vnf_id;"
     sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
          "VALUES (24, '0.24', '0.5.21', 'Added vnfd fields', '2017-08-29');"
@@ -1003,6 +1005,22 @@ function downgrade_from_26(){
     sql "DELETE FROM schema_version WHERE version_int='26';"
 }
 
+function upgrade_to_27(){
+    # echo "    upgrade database from version 0.26 to version 0.27"
+    echo "      Added 'encrypted_RO_priv_key','RO_pub_key' to table 'nfvo_tenants'"
+    sql "ALTER TABLE nfvo_tenants ADD COLUMN encrypted_RO_priv_key VARCHAR(2000) NULL AFTER description;"
+    sql "ALTER TABLE nfvo_tenants ADD COLUMN RO_pub_key VARCHAR(510) NULL AFTER encrypted_RO_priv_key;"
+
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
+         "VALUES (27, '0.27', '0.5.25', 'Added encrypted_RO_priv_key,RO_pub_key to table nfvo_tenants', '2017-09-29');"
+}
+function downgrade_from_26(){
+    # echo "    downgrade database from version 0.27 to version 0.26"
+    echo "      Remove 'encrypted_RO_priv_key','RO_pub_key' to table 'nfvo_tenants'"
+    sql "ALTER TABLE nfvo_tenants DROP COLUMN encrypted_RO_priv_key;"
+    sql "ALTER TABLE nfvo_tenants DROP COLUMN RO_pub_key;"
+    sql "DELETE FROM schema_version WHERE version_int='27';"
+}
 function upgrade_to_X(){
     echo "      change 'datacenter_nets'"
     sql "ALTER TABLE datacenter_nets ADD COLUMN vim_tenant_id VARCHAR(36) NOT NULL AFTER datacenter_id, DROP INDEX name_datacenter_id, ADD UNIQUE INDEX name_datacenter_id (name, datacenter_id, vim_tenant_id);"

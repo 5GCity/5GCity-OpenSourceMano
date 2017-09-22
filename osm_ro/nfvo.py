@@ -46,10 +46,10 @@ from threading import Lock
 import time as t
 from lib_osm_openvim import ovim as ovim_module
 from lib_osm_openvim.ovim import ovimException
+from Crypto.PublicKey import RSA
 
 import osm_im.vnfd as vnfd_catalog
 import osm_im.nsd as nsd_catalog
-
 from pyangbind.lib.serialise import pybindJSONDecoder
 from itertools import chain
 
@@ -958,7 +958,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                 # cloud-init
                 boot_data = {}
                 if vdu.get("cloud-init"):
-                    boot_data["user-data"] = vdu["cloud-init"]
+                    boot_data["user-data"] = str(vdu["cloud-init"])
                 elif vdu.get("cloud-init-file"):
                     # TODO Where this file content is present???
                     # boot_data["user-data"] = rift_vnfd.files[vdu["cloud-init-file"]]
@@ -1077,10 +1077,18 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                 mgmt_access["interface_id"] = cp_name2iface_uuid[vnfd["mgmt-interface"]["cp"]]
             default_user = get_str(vnfd.get("vnf-configuration", {}).get("config-access", {}).get("ssh-access", {}),
                                     "default-user", 64)
+
             if default_user:
                 mgmt_access["default_user"] = default_user
+            required = get_str(vnfd.get("vnf-configuration", {}).get("config-access", {}).get("ssh-access", {}),
+                                   "required", 6)
+            if required:
+                mgmt_access["required"] = required
+
             if mgmt_access:
                 db_vnf["mgmt_access"] = yaml.safe_dump(mgmt_access, default_flow_style=True, width=256)
+
+
 
             db_vnfs.append(db_vnf)
         db_tables=[
@@ -2386,7 +2394,6 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
         #logger.error("start_scenario %s", error_text)
         raise NfvoException(error_text, e.http_code)
 
-
 def unify_cloud_config(cloud_config_preserve, cloud_config):
     """ join the cloud config information into cloud_config_preserve.
     In case of conflict cloud_config_preserve preserves
@@ -2536,7 +2543,6 @@ def update(d, u):
             d[k] = u[k]
     return d
 
-
 def create_instance(mydb, tenant_id, instance_dict):
     # print "Checking that nfvo_tenant_id exists and getting the VIM URI and the VIM tenant_id"
     # logger.debug("Creating instance...")
@@ -2549,7 +2555,9 @@ def create_instance(mydb, tenant_id, instance_dict):
     default_datacenter_id, vim = get_datacenter_by_name_uuid(mydb, tenant_id, datacenter)
     myvims[default_datacenter_id] = vim
     myvim_threads_id[default_datacenter_id], _ = get_vim_thread(mydb, tenant_id, default_datacenter_id)
+    tenant = mydb.get_rows_by_id('nfvo_tenants', tenant_id)
     # myvim_tenant = myvim['tenant_id']
+
     rollbackList=[]
 
     # print "Checking that the scenario exists and getting the scenario dictionary"
@@ -2644,6 +2652,10 @@ def create_instance(mydb, tenant_id, instance_dict):
 
         # 0.1 parse cloud-config parameters
         cloud_config = unify_cloud_config(instance_dict.get("cloud-config"), scenarioDict.get("cloud-config"))
+        # We add the RO key to cloud_config
+        if tenant[0].get('RO_pub_key'):
+            RO_key = {"key-pairs": [tenant[0]['RO_pub_key']]}
+            cloud_config = unify_cloud_config(cloud_config, RO_key)
 
         # 0.2 merge instance information into scenario
         # Ideally, the operation should be as simple as: update(scenarioDict,instance_dict)
@@ -3442,7 +3454,6 @@ def refresh_instance(mydb, nfvo_tenant, instanceDict, datacenter=None, vim_tenan
 
     return 0, 'Scenario instance ' + instance_id + ' refreshed.'
 
-
 def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
     #print "Checking that the instance_id exists and getting the instance dictionary"
     instanceDict = mydb.get_instance_scenario(instance_id, nfvo_tenant)
@@ -3475,44 +3486,69 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                                 vm['uuid'] not in input_vms and vm['name'] not in input_vms:
                     continue
             try:
-                data = myvim.action_vminstance(vm['vim_vm_id'], action_dict)
-                if "console" in action_dict:
-                    if not global_config["http_console_proxy"]:
-                        vm_result[ vm['uuid'] ] = {"vim_result": 200,
-                                                   "description": "{protocol}//{ip}:{port}/{suffix}".format(
-                                                                                protocol=data["protocol"],
-                                                                                ip = data["server"],
-                                                                                port = data["port"],
-                                                                                suffix = data["suffix"]),
-                                                   "name":vm['name']
-                                                }
-                        vm_ok +=1
-                    elif data["server"]=="127.0.0.1" or data["server"]=="localhost":
-                        vm_result[ vm['uuid'] ] = {"vim_result": -HTTP_Unauthorized,
-                                                   "description": "this console is only reachable by local interface",
-                                                   "name":vm['name']
-                                                }
-                        vm_error+=1
-                    else:
-                    #print "console data", data
+                if "add_public_key" in action_dict:
+                    mgmt_access = {}
+                    if sce_vnf.get('mgmt_access'):
+                        mgmt_access = yaml.load(sce_vnf['mgmt_access'])
+                        ssh_access = mgmt_access['config-access']['ssh-access']
+                        tenant = mydb.get_rows_by_id('nfvo_tenants', nfvo_tenant)
                         try:
-                            console_thread = create_or_use_console_proxy_thread(data["server"], data["port"])
+                            if ssh_access['required'] and ssh_access['default-user']:
+                                if 'ip_address' in vm:
+                                    mgmt_ip = vm['ip_address'].split(';')
+                                    password = mgmt_access['config-access'].get('password')
+                                    priv_RO_key = decrypt_key(tenant[0]['encrypted_RO_priv_key'], tenant[0]['uuid'])
+                                    myvim.inject_user_key(mgmt_ip[0], ssh_access['default-user'],
+                                                          action_dict['add_public_key'],
+                                                          password=password, ro_key=priv_RO_key)
+                            else:
+                                raise NfvoException("Unable to inject ssh key in vm: {} - Aborting".format(vm['uuid']),
+                                                    HTTP_Internal_Server_Error)
+                        except KeyError:
+                            raise NfvoException("Unable to inject ssh key in vm: {} - Aborting".format(vm['uuid']),
+                                                HTTP_Internal_Server_Error)
+                    else:
+                        raise NfvoException("Unable to inject ssh key in vm: {} - Aborting".format(vm['uuid']),
+                                            HTTP_Internal_Server_Error)
+                else:
+                    data = myvim.action_vminstance(vm['vim_vm_id'], action_dict)
+                    if "console" in action_dict:
+                        if not global_config["http_console_proxy"]:
                             vm_result[ vm['uuid'] ] = {"vim_result": 200,
                                                        "description": "{protocol}//{ip}:{port}/{suffix}".format(
                                                                                     protocol=data["protocol"],
-                                                                                    ip = global_config["http_console_host"],
-                                                                                    port = console_thread.port,
+                                                                                    ip = data["server"],
+                                                                                    port = data["port"],
                                                                                     suffix = data["suffix"]),
                                                        "name":vm['name']
                                                     }
                             vm_ok +=1
-                        except NfvoException as e:
-                            vm_result[ vm['uuid'] ] = {"vim_result": e.http_code, "name":vm['name'], "description": str(e)}
+                        elif data["server"]=="127.0.0.1" or data["server"]=="localhost":
+                            vm_result[ vm['uuid'] ] = {"vim_result": -HTTP_Unauthorized,
+                                                       "description": "this console is only reachable by local interface",
+                                                       "name":vm['name']
+                                                    }
                             vm_error+=1
+                        else:
+                        #print "console data", data
+                            try:
+                                console_thread = create_or_use_console_proxy_thread(data["server"], data["port"])
+                                vm_result[ vm['uuid'] ] = {"vim_result": 200,
+                                                           "description": "{protocol}//{ip}:{port}/{suffix}".format(
+                                                                                        protocol=data["protocol"],
+                                                                                        ip = global_config["http_console_host"],
+                                                                                        port = console_thread.port,
+                                                                                        suffix = data["suffix"]),
+                                                           "name":vm['name']
+                                                        }
+                                vm_ok +=1
+                            except NfvoException as e:
+                                vm_result[ vm['uuid'] ] = {"vim_result": e.http_code, "name":vm['name'], "description": str(e)}
+                                vm_error+=1
 
-                else:
-                    vm_result[ vm['uuid'] ] = {"vim_result": 200, "description": "ok", "name":vm['name']}
-                    vm_ok +=1
+                    else:
+                        vm_result[ vm['uuid'] ] = {"vim_result": 200, "description": "ok", "name":vm['name']}
+                        vm_ok +=1
             except vimconn.vimconnException as e:
                 vm_result[ vm['uuid'] ] = {"vim_result": e.http_code, "name":vm['name'], "description": str(e)}
                 vm_error+=1
@@ -3568,11 +3604,18 @@ def check_tenant(mydb, tenant_id):
         raise NfvoException("tenant '{}' not found".format(tenant_id), HTTP_Not_Found)
     return
 
-
 def new_tenant(mydb, tenant_dict):
-    tenant_id = mydb.new_row("nfvo_tenants", tenant_dict, add_uuid=True)
-    return tenant_id
 
+    tenant_uuid = str(uuid4())
+    tenant_dict['uuid'] = tenant_uuid
+    try:
+        pub_key, priv_key = create_RO_keypair(tenant_uuid)
+        tenant_dict['RO_pub_key'] = pub_key
+        tenant_dict['encrypted_RO_priv_key'] = priv_key
+        mydb.new_row("nfvo_tenants", tenant_dict)
+    except db_base_Exception as e:
+        raise NfvoException("Error creating the new tenant: {} ".format(tenant_dict['name']) + str(e), HTTP_Internal_Server_Error)
+    return tenant_uuid
 
 def delete_tenant(mydb, tenant):
     #get nfvo_tenant info
@@ -4331,3 +4374,42 @@ def datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id):
 
 def datacenter_sdn_port_mapping_delete(mydb, tenant_id, datacenter_id):
     return ovim.clear_of_port_mapping(db_filter={"region":datacenter_id})
+
+def create_RO_keypair(tenant_id):
+    """
+    Creates a public / private keys for a RO tenant and returns their values
+    Params:
+        tenant_id: ID of the tenant
+    Return:
+        public_key: Public key for the RO tenant
+        private_key: Encrypted private key for RO tenant
+    """
+
+    bits = 2048
+    key = RSA.generate(bits)
+    try:
+        public_key = key.publickey().exportKey('OpenSSH')
+        if isinstance(public_key, ValueError):
+            raise NfvoException("Unable to create public key: {}".format(public_key), HTTP_Internal_Server_Error)
+        private_key = key.exportKey(passphrase=tenant_id, pkcs=8)
+    except (ValueError, NameError) as e:
+        raise NfvoException("Unable to create private key: {}".format(e), HTTP_Internal_Server_Error)
+    return public_key, private_key
+
+def decrypt_key (key, tenant_id):
+    """
+    Decrypts an encrypted RSA key
+    Params:
+        key: Private key to be decrypted
+        tenant_id: ID of the tenant
+    Return:
+        unencrypted_key: Unencrypted private key for RO tenant
+    """
+    try:
+        key = RSA.importKey(key,tenant_id)
+        unencrypted_key = key.exportKey('PEM')
+        if isinstance(unencrypted_key, ValueError):
+            raise NfvoException("Unable to decrypt the private key: {}".format(unencrypted_key), HTTP_Internal_Server_Error)
+    except ValueError as e:
+        raise NfvoException("Unable to decrypt the private key: {}".format(e), HTTP_Internal_Server_Error)
+    return unencrypted_key

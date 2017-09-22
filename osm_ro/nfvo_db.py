@@ -213,7 +213,7 @@ class nfvo_db(db_base.db_base):
                     myVNFDict["description"] = vnf_descriptor['vnf']['description']
                     myVNFDict["class"] = vnf_descriptor['vnf'].get('class',"MISC")
                     myVNFDict["tenant_id"] = vnf_descriptor['vnf'].get("tenant_id")
-                    
+
                     vnf_id = self._new_row_internal('vnfs', myVNFDict, add_uuid=True, root_uuid=None, created_time=created_time)
                     #print "Adding new vms to the NFVO database"
                     #For each vm, we must create the appropriate vm in the NFVO database.
@@ -586,7 +586,16 @@ class nfvo_db(db_base.db_base):
                     self.logger.debug(cmd)
                     self.cur.execute(cmd)
                     scenario_dict['vnfs'] = self.cur.fetchall()
+
                     for vnf in scenario_dict['vnfs']:
+                        cmd = "SELECT mgmt_access FROM vnfs WHERE uuid='{}'".format(scenario_dict['vnfs'][0]['vnf_id'])
+                        self.logger.debug(cmd)
+                        self.cur.execute(cmd)
+                        mgmt_access_dict = self.cur.fetchall()
+                        if mgmt_access_dict[0].get('mgmt_access'):
+                            vnf['mgmt_access'] = yaml.load(mgmt_access_dict[0]['mgmt_access'])
+                        else:
+                            vnf['mgmt_access'] = None
                         #sce_interfaces
                         cmd = "SELECT scei.uuid,scei.sce_net_id,scei.interface_id,i.external_name,scei.ip_address"\
                               " FROM sce_interfaces as scei join interfaces as i on scei.interface_id=i.uuid"\
@@ -721,7 +730,7 @@ class nfvo_db(db_base.db_base):
                     cmd = "DELETE FROM scenarios WHERE uuid='{}'".format(scenario_uuid)
                     self.logger.debug(cmd)
                     self.cur.execute(cmd)
-    
+
                     return scenario_uuid + " " + scenario_name
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries, "delete", "instances running")
@@ -923,9 +932,9 @@ class nfvo_db(db_base.db_base):
                         instance_dict["cloud-config"] = yaml.load(instance_dict["cloud_config"])
                     del instance_dict["cloud_config"]
                     
-                    # instance_vnfs
-                    cmd = "SELECT iv.uuid as uuid,sv.vnf_id as vnf_id,sv.name as vnf_name, sce_vnf_id, datacenter_id, datacenter_tenant_id"\
-                            " FROM instance_vnfs as iv join sce_vnfs as sv on iv.sce_vnf_id=sv.uuid" \
+                    #instance_vnfs
+                    cmd = "SELECT iv.uuid as uuid,sv.vnf_id as vnf_id,sv.name as vnf_name, sce_vnf_id, datacenter_id, datacenter_tenant_id, v.mgmt_access"\
+                            " FROM instance_vnfs as iv join sce_vnfs as sv on iv.sce_vnf_id=sv.uuid join vnfs as v on iv.vnf_id=v.uuid" \
                             " WHERE iv.instance_scenario_id='{}'" \
                             " ORDER BY iv.created_at ".format(instance_dict['uuid'])
                     self.logger.debug(cmd)
@@ -934,7 +943,7 @@ class nfvo_db(db_base.db_base):
                     for vnf in instance_dict['vnfs']:
                         vnf_manage_iface_list=[]
                         #instance vms
-                        cmd = "SELECT iv.uuid as uuid, vim_vm_id, status, error_msg, vim_info, iv.created_at as created_at, name "\
+                        cmd = "SELECT iv.uuid as uuid, vim_vm_id, status, error_msg, vim_info, iv.created_at as created_at, name"\
                                 " FROM instance_vms as iv join vms on iv.vm_id=vms.uuid "\
                                 " WHERE instance_vnf_id='{}' ORDER BY iv.created_at".format(vnf['uuid'])
                         self.logger.debug(cmd)

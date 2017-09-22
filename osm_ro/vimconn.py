@@ -29,6 +29,9 @@ __author__="Alfonso Tierno, Igor D.C."
 __date__ ="$14-aug-2017 23:59:59$"
 
 import logging
+import paramiko
+import socket
+import StringIO
 
 #Error variables 
 HTTP_Bad_Request = 400
@@ -662,6 +665,47 @@ class vimconnector():
         """
         raise vimconnNotImplemented( "SFC support not implemented" )
 
+    def inject_user_key(self, ip_addr=None, user=None, key=None, ro_key=None, password=None):
+        """
+        Inject a ssh public key in a VM
+        Params:
+            ip_addr: ip address of the VM
+            user: username (default-user) to enter in the VM
+            key: public key to be injected in the VM
+            ro_key: private key of the RO, used to enter in the VM if the password is not provided
+            password: password of the user to enter in the VM
+        The function doesn't return a value:
+        """
+        if not ip_addr or not user:
+            raise vimconnNotSupportedException("All parameters should be different from 'None'")
+        elif not ro_key and not password:
+            raise vimconnNotSupportedException("All parameters should be different from 'None'")
+        else:
+            commands = {'mkdir -p ~/.ssh/', 'echo "%s" >> ~/.ssh/authorized_keys' % key,
+                        'chmod 644 ~/.ssh/authorized_keys', 'chmod 700 ~/.ssh/'}
+            client = paramiko.SSHClient()
+            try:
+                if ro_key:
+                    pkey = paramiko.RSAKey.from_private_key(StringIO.StringIO(ro_key))
+                else:
+                    pkey = None
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                client.connect(ip_addr, username=user, password=password, pkey=pkey, timeout=10)
+                for command in commands:
+                    (i, o, e) = client.exec_command(command, timeout=10)
+                    returncode = o.channel.recv_exit_status()
+                    output = o.read()
+                    outerror = e.read()
+                    if returncode != 0:
+                        text = "run_command='{}' Error='{}'".format(command, outerror)
+                        raise vimconnUnexpectedResponse("Cannot inject ssh key in VM: '{}'".format(text))
+                        return
+            except (socket.error, paramiko.AuthenticationException, paramiko.SSHException) as message:
+                raise vimconnUnexpectedResponse(
+                    "Cannot inject ssh key in VM: '{}' - {}".format(ip_addr, str(message)))
+                return
+
+
 #NOT USED METHODS in current version
 
     def host_vim2gui(self, host, server_dict):
@@ -708,3 +752,4 @@ class vimconnector():
         """Adds a VM instance to VIM"""
         """Returns the instance identifier"""
         raise vimconnNotImplemented( "Should have implemented this" )
+

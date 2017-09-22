@@ -546,7 +546,7 @@ vnfc_schema = {
         "availability_zone": name_schema,
         "VNFC image": {"oneOf": [path_schema, http_schema]},
         "image checksum": checksum_schema,
-        "image metadata": metadata_schema, 
+        "image metadata": metadata_schema,
         #"cloud-config": cloud_config_schema, #common for all vnfs in the scenario
         "processor": {
             "type":"object",
@@ -598,6 +598,7 @@ vnfd_schema_v01 = {
                 "class": nameshort_schema,
                 "public": {"type" : "boolean"},
                 "physical": {"type" : "boolean"},
+                "default_user": name_schema,
                 "tenant_id": id_schema, #only valid for admin
                 "external-connections": {"type" : "array", "items": external_connection_schema, "minItems":1},
                 "internal-connections": {"type" : "array", "items": internal_connection_schema, "minItems":1},
@@ -611,7 +612,7 @@ vnfd_schema_v01 = {
     "additionalProperties": False
 }
 
-#VNFD schema for OSM R1 
+#VNFD schema for OSM R1
 vnfd_schema_v02 = {
     "title":"vnfd information schema v0.2",
     "$schema": "http://json-schema.org/draft-04/schema#",
@@ -1097,9 +1098,10 @@ instance_scenario_action_schema = {
         "reboot":{
             "type": ["object","null"],
         },
+        "add_public_key": description_schema,
         "console": {"type": ["string", "null"], "enum": ["novnc", "xvpvnc", "rdp-html5", "spice-html5", None]},
         "create-vdu": {
-            "type": "list",
+            "type": "array",
             "items" :{
                 "type": "object",
                 "properties":{
@@ -1111,7 +1113,7 @@ instance_scenario_action_schema = {
             }
         },
         "delete-vdu": {
-            "type": "list",
+            "type": "array",
             "items" :{
                 "type": "object",
                 "properties":{

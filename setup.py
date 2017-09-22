@@ -37,6 +37,7 @@ _requirements = [
     "boto",
     #"lib_osm_openvim",
     #"osm_im",
+    "python-crypto",
 ]
 
 setup(name=_name,
