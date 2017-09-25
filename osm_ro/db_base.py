@@ -271,16 +271,22 @@ class db_base():
             return json.dumps(str(data))
     
     def __tuple2db_format_set(self, data):
-        '''Compose the needed text for a SQL SET, parameter 'data' is a pair tuple (A,B),
+        """Compose the needed text for a SQL SET, parameter 'data' is a pair tuple (A,B),
         and it returns the text 'A="B"', where A is a field of a table and B is the value 
         If B is None it returns the 'A=Null' text, without surrounding Null by quotes
         If B is not None it returns the text "A='B'" or 'A="B"' where B is surrounded by quotes,
         and it ensures internal quotes of B are escaped.
-        '''
-        if data[1]==None:
+        B can be also a dict with special keys:
+            {"INCREMENT": NUMBER}, then it produce "A=A+NUMBER"
+        """
+        if data[1] == None:
             return str(data[0]) + "=Null"
         elif isinstance(data[1], str):
             return str(data[0]) + '=' + json.dumps(data[1])
+        elif isinstance(data[1], dict):
+            if "INCREMENT" in data[1]:
+                return "{A}={A}{N:+d}".format(A=data[0], N=data[1]["INCREMENT"])
+            raise db_base_Exception("Format error for UPDATE field")
         else:
             return str(data[0]) + '=' + json.dumps(str(data[1]))
     
@@ -540,7 +546,7 @@ class db_base():
             'WHERE_OR': dict of key:values, translated to key=value OR ... (Optional)
             'WHERE_AND_OR: str 'AND' or 'OR'(by default) mark the priority to 'WHERE AND (WHERE_OR)' or (WHERE) OR WHERE_OR' (Optional)
             'LIMIT':     limit of number of rows (Optional)
-            'ORDER_BY':  list or tuple of fields to order
+            'ORDER_BY':  list or tuple of fields to order, add ' DESC'  to each item if inverse order is required
         Return: a list with dictionaries at each row
         '''
         #print sql_dict
@@ -573,7 +579,7 @@ class db_base():
             where_ = ""
         #print 'where_', where_
         limit_ = "LIMIT " + str(sql_dict['LIMIT']) if 'LIMIT' in sql_dict else ""
-        order_ = "ORDER BY " + ",".join(map(str,sql_dict['SELECT'])) if 'ORDER_BY' in sql_dict else ""
+        order_ = "ORDER BY " + ",".join(map(str,sql_dict['ORDER_BY'])) if 'ORDER_BY' in sql_dict else ""
         
         #print 'limit_', limit_
         cmd =  " ".join( (select_, from_, where_, limit_, order_) )

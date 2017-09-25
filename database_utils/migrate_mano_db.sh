@@ -33,7 +33,7 @@ DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=25
+LAST_DB_VERSION=26
  
 # Detect paths
 MYSQL=$(which mysql)
@@ -193,6 +193,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5020 ] && DB_VERSION=23  #0.5.20 =>  23
 #[ $OPENMANO_VER_NUM -ge 5021 ] && DB_VERSION=24  #0.5.21 =>  24
 #[ $OPENMANO_VER_NUM -ge 5022 ] && DB_VERSION=25  #0.5.22 =>  25
+#[ $OPENMANO_VER_NUM -ge 5024 ] && DB_VERSION=26  #0.5.24 =>  26
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -850,6 +851,158 @@ function downgrade_from_25(){
     sql "DELETE FROM schema_version WHERE version_int='25';"
 }
 
+function upgrade_to_26(){
+    echo "      Add name to table datacenter_tenants"
+    sql "ALTER TABLE datacenter_tenants ADD COLUMN name VARCHAR(255) NULL AFTER uuid;"
+    sql "UPDATE datacenter_tenants as dt join datacenters as d on dt.datacenter_id = d.uuid set dt.name=d.name;"
+    echo "      Add 'SCHEDULED' to 'status' at tables 'instance_nets', 'instance_vms'"
+    sql "ALTER TABLE instance_vms CHANGE COLUMN status status ENUM('ACTIVE:NoMgmtIP','ACTIVE','INACTIVE','BUILD',"\
+         "'ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') "\
+         "NOT NULL DEFAULT 'BUILD';"
+    sql "ALTER TABLE instance_nets CHANGE COLUMN status status ENUM('ACTIVE','INACTIVE','DOWN','BUILD','ERROR',"\
+         "'VIM_ERROR','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD';"
+    echo "      Enlarge pci at instance_interfaces to allow extended pci for SDN por mapping"
+    sql "ALTER TABLE instance_interfaces CHANGE COLUMN pci pci VARCHAR(50) NULL DEFAULT NULL COMMENT 'PCI of the "\
+        "physical port in the host' AFTER compute_node;"
+
+    for t in flavor image; do
+        echo "      Change 'datacenters_${t}s' to point to datacenter_tenant, add status, vim_info"
+        sql "ALTER TABLE datacenters_${t}s ADD COLUMN datacenter_vim_id VARCHAR(36) NULL DEFAULT NULL AFTER "\
+            "datacenter_id, ADD COLUMN status ENUM('ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','DELETED',"\
+            "'SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD' AFTER vim_id, ADD COLUMN vim_info "\
+            "TEXT NULL AFTER status;"
+        sql "UPDATE datacenters_${t}s as df left join datacenter_tenants as dt on dt.datacenter_id=df.datacenter_id "\
+            "set df.datacenter_vim_id=dt.uuid;"
+        sql "DELETE FROM datacenters_${t}s WHERE datacenter_vim_id is NULL;"
+        sql "ALTER TABLE datacenters_${t}s CHANGE COLUMN datacenter_vim_id datacenter_vim_id VARCHAR(36) NOT NULL;"
+        sql "ALTER TABLE datacenters_${t}s ADD CONSTRAINT FK_datacenters_${t}s_datacenter_tenants FOREIGN KEY "\
+            "(datacenter_vim_id) REFERENCES datacenter_tenants (uuid) ON UPDATE CASCADE ON DELETE CASCADE;"
+        sql "ALTER TABLE datacenters_${t}s DROP FOREIGN KEY FK__datacenters_${t:0:1};"
+        sql "ALTER TABLE datacenters_${t}s DROP COLUMN datacenter_id;"
+	done
+
+    echo "      Decoupling 'instance_interfaces' from scenarios/vnfs to allow scale actions"
+    sql "ALTER TABLE instance_interfaces CHANGE COLUMN vim_interface_id vim_interface_id VARCHAR(128) NULL DEFAULT NULL;"
+    sql "ALTER TABLE instance_interfaces CHANGE COLUMN interface_id interface_id VARCHAR(36) NULL DEFAULT NULL;"
+	sql "ALTER TABLE instance_interfaces DROP FOREIGN KEY FK_instance_ids"
+	sql "ALTER TABLE instance_interfaces ADD CONSTRAINT FK_instance_ids FOREIGN KEY (interface_id) "\
+	    "REFERENCES interfaces (uuid) ON UPDATE CASCADE ON DELETE SET NULL;"
+
+    echo "      Decoupling 'instance_vms' from scenarios/vnfs to allow scale actions"
+    sql "ALTER TABLE instance_vms CHANGE COLUMN vim_vm_id vim_vm_id VARCHAR(128) NULL DEFAULT NULL;"
+    sql "ALTER TABLE instance_vms CHANGE COLUMN vm_id vm_id VARCHAR(36) NULL DEFAULT NULL;"
+	sql "ALTER TABLE instance_vms DROP FOREIGN KEY FK_instance_vms_vms;"
+	sql "ALTER TABLE instance_vms ADD CONSTRAINT FK_instance_vms_vms FOREIGN KEY (vm_id) "\
+	    "REFERENCES vms (uuid) ON UPDATE CASCADE ON DELETE SET NULL;"
+
+    echo "      Decoupling 'instance_nets' from scenarios/vnfs to allow scale actions"
+    sql "ALTER TABLE instance_nets CHANGE COLUMN vim_net_id vim_net_id VARCHAR(128) NULL DEFAULT NULL;"
+
+    echo "      Decoupling 'instance_scenarios' from scenarios"
+    sql "ALTER TABLE instance_scenarios CHANGE COLUMN scenario_id scenario_id VARCHAR(36) NULL DEFAULT NULL;"
+	sql "ALTER TABLE instance_scenarios DROP FOREIGN KEY FK_instance_scenarios_scenarios;"
+	sql "ALTER TABLE instance_scenarios ADD CONSTRAINT FK_instance_scenarios_scenarios FOREIGN KEY (scenario_id) "\
+	    "REFERENCES scenarios (uuid) ON UPDATE CASCADE ON DELETE SET NULL;"
+
+    echo "      Create table instance_actions, vim_actions"
+    sql "CREATE TABLE IF NOT EXISTS instance_actions (
+	    uuid VARCHAR(36) NOT NULL,
+	    tenant_id VARCHAR(36) NULL DEFAULT NULL,
+	    instance_id VARCHAR(36) NULL DEFAULT NULL,
+	    description VARCHAR(64) NULL DEFAULT NULL COMMENT 'CREATE, DELETE, SCALE OUT/IN, ...',
+	    number_tasks SMALLINT(6) NOT NULL DEFAULT '1',
+	    number_done SMALLINT(6) NOT NULL DEFAULT '0',
+	    number_failed SMALLINT(6) NOT NULL DEFAULT '0',
+	    created_at DOUBLE NOT NULL,
+	    modified_at DOUBLE NULL DEFAULT NULL,
+	    PRIMARY KEY (uuid),
+        INDEX FK_actions_tenants (tenant_id),
+    	CONSTRAINT FK_actions_tenant FOREIGN KEY (tenant_id) REFERENCES nfvo_tenants (uuid) ON UPDATE CASCADE ON DELETE CASCADE)
+		COMMENT='Contains client actions over instances'
+        COLLATE='utf8_general_ci'
+        ENGINE=InnoDB;"  
+
+    sql "CREATE TABLE IF NOT EXISTS vim_actions (
+	    instance_action_id VARCHAR(36) NOT NULL,
+	    task_index INT(6) NOT NULL,
+	    datacenter_vim_id VARCHAR(36) NOT NULL,
+	    vim_id VARCHAR(64) NULL DEFAULT NULL,
+	    action VARCHAR(36) NOT NULL COMMENT 'CREATE,DELETE,START,STOP...',
+	    item ENUM('datacenters_flavors','datacenter_images','instance_nets','instance_vms','instance_interfaces') NOT NULL COMMENT 'table where the item is stored',
+	    item_id VARCHAR(36) NULL DEFAULT NULL COMMENT 'uuid of the entry in the table',
+	    status ENUM('SCHEDULED', 'BUILD', 'DONE', 'FAILED', 'SUPERSEDED') NOT NULL DEFAULT 'SCHEDULED',
+	    extra TEXT NULL DEFAULT NULL COMMENT 'json with params:, depends_on: for the task',
+	    error_msg VARCHAR(1024) NULL DEFAULT NULL,
+	    created_at DOUBLE NOT NULL,
+	    modified_at DOUBLE NULL DEFAULT NULL,
+	    PRIMARY KEY (task_index, instance_action_id),
+        INDEX FK_actions_instance_actions (instance_action_id),
+    	CONSTRAINT FK_actions_instance_actions FOREIGN KEY (instance_action_id) REFERENCES instance_actions (uuid) ON UPDATE CASCADE ON DELETE CASCADE,
+        INDEX FK_actions_vims (datacenter_vim_id),
+    	CONSTRAINT FK_actions_vims FOREIGN KEY (datacenter_vim_id) REFERENCES datacenter_tenants (uuid) ON UPDATE CASCADE ON DELETE CASCADE)
+        COMMENT='Table with the individual VIM actions.'
+        COLLATE='utf8_general_ci'
+        ENGINE=InnoDB;"  
+
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
+         "VALUES (26, '0.26', '0.5.23', 'Several changes', '2017-09-09');"
+}
+function downgrade_from_26(){
+    echo "      Remove name from table datacenter_tenants"
+    sql "ALTER TABLE datacenter_tenants DROP COLUMN name;"
+    echo "      Remove 'SCHEDULED' from the 'status' at tables 'instance_nets', 'instance_vms'"
+    sql "ALTER TABLE instance_vms CHANGE COLUMN status status ENUM('ACTIVE:NoMgmtIP','ACTIVE','INACTIVE','BUILD',"\
+         "'ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED') NOT NULL DEFAULT 'BUILD';"
+    sql "ALTER TABLE instance_nets CHANGE COLUMN status status ENUM('ACTIVE','DOWN','BUILD','ERROR','VIM_ERROR',"\
+         "'INACTIVE','DELETED') NOT NULL DEFAULT 'BUILD';"
+    echo "      Shorten back pci at instance_interfaces to allow extended pci for SDN por mapping"
+    sql "ALTER TABLE instance_interfaces CHANGE COLUMN pci pci VARCHAR(12) NULL DEFAULT NULL COMMENT 'PCI of the "\
+        "physical port in the host' AFTER compute_node;"
+
+    for t in flavor image; do
+        echo "      Restore back 'datacenters_${t}s'"
+        sql "ALTER TABLE datacenters_${t}s ADD COLUMN datacenter_id VARCHAR(36) NULL DEFAULT NULL AFTER "\
+            "${t}_id, DROP COLUMN status, DROP COLUMN vim_info ;"
+        sql "UPDATE datacenters_${t}s as df left join datacenter_tenants as dt on dt.uuid=df.datacenter_vim_id set "\
+            "df.datacenter_id=dt.datacenter_id;"
+        sql "ALTER TABLE datacenters_${t}s CHANGE COLUMN datacenter_id datacenter_id VARCHAR(36) NOT NULL;"
+        sql "ALTER TABLE datacenters_${t}s ADD CONSTRAINT FK__datacenters_${t:0:1} FOREIGN KEY "\
+            "(datacenter_id) REFERENCES datacenters (uuid), DROP FOREIGN KEY FK_datacenters_${t}s_datacenter_tenants, "\
+            "DROP COLUMN datacenter_vim_id;"
+    done
+
+    echo "      Restore back 'instance_interfaces' coupling to scenarios/vnfs"
+    sql "ALTER TABLE instance_interfaces CHANGE COLUMN vim_interface_id vim_interface_id VARCHAR(36) NULL DEFAULT NULL;"
+	sql "ALTER TABLE instance_interfaces DROP FOREIGN KEY FK_instance_ids"
+    sql "ALTER TABLE instance_interfaces CHANGE COLUMN interface_id interface_id VARCHAR(36) NOT NULL;"
+	sql "ALTER TABLE instance_interfaces ADD CONSTRAINT FK_instance_ids FOREIGN KEY (interface_id) "\
+	    "REFERENCES interfaces (uuid);"
+
+    echo "      Restore back 'instance_vms' coupling to scenarios/vnfs"
+    echo "      Decoupling 'instance vms' from scenarios/vnfs to allow scale actions"
+    sql "UPDATE instance_vms SET vim_vm_id='' WHERE vim_vm_id is NULL;"
+    sql "ALTER TABLE instance_vms CHANGE COLUMN vim_vm_id vim_vm_id VARCHAR(36) NOT NULL;"
+	sql "ALTER TABLE instance_vms DROP FOREIGN KEY FK_instance_vms_vms;"
+    sql "ALTER TABLE instance_vms CHANGE COLUMN vm_id vm_id VARCHAR(36) NOT NULL;"
+	sql "ALTER TABLE instance_vms ADD CONSTRAINT FK_instance_vms_vms FOREIGN KEY (vm_id) "\
+	    "REFERENCES vms (uuid);"
+
+    echo "      Restore back 'instance_nets' coupling to scenarios/vnfs"
+    sql "UPDATE instance_nets SET vim_net_id='' WHERE vim_net_id is NULL;"
+    sql "ALTER TABLE instance_nets CHANGE COLUMN vim_net_id vim_net_id VARCHAR(36) NOT NULL;"
+
+    echo "      Restore back  'instance_scenarios' coupling to scenarios"
+	sql "ALTER TABLE instance_scenarios DROP FOREIGN KEY FK_instance_scenarios_scenarios;"
+    sql "ALTER TABLE instance_scenarios CHANGE COLUMN scenario_id scenario_id VARCHAR(36) NOT NULL;"
+	sql "ALTER TABLE instance_scenarios ADD CONSTRAINT FK_instance_scenarios_scenarios FOREIGN KEY (scenario_id) "\
+	    "REFERENCES scenarios (uuid);"
+
+    echo "      Delete table instance_actions"
+    sql "DROP TABLE vim_actions"
+    sql "DROP TABLE instance_actions"
+    sql "DELETE FROM schema_version WHERE version_int='26';"
+}
+
 function upgrade_to_X(){
     echo "      change 'datacenter_nets'"
     sql "ALTER TABLE datacenter_nets ADD COLUMN vim_tenant_id VARCHAR(36) NOT NULL AFTER datacenter_id, DROP INDEX name_datacenter_id, ADD UNIQUE INDEX name_datacenter_id (name, datacenter_id, vim_tenant_id);"
@@ -870,14 +1023,14 @@ mysqldump $DEF_EXTRA_FILE_PARAM --add-drop-table --add-drop-database --routines 
 
 function rollback_db()
 {
-    cat $TEMPFILE2 | mysql $DEF_EXTRA_FILE_PARAM && echo "    Rollback database OK" ||
-        echo "    Rollback database FAIL"
+    cat $TEMPFILE2 | mysql $DEF_EXTRA_FILE_PARAM && echo "    Aborted! Rollback database OK" ||
+        echo "    Aborted! Rollback database FAIL"
     exit 1
 }
 
 function sql()    # send a sql command
 {
-    echo "$*" | $DBCMD || ! echo "    ERROR. Aborted!" || rollback_db
+    echo "$*" | $DBCMD || ! echo "    ERROR with command '$*'" || rollback_db
     return 0
 }
 

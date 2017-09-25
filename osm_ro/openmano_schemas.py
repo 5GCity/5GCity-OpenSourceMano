@@ -1098,6 +1098,31 @@ instance_scenario_action_schema = {
             "type": ["object","null"],
         },
         "console": {"type": ["string", "null"], "enum": ["novnc", "xvpvnc", "rdp-html5", "spice-html5", None]},
+        "create-vdu": {
+            "type": "list",
+            "items" :{
+                "type": "object",
+                "properties":{
+                    "vdu-id": id_schema,
+                    "count": integer1_schema,
+                },
+                "additionalProperties": False,
+                "required": ["vdu-id"]
+            }
+        },
+        "delete-vdu": {
+            "type": "list",
+            "items" :{
+                "type": "object",
+                "properties":{
+                    "vdu-id": id_schema,
+                    "transaction-id": id_schema,
+                },
+                "additionalProperties": False,
+                "minProperties": 1,
+                "maxProperties": 1,
+            }
+        },
         "vnfs":{"type": "array", "items":{"type":"string"}},
         "vms":{"type": "array", "items":{"type":"string"}}
     },

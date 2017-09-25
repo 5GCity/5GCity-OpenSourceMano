@@ -1478,7 +1478,12 @@ def http_delete_instance_id(tenant_id, instance_id):
 
 @bottle.route(url_base + '/<tenant_id>/instances/<instance_id>/action', method='POST')
 def http_post_instance_scenario_action(tenant_id, instance_id):
-    '''take an action over a scenario instance'''
+    """
+    take an action over a scenario instance
+    :param tenant_id: tenant where user belongs to
+    :param instance_id: instance indentity
+    :return:
+    """
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     # parse input data
     http_content, _ = format_in(instance_scenario_action_schema)
@@ -1499,6 +1504,30 @@ def http_post_instance_scenario_action(tenant_id, instance_id):
         return format_out(data)
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_instance_scenario_action error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
+
+@bottle.route(url_base + '/<tenant_id>/instances/<instance_id>/action', method='GET')
+@bottle.route(url_base + '/<tenant_id>/instances/<instance_id>/action/<action_id>', method='GET')
+def http_get_instance_scenario_action(tenant_id, instance_id, action_id=None):
+    """
+    List the actions done over an instance, or the action details
+    :param tenant_id: tenant where user belongs to. Can be "any" to ignore
+    :param instance_id: instance id, can be "any" to get actions of all instances
+    :return:
+    """
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        # check valid tenant_id
+        if tenant_id != "any":
+            nfvo.check_tenant(mydb, tenant_id)
+        data = nfvo.instance_action_get(mydb, tenant_id, instance_id, action_id)
+        return format_out(data)
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_get_instance_scenario_action error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
         logger.error("Unexpected exception: ", exc_info=True)

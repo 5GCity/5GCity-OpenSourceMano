@@ -36,7 +36,8 @@ import time
 
 tables_with_createdat_field=["datacenters","instance_nets","instance_scenarios","instance_vms","instance_vnfs",
                            "interfaces","nets","nfvo_tenants","scenarios","sce_interfaces","sce_nets",
-                           "sce_vnfs","tenants_datacenters","datacenter_tenants","vms","vnfs", "datacenter_nets"]
+                           "sce_vnfs","tenants_datacenters","datacenter_tenants","vms","vnfs", "datacenter_nets",
+                           "instance_actions", "vim_actions"]
 
 
 class nfvo_db(db_base.db_base):
@@ -553,10 +554,10 @@ class nfvo_db(db_base.db_base):
 #             print "nfvo_db.get_instance_scenario DB Exception %d: %s" % (e.args[0], e.args[1])
 #             return self._format_error(e)
 
-    def get_scenario(self, scenario_id, tenant_id=None, datacenter_id=None):
+    def get_scenario(self, scenario_id, tenant_id=None, datacenter_vim_id=None, datacenter_id=None):
         '''Obtain the scenario information, filtering by one or serveral of the tenant, uuid or name
         scenario_id is the uuid or the name if it is not a valid uuid format
-        if datacenter_id is provided, it supply aditional vim_id fields with the matching vim uuid 
+        if datacenter_vim_id,d datacenter_id is provided, it supply aditional vim_id fields with the matching vim uuid
         Only one scenario must mutch the filtering or an error is returned
         ''' 
         tries = 2
@@ -608,14 +609,14 @@ class nfvo_db(db_base.db_base):
                                 vm["boot_data"] = yaml.safe_load(vm["boot_data"])
                             else:
                                 del vm["boot_data"]
-                            if datacenter_id!=None:
-                                cmd = "SELECT vim_id FROM datacenters_images WHERE image_id='{}' AND datacenter_id='{}'".format(vm['image_id'],datacenter_id)
+                            if datacenter_vim_id!=None:
+                                cmd = "SELECT vim_id FROM datacenters_images WHERE image_id='{}' AND datacenter_vim_id='{}'".format(vm['image_id'],datacenter_vim_id)
                                 self.logger.debug(cmd)
                                 self.cur.execute(cmd) 
                                 if self.cur.rowcount==1:
                                     vim_image_dict = self.cur.fetchone()
                                     vm['vim_image_id']=vim_image_dict['vim_id']
-                                cmd = "SELECT vim_id FROM datacenters_flavors WHERE flavor_id='{}' AND datacenter_id='{}'".format(vm['flavor_id'],datacenter_id)
+                                cmd = "SELECT vim_id FROM datacenters_flavors WHERE flavor_id='{}' AND datacenter_vim_id='{}'".format(vm['flavor_id'],datacenter_vim_id)
                                 self.logger.debug(cmd)
                                 self.cur.execute(cmd) 
                                 if self.cur.rowcount==1:
@@ -677,7 +678,7 @@ class nfvo_db(db_base.db_base):
                         self.logger.debug(cmd)
                         self.cur.execute(cmd) 
                         d_net = self.cur.fetchone()
-                        if d_net==None or datacenter_id==None:
+                        if d_net==None or datacenter_vim_id==None:
                             #print "nfvo_db.get_scenario() WARNING external net %s not found"  % net['name']
                             net['vim_id']=None
                         else:
@@ -895,7 +896,7 @@ class nfvo_db(db_base.db_base):
             try:
                 with self.con:
                     self.cur = self.con.cursor(mdb.cursors.DictCursor)
-                    #instance table
+                    # instance table
                     where_list=[]
                     if tenant_id is not None: where_list.append( "inst.tenant_id='" + tenant_id +"'" )
                     if db_base._check_valid_uuid(instance_id):
@@ -922,7 +923,7 @@ class nfvo_db(db_base.db_base):
                         instance_dict["cloud-config"] = yaml.load(instance_dict["cloud_config"])
                     del instance_dict["cloud_config"]
                     
-                    #instance_vnfs
+                    # instance_vnfs
                     cmd = "SELECT iv.uuid as uuid,sv.vnf_id as vnf_id,sv.name as vnf_name, sce_vnf_id, datacenter_id, datacenter_tenant_id"\
                             " FROM instance_vnfs as iv join sce_vnfs as sv on iv.sce_vnf_id=sv.uuid" \
                             " WHERE iv.instance_scenario_id='{}'" \
