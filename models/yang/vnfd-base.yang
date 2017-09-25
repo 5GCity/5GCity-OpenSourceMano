@@ -160,7 +160,10 @@ module vnfd-base
         type string;
       }
 
-      uses manotypes:vca-configuration;
+
+      container vnf-configuration {
+        uses manotypes:vca-configuration;
+      }
 
       container mgmt-interface {
         description
@@ -364,6 +367,10 @@ module vnfd-base
         }
 
         uses manotypes:image-properties;
+
+        container vdu-configuration {
+          uses manotypes:vca-configuration;
+        }
 
         choice cloud-init-input {
           description
