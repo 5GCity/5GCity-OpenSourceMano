@@ -108,7 +108,7 @@ cp -R $BUILD_NUMBER/pool $BASE_DIR/
 
 cd $BASE_DIR
 
-for i in RO osmclient openvim SO UI; do
+for i in RO osmclient openvim SO UI IM; do
 
     # gpg sign the packages
     dpkg-sig -g "$GPG_PASSPHRASE" -k $GPGKEY --sign builder pool/$i/*.deb
