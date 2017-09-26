@@ -43,16 +43,10 @@ class Plugin():
         self.conn = Connection()
         self.metricAlarm = MetricAlarm()
         self.metric = Metrics()
-
         server = {'server': 'localhost:9092', 'topic': 'alarm_request'}
-
         self._consumer = KafkaConsumer(server['topic'], bootstrap_servers=server['server'])
         self._consumer.subscribe(['alarm_request'])
-
-        #self.producer = KafkaProducer('create_alarm_request')
-        self.producer = KafkaProducer('')
-        
-
+        self.producer = KafkaProducer('')     
 #---------------------------------------------------------------------------------------------------------------------------      
     def connection(self):
         """Connecting instances with CloudWatch"""
@@ -94,8 +88,7 @@ class Plugin():
                     if message.key == "create_alarm_request":  
                         if alarm_info['vim_type'] == 'AWS':                        
                             alarm_inner_dict = alarm_info['alarm_create_request']
-                            metric_status = self.check_metric(alarm_inner_dict['metric_name'])
-                            
+                            metric_status = self.check_metric(alarm_inner_dict['metric_name'])                            
                             if self.check_resource(alarm_inner_dict['resource_uuid']) == True and metric_status['status'] == True:
                                 log.debug ("Resource and Metrics exists")
                             
@@ -128,7 +121,7 @@ class Plugin():
                                 ack_details = self.get_ack_details(alarm_info)
                                 payload = json.dumps(ack_details)                                  
                                 file = open('../../core/models/notify_alarm.json','wb').write((payload))
-                                self.producer.update_alarm_response(key='notify_alarm',message=payload,topic = 'alarm_response')
+                                self.producer.notify_alarm(key='notify_alarm',message=payload,topic = 'alarm_response')
                                 log.info("Acknowledge sent: %s", ack_details)
                             else:
                                 log.error("Resource ID is Incorrect")    
@@ -168,7 +161,7 @@ class Plugin():
                             del_resp = self.delete_alarm(del_info)
                             payload = json.dumps(del_resp)                                   
                             file = open('../../core/models/delete_alarm_resp.json','wb').write((payload))
-                            self.producer.update_alarm_response(key='delete_alarm_response',message=payload,topic = 'alarm_response')
+                            self.producer.delete_alarm_response(key='delete_alarm_response',message=payload,topic = 'alarm_response')
                             log.info("Alarm Deleted with alarm info: %s", del_resp)
                         else: 
                             log.error(" VIM type Incorrect ")     
@@ -176,12 +169,12 @@ class Plugin():
                     elif message.key == "alarm_list_request":
                         alarm_inner_dict = alarm_info['alarm_list_request']
                         if alarm_info['vim_type'] == 'AWS': 
-                            if self.check_resource(alarm_inner_dict['resource_uuid']) == True: 
+                            if self.check_resource(alarm_inner_dict['resource_uuid']) == True or alarm_inner_dict['resource_uuid'] == "": 
                                 #Generate a valid response message, send via producer
                                 list_resp = self.get_alarms_list(alarm_info)#['alarm_names']
                                 payload = json.dumps(list_resp)                                                                 
                                 file = open('../../core/models/list_alarm_resp.json','wb').write((payload))
-                                self.producer.update_alarm_response(key='list_alarm_response',message=payload,topic = 'alarm_response')
+                                self.producer.list_alarm_response(key='list_alarm_response',message=payload,topic = 'alarm_response')
                             else:
                                 log.error("Resource ID is Incorrect")    
                         else:

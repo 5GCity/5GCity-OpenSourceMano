@@ -45,6 +45,19 @@ try:
 except:
     exit("Boto not avialable. Try activating your virtualenv OR `pip install boto`")
 
+STATISTICS = {
+    "AVERAGE": "Average",
+    "MINIMUM": "Minimum",
+    "MAXIMUM": "Maximum",
+    "COUNT"  : "SampleCount",
+    "SUM"    : "Sum"}
+
+OPERATIONS = {
+    "GE"     : ">=",
+    "LE"     : "<=",
+    "GT"     : ">",
+    "LT"     : "<",
+    "EQ"     : "="}   
 
 class MetricAlarm():
     """Alarms Functionality Handler -- Carries out alarming requests and responses via BOTO.Cloudwatch """
@@ -63,42 +76,50 @@ class MetricAlarm():
             log.debug ("Alarm already exists, Try updating the alarm using 'update_alarm_configuration()'")   
         else:              
             try:
-                alarm = boto.ec2.cloudwatch.alarm.MetricAlarm(
-                    connection = cloudwatch_conn,
-                    name = alarm_info['alarm_name'] + "_" + alarm_info['resource_uuid'],
-                    metric = alarm_info['metric_name'],
-                    namespace = "AWS/EC2",
-                    statistic = alarm_info['statistic'],
-                    comparison = alarm_info['operation'],
-                    threshold = alarm_info['threshold_value'],
-                    period = 60,
-                    evaluation_periods = 1,
-                    unit=alarm_info['unit'],
-                    description = alarm_info['severity'] + ";" + alarm_id + ";" + alarm_info['description'],
-                    dimensions = {'InstanceId':alarm_info['resource_uuid']},
-                    alarm_actions = None,
-                    ok_actions = None,
-                    insufficient_data_actions = None)
+                if alarm_info['statistic'] in STATISTICS:
+                    if alarm_info['operation'] in OPERATIONS:
+                        alarm = boto.ec2.cloudwatch.alarm.MetricAlarm(
+                            connection = cloudwatch_conn,
+                            name = alarm_info['alarm_name'] + "_" + alarm_info['resource_uuid'],
+                            metric = alarm_info['metric_name'],
+                            namespace = "AWS/EC2",
+                            statistic = STATISTICS[alarm_info['statistic']],
+                            comparison = OPERATIONS[alarm_info['operation']],
+                            threshold = alarm_info['threshold_value'],
+                            period = 60,
+                            evaluation_periods = 1,
+                            unit=alarm_info['unit'],
+                            description = alarm_info['severity'] + ";" + alarm_id + ";" + alarm_info['description'],
+                            dimensions = {'InstanceId':alarm_info['resource_uuid']},
+                            alarm_actions = None,
+                            ok_actions = None,
+                            insufficient_data_actions = None)
 
-                """Setting Alarm Actions : 
-                alarm_actions = ['arn:aws:swf:us-west-2:465479087178:action/actions/AWS_EC2.InstanceId.Stop/1.0']"""
+                        """Setting Alarm Actions : 
+                        alarm_actions = ['arn:aws:swf:us-west-2:465479087178:action/actions/AWS_EC2.InstanceId.Stop/1.0']"""
 
-                status=cloudwatch_conn.put_metric_alarm(alarm)
+                        status=cloudwatch_conn.put_metric_alarm(alarm)
 
-                log.debug ("Alarm Configured Succesfully")
-                self.alarm_resp['schema_version'] = str(create_info['schema_version'])
-                self.alarm_resp['schema_type'] = 'create_alarm_response'
+                        log.debug ("Alarm Configured Succesfully")
+                        self.alarm_resp['schema_version'] = str(create_info['schema_version'])
+                        self.alarm_resp['schema_type'] = 'create_alarm_response'
 
-                inner_dict['correlation_id'] = str(alarm_info['correlation_id'])
-                inner_dict['alarm_uuid'] = str(alarm_id) 
-                inner_dict['status'] = status
+                        inner_dict['correlation_id'] = str(alarm_info['correlation_id'])
+                        inner_dict['alarm_uuid'] = str(alarm_id) 
+                        inner_dict['status'] = status
 
-                self.alarm_resp['alarm_create_response'] = inner_dict
-                if status == True:
-                	return self.alarm_resp
+                        self.alarm_resp['alarm_create_response'] = inner_dict
+
+                        if status == True:
+                            return self.alarm_resp
+                        else:
+                            return None	
+                    else: 
+                        log.error("Operation not supported")
+                        return None        
                 else:
-                	return None	
-
+                    log.error("Statistic not supported")
+                    return None
             except Exception as e:
                 log.error("Alarm Configuration Failed: " + str(e))
             
@@ -120,37 +141,45 @@ class MetricAlarm():
             return alarm_id   
         else:            
             try:
-                alarm = boto.ec2.cloudwatch.alarm.MetricAlarm(
-                    connection = cloudwatch_conn,
-                    name = status['info'].name ,
-                    metric = alarm_info['metric_name'],
-                    namespace = "AWS/EC2",
-                    statistic = alarm_info['statistic'],
-                    comparison = alarm_info['operation'],
-                    threshold = alarm_info['threshold_value'],
-                    period = 60,
-                    evaluation_periods = 1,
-                    unit=alarm_info['unit'],
-                    description = alarm_info['severity'] + ";" + alarm_id + ";" + alarm_info['description'],
-                    dimensions = {'InstanceId':str(status['info'].dimensions['InstanceId']).split("'")[1]},
-                    alarm_actions = None,
-                    ok_actions = None,
-                    insufficient_data_actions = None)
+                if alarm_info['statistic'] in STATISTICS:
+                    if alarm_info['operation'] in OPERATIONS:
+                        alarm = boto.ec2.cloudwatch.alarm.MetricAlarm(
+                            connection = cloudwatch_conn,
+                            name = status['info'].name ,
+                            metric = alarm_info['metric_name'],
+                            namespace = "AWS/EC2",
+                            statistic = STATISTICS[alarm_info['statistic']],
+                            comparison = OPERATIONS[alarm_info['operation']],
+                            threshold = alarm_info['threshold_value'],
+                            period = 60,
+                            evaluation_periods = 1,
+                            unit=alarm_info['unit'],
+                            description = alarm_info['severity'] + ";" + alarm_id + ";" + alarm_info['description'],
+                            dimensions = {'InstanceId':str(status['info'].dimensions['InstanceId']).split("'")[1]},
+                            alarm_actions = None,
+                            ok_actions = None,
+                            insufficient_data_actions = None)
 
-                """Setting Alarm Actions : 
-                alarm_actions = ['arn:aws:swf:us-west-2:465479087178:action/actions/AWS_EC2.InstanceId.Stop/1.0']"""
+                        """Setting Alarm Actions : 
+                        alarm_actions = ['arn:aws:swf:us-west-2:465479087178:action/actions/AWS_EC2.InstanceId.Stop/1.0']"""
 
-                status=cloudwatch_conn.put_metric_alarm(alarm)
-                log.debug("Alarm %s Updated ",alarm.name)
-                self.alarm_resp['schema_version'] = str(update_info['schema_version'])
-                self.alarm_resp['schema_type'] = 'update_alarm_response'
+                        status=cloudwatch_conn.put_metric_alarm(alarm)
+                        log.debug("Alarm %s Updated ",alarm.name)
+                        self.alarm_resp['schema_version'] = str(update_info['schema_version'])
+                        self.alarm_resp['schema_type'] = 'update_alarm_response'
 
-                inner_dict['correlation_id'] = str(alarm_info['correlation_id'])
-                inner_dict['alarm_uuid'] = str(alarm_id) 
-                inner_dict['status'] = status
+                        inner_dict['correlation_id'] = str(alarm_info['correlation_id'])
+                        inner_dict['alarm_uuid'] = str(alarm_id) 
+                        inner_dict['status'] = status
 
-                self.alarm_resp['alarm_update_response'] = inner_dict
-                return self.alarm_resp
+                        self.alarm_resp['alarm_update_response'] = inner_dict
+                        return self.alarm_resp
+                    else: 
+                        log.error("Operation not supported")
+                        return None        
+                else:
+                    log.error("Statistic not supported")
+                    return None        
             except Exception as e:
                 log.error ("Error in Updating Alarm " + str(e))
         
@@ -180,17 +209,49 @@ class MetricAlarm():
         """Get a list of alarms that are present on a particular VIM type"""
         alarm_list = []
         alarm_info = dict()
+        inner_dict = list_info['alarm_list_request']
         try: #id vim 
             alarms = cloudwatch_conn.describe_alarms()
             itr = 0
             for alarm in alarms:
                 list_info['alarm_list_request']['alarm_uuid'] = str(alarm.description).split(';')[1]
-                alarm_list.insert(itr,self.alarm_details(cloudwatch_conn,list_info))
-                itr += 1
-            
+
+                #Severity = alarm_name = resource_uuid = ""
+                if inner_dict['severity'] == "" and inner_dict['alarm_name'] == "" and inner_dict['resource_uuid'] == "":
+                    alarm_list.insert(itr,self.alarm_details(cloudwatch_conn,list_info))
+                    itr += 1
+                #alarm_name = resource_uuid = ""
+                if inner_dict['severity'] == str(alarm.description).split(';')[0] and inner_dict['alarm_name'] == "" and inner_dict['resource_uuid'] == "":
+                    alarm_list.insert(itr,self.alarm_details(cloudwatch_conn,list_info))
+                    itr += 1
+                #severity = resource_uuid = ""
+                if inner_dict['severity'] == "" and inner_dict['alarm_name'] in alarm.name and inner_dict['resource_uuid'] == "":
+                    alarm_list.insert(itr,self.alarm_details(cloudwatch_conn,list_info))
+                    itr += 1
+                #severity = alarm_name = ""    
+                if inner_dict['severity'] == "" and inner_dict['alarm_name'] == "" and inner_dict['resource_uuid'] == str(alarm.dimensions['InstanceId']).split("'")[1]:
+                    alarm_list.insert(itr,self.alarm_details(cloudwatch_conn,list_info))
+                    itr += 1
+                #resource_uuid = ""    
+                if inner_dict['severity'] == str(alarm.description).split(';')[0] and inner_dict['alarm_name'] in alarm.name and inner_dict['resource_uuid'] == "":
+                    alarm_list.insert(itr,self.alarm_details(cloudwatch_conn,list_info))
+                    itr += 1
+                #alarm_name = ""    
+                if inner_dict['severity'] == str(alarm.description).split(';')[0] and inner_dict['alarm_name'] == "" and inner_dict['resource_uuid'] == str(alarm.dimensions['InstanceId']).split("'")[1]:
+                    alarm_list.insert(itr,self.alarm_details(cloudwatch_conn,list_info))
+                    itr += 1
+                #severity = ""    
+                if inner_dict['severity'] == "" and inner_dict['alarm_name'] in alarm.name and inner_dict['resource_uuid'] == str(alarm.dimensions['InstanceId']).split("'")[1]:
+                    alarm_list.insert(itr,self.alarm_details(cloudwatch_conn,list_info))
+                    itr += 1                    
+                #Everything provided    
+                if inner_dict['severity'] == str(alarm.description).split(';')[0] and inner_dict['alarm_name'] in alarm.name and inner_dict['resource_uuid'] == str(alarm.dimensions['InstanceId']).split("'")[1]:
+                    alarm_list.insert(itr,self.alarm_details(cloudwatch_conn,list_info))
+                    itr += 1
+
             alarm_info['schema_version'] = str(list_info['schema_version'])
             alarm_info['schema_type'] = 'list_alarm_response'    
-            alarm_info['list_alarm_resp'] = json.dumps(alarm_list)
+            alarm_info['list_alarm_resp'] = alarm_list
 
             return alarm_info                  
         except Exception as e:
