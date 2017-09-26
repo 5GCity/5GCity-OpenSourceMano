@@ -36,6 +36,19 @@ node("${params.NODE}") {
     }
 
     stage('downstream') {
+        // initially use stage_name as the event_type
+        def stage_name = GERRIT_EVENT_TYPE
+
+        switch(GERRIT_EVENT_TYPE) {
+            case "change-merged":
+               stage_name = "stage_2-merge"
+               break
+
+            case "patchset-created":
+               stage_name = "stage_2"
+               break
+        }
+
         // pipeline running from gerrit trigger.
         // kickoff the downstream multibranch pipeline
         def downstream_params = [
@@ -46,8 +59,7 @@ node("${params.NODE}") {
             string(name: 'PROJECT_URL_PREFIX', value: params.PROJECT_URL_PREFIX),
             booleanParam(name: 'TEST_INSTALL', value: params.TEST_INSTALL),
         ]
-
-        stage_name = "stage_2"
+     
         if ( params.STAGE )
         {
             // go directly to stage 3 (osm system)
@@ -59,11 +71,12 @@ node("${params.NODE}") {
                 return
             }
         }
-        println("TEST_INSTALL = ${params.TEST_INSTALL}")
         // callout to stage_2.  This is a multi-branch pipeline.
-        upstream_job_name = "${mdg}-${stage_name}/${GERRIT_BRANCH}"
+        downstream_job_name = "${mdg}-${stage_name}/${GERRIT_BRANCH}"
 
-        stage_2_result = build job: "${upstream_job_name}", parameters: downstream_params, propagate: true
+        println("TEST_INSTALL = ${params.TEST_INSTALL}, downstream job: ${downstream_job_name}")
+
+        stage_2_result = build job: "${downstream_job_name}", parameters: downstream_params, propagate: true
         if (stage_2_result.getResult() != 'SUCCESS') {
             project = stage_2_result.getProjectName()
             build = stage_2_result.getNumber()

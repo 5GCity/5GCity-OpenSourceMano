@@ -31,7 +31,7 @@ properties([
         string(defaultValue: 'dpkg1', description: '', name: 'GPG_KEY_NAME'),
         string(defaultValue: 'artifactory-osm', description: '', name: 'ARTIFACTORY_SERVER'),
         booleanParam(defaultValue: false, description: '', name: 'SAVE_CONTAINER_ON_FAIL'),
-        booleanParam(defaultValue: false, description: '', name: 'SAVE_CONTAINER_ON_PASS'),
+        booleanParam(defaultValue: false, description: '', name: 'SAVE_CONTAINER_ON_PASS')
     ])
 ])
 
@@ -49,78 +49,87 @@ node("${params.NODE}") {
 
     ci_helper = load "jenkins/ci-pipelines/ci_helper.groovy"
 
+    def upstream_main_job = params.UPSTREAM_SUFFIX
+    def save_artifacts = false
+
+    if ( JOB_NAME.contains('merge') ) {
+        upstream_main_job += '-merge'
+        save_artifacts = true
+        println("merge job, saving artifacts")
+    }
+
     // Copy the artifacts from the upstream jobs
     stage("Copy Artifacts") {
         // cleanup any previous repo
         sh 'rm -rf repo'
-        if ( params.UPSTREAM_SUFFIX ) {
+        dir("repo") {
+            // grab all stable upstream builds based on the
 
-            dir("repo") {
-                // grab all stable upstream builds based on the
-                // given target UPSTREAM_SUFFIX
+            dir("${RELEASE}") {
+                def list = ["SO", "UI", "RO", "openvim", "osmclient", "IM"]
+                for (component in list) {
+                    step ([$class: 'CopyArtifact',
+                           projectName: "${component}${upstream_main_job}/${GERRIT_BRANCH}"])
 
-                dir("${RELEASE}") {
-                    def list = ["SO", "UI", "RO", "openvim", "osmclient", "IM"]
-                    for (component in list) {
-                        step ([$class: 'CopyArtifact',
-                               projectName: "${component}${params.UPSTREAM_SUFFIX}/${GERRIT_BRANCH}"])
+                    // grab the build name/number
+                    //options = get_env_from_build('build.env')
+                    build_num = ci_helper.get_env_value('build.env','BUILD_NUMBER')
 
-                        // grab the build name/number
-                        //options = get_env_from_build('build.env')
-                        build_num = ci_helper.get_env_value('build.env','BUILD_NUMBER')
-                        //build_num = sh(returnStdout:true,  script: "cat build.env | awk -F= '/BUILD_NUMBER/{print \$2}'").trim()
-                        ci_helper.get_archive(params.ARTIFACTORY_SERVER,component,GERRIT_BRANCH, "${component}-stage_2 :: ${GERRIT_BRANCH}", build_num)
+                    // grab the archives from the stage_2 builds (ie. this will be the artifacts stored based on a merge)
+                    ci_helper.get_archive(params.ARTIFACTORY_SERVER,component,GERRIT_BRANCH, "${component}${upstream_main_job} :: ${GERRIT_BRANCH}", build_num)
 
-                        // cleanup any prevously defined dists
-                        sh "rm -rf dists"
-                    }
-
-                    // check if an upstream artifact based on specific build number has been requested
-                    // This is the case of a merge build and the upstream merge build is not yet complete (it is not deemed
-                    // a successful build yet). The upstream job is calling this downstream job (with the its build artifiact)
-                    if ( params.UPSTREAM_JOB_NAME ) {
-                        step ([$class: 'CopyArtifact',
-                               projectName: "${params.UPSTREAM_JOB_NAME}",
-                               selector: [$class: 'SpecificBuildSelector', buildNumber: "${params.UPSTREAM_JOB_NUMBER}"]
-                              ])
-
-                        //options = get_env_from_build('build.env')
-                        // grab the build name/number
-                        //build_num = sh(returnStdout:true,  script: "cat build.env | awk -F= '/BUILD_NUMBER/{print \$2}'").trim()
-                        build_num = ci_helper.get_env_value('build.env','BUILD_NUMBER')
-                        component = ci_helper.get_mdg_from_project(ci_helper.get_env_value('build.env','GERRIT_PROJECT'))
-
-                        ci_helper.get_archive(params.ARTIFACTORY_SERVER,component,GERRIT_BRANCH, "${component}-stage_2 :: ${GERRIT_BRANCH}", build_num)
-
-                        sh "rm -rf dists"
-                    }
-                    
-                    // sign all the components
-                    for (component in list) {
-                        sh "dpkg-sig --sign builder -k ${GPG_KEY_NAME} pool/${component}/*"
-                    }
-
-                    // now create the distro
-                    for (component in list) {
-                        sh "mkdir -p dists/${params.REPO_DISTRO}/${component}/binary-amd64/"
-                        sh "apt-ftparchive packages pool/${component} > dists/${params.REPO_DISTRO}/${component}/binary-amd64/Packages"
-                        sh "gzip -9fk dists/${params.REPO_DISTRO}/${component}/binary-amd64/Packages"
-                    }
-
-                    // create and sign the release file
-                    sh "apt-ftparchive release dists/${params.REPO_DISTRO} > dists/${params.REPO_DISTRO}/Release"
-                    sh "gpg --yes -abs -u ${GPG_KEY_NAME} -o dists/${params.REPO_DISTRO}/Release.gpg dists/${params.REPO_DISTRO}/Release"
-
-                    // copy the public key into the release folder
-                    // this pulls the key from the home dir of the current user (jenkins)
-                    sh "cp ~/${REPO_KEY_NAME} ."
+                    // cleanup any prevously defined dists
+                    sh "rm -rf dists"
                 }
-                // start an apache server to serve up the images
-                http_server_name = "${container_name}-apache"
 
-                pwd = sh(returnStdout:true,  script: 'pwd').trim()
-                repo_base_url = ci_helper.start_http_server(pwd,http_server_name)
+                // check if an upstream artifact based on specific build number has been requested
+                // This is the case of a merge build and the upstream merge build is not yet complete (it is not deemed
+                // a successful build yet). The upstream job is calling this downstream job (with the its build artifiact)
+                if ( params.UPSTREAM_JOB_NAME ) {
+                    step ([$class: 'CopyArtifact',
+                           projectName: "${params.UPSTREAM_JOB_NAME}",
+                           selector: [$class: 'SpecificBuildSelector', buildNumber: "${params.UPSTREAM_JOB_NUMBER}"]
+                          ])
+
+                    //options = get_env_from_build('build.env')
+                    // grab the build name/number
+                    //build_num = sh(returnStdout:true,  script: "cat build.env | awk -F= '/BUILD_NUMBER/{print \$2}'").trim()
+                    build_num = ci_helper.get_env_value('build.env','BUILD_NUMBER')
+                    component = ci_helper.get_mdg_from_project(ci_helper.get_env_value('build.env','GERRIT_PROJECT'))
+
+                    // the upstream job name contains suffix with the project. Need this stripped off
+                    def project_without_branch = params.UPSTREAM_JOB_NAME.split('/')[0]
+
+                    ci_helper.get_archive(params.ARTIFACTORY_SERVER,component,GERRIT_BRANCH, "${project_without_branch} :: ${GERRIT_BRANCH}", build_num)
+
+                    sh "rm -rf dists"
+                }
+                
+                // sign all the components
+                for (component in list) {
+                    sh "dpkg-sig --sign builder -k ${GPG_KEY_NAME} pool/${component}/*"
+                }
+
+                // now create the distro
+                for (component in list) {
+                    sh "mkdir -p dists/${params.REPO_DISTRO}/${component}/binary-amd64/"
+                    sh "apt-ftparchive packages pool/${component} > dists/${params.REPO_DISTRO}/${component}/binary-amd64/Packages"
+                    sh "gzip -9fk dists/${params.REPO_DISTRO}/${component}/binary-amd64/Packages"
+                }
+
+                // create and sign the release file
+                sh "apt-ftparchive release dists/${params.REPO_DISTRO} > dists/${params.REPO_DISTRO}/Release"
+                sh "gpg --yes -abs -u ${GPG_KEY_NAME} -o dists/${params.REPO_DISTRO}/Release.gpg dists/${params.REPO_DISTRO}/Release"
+
+                // copy the public key into the release folder
+                // this pulls the key from the home dir of the current user (jenkins)
+                sh "cp ~/${REPO_KEY_NAME} ."
             }
+            // start an apache server to serve up the images
+            http_server_name = "${container_name}-apache"
+
+            pwd = sh(returnStdout:true,  script: 'pwd').trim()
+            repo_base_url = ci_helper.start_http_server(pwd,http_server_name)
         }
     }
 
@@ -174,13 +183,16 @@ node("${params.NODE}") {
             junit '*.xml'
         }
 
-        stage("Archive") {
-            sh "echo ${container_name} > build_version.txt"
-            archiveArtifacts artifacts: "build_version.txt", fingerprint: true
+        // save the artifacts of this build if this is a merge job
+        if ( save_artifacts ) {
+            stage("Archive") {
+                sh "echo ${container_name} > build_version.txt"
+                archiveArtifacts artifacts: "build_version.txt", fingerprint: true
 
-            // Archive the tested repo
-            dir("repo/${RELEASE}") {
-                ci_helper.archive(params.ARTIFACTORY_SERVER,RELEASE,GERRIT_BRANCH,'tested')
+                // Archive the tested repo
+                dir("repo/${RELEASE}") {
+                    ci_helper.archive(params.ARTIFACTORY_SERVER,RELEASE,GERRIT_BRANCH,'tested')
+                }
             }
         }
     }

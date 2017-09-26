@@ -74,9 +74,13 @@ def ci_pipeline(mdg,url_prefix,project,branch,refspec,revision,build_system,arti
                 string(name: 'UPSTREAM_JOB_NAME', value: "${JOB_NAME}" ),
                 string(name: 'UPSTREAM_JOB_NUMBER', value: "${BUILD_NUMBER}" ),
             ]
+            stage_3_job = "osm-stage_3"
+            if ( JOB_NAME.contains('merge') ) {
+                stage_3_job += '-merge'
+            }
 
-            // callout to stage_3.  This is the system build
-            result = build job: "osm-stage_3/${branch}", parameters: downstream_params_stage_3, propagate: true
+            // callout to stage_3. This is the system build
+            result = build job: "${stage_3_job}/${branch}", parameters: downstream_params_stage_3, propagate: true
             if (result.getResult() != 'SUCCESS') {
                 project = result.getProjectName()
                 build = result.getNumber()
