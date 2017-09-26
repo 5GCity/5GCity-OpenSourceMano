@@ -22,7 +22,8 @@
 """Carry out alarming requests via Aodh API."""
 
 import json
-import logging as log
+import logging
+log = logging.getLogger(__name__)
 
 from core.message_bus.producer import KafkaProducer
 
@@ -102,6 +103,9 @@ class Alarming(object):
 
                     # Generate a valid response message, send via producer
                     try:
+                        if alarm_status is True:
+                            log.info("Alarm successfully created")
+
                         resp_message = self._response.generate_response(
                             'create_alarm_response', status=alarm_status,
                             alarm_id=alarm_id,
@@ -233,6 +237,7 @@ class Alarming(object):
             result = self._common._perform_request(
                 url, auth_token, req_type="delete")
             if str(result.status_code) == "404":
+                log.info("Alarm doesn't exist: %s", result.status_code)
                 # If status code is 404 alarm did not exist
                 return False
             else:

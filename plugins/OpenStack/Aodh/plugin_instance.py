@@ -21,7 +21,14 @@
 ##
 """Aodh plugin for the OSM monitoring module."""
 
-import logging as log
+import logging
+
+logging.basicConfig(filename='aodh_MON.log', format='%(asctime)s %(message)s',
+                    datefmt='%m/%d/%Y %I:%M:%S %p', filemode='a',
+                    level=logging.INFO)
+log = logging.getLogger(__name__)
+
+
 try:
     import aodhclient
 except ImportError:
