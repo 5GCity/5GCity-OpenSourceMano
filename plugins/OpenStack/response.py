@@ -22,7 +22,8 @@
 """Generate valid responses to send back to the SO."""
 
 import json
-import logging as log
+import logging
+log = logging.getLogger(__name__)
 
 __author__ = "Helena McGough"
 

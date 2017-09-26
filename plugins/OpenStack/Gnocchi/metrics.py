@@ -23,7 +23,9 @@
 
 import datetime
 import json
-import logging as log
+import logging
+log = logging.getLogger(__name__)
+
 import time
 
 from core.message_bus.producer import KafkaProducer

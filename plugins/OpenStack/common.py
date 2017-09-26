@@ -21,7 +21,8 @@
 ##
 """Common methods for the OpenStack plugins."""
 
-import logging as log
+import logging
+log = logging.getLogger(__name__)
 
 from keystoneclient.v3 import client
 
@@ -102,5 +103,8 @@ class Common(object):
 
         except Exception as e:
             log.warn("Exception thrown on request", e)
+            if response is not None:
+                log.warn("Request resulted in %s code and %s response",
+                         response.status_code, response.text)
 
         return response

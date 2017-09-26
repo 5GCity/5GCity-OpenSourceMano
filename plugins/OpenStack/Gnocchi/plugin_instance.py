@@ -21,7 +21,12 @@
 ##
 """Gnocchi plugin for the OSM monitoring module."""
 
-import logging as log
+import logging
+
+logging.basicConfig(filename='gnocchi_MON.log', datefmt='%m/%d/%Y %I:%M:%S %p',
+                    format='%(asctime)s %(message)s', filemode='a',
+                    level=logging.INFO)
+log = logging.getLogger(__name__)
 
 try:
     import gnocchiclient

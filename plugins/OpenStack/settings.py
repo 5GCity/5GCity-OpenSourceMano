@@ -21,9 +21,8 @@
 ##
 """Configurations for the OpenStack plugins."""
 
-#from __future__ import unicode_literals
-
-import logging as log
+import logging
+log = logging.getLogger(__name__)
 import os
 
 from collections import namedtuple
