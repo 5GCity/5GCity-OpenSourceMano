@@ -81,20 +81,26 @@ class Metrics():
 
             supported=self.check_metric(data_info['metric_name'])
 
-            metric_stats=cloudwatch_conn.get_metric_statistics(60, datetime.datetime.utcnow() - datetime.timedelta(seconds=int(data_info['collection_period'])),
-                                datetime.datetime.utcnow(),supported['metric_name'],'AWS/EC2', 'Maximum',
-                                dimensions={'InstanceId':data_info['resource_uuid']}, unit='Percent')  
+            if supported['status'] == True:
+                if int(data_info['collection_period']) % 60 == 0:
+                    metric_stats=cloudwatch_conn.get_metric_statistics(60, datetime.datetime.utcnow() - datetime.timedelta(seconds=int(data_info['collection_period'])),
+                                        datetime.datetime.utcnow(),supported['metric_name'],'AWS/EC2', 'Maximum',
+                                        dimensions={'InstanceId':data_info['resource_uuid']}, unit='Percent')  
+                    index = 0
+                    for itr in range (len(metric_stats)):
+                        timestamp_arr[index] = str(metric_stats[itr]['Timestamp'])
+                        value_arr[index] = metric_stats[itr]['Maximum']
+                        index +=1
+                    metric_info_dict['time_series'] = timestamp_arr
+                    metric_info_dict['metrics_series'] = value_arr
+                    log.debug("Metrics Data : %s", metric_info_dict)
+                    return metric_info_dict
+                else: 
+                    log.error("Collection Period should be a multiple of 60")
+                    return False
 
-            index = 0
-            for itr in range (len(metric_stats)):
-                timestamp_arr[index] = str(metric_stats[itr]['Timestamp'])
-                value_arr[index] = metric_stats[itr]['Maximum']
-                index +=1
-
-            metric_info_dict['time_series'] = timestamp_arr
-            metric_info_dict['metrics_series'] = value_arr
-            log.debug("Metrics Data : %s", metric_info_dict)
-            return metric_info_dict
+            else:
+                return False
         
         except Exception as e:
             log.error("Error returning Metrics Data" + str(e))
@@ -126,19 +132,23 @@ class Metrics():
         ''' " Not supported in AWS"
         Returning the required parameters with status = False'''
         try:
-
+            supported=self.check_metric(del_info['metric_name'])
+            metric_resp = dict()
             del_resp = dict()
-            del_resp['schema_version'] = del_info['schema_version']
-            del_resp['schema_type'] = "delete_metric_response"
-            del_resp['metric_name'] = del_info['metric_name']
-            del_resp['metric_uuid'] = del_info['metric_uuid']
-            del_resp['resource_uuid'] = del_info['resource_uuid']
-            # TODO : yet to finalize
-            del_resp['tenant_uuid'] = del_info['tenant_uuid']
-            del_resp['correlation_id'] = del_info['correlation_uuid']
-            del_resp['status'] = False
-            log.info("Metric Deletion Not supported in AWS : %s",del_resp)
-            return del_resp
+            if supported['status'] == True:      
+                del_resp['schema_version'] = del_info['schema_version']
+                del_resp['schema_type'] = "delete_metric_response"
+                del_resp['metric_name'] = del_info['metric_name']
+                del_resp['metric_uuid'] = del_info['metric_uuid']
+                del_resp['resource_uuid'] = del_info['resource_uuid']
+                # TODO : yet to finalize
+                del_resp['tenant_uuid'] = del_info['tenant_uuid']
+                del_resp['correlation_id'] = del_info['correlation_uuid']
+                del_resp['status'] = False
+                log.info("Metric Deletion Not supported in AWS : %s",del_resp)
+                return del_resp
+            else:
+                return False
 
         except Exception as e:
                 log.error(" Metric Deletion Not supported in AWS : " + str(e))
@@ -150,37 +160,40 @@ class Metrics():
         alarms have been configured and the metrics are being monitored'''
         try:
             supported = self.check_metric(list_info['metric_name'])
+            if supported['status'] == True: 
+                metrics_list = []
+                metrics_data = dict()    
 
-            metrics_list = []
-            metrics_data = dict()
-            metrics_info = dict()    
-
-            #To get the list of associated metrics with the alarms
-            alarms = cloudwatch_conn.describe_alarms()
-            itr = 0
-            if list_info['metric_name'] == None:
-                for alarm in alarms:
-                    instance_id = str(alarm.dimensions['InstanceId']).split("'")[1] 
-                    metrics_info['metric_name'] = str(alarm.metric)
-                    metrics_info['metric_uuid'] = 0     
-                    metrics_info['metric_unit'] = str(alarm.unit)    
-                    metrics_info['resource_uuid'] = instance_id 
-                    metrics_list.insert(itr,metrics_info)
-                    itr += 1
-            else: 
-                for alarm in alarms:
-                    print supported['metric_name']
-                    if alarm.metric == supported['metric_name']:
+                #To get the list of associated metrics with the alarms
+                alarms = cloudwatch_conn.describe_alarms()
+                itr = 0
+                if list_info['metric_name'] == "":
+                    for alarm in alarms:
+                        metrics_info = dict()
                         instance_id = str(alarm.dimensions['InstanceId']).split("'")[1] 
-                        metrics_info['metric_name'] = str(alarm.metric)
+                        metrics_info['metric_name'] = str(alarm.metric) 
                         metrics_info['metric_uuid'] = 0     
                         metrics_info['metric_unit'] = str(alarm.unit)    
-                        metrics_info['resource_uuid'] = instance_id
+                        metrics_info['resource_uuid'] = instance_id 
                         metrics_list.insert(itr,metrics_info)
                         itr += 1
-                        
-            log.debug("Metrics List : %s",metrics_list)
-            return metrics_list
+                    print metrics_list
+                    return metrics_list
+                else: 
+                    for alarm in alarms:
+                        metrics_info = dict()
+                        if alarm.metric == supported['metric_name']:
+                            instance_id = str(alarm.dimensions['InstanceId']).split("'")[1] 
+                            metrics_info['metric_name'] = str(alarm.metric)
+                            metrics_info['metric_uuid'] = 0     
+                            metrics_info['metric_unit'] = str(alarm.unit)    
+                            metrics_info['resource_uuid'] = instance_id
+                            metrics_list.insert(itr,metrics_info)
+                            itr += 1
+                    return metrics_list               
+                log.debug("Metrics List : %s",metrics_list)
+            else:
+                return False
 
         except Exception as e:
             log.error("Error in Getting Metric List " + str(e))
@@ -192,7 +205,7 @@ class Metrics():
         ''' Checking whether the metric is supported by AWS '''
         try:
             check_resp = dict()
-            #metric_name
+            # metric_name
             if metric_name == 'CPU_UTILIZATION':
                 metric_name = 'CPUUtilization'
                 metric_status = True
@@ -214,15 +227,23 @@ class Metrics():
             elif metric_name == 'PACKETS_SENT':
                 metric_name = 'NetworkPacketsOut'
                 metric_status = True
+            elif metric_name == "":
+                metric_name = None
+                metric_status = True
+                log.info("Metric Not Supported by AWS plugin ")
             else:
                 metric_name = None
-                log.info("Metric Not Supported by AWS plugin ")
                 metric_status = False
+                log.info("Metric Not Supported by AWS plugin ")
             check_resp['metric_name'] = metric_name
             #status
             if metric_status == True:
                 check_resp['status'] = True
-                return check_resp    
+            else:
+            	check_resp['status'] = False
+
+            return check_resp
+
         except Exception as e: 
             log.error("Error in Plugin Inputs %s",str(e))     
 #--------------------------------------------------------------------------------------------------------------------------------------

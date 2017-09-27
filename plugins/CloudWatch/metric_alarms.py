@@ -73,7 +73,8 @@ class MetricAlarm():
         alarm_id = alarm_info['alarm_name'] + "_" + alarm_info['resource_uuid']
         if self.is_present(cloudwatch_conn,alarm_id)['status'] == True: 
             alarm_id = None
-            log.debug ("Alarm already exists, Try updating the alarm using 'update_alarm_configuration()'")   
+            log.debug ("Alarm already exists, Try updating the alarm using 'update_alarm_configuration()'")
+            return alarm_id   
         else:              
             try:
                 if alarm_info['statistic'] in STATISTICS:
