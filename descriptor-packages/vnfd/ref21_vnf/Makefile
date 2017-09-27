@@ -14,6 +14,8 @@
 #   limitations under the License.
 #
 
-SUBDIRS = vnfd nsd
+DESCRIPTORS_TOPDIR ?= ../..
 
-include mk/dirs.mk
+include $(DESCRIPTORS_TOPDIR)/mk/pkg.mk
+
+all: $(BUILD_DIR)/$(PKG_NAME)

@@ -13,7 +13,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 #
+DESCRIPTORS_TOPDIR ?= ../..
+include $(DESCRIPTORS_TOPDIR)/mk/pkg.mk
 
-SUBDIRS = vnfd nsd
-
-include mk/dirs.mk
+all: $(BUILD_DIR)/$(PKG_NAME)

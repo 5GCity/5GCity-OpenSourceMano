@@ -20,7 +20,7 @@
 
 # Generates a NSD descriptor package from a source directory
 # Usage:
-# gen_nsd_pkg.sh <pkg_src_dir> <pkg_dest_dir>
+# gen_vnfd_pkg.sh <pkg_src_dir> <pkg_dest_dir>
 
 set -o nounset
 
@@ -42,24 +42,24 @@ if [ ! -e ${pkg_dest_dir} ]; then
     exit 1
 fi
 
-echo "Generating package in directory: ${pkg_dest_dir}"
+#echo "Generating package in directory: ${pkg_dest_dir}"
 
 # Create any missing directories/files so each package has
 # a complete hierachy
-nsd_dirs=( ns_config vnf_config icons scripts )
-nsd_files=( README )
+vnfd_dirs=( charms icons scripts images )
+vnfd_files=( README )
 
-nsd_dir="${pkg_src_dir}"
-echo $(pwd)
+vnfd_dir="${pkg_src_dir}"
+#echo $(pwd)
 
 mkdir -p "${pkg_dest_dir}"
-cp -rf ${nsd_dir}/* "${pkg_dest_dir}"
-for sub_dir in ${nsd_dirs[@]}; do
+cp -rf ${vnfd_dir}/* "${pkg_dest_dir}"
+for sub_dir in ${vnfd_dirs[@]}; do
     dir_path=${pkg_dest_dir}/${sub_dir}
     mkdir -p ${dir_path}
 done
 
-for file in ${nsd_files[@]}; do
+for file in ${vnfd_files[@]}; do
     file_path=${pkg_dest_dir}/${file}
     touch ${file_path}
 done

@@ -13,7 +13,9 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 #
+DESCRIPTORS_TOPDIR ?= ../..
 
-SUBDIRS = vnfd nsd
+VNFD_CHARM = pingpong
+include $(DESCRIPTORS_TOPDIR)/mk/pkg.mk
 
-include mk/dirs.mk
+all: $(BUILD_DIR)/$(PKG_NAME)
