@@ -55,10 +55,14 @@ package:
 pyangbind: pyang
 	git clone https://github.com/robshakir/pyangbind
 	cd pyangbind; python setup.py --command-packages=stdeb.command bdist_deb; cd ..
+	mkdir -p deb_dist
+	cp pyangbind/deb_dist/*.deb deb_dist
 
 pyang:
 	git clone https://github.com/mbj4668/pyang
 	cd pyang; python setup.py --command-packages=stdeb.command bdist_deb; cd ..
+	mkdir -p deb_dist
+	cp pyang/deb_dist/*.deb deb_dist
 
 pyang-json-schema-plugin:
 	git clone https://github.com/cmoberg/pyang-json-schema-plugin
