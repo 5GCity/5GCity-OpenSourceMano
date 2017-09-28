@@ -77,6 +77,7 @@ function ask_user(){
 
 GIT_URL=https://osm.etsi.org/gerrit/osm/RO.git
 GIT_OVIM_URL=https://osm.etsi.org/gerrit/osm/openvim.git
+GIT_OSMIM_URL=https://osm.etsi.org/gerrit/osm/IM.git
 DBUSER="root"
 DBPASSWD=""
 DBPASSWD_PARAM=""
@@ -280,6 +281,31 @@ fi
 
 echo -e "\n"\
     "#################################################################\n"\
+    "#####        INSTALLING OSM-IM LIBRARY                      #####\n"\
+    "#################################################################"
+su $SUDO_USER -c "git -C ${BASEFOLDER} clone ${GIT_OSMIM_URL} IM"
+LATEST_STABLE_TAG=`git -C "${BASEFOLDER}/IM" tag -l v[0-9].* | tail -n1`
+# TODO remove comment when a stable version of IM were tagged
+# [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER}/IM checkout tags/${LATEST_STABLE_TAG}"
+
+# Install debian dependencies before setup.py
+if [[ -z "$NO_PACKAGES" ]]
+then
+    [ "$_DISTRO" == "Ubuntu" ] && install_packages "tox debhelper python-bitarray"
+    # TODO check packages for CentOS and RedHat
+    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "tox debhelper python-bitarray"
+    pip install stdeb pyangbind
+fi
+su $SUDO_USER -c "make -C ${BASEFOLDER}/IM all"
+dpkg -i ${BASEFOLDER}/IM/deb_dist/python-osm-im*.deb ${BASEFOLDER}/IM/pyangbind/deb_dist/*.deb \
+        ${BASEFOLDER}/IM/pyang/deb_dist/*.deb
+rm -rf "${BASEFOLDER}/IM"
+OSM_IM_PATH=`python -c 'import osm_im; print osm_im.__path__[0]'` ||
+    ! echo "ERROR installing python-osm-im library!!!" >&2  || exit 1
+
+
+echo -e "\n"\
+    "#################################################################\n"\
     "#####        INSTALLING OVIM LIBRARY                        #####\n"\
     "#################################################################"
 su $SUDO_USER -c "git -C ${BASEFOLDER} clone ${GIT_OVIM_URL} openvim"
@@ -287,11 +313,16 @@ LATEST_STABLE_TAG=`git -C "${BASEFOLDER}/openvim" tag -l v[0-9].* | tail -n1`
 [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER}/openvim checkout tags/${LATEST_STABLE_TAG}"
 
 # Install debian dependencies before setup.py
-[ "$_DISTRO" == "Ubuntu" ] && install_packages "libmysqlclient-dev"
-[ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "libmysqlclient-dev"  #TODO check if that's the name in CentOS and RedHat
+if [[ -z "$NO_PACKAGES" ]]
+then
+    [ "$_DISTRO" == "Ubuntu" ] && install_packages "libmysqlclient-dev"
+    #TODO check if that is the name in CentOS and RedHat
+    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "libmysqlclient-dev"
+fi
 make -C ${BASEFOLDER}/openvim lite
 rm -rf "${BASEFOLDER}/openvim"
-OSMLIBOVIM_PATH=`python -c 'import lib_osm_openvim; print lib_osm_openvim.__path__[0]'`
+OSMLIBOVIM_PATH=`python -c 'import lib_osm_openvim; print lib_osm_openvim.__path__[0]'` ||
+    ! echo "ERROR installing python-lib-osm-openvim library!!!" >&2  || exit 1
 
 if [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ]
 then
