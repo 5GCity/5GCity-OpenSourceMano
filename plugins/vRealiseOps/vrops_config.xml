@@ -48,7 +48,7 @@
         <action>acknowledge</action>
         <resource_kind>VirtualMachine</resource_kind>
         <adapter_kind>VMWARE</adapter_kind>
-        <alarm_type>16</alarm_type>
+        <alarm_type>18</alarm_type>
         <alarm_subType>19</alarm_subType>
         <impact>risk</impact>
         <unit>msec</unit>
@@ -64,7 +64,7 @@
         <action>acknowledge</action>
         <resource_kind>VirtualMachine</resource_kind>
         <adapter_kind>VMWARE</adapter_kind>
-        <alarm_type>16</alarm_type>
+        <alarm_type>18</alarm_type>
         <alarm_subType>19</alarm_subType>
         <impact>risk</impact>
         <unit>msec</unit>
@@ -80,7 +80,7 @@
         <action>acknowledge</action>
         <resource_kind>VirtualMachine</resource_kind>
         <adapter_kind>VMWARE</adapter_kind>
-        <alarm_type>16</alarm_type>
+        <alarm_type>19</alarm_type>
         <alarm_subType>19</alarm_subType>
         <impact>risk</impact>
         <unit>nos</unit>
@@ -164,4 +164,5 @@
         <tenant_id>Org2-VDC-PVDC1</tenant_id>
     </Access_Config>
 </alarmsDefaultConfig>
+
 

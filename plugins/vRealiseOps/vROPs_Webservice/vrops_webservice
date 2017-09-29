@@ -39,9 +39,11 @@ from xml.etree import ElementTree as ET
 import logging
 import os
 import json
+import sys
 import requests
-
-from core.message_bus.producer import KafkaProducer
+sys.path.append("../../core/message_bus")
+from producer import KafkaProducer
+#from core.message_bus.producer import KafkaProducer
 
 try:
     from cheroot.wsgi import Server as WSGIServer
@@ -53,8 +55,12 @@ except ImportError:
 #Set Constants
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 CERT_DIR = os.path.join(BASE_DIR, "SSL_certificate")
-CERTIFICATE = os.path.join(CERT_DIR, "www.vrops_webservice.com.cert")
-KEY = os.path.join(CERT_DIR, "www.vrops_webservice.com.key")
+certificate_name = gethostname() + ".cert"
+key_name = gethostname() + ".key"
+CERTIFICATE = os.path.join(CERT_DIR, certificate_name)
+KEY = os.path.join(CERT_DIR, key_name)
+#CERTIFICATE = os.path.join(CERT_DIR, "www.vrops_webservice.com.cert")
+#KEY = os.path.join(CERT_DIR, "www.vrops_webservice.com.key")
 CONFIG_FILE = os.path.join(BASE_DIR, '../vrops_config.xml')
 #Severity Mapping from vROPs to OSM
 VROPS_SEVERITY_TO_OSM_MAPPING = {
@@ -231,4 +237,5 @@ if __name__ == "__main__":
     app = default_app()
     server_names['sslwebserver'] = SSLWebServer
     run(app=app,host=gethostname(), port=8080, server='sslwebserver')
+
 
