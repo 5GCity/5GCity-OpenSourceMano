@@ -73,10 +73,13 @@ log_config = {
 logging.config.dictConfig(log_config)
 logger = logging.getLogger('kafka')
 
+if "BROKER_URI" in os.environ:
+    broker = os.getenv("BROKER_URI")
+else:
+    broker = "localhost:9092"
 
-
-alarm_consumer = KafkaConsumer('alarm_response', 'osm_mon', bootstrap_servers = 'localhost:9092')
-metric_consumer = KafkaConsumer('metric_response', 'osm_mon', bootstrap_servers = 'localhost:9092')
+alarm_consumer = KafkaConsumer('alarm_response', 'osm_mon', bootstrap_servers = broker)
+metric_consumer = KafkaConsumer('metric_response', 'osm_mon', bootstrap_servers = broker)
 try:
     for message in alarm_consumer:
         logger.debug(message)
@@ -84,7 +87,6 @@ try:
         logger.debug(message)
 except KafkaError:
     log.exception()
-    pass
 
 alarm_consumer.subscribe('alarm_response')
 metric_consumer.subscribe('metric_response')

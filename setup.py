@@ -27,7 +27,7 @@ __date__   = "14/Sep/2017"
 from setuptools import setup
 from os import system
 
-_name = 'mon'
+_name = 'core'
 _version = '1.0'
 _description = 'OSM Monitoring Module'
 _author = 'Prithiv Mohan'
@@ -38,9 +38,9 @@ _license = 'Apache 2.0'
 _copyright = 'Intel Research and Development Ireland'
 _url = 'https://osm.etsi.org/gitweb/?p=osm/MON.git;a=tree'
 _requirements = [
-    "MySQL-python",
+   "MySQL-python",
     "requests",
-    "loguitls",
+    "logutils",
     "cherrypy",
     "jsmin",
     "jsonschema",
@@ -48,19 +48,18 @@ _requirements = [
     "python-novaclient",
     "python-keystoneclient",
     "python-neutronclient",
-    "python-aodhclient",
-    "python-gnocchi client",
-    "boto==2.8",
+    "aodhclient",
+    "gnocchiclient",
+    "boto==2.48",
     "python-cloudwatchlogs-logging",
     "py-cloudwatch",
     "pyvcloud",
     "pyopenssl",
-    "python-requests",
     "cherrypy",
-    "python-bottle",
+    "bottle",
 ]
 
-setup(name=_name,
+setup(name="mon_core",
       version = _version,
       description = _description,
       long_description = open('README.rst').read(),
@@ -76,6 +75,10 @@ setup(name=_name,
       package_data = {_name: ['core/message_bus/*.py', 'core/models/*.json',
                       'plugins/OpenStack/Aodh/*.py', 'plugins/OpenStack/Gnocchi/*.py',
                       'plugins/vRealiseOps/*', 'plugins/CloudWatch/*']},
+      data_files = [('/etc/systemd/system/', ['core/kafka.service']),
+                   ],
+      scripts=['plugins/vRealiseOps/vROPs_Webservice/vrops_webservice',
+               'kafkad'],
       install_requires = _requirements,
       include_package_data=True,
       )
