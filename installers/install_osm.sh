@@ -369,6 +369,8 @@ lxd --version &>/dev/null || FATAL "lxd not present, exiting."
 
 wget -q -O- https://osm-download.etsi.org/ftp/osm-2.0-two/README.txt &> /dev/null
 
+# use local devops for containers
+export OSM_USE_LOCAL_DEVOPS=true
 if [ -z "$INSTALL_FROM_SOURCE" ]; then
     echo -e "\nCreating the containers and installing from binaries ..."
     $OSM_DEVOPS/jenkins/host/install RO $REPOSITORY $RELEASE $REPOSITORY_KEY $REPOSITORY_BASE || FATAL "RO install failed"

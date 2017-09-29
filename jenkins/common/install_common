@@ -35,9 +35,6 @@ while getopts ":r:k:u:R:" o; do
         u)
             REPOSITORY_BASE=${OPTARG}
             ;;
-        *)
-            exit 1
-            ;;
     esac
 done
 
