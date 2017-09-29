@@ -33,6 +33,8 @@ function dump_vars() {
     echo "RSYNC_USER_HOST $RSYNC_USER_HOST"
     echo "RSYNC_OPTIONS   $RSYNC_OPTIONS"
     echo "PUBLIC_KEY_FILE $PUBLIC_KEY_FILE"
+    echo "BUILD:          $BUILD"
+    echo "BUILD_NUMBER:   $BUILD_NUMBER"
 }
 
 IN_REPO="unstable"
@@ -87,17 +89,18 @@ while getopts ":p:i:o:k:j::d:b:r:h:R:P:" o; do
     esac
 done
 
-dump_vars
-
 BASE_DIR=$REPO_BASE/osm/debian/$RELEASE_DIR
 
 [ -z "$BUILD" ] && FATAL "missing option: -b <build>"
+
+BUILD_NUMBER=$(echo "$BUILD" | sed -e 's/.*:: //g')
+
+dump_vars
 
 [ -x $JFROG_CLI ] || FATAL "jfrog cli not found. Please install https://www.jfrog.com/getcli/ and use option '-j <jfrog cli location>'"
 
 $JFROG_CLI rt download --build "$BUILD" osm-release || FATAL "Failed to download"
 
-BUILD_NUMBER=$(basename "$BUILD")
 
 [ $PASSPHRASE_FILE ] && GPG_PASSPHRASE="--no-tty --no-use-agent --passphrase \"$(cat $PASSPHRASE_FILE)\""
 

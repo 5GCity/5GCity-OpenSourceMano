@@ -318,8 +318,8 @@ fi
 # if develop, we force master
 [ -z "$COMMIT_ID" ] && [ -n "$DEVELOP" ] && COMMIT_ID="master"
 
-# if master, force install from source
-[ -n "$COMMIT_ID" ] && [ "$COMMIT_ID" == "master" ] && INSTALL_FROM_SOURCE="y"
+# forcing source from master removed. Now only install from source when explicit
+# [ -n "$COMMIT_ID" ] && [ "$COMMIT_ID" == "master" ] && INSTALL_FROM_SOURCE="y"
 
 if [ -n "$TEST_INSTALLER" ]; then
     echo -e "\nUsing local devops repo for OSM installation"
