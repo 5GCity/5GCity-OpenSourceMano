@@ -21,7 +21,7 @@ REPOSITORY_KEY="OSM%20ETSI%20Release%20Key.gpg"
 REPOSITORY="stable"
 REPOSITORY_BASE="http://osm-download.etsi.org/repository/osm/debian"
 
-while getopts ":r:k:u:R:" o; do
+while getopts ":r:k:u:R:b:" o; do
     case "${o}" in
         r)
             REPOSITORY=${OPTARG}
@@ -35,10 +35,14 @@ while getopts ":r:k:u:R:" o; do
         u)
             REPOSITORY_BASE=${OPTARG}
             ;;
+        b)
+            ## ignore branch option
+            ;;
     esac
 done
 
 key_location=$REPOSITORY_BASE/$RELEASE/$REPOSITORY_KEY
+echo $key_location
 
 curl $key_location | apt-key add -
 
