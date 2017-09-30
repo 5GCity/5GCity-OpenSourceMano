@@ -53,6 +53,11 @@ node("${params.NODE}") {
             // go directly to stage 3 (osm system)
             stage_name = "stage_3"
             mdg = "osm"
+            if ( ! params.TEST_INSTALL )
+            {
+                println("disabling stage_3 invocation")
+                return
+            }
         }
         println("TEST_INSTALL = ${params.TEST_INSTALL}")
         // callout to stage_2.  This is a multi-branch pipeline.
