@@ -1,0 +1,10 @@
+{
+"schema_version": "1.0",
+"schema_type": "delete_metric_data_request",
+"metric_name": "CPU_UTILIATION",
+"metric_uuid": "",
+"resource_uuid": "i-098da78cbd8304e17",
+"tenant_uuid": "",
+"correlation_uuid": "S0123",
+"vim_type": "AWS"
+}

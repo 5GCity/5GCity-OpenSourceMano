@@ -52,15 +52,17 @@ class Metrics():
 
             supported=self.check_metric(metric_info['metric_name'])
             metric_resp = dict()
+            metric_resp['resource_uuid'] = metric_info['resource_uuid']
+            
             if supported['status'] == True:
                 metric_resp['status'] = True
                 metric_resp['metric_uuid'] = 0
+                log.debug("Metrics Configured Succesfully : %s" , metric_resp)
             else:
                 metric_resp['status'] = False
                 metric_resp['metric_uuid'] = None
-
-            metric_resp['resource_uuid'] = metric_info['resource_uuid'] 
-            log.debug("Metrics Configured Succesfully : %s" , metric_resp)
+                log.error("Metric name is not supported") 
+            
             return metric_resp         
 
         except Exception as e:
@@ -100,6 +102,7 @@ class Metrics():
                     return False
 
             else:
+                log.error("Metric name is not supported")
                 return False
         
         except Exception as e:
@@ -113,15 +116,16 @@ class Metrics():
         try:
             supported=self.check_metric(metric_info['metric_name'])
             update_resp = dict()
+            update_resp['resource_uuid'] = metric_info['resource_uuid']
             if supported['status'] == True:
                 update_resp['status'] = True
                 update_resp['metric_uuid'] = 0
+                log.debug("Metric Updated : %s", update_resp)
             else:
                 update_resp['status'] = False
                 update_resp['metric_uuid'] = None
-
-            update_resp['resource_uuid'] = metric_info['resource_uuid']
-            log.debug("Metric Updated : %s", update_resp) 
+                log.error("Metric name is not supported")
+             
             return update_resp  
         
         except Exception as e:
@@ -148,6 +152,7 @@ class Metrics():
                 log.info("Metric Deletion Not supported in AWS : %s",del_resp)
                 return del_resp
             else:
+                log.error("Metric name is not supported")
                 return False
 
         except Exception as e:
@@ -193,6 +198,7 @@ class Metrics():
                     return metrics_list               
                 log.debug("Metrics List : %s",metrics_list)
             else:
+                log.error("Metric name is not supported")
                 return False
 
         except Exception as e:

@@ -1,0 +1,10 @@
+{
+"schema_version": "1.0",
+"schema_type": "delete_alarm_request",
+"vim_type": "AWS",
+"alarm_delete_request":
+{
+"alarm_uuid": "CPU_Utilization_Above_Threshold_i-098da78cbd8304e16",
+"correlation_id": "SO123"
+}
+}

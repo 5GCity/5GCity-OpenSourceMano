@@ -31,9 +31,7 @@ import json
 from connection import Connection
 from metric_alarms import MetricAlarm
 from metrics import Metrics
-# Need to import the producer message bus,not working yet
-#from core.message_bus.producerfunct import KafkaProducer
-sys.path.append("../../core/message-bus")
+sys.path.append("../../core/message_bus")
 from producer import KafkaProducer
 from kafka import KafkaConsumer
 import logging as log
@@ -104,8 +102,8 @@ class plugin_metrics():
         
         try:
             for message in self._consumer:
-                
                 metric_info = json.loads(message.value)
+                print metric_info
                 metric_response = dict()
   
                 if metric_info['vim_type'] == 'AWS':
@@ -124,7 +122,7 @@ class plugin_metrics():
                                 payload = json.dumps(metric_response)                                                                  
                                 file = open('../../core/models/create_metric_resp.json','wb').write((payload))
                                 self.producer.create_metrics_resp(key='create_metric_response',message=payload,topic = 'metric_response')
-
+                                
                                 log.info("Metric configured: %s", metric_resp)
                                 return metric_response
                                 
@@ -134,9 +132,10 @@ class plugin_metrics():
                                 metric_response['schema_version'] = metric_info['schema_version']
                                 metric_response['schema_type'] = "update_metric_response"
                                 metric_response['metric_update_response'] = update_resp
-                                payload = json.dumps(metric_response)                                                                                                 
+                                payload = json.dumps(metric_response)  
+                                print payload                                                                                               
                                 file = open('../../core/models/update_metric_resp.json','wb').write((payload))
-                                self.producer.create_metrics_resp(key='update_metric_response',message=payload,topic = 'metric_response')
+                                self.producer.update_metric_response(key='update_metric_response',message=payload,topic = 'metric_response')
 
                                 log.info("Metric Updates: %s",metric_response)
                                 return metric_response
@@ -144,9 +143,9 @@ class plugin_metrics():
                         elif message.key == "delete_metric_request":
                             if self.check_resource(metric_info['resource_uuid']) == True:
                                 del_resp=self.delete_metric_request(metric_info)
-                                payload = json.dumps(del_resp)                                                                                                
+                                payload = json.dumps(del_resp)                                                                                               
                                 file = open('../../core/models/delete_metric_resp.json','wb').write((payload))
-                                self.producer.create_metrics_resp(key='delete_metric_response',message=payload,topic = 'metric_response')
+                                self.producer.delete_metric_response(key='delete_metric_response',message=payload,topic = 'metric_response')
 
                                 log.info("Metric Deletion Not supported in AWS : %s",del_resp)
                                 return del_resp
@@ -161,7 +160,7 @@ class plugin_metrics():
                                 metric_response['metrics_list'] = list_resp
                                 payload = json.dumps(metric_response)                                                                                                
                                 file = open('../../core/models/list_metric_resp.json','wb').write((payload))
-                                self.producer.create_metrics_resp(key='list_metrics_response',message=payload,topic = 'metric_response')
+                                self.producer.list_metric_response(key='list_metrics_response',message=payload,topic = 'metric_response')
 
                                 log.info("Metric List: %s",metric_response)
                                 return metric_response
@@ -170,17 +169,17 @@ class plugin_metrics():
                             if self.check_resource(metric_info['resource_uuid']) == True:
                                 data_resp = self.read_metrics_data(metric_info)
                                 metric_response['schema_version'] = metric_info['schema_version']
-                                metric_response['schema_type'] = "list_metric_response"
+                                metric_response['schema_type'] = "read_metric_data_response"
                                 metric_response['metric_name'] = metric_info['metric_name']
                                 metric_response['metric_uuid'] = metric_info['metric_uuid']
                                 metric_response['correlation_id'] = metric_info['correlation_uuid']
                                 metric_response['resource_uuid'] = metric_info['resource_uuid']
                                 metric_response['tenant_uuid'] = metric_info['tenant_uuid']
                                 metric_response['metrics_data'] = data_resp
-                                payload = json.dumps(metric_response)
-                                                                                                
+                                payload = json.dumps(metric_response)                                                                
                                 file = open('../../core/models/read_metric_data_resp.json','wb').write((payload))
-                                self.producer.create_metrics_resp(key='read_metric_data_response',message=payload,topic = 'metric_response')
+                                self.producer.read_metric_data_response(key='read_metric_data_response',message=payload,topic = 'metric_response')
+                                
                                 log.info("Metric Data Response: %s",metric_response)
                                 return metric_response 
 

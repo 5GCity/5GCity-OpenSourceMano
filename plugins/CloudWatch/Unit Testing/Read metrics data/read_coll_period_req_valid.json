@@ -1,0 +1,12 @@
+{
+"schema_version": "1.0",
+"schema_type": "read_metric_data_request",
+"metric_name": "CPU_UTILIZATION",
+"metric_uuid": "0",
+"resource_uuid": "i-098da78cbd8304e17",
+"tenant_uuid": "",
+"correlation_uuid": "SO123",
+"vim_type":"AWS",
+"collection_period":"3600" ,
+"collection_unit": ""
+}

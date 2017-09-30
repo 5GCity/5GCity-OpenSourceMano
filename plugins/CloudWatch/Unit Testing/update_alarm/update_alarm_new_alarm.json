@@ -1,0 +1,18 @@
+{
+"schema_version": "1.0",
+"schema_type": "create_alarm_request",
+"vim_type": "AWS",
+"alarm_create_request":
+{
+"correlation_id": "SO123",
+"alarm_name": "CPU_Utilization_Above_Threshold4",
+"resource_uuid": "i-098da78cbd8304e17",
+"description": "",
+"severity": "Critical",
+"operation": "GE",
+"threshold_value": 1.5,
+"unit": "",
+"metric_name": "CPU_UTILIZATION",
+"statistic": "MAXIMUM"
+}
+}

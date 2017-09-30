@@ -1,0 +1,11 @@
+{
+"schema_version": "1.0",
+"schema_type": "alarm_ack",
+"vim_type": "AWS",
+"ack_details":
+{
+"alarm_uuid": "CPU_Utilization_i-098da78cbd8304e17",
+"resource_uuid": "i-098da78cbd8304e17",
+"tenant_uuid": ""
+}
+}

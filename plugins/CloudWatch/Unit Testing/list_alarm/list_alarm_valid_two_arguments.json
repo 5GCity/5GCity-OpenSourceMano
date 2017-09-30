@@ -1,0 +1,12 @@
+{
+"schema_version": "1.0",
+"schema_type": "list_alarm_request",
+"vim_type": "AWS",
+"alarm_list_request":
+{
+"correlation_id": "SO123",
+"resource_uuid": "i-098da78cbd8304e17",
+"alarm_name": "",
+"severity": "Critical"
+}
+}

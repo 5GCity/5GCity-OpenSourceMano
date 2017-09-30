@@ -1,0 +1,11 @@
+{
+"schema_version": "1.0",
+"schema_type": "list_metrics_request",
+"vim_type": "AWS",
+"metrics_list_request":
+{
+"metric_name": "CPU_UTILIZATION",
+"correlation_id": "SO123",
+"resource_uuid": "i-098da78cbd8304e17"
+}
+}
