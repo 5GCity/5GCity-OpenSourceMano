@@ -102,6 +102,7 @@ class Metrics(object):
                             'create_metric_response', status=status,
                             cor_id=values['correlation_id'],
                             metric_id=metric_id, r_id=resource_id)
+                        log.info("Response messages: %s", resp_message)
                         self._producer.create_metrics_resp(
                             'create_metric_response', resp_message,
                             'metric_response')
@@ -122,6 +123,7 @@ class Metrics(object):
                             r_id=values['resource_uuid'],
                             cor_id=values['correlation_id'],
                             times=timestamps, metrics=metric_data)
+                        log.info("Response message: %s", resp_message)
                         self._producer.read_metric_data_response(
                             'read_metric_data_response', resp_message,
                             'metric_response')
@@ -141,6 +143,7 @@ class Metrics(object):
                             m_name=values['metric_name'],
                             status=status, r_id=values['resource_uuid'],
                             cor_id=values['correlation_id'])
+                        log.info("Response message: %s", resp_message)
                         self._producer.delete_metric_response(
                             'delete_metric_response', resp_message,
                             'metric_response')
@@ -164,6 +167,7 @@ class Metrics(object):
                             'update_metric_response', status=False,
                             cor_id=values['correlation_id'],
                             r_id=resource_id, m_id=metric_id)
+                        log.info("Response message: %s", resp_message)
                         self._producer.update_metric_response(
                             'update_metric_response', resp_message,
                             'metric_response')
@@ -181,6 +185,7 @@ class Metrics(object):
                         resp_message = self._response.generate_response(
                             'list_metric_response', m_list=metric_list,
                             cor_id=list_details['correlation_id'])
+                        log.info("Response message: %s", resp_message)
                         self._producer.list_metric_response(
                             'list_metric_response', resp_message,
                             'metric_response')
@@ -374,7 +379,7 @@ class Metrics(object):
                 diff = PERIOD_MS[collection_unit]
             else:
                 diff = collection_period * PERIOD_MS[collection_unit]
-            s_time = (end_time - diff)/1000.0
+            s_time = (end_time - diff) / 1000.0
             start_time = datetime.datetime.fromtimestamp(s_time).strftime(
                 '%Y-%m-%dT%H:%M:%S.%f')
             base_url = "{}/v1/metric/%(0)s/measures?start=%(1)s&stop=%(2)s"

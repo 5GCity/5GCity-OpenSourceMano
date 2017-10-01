@@ -17,25 +17,13 @@
 # under the License.
 
 # For those usages not covered by the Apache License, Version 2.0 please
-# contact: prithiv.mohan@intel.com or adrian.hoban@intel.com
+# contact: helena.mcgough@intel.com or adrian.hoban@intel.com
+##
 
-MySQL-python
-lxml
-requests
-logutils
-cherrypy
-jsmin
-jsonschema
-python-openstackclient
-python-novaclient
-python-keystoneclient
-python-neutronclient
-aodhclient
-gnocchiclient
-boto==2.48
-python-cloudwatchlogs-logging
-py-cloudwatch
-pyvcloud
-pyopenssl
-six
-bottle
+flake8
+mock
+os-testr
+testrepository
+testscenarios
+testtools
+kafka

@@ -82,14 +82,9 @@ class Common(object):
         headers = {'X-Auth-Token': auth_token,
                    'Content-type': 'application/json'}
         # perform request and return its result
-        response = None
         try:
             if req_type == "put":
                 response = requests.put(
-                    url, data=payload, headers=headers,
-                    timeout=1)
-            elif req_type == "post":
-                response = requests.post(
                     url, data=payload, headers=headers,
                     timeout=1)
             elif req_type == "get":
@@ -99,7 +94,9 @@ class Common(object):
                 response = requests.delete(
                     url, headers=headers, timeout=1)
             else:
-                log.warn("Invalid request type")
+                response = requests.post(
+                    url, data=payload, headers=headers,
+                    timeout=1)
 
         except Exception as e:
             log.warn("Exception thrown on request", e)

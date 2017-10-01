@@ -110,6 +110,7 @@ class Alarming(object):
                             'create_alarm_response', status=alarm_status,
                             alarm_id=alarm_id,
                             cor_id=alarm_details['correlation_id'])
+                        log.info("Response Message: %s", resp_message)
                         self._producer.create_alarm_response(
                             'create_alarm_resonse', resp_message,
                             'alarm_response')
@@ -129,6 +130,7 @@ class Alarming(object):
                         resp_message = self._response.generate_response(
                             'list_alarm_response', alarm_list=alarm_list,
                             cor_id=list_details['correlation_id'])
+                        log.info("Response Message: %s", resp_message)
                         self._producer.list_alarm_response(
                             'list_alarm_response', resp_message,
                             'alarm_response')
@@ -148,6 +150,7 @@ class Alarming(object):
                             'delete_alarm_response', alarm_id=alarm_id,
                             status=resp_status,
                             cor_id=request_details['correlation_id'])
+                        log.info("Response message: %s", resp_message)
                         self._producer.delete_alarm_response(
                             'delete_alarm_response', resp_message,
                             'alarm_response')
@@ -180,6 +183,7 @@ class Alarming(object):
                             'update_alarm_response', alarm_id=alarm_id,
                             cor_id=alarm_details['correlation_id'],
                             status=status)
+                        log.info("Response message: %s", resp_message)
                         self._producer.update_alarm_response(
                             'update_alarm_response', resp_message,
                             'alarm_response')

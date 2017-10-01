@@ -38,7 +38,7 @@ _license = 'Apache 2.0'
 _copyright = 'Intel Research and Development Ireland'
 _url = 'https://osm.etsi.org/gitweb/?p=osm/MON.git;a=tree'
 _requirements = [
-   "MySQL-python",
+    "MySQL-python",
     "requests",
     "logutils",
     "cherrypy",
@@ -57,6 +57,7 @@ _requirements = [
     "pyopenssl",
     "cherrypy",
     "bottle",
+    "six",
 ]
 
 setup(name="mon_core",

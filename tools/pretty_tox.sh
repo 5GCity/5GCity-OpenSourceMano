@@ -17,25 +17,13 @@
 # under the License.
 
 # For those usages not covered by the Apache License, Version 2.0 please
-# contact: prithiv.mohan@intel.com or adrian.hoban@intel.com
+# contact: helena.mcgough@intel.com or adrian.hoban@intel.com
+##
 
-MySQL-python
-lxml
-requests
-logutils
-cherrypy
-jsmin
-jsonschema
-python-openstackclient
-python-novaclient
-python-keystoneclient
-python-neutronclient
-aodhclient
-gnocchiclient
-boto==2.48
-python-cloudwatchlogs-logging
-py-cloudwatch
-pyvcloud
-pyopenssl
-six
-bottle
+#! /bin/sh
+
+TESTRARGS=$1
+
+exec 3>&1
+status=$(exec 4>&1 >&3; ( python setup.py testr --slowest --testr-args="--subunit $TESTRARGS"; echo $? >&4 ) | subunit-trace -f) && exit $status
+
