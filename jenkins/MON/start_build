@@ -1,0 +1,46 @@
+# Copyright 2017 Intel Research and Development Ireland Limited
+# *************************************************************
+
+# This file is part of OSM Monitoring module
+# All Rights Reserved to Intel Corporation
+
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+
+#         http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+# For those usages not covered by the Apache License, Version 2.0 please
+# contact: prithiv.mohan@intel.com or adrian.hoban@intel.com
+
+#__author__ = "Prithiv Mohan"
+#__date__   = "25/Sep/2017"
+
+HERE=$(realpath $(dirname $0)
+OSM_JENKINS=$(dirname $HERE)
+. $OSM_JENKINS/common/all_funcs
+
+# SET YOU MDG repository name here
+export OSM_MDG=RO
+OSM_load_config
+OSM_git_checkout "$@"
+python -m py_compile kafkad
+python kafkad
+INFO "Starting Kafka"
+service kafka start
+
+#Start VMWare install script
+INFO "Installing vROPs Web Service"
+. plugins/vRealiseOps/vROPs_Webservice/install.sh
+INFO "Startinv vrops Web Service"
+python plugins/vRealiseOps/vROPs_Webservice/vrops_webservice
+
+RC=$?
+INFO "done, RC=$RC"
+exit $RC

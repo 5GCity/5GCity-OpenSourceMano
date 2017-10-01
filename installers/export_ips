@@ -22,4 +22,4 @@ export DEFAULT_IP=`ip -o -4 a |grep ${DEFAULT_IF}|awk '{split($4,a,"/"); print a
 export VCA_CONTAINER_IP=`lxc list VCA -c 4|grep eth0 |awk '{print $2}'`
 export SO_CONTAINER_IP=`lxc list SO-ub -c 4|grep eth0 |awk '{print $2}'`
 export RO_CONTAINER_IP=`lxc list RO -c 4|grep eth0 |awk '{print $2}'`
-
+export MON_CONTAINER_IP=`lxc list MON -c 4|grep eth0|awk '{print $2}'`
