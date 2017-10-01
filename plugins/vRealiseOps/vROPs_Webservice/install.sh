@@ -23,7 +23,9 @@
 
 BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SSL_Cert_Dir="${BASEDIR}/SSL_certificate"
-Domain_Name="www.vrops_webservice.com"
+THISHOST=$(hostname)
+Domain_Name="${THISHOST}"
+#Domain_Name="www.vrops_webservice.com"
 WebServiceFile='vrops_webservice.py'
 
 echo '
@@ -80,3 +82,4 @@ echo '
  #################################################################
  #####              Done                                  #####
  #################################################################'
+
