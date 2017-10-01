@@ -32,6 +32,9 @@ import logging
 import paramiko
 import socket
 import StringIO
+import yaml
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 #Error variables 
 HTTP_Bad_Request = 400
@@ -167,7 +170,116 @@ class vimconnector():
             self.url_admin = value
         else:
             raise KeyError("Invalid key '%s'" %str(index))
-        
+
+    @staticmethod
+    def _create_mimemultipart(content_list):
+        """Creates a MIMEmultipart text combining the content_list
+        :param content_list: list of text scripts to be combined
+        :return: str of the created MIMEmultipart. If the list is empty returns None, if the list contains only one
+        element MIMEmultipart is not created and this content is returned
+        """
+        if not content_list:
+            return None
+        elif len(content_list) == 1:
+            return content_list[0]
+        combined_message = MIMEMultipart()
+        for content in content_list:
+            if content.startswith('#include'):
+                format = 'text/x-include-url'
+            elif content.startswith('#include-once'):
+                format = 'text/x-include-once-url'
+            elif content.startswith('#!'):
+                format = 'text/x-shellscript'
+            elif content.startswith('#cloud-config'):
+                format = 'text/cloud-config'
+            elif content.startswith('#cloud-config-archive'):
+                format = 'text/cloud-config-archive'
+            elif content.startswith('#upstart-job'):
+                format = 'text/upstart-job'
+            elif content.startswith('#part-handler'):
+                format = 'text/part-handler'
+            elif content.startswith('#cloud-boothook'):
+                format = 'text/cloud-boothook'
+            else:  # by default
+                format = 'text/x-shellscript'
+            sub_message = MIMEText(content, format, sys.getdefaultencoding())
+            combined_message.attach(sub_message)
+        return combined_message.as_string()
+
+    def _create_user_data(self, cloud_config):
+        """
+        Creates a script user database on cloud_config info
+        :param cloud_config: dictionary with
+            'key-pairs': (optional) list of strings with the public key to be inserted to the default user
+            'users': (optional) list of users to be inserted, each item is a dict with:
+                'name': (mandatory) user name,
+                'key-pairs': (optional) list of strings with the public key to be inserted to the user
+            'user-data': (optional) can be a string with the text script to be passed directly to cloud-init,
+                or a list of strings, each one contains a script to be passed, usually with a MIMEmultipart file
+            'config-files': (optional). List of files to be transferred. Each item is a dict with:
+                'dest': (mandatory) string with the destination absolute path
+                'encoding': (optional, by default text). Can be one of:
+                    'b64', 'base64', 'gz', 'gz+b64', 'gz+base64', 'gzip+b64', 'gzip+base64'
+                'content' (mandatory): string with the content of the file
+                'permissions': (optional) string with file permissions, typically octal notation '0644'
+                'owner': (optional) file owner, string with the format 'owner:group'
+            'boot-data-drive': boolean to indicate if user-data must be passed using a boot drive (hard disk)
+        :return: config_drive, userdata. The first is a boolean or None, the second a string or None
+        """
+        config_drive = None
+        userdata = None
+        userdata_list = []
+        if isinstance(cloud_config, dict):
+            if cloud_config.get("user-data"):
+                if isinstance(cloud_config["user-data"], str):
+                    userdata_list.append(cloud_config["user-data"])
+                else:
+                    for u in cloud_config["user-data"]:
+                        userdata_list.append(u)
+            if cloud_config.get("boot-data-drive") != None:
+                config_drive = cloud_config["boot-data-drive"]
+            if cloud_config.get("config-files") or cloud_config.get("users") or cloud_config.get("key-pairs"):
+                userdata_dict = {}
+                # default user
+                if cloud_config.get("key-pairs"):
+                    userdata_dict["ssh-authorized-keys"] = cloud_config["key-pairs"]
+                    userdata_dict["users"] = [{"default": None, "ssh-authorized-keys": cloud_config["key-pairs"]}]
+                if cloud_config.get("users"):
+                    if "users" not in userdata_dict:
+                        userdata_dict["users"] = ["default"]
+                    for user in cloud_config["users"]:
+                        user_info = {
+                            "name": user["name"],
+                            "sudo": "ALL = (ALL)NOPASSWD:ALL"
+                        }
+                        if "user-info" in user:
+                            user_info["gecos"] = user["user-info"]
+                        if user.get("key-pairs"):
+                            user_info["ssh-authorized-keys"] = user["key-pairs"]
+                        userdata_dict["users"].append(user_info)
+
+                if cloud_config.get("config-files"):
+                    userdata_dict["write_files"] = []
+                    for file in cloud_config["config-files"]:
+                        file_info = {
+                            "path": file["dest"],
+                            "content": file["content"]
+                        }
+                        if file.get("encoding"):
+                            file_info["encoding"] = file["encoding"]
+                        if file.get("permissions"):
+                            file_info["permissions"] = file["permissions"]
+                        if file.get("owner"):
+                            file_info["owner"] = file["owner"]
+                        userdata_dict["write_files"].append(file_info)
+                userdata_list.append("#cloud-config\n" + yaml.safe_dump(userdata_dict, indent=4,
+                                                                        default_flow_style=False))
+            userdata = self._create_mimemultipart(userdata_list)
+            self.logger.debug("userdata: %s", userdata)
+        elif isinstance(cloud_config, str):
+            userdata = cloud_config
+        return config_drive, userdata
+
     def check_vim_connectivity(self):
         """Checks VIM can be reached and user credentials are ok.
         Returns None if success or raised vimconnConnectionException, vimconnAuthException, ...

@@ -60,8 +60,6 @@ from httplib import HTTPException
 from neutronclient.neutron import client as neClient
 from neutronclient.common import exceptions as neExceptions
 from requests.exceptions import ConnectionError
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 
 """contain the openstack virtual machine status to openmano status"""
@@ -635,7 +633,6 @@ class vimconnector(vimconn.vimconnector):
         except (nvExceptions.NotFound, nvExceptions.ClientException, ksExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)
 
-
     def new_flavor(self, flavor_data, change_name_if_used=True):
         '''Adds a tenant flavor to openstack VIM
         if change_name_if_used is True, it will change name in case of conflict, because it is not supported name repetition
@@ -848,41 +845,6 @@ class vimconnector(vimconn.vimconnector):
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
             self._format_exception(e)
 
-    @staticmethod
-    def _create_mimemultipart(content_list):
-        """Creates a MIMEmultipart text combining the content_list
-        :param content_list: list of text scripts to be combined
-        :return: str of the created MIMEmultipart. If the list is empty returns None, if the list contains only one
-        element MIMEmultipart is not created and this content is returned
-        """
-        if not content_list:
-            return None
-        elif len(content_list) == 1:
-            return content_list[0]
-        combined_message = MIMEMultipart()
-        for content in content_list:
-            if content.startswith('#include'):
-                format = 'text/x-include-url'
-            elif content.startswith('#include-once'):
-                format = 'text/x-include-once-url'
-            elif content.startswith('#!'):
-                format = 'text/x-shellscript'
-            elif content.startswith('#cloud-config'):
-                format = 'text/cloud-config'
-            elif content.startswith('#cloud-config-archive'):
-                format = 'text/cloud-config-archive'
-            elif content.startswith('#upstart-job'):
-                format = 'text/upstart-job'
-            elif content.startswith('#part-handler'):
-                format = 'text/part-handler'
-            elif content.startswith('#cloud-boothook'):
-                format = 'text/cloud-boothook'
-            else:  # by default
-                format = 'text/x-shellscript'
-            sub_message = MIMEText(content, format, sys.getdefaultencoding())
-            combined_message.attach(sub_message)
-        return combined_message.as_string()
-
     def __wait_for_vm(self, vm_id, status):
         """wait until vm is in the desired status and return True.
         If the VM gets in ERROR status, return false.
@@ -1091,58 +1053,7 @@ class vimconnector(vimconn.vimconnector):
             if type(security_groups) is str:
                 security_groups = ( security_groups, )
             #cloud config
-            userdata=None
-            config_drive = None
-            userdata_list = []
-            if isinstance(cloud_config, dict):
-                if cloud_config.get("user-data"):
-                    if isinstance(cloud_config["user-data"], str):
-                        userdata_list.append(cloud_config["user-data"])
-                    else:
-                        for u in cloud_config["user-data"]:
-                            userdata_list.append(u)
-                if cloud_config.get("boot-data-drive") != None:
-                    config_drive = cloud_config["boot-data-drive"]
-                if cloud_config.get("config-files") or cloud_config.get("users") or cloud_config.get("key-pairs"):
-                    userdata_dict={}
-                    #default user
-                    if cloud_config.get("key-pairs"):
-                        userdata_dict["ssh-authorized-keys"] = cloud_config["key-pairs"]
-                        userdata_dict["users"] = [{"default": None, "ssh-authorized-keys": cloud_config["key-pairs"] }]
-                    if cloud_config.get("users"):
-                        if "users" not in userdata_dict:
-                            userdata_dict["users"] = [ "default" ]
-                        for user in cloud_config["users"]:
-                            user_info = {
-                                "name" : user["name"],
-                                "sudo": "ALL = (ALL)NOPASSWD:ALL"
-                            }
-                            if "user-info" in user:
-                                user_info["gecos"] = user["user-info"]
-                            if user.get("key-pairs"):
-                                user_info["ssh-authorized-keys"] = user["key-pairs"]
-                            userdata_dict["users"].append(user_info)
-
-                    if cloud_config.get("config-files"):
-                        userdata_dict["write_files"] = []
-                        for file in cloud_config["config-files"]:
-                            file_info = {
-                                "path" : file["dest"],
-                                "content": file["content"]
-                            }
-                            if file.get("encoding"):
-                                file_info["encoding"] = file["encoding"]
-                            if file.get("permissions"):
-                                file_info["permissions"] = file["permissions"]
-                            if file.get("owner"):
-                                file_info["owner"] = file["owner"]
-                            userdata_dict["write_files"].append(file_info)
-                    userdata_list.append("#cloud-config\n" + yaml.safe_dump(userdata_dict, indent=4,
-                                                                              default_flow_style=False))
-                    userdata = self._create_mimemultipart(userdata_list)
-                self.logger.debug("userdata: %s", userdata)
-            elif isinstance(cloud_config, str):
-                userdata = cloud_config
+            config_drive, userdata = self._create_user_data(cloud_config)
 
             #Create additional volumes in case these are present in disk_list
             base_disk_index = ord('b')

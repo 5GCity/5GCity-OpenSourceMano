@@ -641,52 +641,7 @@ class vimconnector(vimconn.vimconnector):
         try:
             self._reload_connection()
             instance = None
-            userdata = None
-            if isinstance(cloud_config, dict):
-                if cloud_config.get("user-data"):
-                    userdata = cloud_config["user-data"]
-                if cloud_config.get("config-files") or cloud_config.get("users") or cloud_config.get("key-pairs"):
-                    if userdata:
-                        raise vimconn.vimconnConflictException(
-                            "Cloud-config cannot contain both 'userdata' and 'config-files'/'users'/'key-pairs'")
-                    userdata_dict = {}
-                    # default user
-                    if cloud_config.get("key-pairs"):
-                        userdata_dict["ssh-authorized-keys"] = cloud_config["key-pairs"]
-                        userdata_dict["users"] = [{"default": None, "ssh-authorized-keys": cloud_config["key-pairs"]}]
-                    if cloud_config.get("users"):
-                        if "users" not in userdata_dict:
-                            userdata_dict["users"] = ["default"]
-                        for user in cloud_config["users"]:
-                            user_info = {
-                                "name": user["name"],
-                                "sudo": "ALL = (ALL)NOPASSWD:ALL"
-                            }
-                            if "user-info" in user:
-                                user_info["gecos"] = user["user-info"]
-                            if user.get("key-pairs"):
-                                user_info["ssh-authorized-keys"] = user["key-pairs"]
-                            userdata_dict["users"].append(user_info)
-
-                    if cloud_config.get("config-files"):
-                        userdata_dict["write_files"] = []
-                        for file in cloud_config["config-files"]:
-                            file_info = {
-                                "path": file["dest"],
-                                "content": file["content"]
-                            }
-                            if file.get("encoding"):
-                                file_info["encoding"] = file["encoding"]
-                            if file.get("permissions"):
-                                file_info["permissions"] = file["permissions"]
-                            if file.get("owner"):
-                                file_info["owner"] = file["owner"]
-                            userdata_dict["write_files"].append(file_info)
-                    userdata = "#cloud-config\n"
-                    userdata += yaml.safe_dump(userdata_dict, indent=4, default_flow_style=False)
-                self.logger.debug("userdata: %s", userdata)
-            elif isinstance(cloud_config, str):
-                userdata = cloud_config
+            _, userdata = self._create_user_data(cloud_config)
 
             if not net_list:
                 reservation = self.conn.run_instances(
