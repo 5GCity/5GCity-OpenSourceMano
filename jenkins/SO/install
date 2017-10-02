@@ -103,13 +103,13 @@ rm -f /etc/apt/sources.list.d/RIFT.list
 apt-get update
 
 apt-get install -y \
-    rw.core.mano-mano-1.0 \
-    rw.core.mano-rwcal-plugin-aws-1.0 \
-    rw.core.mano-rwcal-plugin-cloudsim-1.0 \
-    rw.core.mano-rwcal-plugin-cloudsimproxy-1.0 \
-    rw.core.mano-rwcal-plugin-openmano-vimconnector-1.0 \
-    rw.core.mano-rwcal-plugin-openstack-1.0 \
-    rw.core.mano-rwcal-plugin-mock-1.0 
+    rw.core.mano-mano \
+    rw.core.mano-rwcal-plugin-aws \
+    rw.core.mano-rwcal-plugin-cloudsim \
+    rw.core.mano-rwcal-plugin-cloudsimproxy \
+    rw.core.mano-rwcal-plugin-openmano-vimconnector \
+    rw.core.mano-rwcal-plugin-openstack \
+    rw.core.mano-rwcal-plugin-mock 
 
 
 
