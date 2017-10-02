@@ -651,9 +651,7 @@ class vimconnector(vimconn.vimconnector):
                     security_groups=self.security_groups,
                     user_data=userdata
                 )
-                instance = reservation.instances[0]
             else:
-                net_list = [net_list[0]]
                 for index, subnet in enumerate(net_list):
                     net_intr = boto.ec2.networkinterface.NetworkInterfaceSpecification(subnet_id=subnet.get('net_id'),
                                                                                        groups=None,
@@ -672,7 +670,6 @@ class vimconnector(vimconn.vimconnector):
                             network_interfaces=boto.ec2.networkinterface.NetworkInterfaceCollection(net_intr),
                             user_data=userdata
                         )
-                        instance = reservation.instances[0]
                     else:
                         while True:
                             try:
@@ -682,6 +679,9 @@ class vimconnector(vimconn.vimconnector):
                                 break
                             except:
                                 time.sleep(10)
+                    net_list[index]['vim_id'] = reservation.instances[0].interfaces[index].id
+
+            instance = reservation.instances[0]
             return instance.id
         except Exception as e:
             self.format_vimconn_exception(e)
