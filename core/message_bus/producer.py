@@ -65,7 +65,7 @@ class KafkaProducer(object):
 
     def publish(self, key, value, topic=None):
         try:
-            future = self.producer.send(key, value, topic)
+            future = self.producer.send(topic=topic, key=key, value=value)
             self.producer.flush()
         except Exception:
             logging.exception("Error publishing to {} topic." .format(topic))
