@@ -36,6 +36,11 @@ import time
               envvar='OSM_SO_PORT',
               help='hostname of server.  ' +
                    'Also can set OSM_SO_PORT in environment')
+@click.option('--so-project',
+              default='default',
+              envvar='OSM_SO_PROJECT',
+              help='Project Name in SO.  ' +
+                   'Also can set OSM_SO_PROJECT in environment')
 @click.option('--ro-hostname',
               default=None,
               envvar='OSM_RO_HOSTNAME',
@@ -47,7 +52,7 @@ import time
               help='hostname of RO server.  ' +
                    'Also can set OSM_RO_PORT in environment')
 @click.pass_context
-def cli(ctx, hostname, so_port, ro_hostname, ro_port):
+def cli(ctx, hostname, so_port, so_project, ro_hostname, ro_port):
     if hostname is None:
         print(
             "either hostname option or OSM_HOSTNAME " +
@@ -56,6 +61,7 @@ def cli(ctx, hostname, so_port, ro_hostname, ro_port):
     ctx.obj = client.Client(
         host=hostname,
         so_port=so_port,
+        so_project=so_project,
         ro_host=ro_hostname,
         ro_port=ro_port)
 

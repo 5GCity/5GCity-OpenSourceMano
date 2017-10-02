@@ -24,13 +24,22 @@ from osmclient.common.exceptions import ClientException
 
 class Nsd(object):
 
-    def __init__(self, http=None):
+    def __init__(self, http=None, client=None):
         self._http = http
+        self._client = client
 
     def list(self):
-        resp = self._http.get_cmd('api/running/nsd-catalog/nsd')
-        if resp and 'nsd:nsd' in resp:
-            return resp['nsd:nsd']
+        resp = self._http.get_cmd('api/running/{}nsd-catalog/nsd'
+                .format(self._client.so_rbac_project_path))
+        
+        if self._client._so_version == 'v3':
+            if resp and 'project-nsd:nsd' in resp:
+                return resp['project-nsd:nsd']
+        else:
+            # Backwards Compatibility
+            if resp and 'nsd:nsd' in resp:
+                return resp['nsd:nsd']
+
         return list()
 
     def get(self, name):
@@ -45,6 +54,7 @@ class Nsd(object):
             raise NotFound("cannot find nsd {}".format(nsd_name))
 
         resp = self._http.delete_cmd(
-            'api/running/nsd-catalog/nsd/{}'.format(nsd['id']))
+            'api/running/{}nsd-catalog/nsd/{}'
+            .format(self._client.so_rbac_project_path, nsd['id']))
         if 'success' not in resp:
             raise ClientException("failed to delete nsd {}".format(nsd_name))

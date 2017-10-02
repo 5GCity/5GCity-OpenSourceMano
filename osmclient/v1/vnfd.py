@@ -24,13 +24,22 @@ from osmclient.common.exceptions import ClientException
 
 class Vnfd(object):
 
-    def __init__(self, http=None):
+    def __init__(self, http=None, client=None):
         self._http = http
+        self._client = client
 
     def list(self):
-        resp = self._http.get_cmd('api/running/vnfd-catalog/vnfd')
-        if resp and 'vnfd:vnfd' in resp:
-            return resp['vnfd:vnfd']
+        resp = self._http.get_cmd('api/running/{}vnfd-catalog/vnfd'
+                .format(self._client.so_rbac_project_path))
+
+        if self._client._so_version == 'v3':
+            if resp and 'project-vnfd:vnfd' in resp:
+                return resp['project-vnfd:vnfd']
+        else:
+            # Backwards Compatibility
+            if resp and 'vnfd:vnfd' in resp:
+                return resp['vnfd:vnfd']
+                
         return list()
 
     def get(self, name):
@@ -41,7 +50,7 @@ class Vnfd(object):
 
     def delete(self, vnfd_name):
         vnfd = self.get(vnfd_name)
-        resp = self._http.delete_cmd('api/running/vnfd-catalog/vnfd/{}'
-                                     .format(vnfd['id']))
+        resp = self._http.delete_cmd('api/running/{}vnfd-catalog/vnfd/{}'
+                                     .format(self._client.so_rbac_project_path, vnfd['id']))
         if 'success' not in resp:
             raise ClientException("failed to delete vnfd {}".format(vnfd_name))

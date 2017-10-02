@@ -17,28 +17,28 @@
 import unittest
 from mock import Mock
 from osmclient.v1 import ns
+from osmclient.v1 import client
 from osmclient.common.exceptions import NotFound
 
 
-class TestNs(unittest.TestCase):
-
+class TestNs(unittest.TestCase): 
     def test_list_empty(self):
         mock = Mock()
         mock.get_cmd.return_value = list()
-        assert len(ns.Ns(mock).list()) == 0
+        assert len(ns.Ns(mock, client=client.Client(host='127.0.0.1')).list()) == 0
 
     def test_get_notfound(self):
         mock = Mock()
         mock.get_cmd.return_value = 'foo'
-        self.assertRaises(NotFound, ns.Ns(mock).get, 'bar')
+        self.assertRaises(NotFound, ns.Ns(mock, client=client.Client(host='127.0.0.1')).get, 'bar')
 
     def test_get_found(self):
         mock = Mock()
         mock.get_cmd.return_value = {'nsr:ns-instance-config':
                                      {'nsr': [{'name': 'foo'}]}}
-        assert ns.Ns(mock).get('foo')
+        assert ns.Ns(mock, client=client.Client(host='127.0.0.1')).get('foo')
 
     def test_get_monitoring_notfound(self):
         mock = Mock()
         mock.get_cmd.return_value = 'foo'
-        self.assertRaises(NotFound, ns.Ns(mock).get_monitoring, 'bar')
+        self.assertRaises(NotFound, ns.Ns(mock, client=client.Client(host='127.0.0.1')).get_monitoring, 'bar')

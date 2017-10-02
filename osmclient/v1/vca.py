@@ -23,19 +23,21 @@ from osmclient.common.exceptions import ClientException
 
 class Vca(object):
 
-    def __init__(self, http=None):
+    def __init__(self, http=None, client=None):
         self._http = http
+        self._client = client
 
     def list(self):
-        resp = self._http.get_cmd('api/config/config-agent')
+        resp = self._http.get_cmd('api/config/{}config-agent'
+                .format(self._client.so_rbac_project_path))
         if resp and 'rw-config-agent:config-agent' in resp:
             return resp['rw-config-agent:config-agent']['account']
         return list()
 
     def delete(self, name):
         if ('success' not in
-            self._http.delete_cmd('api/config/config-agent/account/{}'
-                                  .format(name))):
+            self._http.delete_cmd('api/config/{}config-agent/account/{}'
+                                  .format(self._client.so_rbac_project_path, name))):
             raise ClientException("failed to delete config agent {}"
                                   .format(name))
 
@@ -52,7 +54,7 @@ class Vca(object):
         account['juju']['ip-address'] = server
         postdata['account'].append(account)
 
-        if 'success' not in self._http.post_cmd('api/config/config-agent',
-                                                postdata):
+        if 'success' not in self._http.post_cmd('api/config/{}config-agent'
+                                .format(self._client.so_rbac_project_path), postdata):
             raise ClientException("failed to create config agent {}"
                                   .format(name))

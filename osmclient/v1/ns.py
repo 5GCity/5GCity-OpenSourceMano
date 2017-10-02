@@ -33,8 +33,8 @@ class Ns(object):
     def list(self):
         """Returns a list of ns's
         """
-        resp = self._http.get_cmd('api/running/ns-instance-config')
-
+        resp = self._http.get_cmd('api/running/{}ns-instance-config'
+                .format(self._client.so_rbac_project_path))
         if not resp or 'nsr:ns-instance-config' not in resp:
             return list()
 
@@ -60,8 +60,8 @@ class Ns(object):
 
         ns = self.get(ns_name)
         resp = self._http.post_cmd(
-            'v1/api/config/ns-instance-config/nsr/{}/scaling-group/{}/instance'
-            .format(ns['id'], ns_scale_group), postdata)
+            'v1/api/config/{}ns-instance-config/nsr/{}/scaling-group/{}/instance'
+            .format(self._client.so_rbac_project_path, ns['id'], ns_scale_group), postdata)
         if 'success' not in resp:
             raise ClientException(
                 "failed to scale ns: {} result: {}".format(
@@ -77,17 +77,32 @@ class Ns(object):
         nsr['id'] = str(uuid.uuid1())
 
         nsd = self._client.nsd.get(nsd_name)
-
-        datacenter = self._client.vim.get_datacenter(account)
-        if datacenter is None:
-            raise NotFound("cannot find datacenter account {}".format(account))
+        
+        if self._client._so_version == 'v3':
+            datacenter, resource_orchestrator = self._client.vim.get_datacenter(account)
+            if datacenter is None or resource_orchestrator is None:
+                raise NotFound("cannot find datacenter account {}".format(account))
+            if 'uuid' not in datacenter:
+                raise NotFound("The RO Datacenter - {} is invalid. Please select another".format(account))
+        else:
+            # Backwards Compatiility
+            datacenter = self._client.vim.get_datacenter(account)
+            if datacenter is None:
+                raise NotFound("cannot find datacenter account {}".format(account))
 
         nsr['nsd'] = nsd
         nsr['name'] = nsr_name
         nsr['short-name'] = nsr_name
         nsr['description'] = description
         nsr['admin-status'] = admin_status
-        nsr['om-datacenter'] = datacenter['uuid']
+        
+        if self._client._so_version == 'v3':
+            # New format for V3
+            nsr['resource-orchestrator'] = resource_orchestrator
+            nsr['datacenter'] = datacenter['name']
+        else:
+            # Backwards Compatiility
+            nsr['om-datacenter'] = datacenter['uuid']
 
         if ssh_keys is not None:
             # ssh_keys is comma separate list
@@ -106,7 +121,8 @@ class Ns(object):
         postdata['nsr'].append(nsr)
 
         resp = self._http.post_cmd(
-            'api/config/ns-instance-config/nsr',
+            'api/config/{}ns-instance-config/nsr'
+            .format(self._client.so_rbac_project_path),
             postdata)
 
         if 'success' not in resp:
@@ -118,7 +134,8 @@ class Ns(object):
 
     def get_opdata(self, id):
         return self._http.get_cmd(
-              'api/operational/ns-instance-opdata/nsr/{}?deep'.format(id))
+              'api/operational/{}ns-instance-opdata/nsr/{}?deep'
+              .format(self._client.so_rbac_project_path, id))
 
     def get_field(self, ns_name, field):
         nsr = self.get(ns_name)
@@ -140,8 +157,8 @@ class Ns(object):
         if ns is None:
             raise NotFound("cannot find ns {}".format(ns_name))
 
-        return self._http.delete_cmd('api/config/ns-instance-config/nsr/' +
-                                     ns['id'])
+        return self._http.delete_cmd('api/config/{}ns-instance-config/nsr/{}'
+                    .format(self._client.so_rbac_project_path, ns['id']))
 
     def delete(self, ns_name, wait=True):
         vnfs = self.get_field(ns_name, 'constituent-vnfr-ref')

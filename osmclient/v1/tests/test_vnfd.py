@@ -17,22 +17,27 @@
 import unittest
 from mock import Mock
 from osmclient.v1 import vnfd
+from osmclient.v1 import client
 from osmclient.common.exceptions import NotFound
 
 
 class TestVnfd(unittest.TestCase):
-
     def test_list_empty(self):
         mock = Mock()
         mock.get_cmd.return_value = list()
-        assert len(vnfd.Vnfd(mock).list()) == 0
+        assert len(vnfd.Vnfd(mock, client=client.Client(host='127.0.0.1')).list()) == 0
 
     def test_get_notfound(self):
         mock = Mock()
         mock.get_cmd.return_value = 'foo'
-        self.assertRaises(NotFound, vnfd.Vnfd(mock).get, 'bar')
+        self.assertRaises(NotFound, vnfd.Vnfd(mock, client=client.Client(host='127.0.0.1')).get, 'bar')
 
     def test_get_found(self):
         mock = Mock()
-        mock.get_cmd.return_value = {'vnfd:vnfd': [{'name': 'foo'}]}
-        assert vnfd.Vnfd(mock).get('foo')
+        if client.Client(host='127.0.0.1')._so_version == 'v3':
+            mock.get_cmd.return_value = {'project-vnfd:vnfd': [{'name': 'foo'}]}
+        else:
+            # Backwards Compatibility
+            mock.get_cmd.return_value = {'vnfd:vnfd': [{'name': 'foo'}]}
+
+        assert vnfd.Vnfd(mock, client=client.Client(host='127.0.0.1')).get('foo')

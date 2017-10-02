@@ -130,27 +130,44 @@ class Vim(object):
             raise ClientException("failed to delete vim {}".format(vim_name))
 
     def list(self):
-        resp = self._http.get_cmd('v1/api/operational/datacenters')
-        if not resp or 'rw-launchpad:datacenters' not in resp:
-            return list()
+        if self._client._so_version == 'v3':
+            resp = self._http.get_cmd('v1/api/operational/{}ro-account-state'
+                    .format(self._client.so_rbac_project_path))
+            datacenters = []
+            if not resp or 'rw-ro-account:ro-account-state' not in resp:
+                return list()
 
-        datacenters = resp['rw-launchpad:datacenters']
+            ro_accounts = resp['rw-ro-account:ro-account-state']
+            for ro_account in ro_accounts['account']:
+                for datacenter in ro_account['datacenters']['datacenters']:
+                    datacenters.append({"name": datacenter['name'], "uuid": datacenter['uuid']
+                        if 'uuid' in datacenter else None}) 
 
-        vim_accounts = list()
-        if 'ro-accounts' not in datacenters:
+            vim_accounts = datacenters
             return vim_accounts
-
-        tenant = self._get_ro_tenant()
-        if tenant is None:
+        else:
+            # Backwards Compatibility
+            resp = self._http.get_cmd('v1/api/operational/datacenters')
+            if not resp or 'rw-launchpad:datacenters' not in resp:
+                return list()
+ 
+            datacenters = resp['rw-launchpad:datacenters']
+ 
+            vim_accounts = list()
+            if 'ro-accounts' not in datacenters:
+                return vim_accounts
+ 
+            tenant = self._get_ro_tenant()
+            if tenant is None:
+                return vim_accounts
+ 
+            for roaccount in datacenters['ro-accounts']:
+                if 'datacenters' not in roaccount:
+                    continue
+                for datacenter in roaccount['datacenters']:
+                    vim_accounts.append(self._get_ro_datacenter(datacenter['name'],
+                                                              tenant['uuid']))
             return vim_accounts
-
-        for roaccount in datacenters['ro-accounts']:
-            if 'datacenters' not in roaccount:
-                continue
-            for datacenter in roaccount['datacenters']:
-                vim_accounts.append(self._get_ro_datacenter(datacenter['name'],
-                                                            tenant['uuid']))
-        return vim_accounts
 
     def _get_ro_tenant(self, name='osm'):
         resp = self._ro_http.get_cmd('openmano/tenants/{}'.format(name))
@@ -182,24 +199,43 @@ class Vim(object):
         return self._get_ro_datacenter(name, tenant['uuid'])
 
     def get_datacenter(self, name):
-        resp = self._http.get_cmd('v1/api/operational/datacenters')
-        if not resp:
-            return None
+        if self._client._so_version == 'v3':
+            resp = self._http.get_cmd('v1/api/operational/{}ro-account-state'
+                    .format(self._client.so_rbac_project_path))
+            if not resp:
+                return None, None
 
-        if not resp or 'rw-launchpad:datacenters' not in resp:
+            if not resp or 'rw-ro-account:ro-account-state' not in resp:
+                return None, None
+
+            ro_accounts = resp['rw-ro-account:ro-account-state']
+            for ro_account in ro_accounts['account']:
+                for datacenter in ro_account['datacenters']['datacenters']:
+                    if datacenter['name'] == name:
+                        return datacenter, ro_account['name']        
+            return None, None
+        else:
+            # Backwards Compatibility
+            resp = self._http.get_cmd('v1/api/operational/datacenters')
+            if not resp:
+                return None
+ 
+            if not resp or 'rw-launchpad:datacenters' not in resp:
+                return None
+            if 'ro-accounts' not in resp['rw-launchpad:datacenters']:
+                return None
+            for roaccount in resp['rw-launchpad:datacenters']['ro-accounts']:
+                if 'datacenters' not in roaccount:
+                    continue
+                for datacenter in roaccount['datacenters']:
+                    if datacenter['name'] == name:
+                        return datacenter
             return None
-        if 'ro-accounts' not in resp['rw-launchpad:datacenters']:
-            return None
-        for roaccount in resp['rw-launchpad:datacenters']['ro-accounts']:
-            if 'datacenters' not in roaccount:
-                continue
-            for datacenter in roaccount['datacenters']:
-                if datacenter['name'] == name:
-                    return datacenter
-        return None
 
     def get_resource_orchestrator(self):
-        resp = self._http.get_cmd('v1/api/operational/resource-orchestrator')
+        resp = self._http.get_cmd('v1/api/operational/{}resource-orchestrator'
+                .format(self._client.so_rbac_project_path))
+
         if not resp or 'rw-launchpad:resource-orchestrator' not in resp:
             return None
         return resp['rw-launchpad:resource-orchestrator']

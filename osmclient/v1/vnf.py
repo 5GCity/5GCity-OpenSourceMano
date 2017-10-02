@@ -22,11 +22,13 @@ from osmclient.common.exceptions import NotFound
 
 
 class Vnf(object):
-    def __init__(self, http=None):
+    def __init__(self, http=None, client=None):
         self._http = http
+        self._client = client
 
     def list(self):
-        resp = self._http.get_cmd('v1/api/operational/vnfr-catalog/vnfr')
+        resp = self._http.get_cmd('v1/api/operational/{}vnfr-catalog/vnfr'
+                .format(self._client.so_rbac_project_path))
         if resp and 'vnfr:vnfr' in resp:
             return resp['vnfr:vnfr']
         return list()
