@@ -10,7 +10,7 @@
 set -eux
 
 # The basic charm layer also installs all the things. 47 packages.
-LAYER_BASIC="gcc build-essential python3-pip python3-setuptools python3-yaml"
+LAYER_BASIC="gcc build-essential python3-pip python3-setuptools libyaml-dev python3-yaml python3-dev"
 
 # the basic layer also installs virtualenv, but the name changed in xenial.
 TRUSTY_PACKAGES="python-virtualenv"
@@ -38,6 +38,7 @@ function cache() {
     lxc exec $container -- apt-get update -y
     lxc exec $container -- apt-get upgrade -y
     lxc exec $container -- apt-get install -y $PACKAGES $2
+    lxc exec $container -- pip3 install --upgrade pip
     lxc exec $container -- pip3 install --upgrade $PYPI
     lxc stop $container
 
