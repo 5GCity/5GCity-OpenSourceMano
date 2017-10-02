@@ -98,7 +98,6 @@ apt remove -y rw.toolchain-rwbase tcpdump
 apt-get install -y --allow-downgrades rw.tools-container-tools=${PLATFORM_VERSION} rw.tools-scripts=${PLATFORM_VERSION} python
 /usr/rift/container_tools/mkcontainer --modes UI-base --rw-version ${PLATFORM_VERSION}
 
-chmod 777 /usr/rift /usr/rift/usr/share
 
 # now disable the RIFT OSM repo so that we'll get UI from
 # the OSM repos

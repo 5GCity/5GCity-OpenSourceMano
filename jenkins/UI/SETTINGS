@@ -29,7 +29,7 @@ export OSM_BUILD_CONTAINER=UI-ub
 #
 # this variable holds the name of the container to be used to run a package
 # if this container already exists, the run processes can skip the container build
-export OSM_RUNTIME_CONTAINER=UI-ub
+export OSM_RUNTIME_CONTAINER=SO-ub
 #
 # this variable must be set to allow creating the runtime container in privileged mode
 # this variable should be removed in the future when no privileged mode is required
