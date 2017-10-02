@@ -80,7 +80,7 @@ function usage() {
 
 # enable the right repos
 curl http://repos.riftio.com/public/xenial-riftware-public-key | apt-key add -
-curl -o /etc/apt/sources.list.d/RIFT.list http://buildtracker.riftio.com/repo_file/ub16/${PLATFORM_REPOSITORY}/
+curl -o /etc/apt/sources.list.d/rift.list http://buildtracker.riftio.com/repo_file/ub16/${PLATFORM_REPOSITORY}/
 
 # Make the Rift repo a higher priority to work around version conflicts.
 cat <<EOF > /etc/apt/preferences.d/rift
@@ -98,7 +98,7 @@ apt-get install -y --allow-downgrades rw.tools-container-tools=${PLATFORM_VERSIO
 
 # now disable the RIFT OSM repo so that we'll get MANO from
 # the OSM repos
-rm -f /etc/apt/sources.list.d/RIFT.list
+rm -f /etc/apt/sources.list.d/rift.list
 
 apt-get update
 
