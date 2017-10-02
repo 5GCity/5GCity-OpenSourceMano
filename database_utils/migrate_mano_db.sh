@@ -1006,7 +1006,6 @@ function downgrade_from_26(){
 }
 
 function upgrade_to_27(){
-    # echo "    upgrade database from version 0.26 to version 0.27"
     echo "      Added 'encrypted_RO_priv_key','RO_pub_key' to table 'nfvo_tenants'"
     sql "ALTER TABLE nfvo_tenants ADD COLUMN encrypted_RO_priv_key VARCHAR(2000) NULL AFTER description;"
     sql "ALTER TABLE nfvo_tenants ADD COLUMN RO_pub_key VARCHAR(510) NULL AFTER encrypted_RO_priv_key;"
@@ -1014,9 +1013,8 @@ function upgrade_to_27(){
     sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
          "VALUES (27, '0.27', '0.5.25', 'Added encrypted_RO_priv_key,RO_pub_key to table nfvo_tenants', '2017-09-29');"
 }
-function downgrade_from_26(){
-    # echo "    downgrade database from version 0.27 to version 0.26"
-    echo "      Remove 'encrypted_RO_priv_key','RO_pub_key' to table 'nfvo_tenants'"
+function downgrade_from_27(){
+    echo "      Remove 'encrypted_RO_priv_key','RO_pub_key' from table 'nfvo_tenants'"
     sql "ALTER TABLE nfvo_tenants DROP COLUMN encrypted_RO_priv_key;"
     sql "ALTER TABLE nfvo_tenants DROP COLUMN RO_pub_key;"
     sql "DELETE FROM schema_version WHERE version_int='27';"
