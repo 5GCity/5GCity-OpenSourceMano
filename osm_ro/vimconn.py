@@ -33,6 +33,7 @@ import paramiko
 import socket
 import StringIO
 import yaml
+import sys
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 

@@ -976,7 +976,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                                     "content": cfg_source})
                         boot_data['config-files'] = om_cfgfile_list
                 if boot_data:
-                    db_vm["boot_data"] = boot_data
+                    db_vm["boot_data"] = yaml.safe_dump(boot_data, default_flow_style=True, width=256)
 
                 db_vms.append(db_vm)
                 db_vms_index += 1

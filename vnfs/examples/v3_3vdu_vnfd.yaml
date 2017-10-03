@@ -25,11 +25,11 @@ vnfd:vnfd-catalog:
             # flavor below can fit into m1.micro
             vm-flavor:
                 vcpu-count: 1
-                memory-mb: 256
-                storage-gb: 2
+                memory-mb: 2048
+                storage-gb: 20
 
             # Image/checksum or image including the full path
-            image: 'cirros034'
+            image: 'ubuntu16.04'
             #checksum: 
 
             interface:
@@ -44,7 +44,16 @@ vnfd:vnfd-catalog:
                 # vnfd-connection-point-ref: eth0
                 external-connection-point-ref: eth0
 
+            # Replace the ssh-rsa public key to use your own public key
+            cloud-init: |
+                #cloud-config
+                ssh_authorized_keys:
+                -  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDajuABKm3lzcA0hk1IQGAfSWxxE0viRedl1EnZ2s0qQL54zTGVqYzC73CndSu0az57ysAKDapKOnTWl6zfj+bU4j3c4jORDWrIelBVaeQaoWGfKtBmS7jE54I94cRgkAIk+4zM1ViRyPQ+0FoOOq7I/6rQZITZ4VqfyhygW7j2ke2vl3oJ/TKocOpdk4WlMmPC6dFYppmwlpTpPYKJVdh58aeq9G/wTRP1qvCAgZAm/1GYoj7JgQjw11j6ZZE0ci03F9aOqqMlICDJF87Zk3fUhnt+g6EYNMiEafd7kuNwXBAJ5D1n4vZnj/EpdQY+dlXhhGS2Bncr1db1YBJCoRWN Generated-by-Nova
+                users:
+                -  name: osm
+                   ssh_authorized_keys:
+                   -  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDajuABKm3lzcA0hk1IQGAfSWxxE0viRedl1EnZ2s0qQL54zTGVqYzC73CndSu0az57ysAKDapKOnTWl6zfj+bU4j3c4jORDWrIelBVaeQaoWGfKtBmS7jE54I94cRgkAIk+4zM1ViRyPQ+0FoOOq7I/6rQZITZ4VqfyhygW7j2ke2vl3oJ/TKocOpdk4WlMmPC6dFYppmwlpTpPYKJVdh58aeq9G/wTRP1qvCAgZAm/1GYoj7JgQjw11j6ZZE0ci03F9aOqqMlICDJF87Zk3fUhnt+g6EYNMiEafd7kuNwXBAJ5D1n4vZnj/EpdQY+dlXhhGS2Bncr1db1YBJCoRWN Generated-by-Nova
+
         connection-point:
             -   name: eth0
                 type: VPORT
-
