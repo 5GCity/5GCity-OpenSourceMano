@@ -89,6 +89,30 @@ Pin: origin repos.riftio.com
 Pin-Priority: 600
 EOF
 
+
+
+#######################
+# temp fix
+# this is normally done by mkcontainer, but the last line is missing
+# we can take this out when we update the RIFT platform 
+
+cat <<EOF >>/etc/systemd/user.conf
+DefaultLimitNOFILE=65536
+DefaultLimitMSGQUEUE=8192000
+DefaultLimitNPROC=65536
+DefaultTasksMax=65536
+EOF
+cat <<EOF >>/etc/systemd/system.conf
+DefaultLimitNOFILE=65536
+DefaultLimitMSGQUEUE=8192000
+DefaultLimitNPROC=65536
+DefaultTasksMax=65536
+EOF
+systemctl daemon-reload
+
+##################################
+
+
 apt-get update
 
 # and install the tools
