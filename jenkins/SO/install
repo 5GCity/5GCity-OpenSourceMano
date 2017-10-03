@@ -92,7 +92,7 @@ EOF
 apt-get update
 
 # and install the tools
-apt remove -y rw.toolchain-rwbase tcpdump
+apt remove -y tcpdump
 apt-get install -y --allow-downgrades rw.tools-container-tools=${PLATFORM_VERSION} rw.tools-scripts=${PLATFORM_VERSION} python
 /usr/rift/container_tools/mkcontainer --modes MANO-base,rw-platform --rw-version ${PLATFORM_VERSION}
 
