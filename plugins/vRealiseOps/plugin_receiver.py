@@ -86,8 +86,11 @@ class PluginReceiver():
         """
         try:
             for message in self.consumer.vrops_consumer:
+                vim_type = None
+                self.logger.info("Message received:\nTopic={}:{}:{}:\nKey={}\nValue={}"\
+                    .format(message.topic, message.partition, message.offset, message.key, message.value))
                 message_values = json.loads(message.value)
-                if message_values.has_key('vim_type'):
+                if message_values.has_key('vim_type') and message_values['vim_type'] is not None:
                     vim_type = message_values['vim_type'].lower()
                 if vim_type == 'vmware':
                     self.logger.info("Action required for: {}".format(message.topic))
@@ -170,6 +173,8 @@ class PluginReceiver():
                              "status": True if alarm_uuid else False
                             }
                        }
+        self.logger.info("Publishing response:\nTopic={}\nKey={}\nValue={}"\
+                .format(topic, msg_key, response_msg))
         #Core producer
         self.producer_alarms.publish(key=msg_key, value=json.dumps(response_msg), topic=topic)
 
@@ -193,6 +198,8 @@ class PluginReceiver():
                              "status": True if alarm_uuid else False
                             }
                        }
+        self.logger.info("Publishing response:\nTopic={}\nKey={}\nValue={}"\
+                .format(topic, msg_key, response_msg))
         #Core producer
         self.producer_alarms.publish(key=msg_key, value=json.dumps(response_msg), topic=topic)
 
@@ -216,6 +223,8 @@ class PluginReceiver():
                              "status": True if alarm_uuid else False
                             }
                        }
+        self.logger.info("Publishing response:\nTopic={}\nKey={}\nValue={}"\
+                .format(topic, msg_key, response_msg))
         #Core producer
         self.producer_alarms.publish(key=msg_key, value=json.dumps(response_msg), topic=topic)
 
@@ -225,6 +234,8 @@ class PluginReceiver():
         """
         topic = 'metric_response'
         msg_key = 'read_metric_data_response'
+        self.logger.info("Publishing response:\nTopic={}\nKey={}\nValue={}"\
+                .format(topic, msg_key, metrics_data))
         #Core producer
         self.producer_metrics.publish(key=msg_key, value=json.dumps(metrics_data), topic=topic)
 
@@ -251,6 +262,8 @@ class PluginReceiver():
                              "status":metric_status
                             }
                        }
+        self.logger.info("Publishing response:\nTopic={}\nKey={}\nValue={}"\
+                .format(topic, msg_key, response_msg))
         #Core producer
         self.producer_metrics.publish(key=msg_key, value=json.dumps(response_msg), topic=topic)
 
@@ -269,6 +282,8 @@ class PluginReceiver():
                              "status":metric_status
                             }
                        }
+        self.logger.info("Publishing response:\nTopic={}\nKey={}\nValue={}"\
+                .format(topic, msg_key, response_msg))
         #Core producer
         self.producer_metrics.publish(key=msg_key, value=json.dumps(response_msg), topic=topic)
 
@@ -286,6 +301,8 @@ class PluginReceiver():
                         "tenant_uuid":metric_info['tenant_uuid'],
                         "status":False
                        }
+        self.logger.info("Publishing response:\nTopic={}\nKey={}\nValue={}"\
+                .format(topic, msg_key, response_msg))
         #Core producer
         self.producer_metrics.publish(key=msg_key, value=json.dumps(response_msg), topic=topic)
 
@@ -308,6 +325,8 @@ class PluginReceiver():
                         #"resource_uuid":list_alarm_input['alarm_list_request']['resource_uuid'],
                         "list_alarm_resp":triggered_alarm_list
                        }
+        self.logger.info("Publishing response:\nTopic={}\nKey={}\nValue={}"\
+                .format(topic, msg_key, response_msg))
         #Core producer
         self.producer_alarms.publish(key=msg_key, value=json.dumps(response_msg), topic=topic)
 
@@ -362,9 +381,10 @@ class PluginReceiver():
                         "correlation_id":access_info_req['access_config']['correlation_id'],
                         "status":access_update_status
                        }
-        #To Do - Add producer
-        #self.producer.publish(key=msg_key, value=json.dumps(response_msg), topic=topic)
-        self.producer.publish(topic=topic, messages=json.dumps(response_msg), msg_key=msg_key)
+        self.logger.info("Publishing response:\nTopic={}\nKey={}\nValue={}"\
+                .format(topic, msg_key, response_msg))
+        #Core Add producer
+        self.producer_access_credentials.publish(key=msg_key, value=json.dumps(response_msg), topic=topic)
 
 def main():
     #log.basicConfig(filename='mon_vrops_log.log',level=log.DEBUG)
@@ -374,5 +394,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 

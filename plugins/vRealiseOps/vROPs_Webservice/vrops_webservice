@@ -41,7 +41,7 @@ import os
 import json
 import sys
 import requests
-sys.path.append("../../core/message_bus")
+sys.path.append("../../../core/message_bus")
 from producer import KafkaProducer
 #from core.message_bus.producer import KafkaProducer
 
