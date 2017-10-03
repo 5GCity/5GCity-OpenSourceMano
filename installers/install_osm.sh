@@ -228,6 +228,12 @@ function configure(){
       --header 'content-type: application/vnd.yang.data+json' \
       --data '{"rw-ro-account:account": [ { "openmano": { "host": "'$RO_CONTAINER_IP'", "port": "9090", "tenant-id": "'$RO_TENANT_ID'"}, "name": "osmopenmano", "ro-account-type": "openmano" }]}')
     [[ $result =~ .*success.* ]] || FATAL "Failed resource-orchestrator configuration: $result"
+
+    lxc exec SO-ub -- /usr/rift/rift-shell -- rwcli --username admin --passwd admin  <<EOF
+config 
+openidc-provider-config rw-ui-client redirect-uri https://$DEFAULT_IP:8443/callback post-logout-redirect-uri https://$DEFAULT_IP:8443/
+EOF
+
 }
 
 function install_lxd() {
