@@ -209,13 +209,22 @@ function configure(){
       --data '{"account": [ { "name": "osmjuju", "account-type": "juju", "juju": { "ip-address": "'$JUJU_CONTROLLER_IP'", "port": "17070", "user": "admin", "secret": "'$JUJU_PASSWD'" }  }  ]}')
     [[ $result =~ .*success.* ]] || FATAL "Failed config-agent configuration: $result"
 
+    #R1/R2 config line
+    #result=$(curl -k --request PUT \
+    #  --url https://$SO_CONTAINER_IP:8008/api/config/resource-orchestrator \
+    #  --header 'accept: application/vnd.yang.data+json' \
+    #  --header 'authorization: Basic YWRtaW46YWRtaW4=' \
+    #  --header 'cache-control: no-cache' \
+    #  --header 'content-type: application/vnd.yang.data+json' \
+    #  --data '{ "openmano": { "host": "'$RO_CONTAINER_IP'", "port": "9090", "tenant-id": "'$RO_TENANT_ID'" }, "name": "osmopenmano", "account-type": "openmano" }')
+
     result=$(curl -k --request PUT \
-      --url https://$SO_CONTAINER_IP:8008/api/config/resource-orchestrator \
+      --url https://$SO_CONTAINER_IP:8008/api/config/project/default/ro-account/account \
       --header 'accept: application/vnd.yang.data+json' \
       --header 'authorization: Basic YWRtaW46YWRtaW4=' \
-      --header 'cache-control: no-cache' \
+      --header 'cache-control: no-cache'   \
       --header 'content-type: application/vnd.yang.data+json' \
-      --data '{ "openmano": { "host": "'$RO_CONTAINER_IP'", "port": "9090", "tenant-id": "'$RO_TENANT_ID'" }, "name": "osmopenmano", "account-type": "openmano" }')
+      --data '{"rw-ro-account:account": [ { "openmano": { "host": "'$RO_CONTAINER_IP'", "port": "9090", "tenant-id": "'$RO_TENANT_ID'"}, "name": "osmopenmano", "ro-account-type": "openmano" }]}')
     [[ $result =~ .*success.* ]] || FATAL "Failed resource-orchestrator configuration: $result"
 }
 
