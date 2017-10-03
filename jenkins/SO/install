@@ -35,7 +35,7 @@ set -o nounset    # Expanding an unset variable is an error.  Variables must be
 
 ###############################################################################
 # Set up repo and version
-PLATFORM_REPOSITORY=OSM
+PLATFORM_REPOSITORY=OSM3
 PLATFORM_VERSION=5.2.0.0.71033
 
 while getopts ":P:V:h" o; do
@@ -79,6 +79,8 @@ function usage() {
 # Main block
 
 # enable the right repos
+echo "### INSTALLING RIFT platform ${PLATFORM_VERSION} from repository ${PLATFORM_REPOSITORY}"
+
 curl http://repos.riftio.com/public/xenial-riftware-public-key | apt-key add -
 curl -o /etc/apt/sources.list.d/rift.list http://buildtracker.riftio.com/repo_file/ub16/${PLATFORM_REPOSITORY}/
 
