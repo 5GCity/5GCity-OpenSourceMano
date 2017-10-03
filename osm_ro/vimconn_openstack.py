@@ -42,7 +42,6 @@ import netaddr
 import time
 import yaml
 import random
-import sys
 import re
 import copy
 

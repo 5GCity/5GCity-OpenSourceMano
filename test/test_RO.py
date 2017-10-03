@@ -20,33 +20,34 @@
 #
 ##
 
-'''
+"""
 Module for testing openmano functionality. It uses openmanoclient.py for invoking openmano
-'''
-__author__ = "Pablo Montes, Alfonso Tierno"
-__date__ = "$16-Feb-2017 17:08:16$"
-__version__ = "0.0.4"
-version_date = "Jun 2017"
+"""
 
 import logging
 import os
-from argparse import ArgumentParser
 import argcomplete
 import unittest
 import string
 import inspect
 import random
-import traceback
+# import traceback
 import glob
 import yaml
 import sys
 import time
-from pyvcloud.vcloudair import VCA
 import uuid
 import json
+from pyvcloud.vcloudair import VCA
+from argparse import ArgumentParser
 
-global test_config   #  used for global variables with the test configuration
-test_config = {}
+__author__ = "Pablo Montes, Alfonso Tierno"
+__date__ = "$16-Feb-2017 17:08:16$"
+__version__ = "0.1.0"
+version_date = "Oct 2017"
+
+test_config = {}    # used for global variables with the test configuration
+
 
 class test_base(unittest.TestCase):
     test_index = 1
@@ -278,6 +279,7 @@ class test_VIM_tenant_operations(test_base):
         tenant = test_config["client"].vim_action("delete", "tenants", uuid=self.__class__.vim_tenant_uuid)
         logger.debug("{}".format(tenant))
         assert ('deleted' in tenant.get('result', ""))
+
 
 class test_vimconn_connect(test_base):
 
@@ -1373,6 +1375,7 @@ class test_vimconn_new_tenant(test_base):
 
         self.assertEqual((context.exception).http_code, 404)
 
+
 '''
 IMPORTANT NOTE
 The following unittest class does not have the 'test_' on purpose. This test is the one used for the
@@ -1381,14 +1384,13 @@ scenario based tests.
 class descriptor_based_scenario_test(test_base):
     test_index = 0
     scenario_test_path = None
-    scenario_uuid = None
-    instance_scenario_uuid = None
-    to_delete_list = []
 
     @classmethod
     def setUpClass(cls):
         cls.test_index = 1
         cls.to_delete_list = []
+        cls.scenario_uuids = []
+        cls.instance_scenario_uuids = []
         cls.scenario_test_path = test_config["test_directory"] + '/' + test_config["test_folder"]
         logger.info("{}. {} {}".format(test_config["test_number"], cls.__name__, test_config["test_folder"]))
 
@@ -1401,55 +1403,72 @@ class descriptor_based_scenario_test(test_base):
                                                            inspect.currentframe().f_code.co_name,
                                                            test_config["test_folder"])
         self.__class__.test_index += 1
-        vnfd_files = glob.glob(self.__class__.scenario_test_path+'/vnfd_*.yaml')
+        # load VNFD and NSD
+        descriptor_files = glob.glob(self.__class__.scenario_test_path+'/*.yaml')
+        vnf_descriptors = []
+        scenario_descriptors = []
+        for descriptor_file in descriptor_files:
+            with open(descriptor_file, 'r') as stream:
+                descriptor = yaml.load(stream)
+                if "vnf" in descriptor or "vnfd:vnfd-catalog" in descriptor or "vnfd-catalog" in descriptor:
+                    vnf_descriptors.append(descriptor)
+                else:
+                    scenario_descriptors.append(descriptor)
+
         scenario_file = glob.glob(self.__class__.scenario_test_path + '/scenario_*.yaml')
-        if len(vnfd_files) == 0 or len(scenario_file) > 1:
+        if not vnf_descriptors or not scenario_descriptors or len(scenario_descriptors) > 1:
             raise Exception("Test '{}' not valid. It must contain an scenario file and at least one vnfd file'".format(
                 test_config["test_folder"]))
 
-        #load all vnfd
-        for vnfd in vnfd_files:
-            with open(vnfd, 'r') as stream:
-                vnf_descriptor = yaml.load(stream)
-
-            vnfc_list = vnf_descriptor['vnf']['VNFC']
-            for vnfc in vnfc_list:
-                vnfc['image name'] = test_config["image_name"]
-                devices = vnfc.get('devices',[])
-                for device in devices:
-                    if device['type'] == 'disk' and 'image name' in device:
-                        device['image name'] = test_config["image_name"]
-
+        # load all vnfd
+        for vnf_descriptor in vnf_descriptors:
             logger.debug("VNF descriptor: {}".format(vnf_descriptor))
-            vnf = test_config["client"].create_vnf(descriptor=vnf_descriptor)
+            vnf = test_config["client"].create_vnf(descriptor=vnf_descriptor, image_name=test_config["image_name"])
             logger.debug(vnf)
+            if 'vnf' in vnf:
+                vnf_uuid = vnf['vnf']['uuid']
+            else:
+                vnf_uuid = vnf['vnfd'][0]['uuid']
             self.__class__.to_delete_list.insert(0, {"item": "vnf", "function": test_config["client"].delete_vnf,
-                                                     "params": {"uuid": vnf['vnf']['uuid']}})
+                                                     "params": {"uuid": vnf_uuid}})
 
-        #load the scenario definition
-        with open(scenario_file[0], 'r') as stream:
-            scenario_descriptor = yaml.load(stream)
-        networks = scenario_descriptor['scenario']['networks']
-        networks[test_config["mgmt_net"]] = networks.pop('mgmt')
-        logger.debug("Scenario descriptor: {}".format(scenario_descriptor))
-        scenario = test_config["client"].create_scenario(descriptor=scenario_descriptor)
-        logger.debug(scenario)
-        self.__class__.to_delete_list.insert(0,{"item": "scenario", "function": test_config["client"].delete_scenario,
-                                 "params":{"uuid": scenario['scenario']['uuid']} })
-        self.__class__.scenario_uuid = scenario['scenario']['uuid']
+        # load the scenario definition
+        for scenario_descriptor in scenario_descriptors:
+            # networks = scenario_descriptor['scenario']['networks']
+            # networks[test_config["mgmt_net"]] = networks.pop('mgmt')
+            logger.debug("Scenario descriptor: {}".format(scenario_descriptor))
+            scenario = test_config["client"].create_scenario(descriptor=scenario_descriptor)
+            logger.debug(scenario)
+            if 'scenario' in scenario:
+                scenario_uuid = scenario['scenario']['uuid']
+            else:
+                scenario_uuid = scenario['nsd'][0]['uuid']
+            self.__class__.to_delete_list.insert(0, {"item": "scenario",
+                                                     "function": test_config["client"].delete_scenario,
+                                                     "params": {"uuid": scenario_uuid}})
+            self.__class__.scenario_uuids.append(scenario_uuid)
 
     def test_010_instantiate_scenario(self):
         self.__class__.test_text = "{}.{}. TEST {} {}".format(test_config["test_number"], self.__class__.test_index,
                                                            inspect.currentframe().f_code.co_name,
                                                            test_config["test_folder"])
         self.__class__.test_index += 1
-
-        instance = test_config["client"].create_instance(scenario_id=self.__class__.scenario_uuid,
-                                                         name=self.__class__.test_text)
-        self.__class__.instance_scenario_uuid = instance['uuid']
-        logger.debug(instance)
-        self.__class__.to_delete_list.insert(0, {"item": "instance", "function": test_config["client"].delete_instance,
-                                  "params": {"uuid": instance['uuid']}})
+        for scenario_uuid in self.__class__.scenario_uuids:
+            instance_descriptor = {
+                "instance":{
+                    "name": self.__class__.test_text,
+                    "scenario": scenario_uuid,
+                    "networks":{
+                        "mgmt": {"sites": [ { "netmap-use": test_config["mgmt_net"]} ]}
+                    }
+                }
+            }
+            instance = test_config["client"].create_instance(instance_descriptor)
+            self.__class__.instance_scenario_uuids.append(instance['uuid'])
+            logger.debug(instance)
+            self.__class__.to_delete_list.insert(0, {"item": "instance",
+                                                     "function": test_config["client"].delete_instance,
+                                                     "params": {"uuid": instance['uuid']}})
 
     def test_020_check_deployent(self):
         self.__class__.test_text = "{}.{}. TEST {} {}".format(test_config["test_number"], self.__class__.test_index,
@@ -1462,15 +1481,19 @@ class descriptor_based_scenario_test(test_base):
             return
 
         keep_waiting = test_config["timeout"]
-        instance_active = False
-        while True:
-            result = check_instance_scenario_active(self.__class__.instance_scenario_uuid)
-            if result[0]:
-                break
-            elif 'ERROR' in result[1]:
-                msg = 'Got error while waiting for the instance to get active: '+result[1]
-                logging.error(msg)
-                raise Exception(msg)
+        pending_instance_scenario_uuids = list(self.__class__.instance_scenario_uuids)   # make a copy
+        while pending_instance_scenario_uuids:
+            index = 0
+            while index < len(pending_instance_scenario_uuids):
+                result = check_instance_scenario_active(pending_instance_scenario_uuids[index])
+                if result[0]:
+                    del pending_instance_scenario_uuids[index]
+                    break
+                elif 'ERROR' in result[1]:
+                    msg = 'Got error while waiting for the instance to get active: '+result[1]
+                    logging.error(msg)
+                    raise Exception(msg)
+                index += 1
 
             if keep_waiting >= 5:
                 time.sleep(5)

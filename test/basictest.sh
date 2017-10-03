@@ -254,7 +254,7 @@ then
 
 elif [[ $action == "create" ]]
 then
-    for VNF in linux dataplaneVNF1 dataplaneVNF2 dataplaneVNF_2VMs dataplaneVNF_2VMs_v02 dataplaneVNF3 linux_2VMs_v02 dataplaneVNF4 v3_3vdu_vnfd
+    for VNF in linux dataplaneVNF1 dataplaneVNF2 dataplaneVNF_2VMs dataplaneVNF_2VMs_v02 dataplaneVNF3 linux_2VMs_v02 dataplaneVNF4
     do    
         printf "%-50s" "Creating VNF '${VNF}': "
         result=`$openmano vnf-create $DIRmano/vnfs/examples/${VNF}.yaml`
@@ -263,6 +263,14 @@ then
         ! is_valid_uuid $vnf && echo FAIL && echo "    $result" &&  $_exit 1
         echo $vnf
     done
+
+    printf "%-50s" "Creating VNF '${VNF}': "
+    result=`$openmano vnf-create $DIRmano/vnfs/examples/v3_3vdu_vnfd.yaml --image-name=cirros034`
+    vnf=`echo $result |gawk '{print $1}'`
+    #check a valid uuid is obtained
+    ! is_valid_uuid $vnf && echo FAIL && echo "    $result" &&  $_exit 1
+    echo $vnf
+
     for NS in simple complex complex2 complex3 complex4 complex5 v3_3vdu_2vnf_nsd
     do
         printf "%-50s" "Creating scenario '${NS}':"

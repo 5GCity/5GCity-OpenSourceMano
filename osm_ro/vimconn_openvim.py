@@ -695,7 +695,6 @@ class vimconnector(vimconn.vimconnector):
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
 
-    
     def get_image_id_from_path(self, path):
         '''Get the image id from image path in the VIM database. Returns the image_id'''
         try:

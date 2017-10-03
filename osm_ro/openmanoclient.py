@@ -22,20 +22,22 @@
 # contact with: nfvlabs@tid.es
 ##
 
-'''
-openmano python client used to interact with openmano-server  
-'''
-__author__="Alfonso Tierno, Pablo Montes"
-__date__ ="$09-Mar-2016 09:09:48$"
-__version__="0.0.2-r468"
-version_date="Feb 2017"
+"""
+openmano python client used to interact with openmano-server
+"""
 
 import requests
 import json
 import yaml
 import logging
 import sys
-if  sys.version_info.major == 3:
+
+__author__ = "Alfonso Tierno, Pablo Montes"
+__date__ = "$09-Mar-2016 09:09:48$"
+__version__ = "0.1.0-r470"
+version_date = "Oct 2017"
+
+if sys.version_info.major == 3:
     from urllib.parse import quote
 elif sys.version_info.major == 2:
     from urllib import quote
@@ -221,24 +223,29 @@ class openmanoclient():
             self.datacenter = self._get_item_uuid("datacenters", self.datacenter_id, self.datacenter_name, False)
         return self.datacenter
 
-    def _create_item(self, item, descriptor, all_tenants=False):
+    def _create_item(self, item, descriptor, all_tenants=False, api_version=None):
         if all_tenants:
             tenant_text = "/any"
-        elif all_tenants==None:
+        elif all_tenants is None:
             tenant_text = ""
         else:
             tenant_text = "/"+self._get_tenant()
         payload_req = yaml.safe_dump(descriptor)
+
+        api_version_text = ""
+        if api_version:
+            api_version_text = "/v3"
             
         #print payload_req
             
-        URLrequest = "{}{}/{}".format(self.endpoint_url, tenant_text, item)
+        URLrequest = "{}{apiver}{tenant}/{item}".format(self.endpoint_url, apiver=api_version_text, tenant=tenant_text,
+                                                        item=item)
         self.logger.debug("openmano POST %s %s", URLrequest, payload_req)
-        mano_response = requests.post(URLrequest, headers = self.headers_req, data=payload_req)
-        self.logger.debug("openmano response: %s", mano_response.text )
+        mano_response = requests.post(URLrequest, headers=self.headers_req, data=payload_req)
+        self.logger.debug("openmano response: %s", mano_response.text)
     
         content = self._parse_yaml(mano_response.text, response=True)
-        if mano_response.status_code==200:
+        if mano_response.status_code == 200:
             return content
         else:
             raise OpenmanoResponseException(str(content))        
@@ -592,6 +599,7 @@ class openmanoclient():
                 must be a dictionary or a json/yaml text.
                 must be a dictionary or a json/yaml text.
             Other parameters can be:
+                #TODO, revise
                 name: the vnf name. Overwrite descriptor name if any
                 image_path: Can be a string or a string list. Overwrite the image_path at descriptor
                 description: vnf descriptor.. Overwrite descriptor description if any
@@ -608,33 +616,153 @@ class openmanoclient():
             pass
         else:
             raise OpenmanoBadParamsException("Missing descriptor")
-        
-        if 'vnf' not in descriptor or len(descriptor)>2:
-            raise OpenmanoBadParamsException("Descriptor must contain only one 'vnf' field, and an optional version")
-        for param in kwargs:
-            if param == 'image_path':
-                #print args.name
-                try:
-                    if isinstance(kwargs[param], str):
-                        descriptor['vnf']['VNFC'][0]['VNFC image']=kwargs[param]
-                    elif isinstance(kwargs[param], tuple) or isinstance(kwargs[param], list):
-                        index=0
-                        for image_path_ in kwargs[param]:
-                            #print "image-path", image_path_
-                            descriptor['vnf']['VNFC'][index]['VNFC image']=image_path_
-                            index=index+1
-                    else:
-                        raise OpenmanoBadParamsException("Wrong image_path type. Expected text or a text list")
-                except (KeyError, TypeError) as e:
-                    if str(e)=='vnf':           error_pos= "missing field 'vnf'"
-                    elif str(e)=='VNFC':        error_pos= "missing field  'vnf':'VNFC'"
-                    elif str(e)==str(index):    error_pos= "field  'vnf':'VNFC' must be an array"
-                    elif str(e)=='VNFC image':  error_pos= "missing field 'vnf':'VNFC'['VNFC image']"
-                    else:                       error_pos="wrong format"
-                    raise OpenmanoBadParamsException("Wrong VNF descriptor: " + error_pos)
+
+        try:
+            if "vnfd:vnfd-catalog" in descriptor or "vnfd-catalog" in descriptor:
+                api_version = "v3"
+                token = "vnfd"
+                vnfd_catalog = descriptor.get("vnfd:vnfd-catalog")
+                if not vnfd_catalog:
+                    vnfd_catalog = descriptor.get("vnfd-catalog")
+                vnfds = vnfd_catalog.get("vnfd:vnfd")
+                if not vnfds:
+                    vnfds = vnfd_catalog.get("vnfd")
+                vnfd = vnfds[0]
+                vdu_list = vnfd["vdu"]
+            elif "vnf" in descriptor:  # old API
+                api_version = None
+                token = "vnfs"
+                vnfd = descriptor['vnf']
+                vdu_list = vnfd["VNFC"]
             else:
-                descriptor['vnf'][param] = kwargs[param]
-        return self._create_item("vnfs", descriptor)
+                raise OpenmanoBadParamsException("Invalid VNF Descriptor must contain only one 'vnf' field or vnd-catalog")
+        except (KeyError, TypeError) as e:
+            raise OpenmanoBadParamsException("Invalid VNF Descriptor. Missing field {}".format(e))
+
+        if kwargs:
+            try:
+                if kwargs.get('name'):
+                    vnfd['name'] = kwargs['name']
+                if kwargs.get('description'):
+                    vnfd['description'] = kwargs['description']
+                if kwargs.get('image_path'):
+                    error_param = 'image_path'
+                    image_list = kwargs['image_path'].split(",")
+                    image_item = image_list.pop(0)
+                    # print "image-path", image_path_
+                    for vdu in vdu_list:
+                        if api_version == "v3":
+                            if vdu.get("image"):
+                                if image_item:
+                                    vdu['image'] = image_item
+                                    if "image-checksum" in vdu:
+                                        del vdu["image-checksum"]
+                                if image_list:
+                                    image_item = image_list.pop(0)
+                            for vol in vdu.get("volumes", ()):  # image name in volumes
+                                if image_item:
+                                    vol["image"] = image_item
+                                    if "image-checksum" in vol:
+                                        del vol["image-checksum"]
+                                if image_list:
+                                    image_item = image_list.pop(0)
+                        else:
+                            if image_item:
+                                vdu['VNFC image'] = image_item
+                                if "image name" in vdu:
+                                    del vdu["image name"]
+                                if "image checksum" in vdu:
+                                    del vdu["image checksum"]
+                            if image_list:
+                                image_item = image_list.pop(0)
+                            for vol in vdu.get('devices', ()):
+                                if vol['type'] != 'disk':
+                                    continue
+                                if image_item:
+                                    vol['image'] = image_item
+                                    if "image name" in vol:
+                                        del vol["image name"]
+                                    if "image checksum" in vol:
+                                        del vol["image checksum"]
+                                if image_list:
+                                    image_item = image_list.pop(0)
+                if kwargs.get('image_name'):  # image name precedes if both are supplied
+                    error_param = 'image_name'
+                    image_list = kwargs['image_name'].split(",")
+                    image_item = image_list.pop(0)
+                    for vdu in vdu_list:
+                        if api_version == "v3":
+                            if vdu.get("image"):
+                                if image_item:
+                                    vdu['image'] = image_item
+                                    if "image-checksum" in vdu:
+                                        del vdu["image-checksum"]
+                                if image_list:
+                                    image_item = image_list.pop(0)
+                            for vol in vdu.get("volumes", ()):  # image name in volumes
+                                if image_item:
+                                    vol["image"] = image_item
+                                    if "image-checksum" in vol:
+                                        del vol["image-checksum"]
+                                if image_list:
+                                    image_item = image_list.pop(0)
+                        else:
+                            if image_item:
+                                vdu['image name'] = image_item
+                                if "VNFC image" in vdu:
+                                    del vdu["VNFC image"]
+                            if image_list:
+                                image_item = image_list.pop(0)
+                            for vol in vdu.get('devices', ()):
+                                if vol['type'] != 'disk':
+                                    continue
+                                if image_item:
+                                    vol['image name'] = image_item
+                                    if "image" in vol:
+                                        del vol["image"]
+                                    if "image checksum" in vol:
+                                        del vol["image checksum"]
+                                if image_list:
+                                    image_item = image_list.pop(0)
+
+                if kwargs.get('image_checksum'):
+                    error_param = 'image_checksum'
+                    image_list = kwargs['image_checksum'].split(",")
+                    image_item = image_list.pop(0)
+                    for vdu in vdu_list:
+                        if api_version == "v3":
+                            if vdu.get("image"):
+                                if image_item:
+                                    vdu['image-checksum'] = image_item
+                                if image_list:
+                                    image_item = image_list.pop(0)
+                            for vol in vdu.get("volumes", ()):  # image name in volumes
+                                if image_item:
+                                    vol["mage-checksum"] = image_item
+                                if image_list:
+                                    image_item = image_list.pop(0)
+                        else:
+                            if image_item:
+                                vdu['image checksum'] = image_item
+                                if "VNFC image" in vdu:
+                                    del vdu["VNFC image"]
+                            if image_list:
+                                image_item = image_list.pop(0)
+                            for vol in vdu.get('devices', ()):
+                                if vol['type'] != 'disk':
+                                    continue
+                                if image_item:
+                                    vol['image checksum'] = image_item
+                                    if "image" in vol:
+                                        del vol["image"]
+                                if image_list:
+                                    image_item = image_list.pop(0)
+            except IndexError:
+                raise OpenmanoBadParamsException("{} contains more items than {} at descriptor".format(
+                    error_param, "vnfd-catalog:vnfd:vdu" if api_version else "vnf:VNFC"))
+            except (KeyError, TypeError) as e:
+                raise OpenmanoBadParamsException("Invalid VNF Descriptor. Missing field {}".format(e))
+        return self._create_item(token, descriptor, api_version=api_version)
 
 #     def edit_vnf(self, uuid=None, name=None, descriptor=None, descriptor_format=None, all_tenants=False, **kwargs):
 #         '''Edit the parameters of a vnf
@@ -696,7 +824,7 @@ class openmanoclient():
         return self._del_item("scenarios", uuid, name, all_tenants)
 
     def create_scenario(self, descriptor=None, descriptor_format=None, **kwargs):
-        '''Creates a scenario
+        """Creates a scenario
         Params: must supply a descriptor
             descriptor: with format {'scenario':{new_scenario_info}}
                 must be a dictionary or a json/yaml text.
@@ -707,7 +835,7 @@ class openmanoclient():
                 tenant_id. Propietary tenant
         Return: Raises an exception on error
                 Obtain a dictionary with format {'scenario':{new_scenario_info}}
-        '''
+        """
         if isinstance(descriptor, str):
             descriptor = self.parse(descriptor, descriptor_format)
         elif descriptor:
@@ -715,11 +843,29 @@ class openmanoclient():
         else:
             raise OpenmanoBadParamsException("Missing descriptor")
         
-        if 'scenario' not in descriptor or len(descriptor)>2:
-            raise OpenmanoBadParamsException("Descriptor must contain only one 'scenario' field, and an optional version")
+        try:
+            if "nsd:nsd-catalog" in descriptor or "nsd-catalog" in descriptor:
+                api_version = "v3"
+                token = "nsd"
+                nsd_catalog = descriptor.get("nsd:nsd-catalog")
+                if not nsd_catalog:
+                    nsd_catalog = descriptor.get("nsd-catalog")
+                nsds = nsd_catalog.get("nsd:nsd")
+                if not nsds:
+                    nsds = nsd_catalog.get("nsd")
+                nsd = nsds[0]
+            elif "scenario" in descriptor:  # old API
+                api_version = None
+                token = "scenarios"
+                nsd = descriptor['scenario']
+            else:
+                raise OpenmanoBadParamsException("Invalid NS Descriptor must contain only one 'scenario' field or nsd-catalog")
+        except (KeyError, TypeError) as e:
+            raise OpenmanoBadParamsException("Invalid NS Descriptor. Missing field {}".format(e))
+
         for param in kwargs:
-            descriptor['scenario'][param] = kwargs[param]
-        return self._create_item("scenarios", descriptor)
+            nsd[param] = kwargs[param]
+        return self._create_item(token, descriptor, api_version=api_version)
 
     def edit_scenario(self, uuid=None, name=None, descriptor=None, descriptor_format=None, all_tenants=False, **kwargs):
         '''Edit the parameters of a scenario
@@ -798,7 +944,7 @@ class openmanoclient():
         elif descriptor:
             pass
         elif name and ("scenario_name" in kwargs or "scenario_id" in kwargs):
-            descriptor = {"instance":{"name": name}}
+            descriptor = {"instance": {"name": name}}
         else:
             raise OpenmanoBadParamsException("Missing descriptor")
         
