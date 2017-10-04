@@ -229,10 +229,24 @@ function configure(){
       --data '{"rw-ro-account:account": [ { "openmano": { "host": "'$RO_CONTAINER_IP'", "port": "9090", "tenant-id": "'$RO_TENANT_ID'"}, "name": "osmopenmano", "ro-account-type": "openmano" }]}')
     [[ $result =~ .*success.* ]] || FATAL "Failed resource-orchestrator configuration: $result"
 
-    lxc exec SO-ub -- /usr/rift/rift-shell -- rwcli --username admin --passwd admin  <<EOF
-config 
-openidc-provider-config rw-ui-client redirect-uri https://$DEFAULT_IP:8443/callback post-logout-redirect-uri https://$DEFAULT_IP:8443/
-EOF
+    result=$(curl -k --request PATCH \
+      --url https://$SO_CONTAINER_IP:8008/v2/api/config/openidc-provider-config/rw-ui-client/redirect-uri \
+      --header 'accept: application/vnd.yang.data+json' \
+      --header 'authorization: Basic YWRtaW46YWRtaW4=' \
+      --header 'cache-control: no-cache'   \
+      --header 'content-type: application/vnd.yang.data+json' \
+      --data '{"redirect-uri": "https://'$DEFAULT_IP':8443/callback" }')
+    [[ $result =~ .*success.* ]] || FATAL "Failed redirect-uri configuration: $result"
+
+    result=$(curl -k --request PATCH \
+      --url https://$SO_CONTAINER_IP:8008/v2/api/config/openidc-provider-config/rw-ui-client/post-logout-redirect-uri \
+      --header 'accept: application/vnd.yang.data+json' \
+      --header 'authorization: Basic YWRtaW46YWRtaW4=' \
+      --header 'cache-control: no-cache'   \
+      --header 'content-type: application/vnd.yang.data+json' \
+      --data '{"post-logout-redirect-uri": "https://'$DEFAULT_IP':8443/?api_server=https://'$DEFAULT_IP'" }')
+    [[ $result =~ .*success.* ]] || FATAL "Failed post-logout-redirect-uri configuration: $result"
+
     lxc exec SO-ub -- tee /etc/network/interfaces.d/60-rift.cfg <<EOF
 auto lo:1
 iface lo:1 inet static 
