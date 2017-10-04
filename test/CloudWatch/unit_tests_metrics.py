@@ -6,8 +6,8 @@ import json
 import os
 import time
 from jsmin import jsmin
-sys.path.append("../../core/message_bus")
-from test_producer_AWS import KafkaProducer
+sys.path.append("../../test/core/")
+from test_producer import KafkaProducer
 from kafka import KafkaConsumer
 try:
     import boto
@@ -36,7 +36,7 @@ _consumer.subscribe(['metric_response'])
 #--------------------------------------------------------------------------------------------------------------------------------------
 
 '''Test E2E Flow : Test cases has been tested one at a time.
-1) Commom Request is generated using request function in test_producer_AWS.py(/core/message-bus)
+1) Commom Request is generated using request function in test_producer.py(/core/message-bus)
 2) The request is then consumed by the comsumer (plugin)
 3) The response is sent back on the message bus in plugin_metrics.py using
    response functions in producer.py(/core/message-bus)
@@ -48,7 +48,7 @@ class test_create_metrics(unittest.TestCase):
     def test_status_positive(self):
         time.sleep(2)
         # To generate Request of testing valid meric_name in create metrics requests
-        producer.request("Unit Testing/create metrics/create_metric_req_valid.json",'create_metric_request', '','metric_request')  
+        producer.request("create_metrics/create_metric_req_valid.json",'create_metric_request', '','metric_request')  
 
         for message in _consumer:
             if message.key == "create_metric_response": 
@@ -61,7 +61,7 @@ class test_create_metrics(unittest.TestCase):
     def test_status_negative(self):
         time.sleep(2)
         # To generate Request of testing invalid meric_name in create metrics requests
-        producer.request("Unit Testing/create metrics/create_metric_req_invalid.json",'create_metric_request', '','metric_request')  
+        producer.request("create_metrics/create_metric_req_invalid.json",'create_metric_request', '','metric_request')  
 
         for message in _consumer:
             if message.key == "create_metric_response": 
@@ -76,7 +76,7 @@ class test_metrics_data(unittest.TestCase):
     def test_met_name_positive(self):
         time.sleep(2)
         # To generate Request of testing valid meric_name in read_metric_data_request
-        producer.request("Unit Testing/Read metrics data/read_metric_name_req_valid.json",'read_metric_data_request', '','metric_request')  
+        producer.request("read_metrics_data/read_metric_name_req_valid.json",'read_metric_data_request', '','metric_request')  
         for message in _consumer:
             if message.key == "read_metric_data_response": 
                 resp = json.loads(json.loads(json.loads(message.value)))
@@ -87,7 +87,7 @@ class test_metrics_data(unittest.TestCase):
     def test_met_name_negative(self):
         time.sleep(2)
         # To generate Request of testing invalid meric_name in read_metric_data_request
-        producer.request("Unit Testing/Read metrics data/read_metric_name_req_invalid.json",'read_metric_data_request', '','metric_request')  
+        producer.request("read_metrics_data/read_metric_name_req_invalid.json",'read_metric_data_request', '','metric_request')  
         for message in _consumer:
             if message.key == "read_metric_data_response": 
                 resp = json.loads(json.loads(json.loads(message.value)))
@@ -99,7 +99,7 @@ class test_metrics_data(unittest.TestCase):
         # To generate Request of testing valid collection_period in read_metric_data_request
         # For AWS metric_data_stats collection period should be a multiple of 60
         time.sleep(2)
-        producer.request("Unit Testing/Read metrics data/read_coll_period_req_valid.json",'read_metric_data_request', '','metric_request')  
+        producer.request("read_metrics_data/read_coll_period_req_valid.json",'read_metric_data_request', '','metric_request')  
         for message in _consumer:
             if message.key == "read_metric_data_response": 
                 resp = json.loads(json.loads(json.loads(message.value)))
@@ -110,7 +110,7 @@ class test_metrics_data(unittest.TestCase):
     def test_coll_period_negative(self):
         time.sleep(2)
         # To generate Request of testing invalid collection_period in read_metric_data_request
-        producer.request("Unit Testing/Read metrics data/read_coll_period_req_invalid.json",'read_metric_data_request', '','metric_request')  
+        producer.request("read_metrics_data/read_coll_period_req_invalid.json",'read_metric_data_request', '','metric_request')  
         for message in _consumer:
             if message.key == "read_metric_data_response": 
                 resp = json.loads(json.loads(json.loads(message.value)))
@@ -123,7 +123,7 @@ class test_update_metrics(unittest.TestCase):
     def test_upd_status_positive(self):
         time.sleep(2)
         # To generate Request of testing valid meric_name in update metrics requests
-        producer.request("Unit Testing/Update metrics/update_metric_req_valid.json",'update_metric_request', '','metric_request')  
+        producer.request("update_metrics/update_metric_req_valid.json",'update_metric_request', '','metric_request')  
         for message in _consumer:
             if message.key == "update_metric_response": 
                 resp = json.loads(json.loads(json.loads(message.value)))
@@ -135,7 +135,7 @@ class test_update_metrics(unittest.TestCase):
     def test_upd_status_negative(self):
         time.sleep(2)
         # To generate Request of testing invalid meric_name in update metrics requests
-        producer.request("Unit Testing/Update metrics/update_metric_req_invalid.json",'update_metric_request', '','metric_request')  
+        producer.request("update_metrics/update_metric_req_invalid.json",'update_metric_request', '','metric_request')  
         for message in _consumer:
             if message.key == "update_metric_response": 
                 resp = json.loads(json.loads(json.loads(message.value)))
@@ -149,7 +149,7 @@ class test_delete_metrics(unittest.TestCase):
     def test_del_met_name_positive(self):
         time.sleep(2)
         # To generate Request of testing valid meric_name in delete metrics requests
-        producer.request("Unit Testing/Delete metrics/delete_metric_req_valid.json",'delete_metric_request', '','metric_request')  
+        producer.request("delete_metrics/delete_metric_req_valid.json",'delete_metric_request', '','metric_request')  
         for message in _consumer:
             if message.key == "delete_metric_response": 
                 resp = json.loads(json.loads(json.loads(message.value)))
@@ -160,7 +160,7 @@ class test_delete_metrics(unittest.TestCase):
     def test_del_met_name_negative(self):
         time.sleep(2)
         # To generate Request of testing invalid meric_name in delete metrics requests
-        producer.request("Unit Testing/Delete metrics/delete_metric_req_invalid.json",'delete_metric_request', '','metric_request')  
+        producer.request("delete_metrics/delete_metric_req_invalid.json",'delete_metric_request', '','metric_request')  
         for message in _consumer:
             if message.key == "delete_metric_response": 
                 resp = json.loads(json.loads(json.loads(message.value)))
@@ -173,7 +173,7 @@ class test_list_metrics(unittest.TestCase):
     def test_list_met_name_positive(self):
         time.sleep(2)
         # To generate Request of testing valid meric_name in list metrics requests
-        producer.request("Unit Testing/List metrics/list_metric_req_valid.json",'list_metric_request', '','metric_request')  
+        producer.request("list_metrics/list_metric_req_valid.json",'list_metric_request', '','metric_request')  
         for message in _consumer:
             if message.key == "list_metrics_response": 
                 resp = json.loads(json.loads(json.loads(message.value)))
@@ -184,7 +184,7 @@ class test_list_metrics(unittest.TestCase):
     def test_list_met_name_negitive(self):
         time.sleep(2)
         # To generate Request of testing invalid meric_name in list metrics requests
-        producer.request("Unit Testing/List metrics/list_metric_req_invalid.json",'list_metric_request', '','metric_request')  
+        producer.request("list_metrics/list_metric_req_invalid.json",'list_metric_request', '','metric_request')  
         for message in _consumer:
             if message.key == "list_metrics_response": 
                 resp = json.loads(json.loads(json.loads(message.value)))

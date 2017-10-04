@@ -21,8 +21,7 @@
 ##
 
 '''
-This is a kafka producer app that interacts with the SO and the plugins of the
-datacenters like OpenStack, VMWare, AWS.
+This is a kafka producer with a common request function to test the plugins.
 '''
 
 
@@ -33,9 +32,10 @@ import logging as log
 import json
 import jsmin
 import os
+import sys
 from os import listdir
 from jsmin import jsmin
-
+import os.path as path
 
 
 
@@ -77,7 +77,7 @@ class KafkaProducer(object):
         except KafkaError:
             pass
 
-    json_path = os.path.join(os.pardir+"/models/")
+    json_path = path.abspath(path.join(os.getcwd(),"../.."))
 
     def request(self, path, key, message, topic): 
        #External to MON
