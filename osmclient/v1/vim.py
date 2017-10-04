@@ -81,6 +81,27 @@ class Vim(object):
             raise ClientException("failed to create vim")
         else:
             self._attach(name, vim_account)
+            self._update_ro_accounts()
+
+
+    def _update_ro_accounts(self):
+        get_ro_accounts = self._http.get_cmd('api/operational/{}ro-account'
+                    .format(self._client.so_rbac_project_path))
+        if not get_ro_accounts or 'rw-ro-account:ro-account' not in get_ro_accounts:
+            return
+        for account in get_ro_accounts['rw-ro-account:ro-account']['account']:
+            if account['ro-account-type'] == 'openmano':
+                # Refresh the Account Status
+                refresh_body = {"input": {
+                                            "ro-account": account['name'], 
+                                            "project-name": self._client._so_project
+                                        }
+                                }
+                refresh_status = self._http.post_cmd('api/operations/update-ro-account-status',
+                    refresh_body)
+                if refresh_status and 'error' in refresh_status:
+                    raise ClientException("Failed to refersh RO Account Status")
+    
 
     def update_vim_account_dict(self, vim_account, vim_access, vim_config):
         if vim_access['vim-type'] == 'vmware':
@@ -124,10 +145,11 @@ class Vim(object):
         self._detach(vim_name)
         # detach.  continue if error,
         # it could be the datacenter is left without attachment
-
-        if 'result' not in self._ro_http.delete_cmd('openmano/datacenters/{}'
-                                                    .format(vim_name)):
-            raise ClientException("failed to delete vim {}".format(vim_name))
+        resp = self._ro_http.delete_cmd('openmano/datacenters/{}'
+                                                    .format(vim_name))
+        if 'result' not in resp:
+            raise ClientException("failed to delete vim {} - {}".format(vim_name, resp))
+        self._update_ro_accounts()
 
     def list(self):
         if self._client._so_version == 'v3':
@@ -139,6 +161,10 @@ class Vim(object):
 
             ro_accounts = resp['rw-ro-account:ro-account-state']
             for ro_account in ro_accounts['account']:
+                if 'datacenters' not in ro_account:
+                    continue
+                if 'datacenters' not in ro_account['datacenters']:
+                    continue
                 for datacenter in ro_account['datacenters']['datacenters']:
                     datacenters.append({"name": datacenter['name'], "uuid": datacenter['uuid']
                         if 'uuid' in datacenter else None}) 
@@ -210,6 +236,10 @@ class Vim(object):
 
             ro_accounts = resp['rw-ro-account:ro-account-state']
             for ro_account in ro_accounts['account']:
+                if 'datacenters' not in ro_account:
+                    continue
+                if 'datacenters' not in ro_account['datacenters']:
+                    continue
                 for datacenter in ro_account['datacenters']['datacenters']:
                     if datacenter['name'] == name:
                         return datacenter, ro_account['name']        
