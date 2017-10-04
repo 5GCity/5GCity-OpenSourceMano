@@ -20,16 +20,17 @@ vnfd:vnfd-catalog:
             -   id-ref: 'iface11'
             -   id-ref: 'iface21'
         vdu:
-        -   external-interface:
+        -   interface:
             -   name: iface10
+                type: EXTERNAL
                 virtual-interface:
                     type: OM-MGMT
-                vnfd-connection-point-ref: mgmt0
-            internal-interface:
+                external-connection-point-ref: mgmt0
             -   name: iface11
+                type: INTERNAL
                 virtual-interface:
                     type: VIRTIO
-                vdu-internal-connection-point-ref: iface11
+                internal-connection-point-ref: iface11
             internal-connection-point:
             -   name: iface11
                 id: iface11
@@ -41,16 +42,17 @@ vnfd:vnfd-catalog:
                 memory-mb: '2048'
                 storage-gb: '8'
                 vcpu-count: '2'
-        -   external-interface:
+        -   interface:
             -   name: iface22
+                type: EXTERNAL
                 virtual-interface:
                     type: VIRTIO
-                vnfd-connection-point-ref: west
-            internal-interface:
+                external-connection-point-ref: west
             -   name: iface21
+                type: INTERNAL
                 virtual-interface:
                     type: VIRTIO
-                vdu-internal-connection-point-ref: iface21
+                internal-connection-point-ref: iface21
             internal-connection-point:
             -   name: iface21
                 id: iface21

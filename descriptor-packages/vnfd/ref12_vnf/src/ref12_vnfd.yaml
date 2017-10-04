@@ -23,11 +23,17 @@ vnfd:vnfd-catalog:
             -   id-ref: 'iface41'
         vdu:
         -   description: Middlepoint
-            external-interface:
+            interface:
             -   name: iface30
+                type: EXTERNAL
                 virtual-interface:
                     type: OM-MGMT
-                vnfd-connection-point-ref: mgmt0
+                external-connection-point-ref: mgmt0
+            -   name: iface31
+                type: INTERNAL
+                internal-connection-point-ref: iface31
+                virtual-interface:
+                    type: VIRTIO
             guest-epa:
                 cpu-pinning-policy: DEDICATED
                 mempage-size: "LARGE"
@@ -37,25 +43,27 @@ vnfd:vnfd-catalog:
             -   id: iface31
                 name: iface31
                 type: VPORT
-            internal-interface:
-            -   name: iface31
-                vdu-internal-connection-point-ref: iface31
-                virtual-interface:
-                    type: VIRTIO
             name: Ref_VM3
             vm-flavor:
                 memory-mb: '2048'
                 storage-gb: '8'
                 vcpu-count: '2'
-        -   external-interface:
+        -   interface:
             -   name: iface42
+                type: EXTERNAL
                 virtual-interface:
                     type: PCI-PASSTHROUGH
-                vnfd-connection-point-ref: west
+                external-connection-point-ref: west
             -   name: iface43
+                type: EXTERNAL
                 virtual-interface:
                     type: SR-IOV
-                vnfd-connection-point-ref: east
+                external-connection-point-ref: east
+            -   name: iface41
+                type: INTERNAL
+                internal-connection-point-ref: iface41
+                virtual-interface:
+                    type: VIRTIO
             guest-epa:
                 cpu-pinning-policy: DEDICATED
             id: e526e
@@ -64,10 +72,5 @@ vnfd:vnfd-catalog:
                 name: iface41
                 type: VPORT
             name: Ref_VM4
-            internal-interface:
-            -   name: iface41
-                vdu-internal-connection-point-ref: iface41
-                virtual-interface:
-                    type: VIRTIO
         vendor: ETSI
         version: '1.0'

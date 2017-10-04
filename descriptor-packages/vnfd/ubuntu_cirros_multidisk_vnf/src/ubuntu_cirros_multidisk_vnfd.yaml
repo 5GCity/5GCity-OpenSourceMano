@@ -27,13 +27,14 @@ vnfd:vnfd-catalog:
             # User-data injection
             cloud-init-file: cloud_init.cfg
 
-            external-interface:
+            interface:
             # Specify the external interfaces
             # There can be multiple interfaces defined
             -   name: eth0
+                type: EXTERNAL
                 virtual-interface:
                     type: OM-MGMT
-                vnfd-connection-point-ref: eth0
+                external-connection-point-ref: eth0
             # Specify the volume
             # There can be multiple interfaces defined
             volumes:

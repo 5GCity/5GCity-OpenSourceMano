@@ -8,9 +8,6 @@ vnfd:vnfd-catalog:
         mgmt-interface:
             vdu-id: IMS-ALLIN1_2p-VM
         vnf-configuration:
-            config-attributes:
-                config-delay: '0'
-                config-priority: '1'
             service-primitive:
             -   name: config
                 parameter:
@@ -58,19 +55,21 @@ vnfd:vnfd-catalog:
                 storage-gb: '10'
                 vcpu-count: '2'
             mgmt-vpci: 0000:00:0a.0
-            external-interface:
+            interface:
             -   name: eth0
+                type: EXTERNAL
                 virtual-interface:
                     bandwidth: '0'
                     type: VIRTIO
                     vpci: 0000:00:0a.0
-                vnfd-connection-point-ref: eth0
+                external-connection-point-ref: eth0
             -   name: eth1
+                type: EXTERNAL
                 virtual-interface:
                     bandwidth: '0'
                     type: OM-MGMT
                     vpci: 0000:00:0b.0
-                vnfd-connection-point-ref: eth1
+                external-connection-point-ref: eth1
             guest-epa:
                 cpu-pinning-policy: DEDICATED
                 cpu-thread-pinning-policy: PREFER

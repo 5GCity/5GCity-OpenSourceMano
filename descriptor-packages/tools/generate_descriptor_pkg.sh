@@ -220,7 +220,7 @@ EOF
 
     # Add external interfaces
     cat >>$desc_file <<EOF
-            external-interface:
+            interface:
             # Specify the external interfaces
             # There can be multiple interfaces defined
 EOF
@@ -228,11 +228,12 @@ EOF
     # Add mgmt interface
     cat >>$desc_file <<EOF
             -   name: eth0
+                type: EXTERNAL
                 virtual-interface:
                     type: VIRTIO
                     bandwidth: '0'
                     vpci: '0000:00:0a.0'
-                vnfd-connection-point-ref: eth0
+                external-connection-point-ref: eth0
 EOF
 
     # Add external interfaces
@@ -241,11 +242,12 @@ EOF
         pci=$(get_pci $eth)
         cat >>$desc_file <<EOF
             -   name: eth${eth}
+                type: EXTERNAL
                 virtual-interface:
                     type: ${INTF_TYPE}
                     bandwidth: '0'
                     vpci: '0000:00:${pci}.0'
-                vnfd-connection-point-ref: eth${eth}
+                external-connection-point-ref: eth${eth}
 EOF
     done
 

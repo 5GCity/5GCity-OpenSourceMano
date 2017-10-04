@@ -32,15 +32,16 @@ vnfd:vnfd-catalog:
             image: 'CirrOS 0.3.4 64-bit'
             #checksum: 
 
-            external-interface:
+            interface:
             # Specify the external interfaces
             # There can be multiple interfaces defined
             -   name: eth0
+                type: EXTERNAL
                 virtual-interface:
                     type: OM-MGMT
                     bandwidth: '0'
                     vpci: 0000:00:0a.0
-                vnfd-connection-point-ref: eth0
+                external-connection-point-ref: eth0
 
         connection-point:
             -   name: eth0

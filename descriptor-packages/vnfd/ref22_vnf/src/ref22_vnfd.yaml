@@ -12,19 +12,22 @@ vnfd:vnfd-catalog:
         name: Ref_VNF_22
         short-name: Ref_VNF_22
         vdu:
-        -   external-interface:
+        -   interface:
             -   name: iface60
+                type: EXTERNAL
                 virtual-interface:
                     type: OM-MGMT
-                vnfd-connection-point-ref: mgmt
+                external-connection-point-ref: mgmt
             -   name: iface61
+                type: EXTERNAL
                 virtual-interface:
                     type: PCI-PASSTHROUGH
-                vnfd-connection-point-ref: west
+                external-connection-point-ref: west
             -   name: iface62
+                type: EXTERNAL
                 virtual-interface:
                     type: SR-IOV
-                vnfd-connection-point-ref: east
+                external-connection-point-ref: east
             id: abd6831e-f811-4580-9aad-1de9c6424180
             image: ref_vm22.qcow2
             name: Ref_VM6

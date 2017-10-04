@@ -48,15 +48,17 @@ vnfd:vnfd-catalog:
         vdu:
         -   cloud-init-file: pong_cloud_init.cfg
             count: '1'
-            external-interface:
+            interface:
             -   name: eth0
+                type: EXTERNAL
                 virtual-interface:
                     type: VIRTIO
-                vnfd-connection-point-ref: pong_vnfd/cp0
+                external-connection-point-ref: pong_vnfd/cp0
             -   name: eth1
+                type: EXTERNAL
                 virtual-interface:
                     type: VIRTIO
-                vnfd-connection-point-ref: pong_vnfd/cp1
+                external-connection-point-ref: pong_vnfd/cp1
             id: iovdu_0
             image: Fedora-x86_64-20-20131211.1-sda-pong.qcow2
             name: iovdu_0
@@ -65,8 +67,6 @@ vnfd:vnfd-catalog:
                 storage-gb: '4'
                 vcpu-count: '1'
         vnf-configuration:
-            config-attributes:
-                config-delay: 10
             service-primitive:
             -   name: start
             -   name: stop

@@ -29,7 +29,7 @@ nsd:nsd-catalog:
             nsd:vnfd-id-ref: rift_ping_vnf
         -   nsd:member-vnf-index: '2'
             nsd:vnfd-id-ref: rift_pong_vnf
-        nsd:initial-config-primitive:
+        nsd:initial-service-primitive:
         -   nsd:name: start traffic
             nsd:parameter:
             -   nsd:name: port

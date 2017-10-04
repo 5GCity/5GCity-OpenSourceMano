@@ -10,15 +10,17 @@ vnfd:vnfd-catalog:
         name: Ref_Vnf_21
         short-name: Ref_Vnf_21
         vdu:
-        -   external-interface:
+        -   interface:
             -   name: iface50
+                type: EXTERNAL
                 virtual-interface:
                     type: OM-MGMT
-                vnfd-connection-point-ref: mgmt
+                external-connection-point-ref: mgmt
             -   name: iface51
+                type: EXTERNAL
                 virtual-interface:
                     type: VIRTIO
-                vnfd-connection-point-ref: data
+                external-connection-point-ref: data
             id: ref_vm21
             image: ref_vm21.qcow2
             name: Ref_VM_5
