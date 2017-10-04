@@ -34,7 +34,7 @@ nsd:nsd-catalog:
                 # member-vnf-index-ref - entry from constituent vnf
                 # vnfd-id-ref - VNFD id
                 # vnfd-connection-point-ref - connection point name in the VNFD
-                -   nsd:member-vnf-index-ref: 1
-                    nsd:vnfd-id-ref: ubuntu_xenial_vnfd
+                -   member-vnf-index-ref: 1
+                    vnfd-id-ref: ubuntu_xenial_vnfd
                     # NOTE: Validate the entry below
-                    nsd:vnfd-connection-point-ref: eth0
+                    vnfd-connection-point-ref: eth0

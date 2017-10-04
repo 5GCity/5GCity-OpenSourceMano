@@ -36,9 +36,9 @@ nsd:nsd-catalog:
                 # member-vnf-index-ref - entry from constituent vnf
                 # vnfd-id-ref - VNFD id
                 # vnfd-connection-point-ref - connection point name in the VNFD
-                -   nsd:member-vnf-index-ref: 1
-                    nsd:vnfd-id-ref: cirros_vnfd
-                    nsd:vnfd-connection-point-ref: eth0
-                -   nsd:member-vnf-index-ref: 2
-                    nsd:vnfd-id-ref: cirros_vnfd
-                    nsd:vnfd-connection-point-ref: eth0
+                -   member-vnf-index-ref: 1
+                    vnfd-id-ref: cirros_vnfd
+                    vnfd-connection-point-ref: eth0
+                -   member-vnf-index-ref: 2
+                    vnfd-id-ref: cirros_vnfd
+                    vnfd-connection-point-ref: eth0
