@@ -789,7 +789,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
         try:
             pybindJSONDecoder.load_ietf_json(vnf_descriptor, None, None, obj=myvnfd)
         except Exception as e:
-            raise NfvoException("Invalid yang descriptor format " + str(e), HTTP_Bad_Request)
+            raise NfvoException("Error. Invalid VNF descriptor format " + str(e), HTTP_Bad_Request)
         db_vnfs = []
         db_nets = []
         db_vms = []
@@ -799,8 +799,8 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
         db_flavors = []
         uuid_list = []
         vnfd_uuid_list = []
-        for rift_vnfd in myvnfd.vnfd_catalog.vnfd.itervalues():
-            vnfd = rift_vnfd.get()
+        for vnfd_yang in myvnfd.vnfd_catalog.vnfd.itervalues():
+            vnfd = vnfd_yang.get()
 
             # table vnf
             vnf_uuid = str(uuid4())
@@ -961,7 +961,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     boot_data["user-data"] = str(vdu["cloud-init"])
                 elif vdu.get("cloud-init-file"):
                     # TODO Where this file content is present???
-                    # boot_data["user-data"] = rift_vnfd.files[vdu["cloud-init-file"]]
+                    # boot_data["user-data"] = vnfd_yang.files[vdu["cloud-init-file"]]
                     boot_data["user-data"] = str(vdu["cloud-init-file"])
 
                 if vdu.get("supplemental-boot-data"):
@@ -1009,7 +1009,11 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                         db_interface["type"] = "data"
                         db_interface["model"] = get_str(iface.get("virtual-interface"), "type", 12)
                     else:
-                        raise ValueError("Interface type {} not supported".format(iface.get("virtual-interface").get("type")))
+                        raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{}]':'vdu[{}]':'interface':'virtual"
+                                            "-interface':'type':'{}'. Interface type is not supported".format(
+                                                str(vnfd["id"])[:255], str(vdu["id"])[:255],
+                                                iface.get("virtual-interface").get("type")),
+                                            HTTP_Bad_Request)
 
                     if iface.get("external-connection-point-ref"):
                         try:
@@ -1021,12 +1025,12 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                             # if cp.get("port-security-enabled") == False:
                             # elif cp.get("port-security-enabled") == True:
                         except KeyError:
-                            raise KeyError(
-                                "Error wrong reference at vnfd['{vnf}'] vdu['{vdu}']:internal-interface['{iface}']:"
-                                "vnfd-connection-point-ref '{cp}' is not present at connection-point".format(
-                                    vnf=vnfd["id"], vdu=vdu["id"], iface=iface["name"],
-                                    cp=iface.get("vnfd-connection-point-ref"))
-                            )
+                            raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'vdu[{vdu}]':"
+                                                "'interface[{iface}]':'vnfd-connection-point-ref':'{cp}' is not present"
+                                                " at connection-point".format(
+                                                    vnf=vnfd["id"], vdu=vdu["id"], iface=iface["name"],
+                                                    cp=iface.get("vnfd-connection-point-ref")),
+                                                HTTP_Bad_Request)
                     elif iface.get("internal-connection-point-ref"):
                         try:
                             for vld in vnfd.get("internal-vld").itervalues():
@@ -1035,12 +1039,12 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                         db_interface["net_id"] = net_id2uuid[vld.get("id")]
                                         break
                         except KeyError:
-                            raise KeyError(
-                                "Error at vnfd['{vnf}'] vdu['{vdu}']:internal-interface['{iface}']:"
-                                "vdu-internal-connection-point-ref '{cp}' is not referenced by any internal-vld".format(
-                                    vnf=vnfd["id"], vdu=vdu["id"], iface=iface["name"],
-                                    cp=iface.get("vdu-internal-connection-point-ref"))
-                            )
+                            raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'vdu[{vdu}]':"
+                                                "'interface[{iface}]':'vdu-internal-connection-point-ref':'{cp}' is not"
+                                                " referenced by any internal-vld".format(
+                                                    vnf=vnfd["id"], vdu=vdu["id"], iface=iface["name"],
+                                                    cp=iface.get("vdu-internal-connection-point-ref")),
+                                                HTTP_Bad_Request)
                     if iface.get("position") is not None:
                         db_interface["created_at"] = int(iface.get("position")) - 1000
                     db_interfaces.append(db_interface)
@@ -1051,9 +1055,10 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                 for vdu in pg.get("member-vdus").itervalues():
                     vdu_id = get_str(vdu, "member-vdu-ref", 255)
                     if vdu_id not in vdu_id2db_table_index:
-                        raise KeyError(
-                            "Error at 'vnfd'['{vnf}']:'placement-groups'['{pg}']:'member-vdus':'{vdu}' references a non existing vdu".format(
-                                vnf=vnfd["id"], pg=pg_name, vdu=vdu_id))
+                        raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'placement-groups[{pg}]':"
+                                            "'member-vdus':'{vdu}'. Reference to a non-existing vdu".format(
+                                                vnf=vnfd["id"], pg=pg_name, vdu=vdu_id),
+                                            HTTP_Bad_Request)
                     db_vms[vdu_id2db_table_index[vdu_id]]["availability_zone"] = pg_name
                     # TODO consider the case of isolation and not colocation
                     # if pg.get("strategy") == "ISOLATION":
@@ -1062,17 +1067,19 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
             mgmt_access = {}
             if vnfd["mgmt-interface"].get("vdu-id"):
                 if vnfd["mgmt-interface"]["vdu-id"] not in vdu_id2uuid:
-                    raise KeyError(
-                        "Error at vnfd['{vnf}']:'mgmt-interface':'vdu-id':{vdu} reference a non existing vdu".format(
-                            vnf=vnfd["id"], vdu=vnfd["mgmt-interface"]["vdu-id"]))
+                    raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'mgmt-interface':'vdu-id':"
+                                        "'{vdu}'. Reference to a non-existing vdu".format(
+                                            vnf=vnfd["id"], vdu=vnfd["mgmt-interface"]["vdu-id"]),
+                                        HTTP_Bad_Request)
                 mgmt_access["vm_id"] = vdu_id2uuid[vnfd["mgmt-interface"]["vdu-id"]]
             if vnfd["mgmt-interface"].get("ip-address"):
                 mgmt_access["ip-address"] = str(vnfd["mgmt-interface"].get("ip-address"))
             if vnfd["mgmt-interface"].get("cp"):
                 if vnfd["mgmt-interface"]["cp"] not in cp_name2iface_uuid:
-                    raise KeyError(
-                        "Error at vnfd['{vnf}']:'mgmt-interface':'cp':{cp} reference a non existing connection-point".
-                            format(vnf=vnfd["id"], cp=vnfd["mgmt-interface"]["cp"]))
+                    raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'mgmt-interface':'cp':'{cp}'. "
+                                        "Reference to a non-existing connection-point".format(
+                                            vnf=vnfd["id"], cp=vnfd["mgmt-interface"]["cp"]),
+                                        HTTP_Bad_Request)
                 mgmt_access["vm_id"] = cp_name2vm_uuid[vnfd["mgmt-interface"]["cp"]]
                 mgmt_access["interface_id"] = cp_name2iface_uuid[vnfd["mgmt-interface"]["cp"]]
             default_user = get_str(vnfd.get("vnf-configuration", {}).get("config-access", {}).get("ssh-access", {}),
@@ -1104,6 +1111,8 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     yaml.safe_dump(db_tables, indent=4, default_flow_style=False) )
         mydb.new_rows(db_tables, uuid_list)
         return vnfd_uuid_list
+    except NfvoException:
+        raise
     except Exception as e:
         logger.error("Exception {}".format(e))
         raise  # NfvoException("Exception {}".format(e), HTTP_Bad_Request)
@@ -2011,7 +2020,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
         try:
             pybindJSONDecoder.load_ietf_json(nsd_descriptor, None, None, obj=mynsd)
         except Exception as e:
-            raise NfvoException("Invalid yang descriptor format " + str(e), HTTP_Bad_Request)
+            raise NfvoException("Error. Invalid NS descriptor format: " + str(e), HTTP_Bad_Request)
         db_scenarios = []
         db_sce_nets = []
         db_sce_vnfs = []
@@ -2020,8 +2029,8 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
         db_ip_profiles_index = 0
         uuid_list = []
         nsd_uuid_list = []
-        for rift_nsd in mynsd.nsd_catalog.nsd.itervalues():
-            nsd = rift_nsd.get()
+        for nsd_yang in mynsd.nsd_catalog.nsd.itervalues():
+            nsd = nsd_yang.get()
 
             # table sceanrios
             scenario_uuid = str(uuid4())
@@ -2046,9 +2055,10 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                 existing_vnf = mydb.get_rows(FROM="vnfs", WHERE={'osm_id': str(vnf["vnfd-id-ref"])[:255],
                                                                       'tenant_id': tenant_id})
                 if not existing_vnf:
-                    raise KeyError("Error at 'nsd[{}]':'constituent-vnfd':'vnfd-id-ref':'{}' references a "
-                                   "non existing VNFD in the catalog".format(str(nsd["id"]),
-                                                                             str(vnf["vnfd-id-ref"])[:255]))
+                    raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'constituent-vnfd':'vnfd-id-ref':"
+                                        "'{}'. Reference to a non-existing VNFD in the catalog".format(
+                                            str(nsd["id"]), str(vnf["vnfd-id-ref"])[:255]),
+                                        HTTP_Bad_Request)
                 sce_vnf_uuid = str(uuid4())
                 uuid_list.append(sce_vnf_uuid)
                 db_sce_vnf = {
@@ -2111,9 +2121,10 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                 if vld.get("ip-profile-ref"):
                     ip_profile_name = vld.get("ip-profile-ref")
                     if ip_profile_name not in ip_profile_name2db_table_index:
-                        raise KeyError("Error at 'nsd[{}]':'vld[{}]':'ip-profile-ref':'{}' references a non existing "
-                                       "'ip_profiles'".format(
-                                            str(nsd["id"]), str(vld["id"]), str(vld["ip-profile-ref"])))
+                        raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'vld[{}]':'ip-profile-ref':'{}'."
+                                            " Reference to a non-existing 'ip_profiles'".format(
+                                                str(nsd["id"]), str(vld["id"]), str(vld["ip-profile-ref"])),
+                                            HTTP_Bad_Request)
                     db_ip_profiles[ip_profile_name2db_table_index[ip_profile_name]]["sce_net_id"] = sce_net_uuid
 
                 # table sce_interfaces (vld:vnfd-connection-point-ref)
@@ -2121,9 +2132,11 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                     vnf_index = int(iface['member-vnf-index-ref'])
                     # check correct parameters
                     if vnf_index not in vnf_index2vnf_uuid:
-                        raise KeyError("Error at 'nsd[{}]':'vld[{}]':'vnfd-connection-point-ref':'member-vnf-index-ref'"
-                                       ":'{}' references a non existing index at 'nsd':'constituent-vnfd'".format(
-                                            str(nsd["id"]), str(vld["id"]), str(iface["member-vnf-index-ref"])))
+                        raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'vld[{}]':'vnfd-connection-point"
+                                            "-ref':'member-vnf-index-ref':'{}'. Reference to a non-existing index at "
+                                            "'nsd':'constituent-vnfd'".format(
+                                                str(nsd["id"]), str(vld["id"]), str(iface["member-vnf-index-ref"])),
+                                            HTTP_Bad_Request)
 
                     existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid',),
                                                     FROM="interfaces as i join vms on i.vm_id=vms.uuid",
@@ -2131,11 +2144,12 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                                                            'external_name': get_str(iface, "vnfd-connection-point-ref",
                                                                                     255)})
                     if not existing_ifaces:
-                        raise KeyError("Error at 'nsd[{}]':'vld[{}]':'vnfd-connection-point-ref':'vnfd-connection-point"
-                                       "-ref':'{}' references a non existing interface at VNFD '{}'".format(
-                            str(nsd["id"]), str(vld["id"]), str(iface["vnfd-connection-point-ref"]),
-                            str(iface.get("vnfd-id-ref"))[:255]))
-
+                        raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'vld[{}]':'vnfd-connection-point"
+                                            "-ref':'vnfd-connection-point-ref':'{}'. Reference to a non-existing "
+                                            "connection-point name at VNFD '{}'".format(
+                                                str(nsd["id"]), str(vld["id"]), str(iface["vnfd-connection-point-ref"]),
+                                                str(iface.get("vnfd-id-ref"))[:255]),
+                                            HTTP_Bad_Request)
                     interface_uuid = existing_ifaces[0]["uuid"]
                     sce_interface_uuid = str(uuid4())
                     uuid_list.append(sce_net_uuid)
@@ -2160,6 +2174,8 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                     yaml.safe_dump(db_tables, indent=4, default_flow_style=False) )
         mydb.new_rows(db_tables, uuid_list)
         return nsd_uuid_list
+    except NfvoException:
+        raise
     except Exception as e:
         logger.error("Exception {}".format(e))
         raise  # NfvoException("Exception {}".format(e), HTTP_Bad_Request)
@@ -2760,8 +2776,11 @@ def create_instance(mydb, tenant_id, instance_dict):
 
                 if lookfor_network and create_network:
                     # TODO create two tasks FIND + CREATE with their relationship
-                    task_action = "FIND_CREATE"
-                    task_params = (lookfor_filter, (net_vim_name, net_type, sce_net.get('ip_profile', None)))
+                    task_action = "FIND"
+                    task_params = (lookfor_filter,)
+                    # task_action = "CREATE"
+                    # task_params = (net_vim_name, net_type, sce_net.get('ip_profile', None))
+                    # task
                 elif lookfor_network:
                     task_action = "FIND"
                     task_params = (lookfor_filter,)
