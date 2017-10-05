@@ -1639,7 +1639,9 @@ class vimconnector(vimconn.vimconnector):
                 if 'net_id' not in net:
                     continue
 
-                net_list['vim_id'] = net_list['net_id']  # Provide the same VIM identifier as the VIM network
+                #Using net_id as a vim_id i.e. vim interface id, as do not have saperate vim interface id
+                #Same will be returned in refresh_vms_status() as vim_interface_id
+                net['vim_id'] = net['net_id']  # Provide the same VIM identifier as the VIM network
 
                 interface_net_id = net['net_id']
                 interface_net_name = self.get_network_name_by_id(network_uuid=interface_net_id)
