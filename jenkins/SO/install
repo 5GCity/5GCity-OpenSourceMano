@@ -96,7 +96,7 @@ EOF
 #######################
 # temp fix
 # this is normally done by mkcontainer, but the last line is missing
-# we can take this out when we update the RIFT platform 
+# we can take this out when we update the RIFT platform
 
 cat <<EOF >>/etc/systemd/user.conf
 DefaultLimitNOFILE=65536
@@ -135,8 +135,9 @@ apt-get install -y \
     rw.core.mano-rwcal-plugin-cloudsimproxy \
     rw.core.mano-rwcal-plugin-openmano-vimconnector \
     rw.core.mano-rwcal-plugin-openstack \
-    rw.core.mano-rwcal-plugin-mock 
+    rw.core.mano-rwcal-plugin-mock
 
+# Install libjuju
+apt-get install -y python3-pip
 
-
-
+pip3 install juju
