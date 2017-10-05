@@ -904,22 +904,22 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     if vdu["guest-epa"].get("numa-node-policy"):  # TODO or dedicated_int:
                         numa_node_policy = vdu["guest-epa"].get("numa-node-policy")
                         if numa_node_policy.get("node"):
-                            numa_node = numa_node_policy.node[0]
+                            numa_node = numa_node_policy["node"]['0']
                             if numa_node.get("num-cores"):
                                 numa["cores"] = numa_node["num-cores"]
                                 epa_vcpu_set = True
                             if numa_node.get("paired-threads"):
                                 if numa_node["paired-threads"].get("num-paired-threads"):
-                                    numa["paired-threads"] = numa_node["paired-threads"]["num-paired-threads"]
+                                    numa["paired-threads"] = int(numa_node["paired-threads"]["num-paired-threads"])
                                     epa_vcpu_set = True
-                                if len(numa_node["paired-threads"].get("paired-thread-ids")) > 0:
+                                if len(numa_node["paired-threads"].get("paired-thread-ids")):
                                     numa["paired-threads-id"] = []
-                                    for pair in numa_node["paired-threads"]["paired-thread-ids"].itervalues:
+                                    for pair in numa_node["paired-threads"]["paired-thread-ids"].itervalues():
                                         numa["paired-threads-id"].append(
                                             (str(pair["thread-a"]), str(pair["thread-b"]))
                                         )
                             if numa_node.get("num-threads"):
-                                numa["threads"] = numa_node["num-threads"]
+                                numa["threads"] = int(numa_node["num-threads"])
                                 epa_vcpu_set = True
                             if numa_node.get("memory-mb"):
                                 numa["memory"] = max(int(numa_node["memory-mb"] / 1024), 1)
