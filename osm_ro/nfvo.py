@@ -2531,6 +2531,28 @@ def get_vim_thread(mydb, tenant_id, datacenter_id_name=None, datacenter_tenant_i
         raise NfvoException("{} {}".format(type(e).__name__ , str(e)), e.http_code)
 
 
+def get_datacenter_uuid(mydb, tenant_id, datacenter_id_name):
+    WHERE_dict={}
+    if utils.check_valid_uuid(datacenter_id_name):
+        WHERE_dict['d.uuid'] = datacenter_id_name
+    else:
+        WHERE_dict['d.name'] = datacenter_id_name
+
+    if tenant_id:
+        WHERE_dict['nfvo_tenant_id'] = tenant_id
+        from_= "tenants_datacenters as td join datacenters as d on td.datacenter_id=d.uuid join datacenter_tenants as" \
+               " dt on td.datacenter_tenant_id=dt.uuid"
+    else:
+        from_ = 'datacenters as d'
+    vimaccounts = mydb.get_rows(FROM=from_, SELECT=("d.uuid as uuid",), WHERE=WHERE_dict )
+    if len(vimaccounts) == 0:
+        raise NfvoException("datacenter '{}' not found".format(str(datacenter_id_name)), HTTP_Not_Found)
+    elif len(vimaccounts)>1:
+        #print "nfvo.datacenter_action() error. Several datacenters found"
+        raise NfvoException("More than one datacenters found, try to identify with uuid", HTTP_Conflict)
+    return vimaccounts[0]["uuid"]
+
+
 def get_datacenter_by_name_uuid(mydb, tenant_id, datacenter_id_name=None, **extra_filter):
     datacenter_id = None
     datacenter_name = None
@@ -2637,6 +2659,7 @@ def create_instance(mydb, tenant_id, instance_dict):
             site_without_datacenter_field = False
             for site in net_instance_desc["sites"]:
                 if site.get("datacenter"):
+                    site["datacenter"] = get_datacenter_uuid(mydb, tenant_id, site["datacenter"])
                     if site["datacenter"] not in myvims:
                         # Add this datacenter to myvims
                         d, v = get_datacenter_by_name_uuid(mydb, tenant_id, site["datacenter"])
@@ -2660,6 +2683,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                 raise NfvoException("Invalid vnf name '{}' at instance:vnfs".format(vnf_instance_desc), HTTP_Bad_Request)
             if "datacenter" in vnf_instance_desc:
                 # Add this datacenter to myvims
+                vnf_instance_desc["datacenter"] = get_datacenter_uuid(mydb, tenant_id, vnf_instance_desc["datacenter"])
                 if vnf_instance_desc["datacenter"] not in myvims:
                     d, v = get_datacenter_by_name_uuid(mydb, tenant_id, vnf_instance_desc["datacenter"])
                     myvims[d] = v

@@ -906,35 +906,39 @@ class nfvo_db(db_base.db_base):
                 with self.con:
                     self.cur = self.con.cursor(mdb.cursors.DictCursor)
                     # instance table
-                    where_list=[]
-                    if tenant_id is not None: where_list.append( "inst.tenant_id='" + tenant_id +"'" )
+                    where_list = []
+                    if tenant_id:
+                        where_list.append("inst.tenant_id='{}'".format(tenant_id))
                     if db_base._check_valid_uuid(instance_id):
-                        where_list.append( "inst.uuid='" + instance_id +"'" )
+                        where_list.append("inst.uuid='{}'".format(instance_id))
                     else:
-                        where_list.append( "inst.name='" + instance_id +"'" )
+                        where_list.append("inst.name='{}'".format(instance_id))
                     where_text = " AND ".join(where_list)
-                    cmd = "SELECT inst.uuid as uuid,inst.name as name,inst.scenario_id as scenario_id, datacenter_id" +\
-                                " ,datacenter_tenant_id, s.name as scenario_name,inst.tenant_id as tenant_id" + \
-                                " ,inst.description as description,inst.created_at as created_at" +\
-                                " ,inst.cloud_config as 'cloud_config'" +\
-                            " FROM instance_scenarios as inst join scenarios as s on inst.scenario_id=s.uuid"+\
+                    cmd = "SELECT inst.uuid as uuid, inst.name as name, inst.scenario_id as scenario_id, datacenter_id"\
+                                " ,datacenter_tenant_id, s.name as scenario_name,inst.tenant_id as tenant_id" \
+                                " ,inst.description as description, inst.created_at as created_at" \
+                                " ,inst.cloud_config as cloud_config" \
+                            " FROM instance_scenarios as inst left join scenarios as s on inst.scenario_id=s.uuid" \
                             " WHERE " + where_text
                     self.logger.debug(cmd)
                     self.cur.execute(cmd)
                     rows = self.cur.fetchall()
                     
-                    if self.cur.rowcount==0:
+                    if self.cur.rowcount == 0:
                         raise db_base.db_base_Exception("No instance found where " + where_text, db_base.HTTP_Not_Found)
-                    elif self.cur.rowcount>1:
-                        raise db_base.db_base_Exception("More than one instance found where " + where_text, db_base.HTTP_Bad_Request)
+                    elif self.cur.rowcount > 1:
+                        raise db_base.db_base_Exception("More than one instance found where " + where_text,
+                                                        db_base.HTTP_Bad_Request)
                     instance_dict = rows[0]
                     if instance_dict["cloud_config"]:
                         instance_dict["cloud-config"] = yaml.load(instance_dict["cloud_config"])
                     del instance_dict["cloud_config"]
                     
-                    #instance_vnfs
-                    cmd = "SELECT iv.uuid as uuid,sv.vnf_id as vnf_id,sv.name as vnf_name, sce_vnf_id, datacenter_id, datacenter_tenant_id, v.mgmt_access"\
-                            " FROM instance_vnfs as iv join sce_vnfs as sv on iv.sce_vnf_id=sv.uuid join vnfs as v on iv.vnf_id=v.uuid" \
+                    # instance_vnfs
+                    cmd = "SELECT iv.uuid as uuid, iv.vnf_id as vnf_id, sv.name as vnf_name, sce_vnf_id, datacenter_id"\
+                                " ,datacenter_tenant_id, v.mgmt_access "\
+                            " FROM instance_vnfs as iv left join sce_vnfs as sv "\
+                                "on iv.sce_vnf_id=sv.uuid join vnfs as v on iv.vnf_id=v.uuid" \
                             " WHERE iv.instance_scenario_id='{}'" \
                             " ORDER BY iv.created_at ".format(instance_dict['uuid'])
                     self.logger.debug(cmd)
@@ -951,7 +955,7 @@ class nfvo_db(db_base.db_base):
                         vnf['vms'] = self.cur.fetchall()
                         for vm in vnf['vms']:
                             vm_manage_iface_list=[]
-                            #instance_interfaces
+                            # instance_interfaces
                             cmd = "SELECT vim_interface_id, instance_net_id, internal_name,external_name, mac_address,"\
                                   " ii.ip_address as ip_address, vim_info, i.type as type, sdn_port_id"\
                                   " FROM instance_interfaces as ii join interfaces as i on ii.interface_id=i.uuid"\

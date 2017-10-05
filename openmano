@@ -28,8 +28,8 @@ openmano client used to interact with openmano-server (openmanod)
 """
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ = "$09-oct-2014 09:09:48$"
-__version__ = "0.4.20-r530"
-version_date = "Sep 2017"
+__version__ = "0.4.21-r531"
+version_date = "Oct 2017"
 
 from argcomplete.completers import FilesCompleter
 import os
@@ -133,24 +133,24 @@ def _print_verbose(mano_response, verbose_level=0):
                 uuid = ""
             if not name:
                 name = ""
-            myoutput = "%s %s" %(uuid.ljust(38),name.ljust(20))
+            myoutput = "{:38} {:20}".format(uuid, name)
             if content.get("status"):
-                myoutput += " " + content['status'].ljust(20)
+                myoutput += " {:20}".format(content['status'])
             elif "enabled" in content and not content["enabled"]:
                 myoutput += " enabled=False".ljust(20)
             if verbose_level >=1:
                 if content.get('created_at'):
-                    myoutput += " " + content['created_at'].ljust(20)
+                    myoutput += " {:20}".format(content['created_at'])
                 if content.get('sdn_attached_ports'):
                     #myoutput += " " + str(content['sdn_attached_ports']).ljust(20)
                     myoutput += "\nsdn_attached_ports:\n" + yaml.safe_dump(content['sdn_attached_ports'], indent=4, default_flow_style=False)
                 if verbose_level >=2:
                     new_line='\n'
                     if content.get('type'):
-                        myoutput += new_line + "  Type: " + content['type'].ljust(29)
+                        myoutput += new_line + "  Type: {:29}".format(content['type'])
                         new_line=''
                     if content.get('description'):
-                        myoutput += new_line + "  Description: " + content['description'].ljust(20)
+                        myoutput += new_line + "  Description: {:20}".format(content['description'])
             print myoutput
     else:
         print content['error']['description']
@@ -783,11 +783,11 @@ def instance_create(args):
         return result
 
     if mano_response.status_code == 200:
-        myoutput = "%s %s" %(content['uuid'].ljust(38),content['name'].ljust(20))
+        myoutput = "{:38} {:20}".format(content['uuid'], content['name'])
         if args.verbose >=1:
-            myoutput = "%s %s" %(myoutput, content['created_at'].ljust(20))
+            myoutput = "{} {:20}".format(myoutput, content['created_at'])
         if args.verbose >=2:
-            myoutput = "%s %s %s" %(myoutput, content['description'].ljust(30))
+            myoutput = "{} {:30}".format(myoutput, content['description'])
         print myoutput
     else:
         print content['error']['description']
@@ -821,9 +821,9 @@ def instance_scenario_list(args):
                 print "No scenario instances were found."
                 return result
             for instance in content['instances']:
-                myoutput = "%s %s" %(instance['uuid'].ljust(38),instance['name'].ljust(20))
+                myoutput = "{:38} {:20}".format(instance['uuid'], instance['name'])
                 if args.verbose >=1:
-                    myoutput = "%s %s" %(myoutput, instance['created_at'].ljust(20))
+                    myoutput = "{} {:20}".format(myoutput, instance['created_at'])
                 print myoutput
                 if args.verbose >=2:
                     print "Description: %s" %instance['description']
@@ -832,31 +832,32 @@ def instance_scenario_list(args):
                 print yaml.safe_dump(content, indent=4, default_flow_style=False)
                 return result
             instance = content
-            print "%s %s %s" %(instance['uuid'].ljust(38),instance['name'].ljust(20),instance['created_at'].ljust(20))
-            print "Description: %s" %instance['description']
-            print "Template scenario id: %s" %instance['scenario_id']
-            print "Template scenario name: %s" %instance['scenario_name']
-            print "---------------------------------------"
-            print "VNF instances: %d" %len(instance['vnfs'])
+            print ("{:38} {:20} {:20}".format(instance['uuid'],instance['name'],instance['created_at']))
+            print ("Description: %s" %instance['description'])
+            print ("Template scenario id: {}".format(instance['scenario_id']))
+            print ("Template scenario name: {}".format(instance['scenario_name']))
+            print ("---------------------------------------")
+            print ("VNF instances: {}".format(len(instance['vnfs'])))
             for vnf in instance['vnfs']:
                 #print "    %s %s Template vnf name: %s Template vnf id: %s" %(vnf['uuid'].ljust(38), vnf['name'].ljust(20), vnf['vnf_name'].ljust(20), vnf['vnf_id'].ljust(38))
-                print "    %s %s Template vnf id: %s" %(vnf['uuid'].ljust(38), vnf['vnf_name'].ljust(20), vnf['vnf_id'].ljust(38))
+                print ("    {:38} {:20} Template vnf id: {:38}".format(vnf['uuid'], vnf['vnf_name'], vnf['vnf_id']))
             if len(instance['nets'])>0:
                 print "---------------------------------------"
                 print "Internal nets:"
                 for net in instance['nets']:
                     if net['created']:
-                        print "    %s %s VIM ID: %s" %(net['uuid'].ljust(38), net['status'].ljust(12), net['vim_net_id'])
+                        print ("    {:38} {:12} VIM ID: {}".format(net['uuid'], net['status'], net['vim_net_id']))
                 print "---------------------------------------"
                 print "External nets:"
                 for net in instance['nets']:
                     if not net['created']:
-                        print "    %s %s VIM ID: %s" %(net['uuid'].ljust(38), net['status'].ljust(12), net['vim_net_id'])
-            print "---------------------------------------"
-            print "VM instances:"
+                        print ("    {:38} {:12} VIM ID: {}".format(net['uuid'], net['status'], net['vim_net_id']))
+            print ("---------------------------------------")
+            print ("VM instances:")
             for vnf in instance['vnfs']:
                 for vm in vnf['vms']:
-                    print "    %s %s %s %s VIM ID: %s" %(vm['uuid'].ljust(38), vnf['vnf_name'].ljust(20), vm['name'].ljust(20), vm['status'].ljust(12), vm['vim_vm_id'])
+                    print ("    {:38} {:20} {:20} {:12} VIM ID: {}".format(vm['uuid'], vnf['vnf_name'], vm['name'],
+                                                                           vm['status'], vm['vim_vm_id']))
     else:
         print content['error']['description']
         if args.verbose:
@@ -937,7 +938,7 @@ def instance_scenario_action(args):
             print yaml.safe_dump(content, indent=4, default_flow_style=False)
             return result
         for uuid,c in content.iteritems():
-            print "%s %s %s" %(uuid.ljust(38), c['name'].ljust(20),c['description'].ljust(20))
+            print ("{:38} {:20} {:20}".format(uuid, c['name'], c['description']))
     else:
         print content['error']['description']
     return result
