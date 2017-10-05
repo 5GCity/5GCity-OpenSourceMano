@@ -188,6 +188,12 @@ function configure(){
     echo -e "       Configuring SO"
     sudo route add -host $JUJU_CONTROLLER_IP gw $VCA_CONTAINER_IP
     sudo sed -i "$ i route add -host $JUJU_CONTROLLER_IP gw $VCA_CONTAINER_IP" /etc/rc.local
+
+    # make journaling persistent
+    lxc exec SO-ub -- mkdir -p /var/log/journal
+    lxc exec SO-ub -- systemd-tmpfiles --create --prefix /var/log/journal
+    lxc exec SO-ub -- systemctl restart systemd-journald
+
     echo RIFT_EXTERNAL_ADDRESS=$DEFAULT_IP | lxc exec SO-ub -- tee -a /usr/rift/etc/default/launchpad
 
     lxc exec SO-ub -- systemctl restart launchpad
