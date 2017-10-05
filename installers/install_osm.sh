@@ -405,7 +405,7 @@ echo -e "Checking required packages: lxd"
 lxd --version &>/dev/null || FATAL "lxd not present, exiting."
 [ -n "$LXD" ] && echo -e "\nConfiguring lxd" && install_lxd
 
-wget -q -O- https://osm-download.etsi.org/ftp/osm-2.0-two/README.txt &> /dev/null
+wget -q -O- https://osm-download.etsi.org/ftp/osm-3.0-three/README.txt &> /dev/null
 
 # use local devops for containers
 export OSM_USE_LOCAL_DEVOPS=true
@@ -429,5 +429,5 @@ nat
 #Configure components
 configure
 
-wget -q -O- https://osm-download.etsi.org/ftp/osm-2.0-two/README2.txt &> /dev/null
+wget -q -O- https://osm-download.etsi.org/ftp/osm-3.0-three/README2.txt &> /dev/null
 echo -e "\nDONE"

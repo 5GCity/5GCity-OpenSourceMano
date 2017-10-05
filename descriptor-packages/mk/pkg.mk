@@ -24,6 +24,7 @@ CHARM_DIR        := $(TOPDIR)/juju-charms
 CHARM_SRC_DIR    := $(CHARM_DIR)/layers
 CHARM_DOCKER_TAG := charm-tools
 CHARM_BUILD_DIR  := $(CHARM_DIR)/builds
+DOCKER_BUILD     ?= $(shell which docker)
 
 Q=@
 
@@ -57,9 +58,14 @@ $(BUILD_DIR)/$(PKG_NAME): $(BUILD_DIR)/$(PKG_BASE_NAME)
 	$(Q)$(GEN_PKG) --no-remove-files -d $(BUILD_DIR) $(BUILD_DIR)/$(PKG_BASE_NAME)
 endif
 
+ifdef DOCKER_BUILD
 $(CHARM_BUILD_DIR)/%: $(CHARM_SRC_DIR)/%
 	$(Q)docker build -q -t $(CHARM_DOCKER_TAG) $(CHARM_DIR)/.
-	$(Q)docker run -u $$(id -u):$$(id -g) -v$(CHARM_DIR):$(CHARM_DIR) -w$(CHARM_DIR) $(CHARM_DOCKER_TAG) charm-build -o $(CHARM_DIR) $<
+	$(CHARM_DIR) $(CHARM_DOCKER_TAG) charm-build -o $(CHARM_DIR) $<
+else
+$(CHARM_BUILD_DIR)/%: $(CHARM_SRC_DIR)/%
+	$(Q)charm-build -o $(CHARM_DIR) $<
+endif
  
 clean:
 	$(Q)rm -rf $(BUILD_DIR)

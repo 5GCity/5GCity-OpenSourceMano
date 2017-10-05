@@ -46,4 +46,4 @@ echo $key_location
 
 curl $key_location | apt-key add -
 
-apt-get update && add-apt-repository -y "deb $REPOSITORY_BASE/$RELEASE $REPOSITORY SO UI RO IM MON osmclient openvim"
+apt-get update && add-apt-repository -y "deb $REPOSITORY_BASE/$RELEASE $REPOSITORY SO UI RO IM osmclient openvim"
