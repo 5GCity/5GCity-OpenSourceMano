@@ -183,7 +183,7 @@ def format_out(data):
         #return data #json no style
         return json.dumps(data, indent=4) + "\n"
 
-def format_in(default_schema, version_fields=None, version_dict_schema=None):
+def format_in(default_schema, version_fields=None, version_dict_schema=None, confidential_data=False):
     """
     Parse the content of HTTP request against a json_schema
     :param default_schema: The schema to be parsed by default if no version field is found in the client data. In None
@@ -216,8 +216,11 @@ def format_in(default_schema, version_fields=None, version_dict_schema=None):
         # if client_data == None:
         #    bottle.abort(HTTP_Bad_Request, "Content error, empty")
         #    return
-
-        logger.debug('IN: %s', yaml.safe_dump(client_data, explicit_start=True, indent=4, default_flow_style=False,
+        if confidential_data:
+            logger.debug('IN: %s', remove_clear_passwd (yaml.safe_dump(client_data, explicit_start=True, indent=4, default_flow_style=False,
+                                              tags=False, encoding='utf-8', allow_unicode=True)))
+        else:
+            logger.debug('IN: %s', yaml.safe_dump(client_data, explicit_start=True, indent=4, default_flow_style=False,
                                               tags=False, encoding='utf-8', allow_unicode=True) )
         # look for the client provider version
         error_text = "Invalid content "
@@ -341,7 +344,11 @@ def http_get_tenant_id(tenant_id):
     #obtain data
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     try:
-        tenant = mydb.get_table_by_uuid_name('nfvo_tenants', tenant_id, "tenant") 
+        from_ = 'nfvo_tenants'
+        select_, where_, limit_ = filter_query_string(bottle.request.query, None,
+                                                      ('uuid', 'name', 'description', 'created_at'))
+        where_['uuid'] = tenant_id
+        tenant = mydb.get_rows(FROM=from_, SELECT=select_,WHERE=where_)
         #change_keys_http2db(content, http2db_tenant, reverse=True)
         convert_datetime2str(tenant)
         data={'tenant' : tenant}
@@ -492,6 +499,12 @@ def http_get_datacenter_id(tenant_id, datacenter_id):
                     try:
                         config_dict = yaml.load(vim_tenant['config'])
                         vim_tenant['config'] = config_dict
+                        if vim_tenant['config'].get('admin_password'):
+                            vim_tenant['config']['admin_password'] = "******"
+                        if vim_tenant['config'].get('vcenter_password'):
+                            vim_tenant['config']['vcenter_password'] = "******"
+                        if vim_tenant['config'].get('nsx_password'):
+                            vim_tenant['config']['nsx_password'] = "******"
                     except Exception as e:
                         logger.error("Exception '%s' while trying to load config information", str(e))
 
@@ -499,6 +512,12 @@ def http_get_datacenter_id(tenant_id, datacenter_id):
             try:
                 config_dict = yaml.load(datacenter['config'])
                 datacenter['config'] = config_dict
+                if datacenter['config'].get('admin_password'):
+                    datacenter['config']['admin_password'] = "******"
+                if datacenter['config'].get('vcenter_password'):
+                    datacenter['config']['vcenter_password'] = "******"
+                if datacenter['config'].get('nsx_password'):
+                    datacenter['config']['nsx_password'] = "******"
             except Exception as e:
                 logger.error("Exception '%s' while trying to load config information", str(e))
         #change_keys_http2db(content, http2db_datacenter, reverse=True)
@@ -518,7 +537,7 @@ def http_post_datacenters():
     '''insert a datacenter into the catalogue. '''
     #parse input data
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
-    http_content,_ = format_in( datacenter_schema )
+    http_content,_ = format_in(datacenter_schema, confidential_data=True)
     r = utils.remove_extra_items(http_content, datacenter_schema)
     if r:
         logger.debug("Remove received extra items %s", str(r))
@@ -860,7 +879,7 @@ def http_associate_datacenters(tenant_id, datacenter_id):
     '''associate an existing datacenter to a this tenant. '''
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     #parse input data
-    http_content,_ = format_in( datacenter_associate_schema )
+    http_content,_ = format_in(datacenter_associate_schema, confidential_data=True)
     r = utils.remove_extra_items(http_content, datacenter_associate_schema)
     if r:
         logger.debug("Remove received extra items %s", str(r))
@@ -1533,6 +1552,23 @@ def http_get_instance_scenario_action(tenant_id, instance_id, action_id=None):
         logger.error("Unexpected exception: ", exc_info=True)
         bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
+def remove_clear_passwd(data):
+    """
+    Removes clear passwords from the data received
+    :param data: data with clear password
+    :return: data without the password information
+    """
+
+    passw = ['password: ', 'passwd: ']
+
+    for pattern in passw:
+        init = data.find(pattern)
+        while init != -1:
+            end = data.find('\n', init)
+            data = data[:init] + '{}******'.format(pattern) + data[end:]
+            init += 1
+            init = data.find(pattern, init)
+    return data
 
 @bottle.error(400)
 @bottle.error(401) 

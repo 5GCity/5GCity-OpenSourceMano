@@ -367,7 +367,7 @@ class db_base():
         self.cur.execute(cmd)
         return uuid
 
-    def _new_row_internal(self, table, INSERT, add_uuid=False, root_uuid=None, created_time=0):
+    def _new_row_internal(self, table, INSERT, add_uuid=False, root_uuid=None, created_time=0, confidential_data=False):
         ''' Add one row into a table. It DOES NOT begin or end the transaction, so self.con.cursor must be created
         Attribute 
             INSERT: dictionary with the key:value to insert
@@ -403,7 +403,12 @@ class db_base():
             ",".join(map(self.__tuple2db_format_set, INSERT.iteritems() )) 
         if created_time:
             cmd += ",created_at=%f" % created_time
-        self.logger.debug(cmd)
+        if confidential_data:
+            index = cmd.find("SET")
+            subcmd = cmd[:index] + 'SET...'
+            self.logger.debug(subcmd)
+        else:
+            self.logger.debug(cmd)
         self.cur.execute(cmd)
         self.cur.rowcount
         return uuid
@@ -415,7 +420,7 @@ class db_base():
         rows = self.cur.fetchall()
         return rows
     
-    def new_row(self, table, INSERT, add_uuid=False, created_time=0):
+    def new_row(self, table, INSERT, add_uuid=False, created_time=0, confidential_data=False):
         ''' Add one row into a table.
         Attribute 
             INSERT: dictionary with the key: value to insert
@@ -432,7 +437,7 @@ class db_base():
             try:
                 with self.con:
                     self.cur = self.con.cursor()
-                    return self._new_row_internal(table, INSERT, add_uuid, None, created_time)
+                    return self._new_row_internal(table, INSERT, add_uuid, None, created_time, confidential_data)
                     
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries)

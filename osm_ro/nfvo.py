@@ -3660,7 +3660,7 @@ def new_tenant(mydb, tenant_dict):
         pub_key, priv_key = create_RO_keypair(tenant_uuid)
         tenant_dict['RO_pub_key'] = pub_key
         tenant_dict['encrypted_RO_priv_key'] = priv_key
-        mydb.new_row("nfvo_tenants", tenant_dict)
+        mydb.new_row("nfvo_tenants", tenant_dict, confidential_data=True)
     except db_base_Exception as e:
         raise NfvoException("Error creating the new tenant: {} ".format(tenant_dict['name']) + str(e), HTTP_Internal_Server_Error)
     return tenant_uuid
@@ -3689,7 +3689,7 @@ def new_datacenter(mydb, datacenter_descriptor):
         #    file.close(module_info[0])
         raise NfvoException("Incorrect datacenter type '{}'. Plugin '{}'.py not installed".format(datacenter_type, module), HTTP_Bad_Request)
 
-    datacenter_id = mydb.new_row("datacenters", datacenter_descriptor, add_uuid=True)
+    datacenter_id = mydb.new_row("datacenters", datacenter_descriptor, add_uuid=True, confidential_data=True)
     return datacenter_id
 
 
@@ -3800,7 +3800,7 @@ def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=
         datacenter_tenants_dict["datacenter_id"] = datacenter_id
         if config:
             datacenter_tenants_dict["config"] = yaml.safe_dump(config, default_flow_style=True, width=256)
-        id_ = mydb.new_row('datacenter_tenants', datacenter_tenants_dict, add_uuid=True)
+        id_ = mydb.new_row('datacenter_tenants', datacenter_tenants_dict, add_uuid=True, confidential_data=True)
         datacenter_tenants_dict["uuid"] = id_
 
     #fill tenants_datacenters table

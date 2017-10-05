@@ -28,7 +28,7 @@ openmano client used to interact with openmano-server (openmanod)
 """
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ = "$09-oct-2014 09:09:48$"
-__version__ = "0.4.21-r531"
+__version__ = "0.4.22-r532"
 version_date = "Oct 2017"
 
 from argcomplete.completers import FilesCompleter
@@ -1017,8 +1017,9 @@ def datacenter_attach(args):
         datacenter_dict['vim_password'] = args.password
     if args.config!=None:
         datacenter_dict["config"] = _load_file_or_yaml(args.config)
+
     payload_req = json.dumps( {"datacenter": datacenter_dict })
-    
+
     #print payload_req
         
     URLrequest = "http://%s:%s/openmano/%s/datacenters/%s" %(mano_host, mano_port, tenant, datacenter)
