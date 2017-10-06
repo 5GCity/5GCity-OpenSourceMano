@@ -285,8 +285,7 @@ echo -e "\n"\
     "#################################################################"
 su $SUDO_USER -c "git -C ${BASEFOLDER} clone ${GIT_OSMIM_URL} IM"
 LATEST_STABLE_TAG=`git -C "${BASEFOLDER}/IM" tag -l v[0-9].* | tail -n1`
-# TODO remove comment when a stable version of IM were tagged
-# [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER}/IM checkout tags/${LATEST_STABLE_TAG}"
+[[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER}/IM checkout tags/${LATEST_STABLE_TAG}"
 
 # Install debian dependencies before setup.py
 if [[ -z "$NO_PACKAGES" ]]
@@ -310,7 +309,8 @@ echo -e "\n"\
     "#################################################################"
 su $SUDO_USER -c "git -C ${BASEFOLDER} clone ${GIT_OVIM_URL} openvim"
 LATEST_STABLE_TAG=`git -C "${BASEFOLDER}/openvim" tag -l v[0-9].* | tail -n1`
-[[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER}/openvim checkout tags/${LATEST_STABLE_TAG}"
+[[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER}/openvim checkout 005a9dc"
+# disable because a problem with this version[[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER}/openvim checkout tags/${LATEST_STABLE_TAG}"
 
 # Install debian dependencies before setup.py
 if [[ -z "$NO_PACKAGES" ]]
