@@ -39,12 +39,12 @@ vnfd:vnfd-catalog:
                 port: '18888'
             port: '18888'
             vdu-id: iovdu_0
-        placement-groups:
-        -   member-vdus:
-            -   member-vdu-ref: iovdu_0
-            name: Eris
-            requirement: Place this VM on the Kuiper belt object Eris
-            strategy: COLOCATION
+        # placement-groups:
+        # -   member-vdus:
+        #     -   member-vdu-ref: iovdu_0
+        #     name: Eris
+        #     requirement: Place this VM on the Kuiper belt object Eris
+        #     strategy: COLOCATION
         vdu:
         -   cloud-init-file: ping_cloud_init.cfg
             count: '1'
