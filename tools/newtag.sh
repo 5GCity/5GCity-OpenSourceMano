@@ -24,7 +24,6 @@ if [ -z "$list" ]; then
 fi
 
 for i in $list; do
-    echo
     echo $i
     if [ ! -d $i ]; then
         git clone https://osm.etsi.org/gerrit/osm/$i
