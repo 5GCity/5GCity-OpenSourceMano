@@ -1021,9 +1021,10 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                             db_interface["external_name"] = get_str(cp, "name", 255)
                             cp_name2iface_uuid[db_interface["external_name"]] = iface_uuid
                             cp_name2vm_uuid[db_interface["external_name"]] = vm_uuid
-                            # TODO add port-security-enable
-                            # if cp.get("port-security-enabled") == False:
-                            # elif cp.get("port-security-enabled") == True:
+                            if cp.get("port-security-enabled") == False:
+                                db_interface["port_security"] = 0
+                            elif cp.get("port-security-enabled") == True:
+                                db_interface["port_security"] = 1
                         except KeyError:
                             raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'vdu[{vdu}]':"
                                                 "'interface[{iface}]':'vnfd-connection-point-ref':'{cp}' is not present"
@@ -1037,6 +1038,10 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                 for cp in vld.get("internal-connection-point").itervalues():
                                     if cp.get("id-ref") == iface.get("internal-connection-point-ref"):
                                         db_interface["net_id"] = net_id2uuid[vld.get("id")]
+                                        if cp.get("port-security-enabled") == False:
+                                            db_interface["port_security"] = 0
+                                        elif cp.get("port-security-enabled") == True:
+                                            db_interface["port_security"] = 1
                                         break
                         except KeyError:
                             raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'vdu[{vdu}]':"
