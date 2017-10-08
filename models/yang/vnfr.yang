@@ -27,10 +27,6 @@ module vnfr
     prefix "manotypes";
   }
 
-  import rw-pb-ext {
-    prefix "rwpb";
-  }
-
   import vnfd-base {
     prefix "vnfd-base";
   }
@@ -72,6 +68,34 @@ module vnfr
       "Derived from earlier versions of base YANG files";
   }
 
+  typedef vdu-operational-status {
+    type enumeration {
+      enum init;
+      enum vm-init-phase;
+      enum vm-alloc-pending;
+      enum running;
+      enum terminate;
+      enum vl-terminate-phase;
+      enum terminated;
+      enum failed;
+    }
+  }
+
+  typedef vnf-operational-status {
+    type enumeration {
+      enum pre-init;
+      enum init;
+      enum vl-init-phase;
+      enum vm-init-phase;
+      enum running;
+      enum terminate;
+      enum vm-terminate-phase;
+      enum vl-terminate-phase;
+      enum terminated;
+      enum failed;
+    }
+  }
+
   grouping placement-group-info {
     list placement-groups-info {
       description
@@ -84,7 +108,6 @@ module vnfr
       uses manotypes:placement-group-input;
     }
   }
-
 
   grouping virtual-interface {
     container virtual-interface {
@@ -331,6 +354,7 @@ module vnfr
               "IP address assigned to the external connection point";
             type inet:ip-address;
           }
+
           leaf mac-address {
             description
               "MAC address assigned to the external connection point";
@@ -364,8 +388,6 @@ module vnfr
             description "Short Unique name of the VDU
                   This will be of the format NSR name-ShortnedString-VDUname
                   NSR name and VDU name shall be constrained to 10 characters";
-            rwpb:field-inline "true";
-            rwpb:field-string-max 64;
             type string;
           }
 
@@ -450,6 +472,7 @@ module vnfr
                 "IP address assigned to the internal connection point";
               type inet:ip-address;
             }
+
             leaf mac-address {
               description
                 "MAC address assigned to the internal connection point";
@@ -513,31 +536,20 @@ module vnfr
           uses virtual-interface;
         }
 
-        leaf operational-status {
-          description
-            "The operational status of the VDU
-              init                : The VDU has just started.
-              vm-init-phase       : The VDUs in the VNF is being created in VIM.
-              vm-alloc-pending    : The  VM alloc is pending in VIM
-              running             : The VDU is active in VM
-              terminate           : The VDU is being terminated
-              vm-terminate-phase  : The VDU in the VNF is being terminated in VIM.
-              terminated          : The VDU is in the terminated state.
-              failed              : The VDU  instantiation failed.
-            ";
-
-            type enumeration {
-              rwpb:enum-type "VduOperationalStatus";
-              enum init;
-              enum vm-init-phase;
-              enum vm-alloc-pending;
-              enum running;
-              enum terminate;
-              enum vl-terminate-phase;
-              enum terminated;
-              enum failed;
-            }
-          }
+         leaf operational-status {
+            description
+              "The operational status of the VDU
+                init                : The VDU has just started.
+                vm-init-phase       : The VDUs in the VNF is being created in VIM.
+                vm-alloc-pending    : The  VM alloc is pending in VIM
+                running             : The VDU is active in VM
+                terminate           : The VDU is being terminated
+                vm-terminate-phase  : The VDU in the VNF is being terminated in VIM.
+                terminated          : The VDU is in the terminated state.
+                failed              : The VDU  instantiation failed.
+              ";
+            type vdu-operational-status;
+         }
 
           uses placement-group-info;
         }
@@ -558,20 +570,7 @@ module vnfr
               terminated          : The VNF is in the terminated state.
               failed              : The VNF instantiation failed
             ";
-
-          type enumeration {
-            rwpb:enum-type "VnfrOperationalStatus";
-            enum pre-init;
-            enum init;
-            enum vl-init-phase;
-            enum vm-init-phase;
-            enum running;
-            enum terminate;
-            enum vm-terminate-phase;
-            enum vl-terminate-phase;
-            enum terminated;
-            enum failed;
-          }
+          type vnf-operational-status;
         }
 
         leaf config-status {
@@ -599,7 +598,6 @@ module vnfr
         uses placement-group-info;
 
         container cloud-config {
-          rwpb:msg-new VnfrCloudConfig;
           uses manotypes:cloud-config;
         }
       }

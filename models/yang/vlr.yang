@@ -23,10 +23,6 @@ module vlr
   namespace "urn:ietf:params:xml:ns:yang:nfvo:vlr";
   prefix "vlr";
 
-  import rw-pb-ext {
-    prefix "rwpb";
-  }
-
   import ietf-yang-types {
     prefix "yang";
   }
@@ -182,7 +178,6 @@ module vlr
           ";
 
           type enumeration {
-            rwpb:enum-type "VlOperationalStatus";
             enum init;
             enum vl-alloc-pending;
             enum running;

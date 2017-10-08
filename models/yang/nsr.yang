@@ -23,10 +23,6 @@ module nsr
   namespace "urn:ietf:params:xml:ns:yang:nfvo:nsr";
   prefix "nsr";
 
-  import rw-pb-ext {
-    prefix "rwpb";
-  }
-
   import vlr {
     prefix "vlr";
   }
@@ -74,6 +70,34 @@ module nsr
        the Network Service Record (NSR)";
     reference
       "Derived from earlier versions of base YANG files";
+  }
+
+  typedef vnffgr-operational-status {
+    type enumeration {
+      enum init;
+      enum running;
+      enum terminate;
+      enum terminated;
+      enum failed;
+    }
+  }
+
+  typedef ns-operational-status {
+    type enumeration {
+      enum init;
+      enum vl-init-phase;
+      enum vnf-init-phase;
+      enum running;
+      enum terminate;
+      enum vnf-terminate-phase;
+      enum vl-terminate-phase;
+      enum terminated;
+      enum failed;
+      enum scaling-out;
+      enum scaling-in;
+      enum vl-instantiate;
+      enum vl-terminate;
+    }
   }
 
   typedef config-states {
@@ -378,15 +402,7 @@ module nsr
             terminated          : The VNFFGR is in the terminated state.
             failed              : The VNFFGR instantiation failed
           ";
-
-        type enumeration {
-          rwpb:enum-type "VnffgrOperationalStatus";
-          enum init;
-          enum running;
-          enum terminate;
-          enum terminated;
-          enum failed;
-        }
+        type vnffgr-operational-status;
       }
 
       list rsp {
@@ -507,13 +523,9 @@ module nsr
               type string;
             }
             leaf port-id {
-              rwpb:field-inline "true";
-              rwpb:field-string-max 64;
               type string;
             }
             leaf vm-id {
-              rwpb:field-inline "true";
-              rwpb:field-string-max 64;
               type string;
             }
             leaf address {
@@ -598,13 +610,9 @@ module nsr
             }
           }
           leaf port-id {
-            rwpb:field-inline "true";
-            rwpb:field-string-max 64;
             type string;
           }
           leaf vm-id {
-            rwpb:field-inline "true";
-            rwpb:field-string-max 64;
             type string;
           }
           leaf ip-address {
@@ -856,21 +864,7 @@ module nsr
             vl-terminate        : The NS is terminating a VL
           ";
 
-          type enumeration {
-            enum init;
-            enum vl-init-phase;
-            enum vnf-init-phase;
-            enum running;
-            enum terminate;
-            enum vnf-terminate-phase;
-            enum vl-terminate-phase;
-            enum terminated;
-            enum failed;
-            enum scaling-out;
-            enum scaling-in;
-            enum vl-instantiate;
-            enum vl-terminate;
-          }
+          type ns-operational-status;
         }
 
         leaf config-status {
@@ -960,7 +954,6 @@ module nsr
         }
 
         list initial-service-primitive {
-          rwpb:msg-new NsrInitialServicePrimitive;
           description
             "Initial set of service primitives for NSD.";
           key "seq";
@@ -969,7 +962,6 @@ module nsr
         }
 
         list terminate-service-primitive {
-          rwpb:msg-new NsrTerminateServicePrimitive;
           description
             "Set of service primitives to
              execute during termination of NSD.";

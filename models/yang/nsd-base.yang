@@ -23,10 +23,6 @@ module nsd-base
   namespace "http://riftio.com/ns/riftware-1.0/nsd-base";
   prefix "nsd-base";
 
-  import rw-pb-ext {
-    prefix "rwpb";
-  }
-
   import ietf-inet-types {
     prefix "inet";
   }
@@ -578,7 +574,6 @@ module nsd-base
     uses manotypes:ip-profile-list;
 
     list initial-service-primitive {
-      rwpb:msg-new NsdInitialServicePrimitive;
       description
         "Initial set of service primitives for NSD.";
       key "seq";
@@ -587,7 +582,6 @@ module nsd-base
     }
 
     list terminate-service-primitive {
-      rwpb:msg-new NsdTerminateServicePrimitive;
       description
         "Set of service primitives during
          termination for NSD.";
@@ -741,11 +735,6 @@ module nsd-base
       description "Flag indicating whether this network is a VIM management network";
       type boolean;
       default false;
-    }
-
-    leaf ipv4-nat-pool-name{
-      type string;
-      description "IPV4 nat pool name";
     }
 
     choice init-params {

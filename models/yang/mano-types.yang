@@ -27,10 +27,6 @@ module mano-types
     prefix "inet";
   }
 
-  import rw-pb-ext {
-    prefix "rwpb";
-  }
-
   import rw-project {
     prefix "rw-project";
   }
@@ -241,7 +237,6 @@ module mano-types
     }
   }
 
-
   grouping vca-configuration {
     description
         "Information about the VNF or VDU configuration. Note:
@@ -278,65 +273,61 @@ module mano-types
             type string;
           }
           uses manotypes:vca-relationships;
-
         }
       }
+    }
 
+    list config-primitive {
+      description
+        "List of config primitives supported by the
+        configuration agent for this VNF or VDU.";
+      key "name";
 
-      list service-primitive {
-        rwpb:msg-new ServicePrimitive;
+      leaf name {
         description
-          "List of config primitives supported by the
-          configuration agent for this VNF or VDU.";
+          "Name of the config primitive.";
+        type string;
+      }
+
+      list parameter {
+        description
+          "List of parameters to the config primitive.";
         key "name";
-
-        leaf name {
-          description
-            "Name of the config primitive.";
-          type string;
-        }
-
-        list parameter {
-          description
-            "List of parameters to the config primitive.";
-          key "name";
-          uses primitive-parameter;
-        }
-
-        leaf user-defined-script {
-          description
-            "A user defined script. If user defined script is defined,
-             the script will be executed using bash";
-          type string;
-        }
+        uses primitive-parameter;
       }
 
-      list initial-config-primitive {
-        rwpb:msg-new InitialConfigPrimitive;
+      leaf user-defined-script {
         description
-          "Initial set of configuration primitives.";
-        key "seq";
-        leaf seq {
-          description
-              "Sequence number for the configuration primitive.";
-          type uint64;
-        }
+          "A user defined script. If user defined script is defined,
+           the script will be executed using bash";
+        type string;
+      }
+    }
 
-        choice primitive-type {
-          case primitive-definition {
-            leaf name {
-              description
-                "Name of the configuration primitive.";
-              type string;
-            }
+    list initial-config-primitive {
+      description
+        "Initial set of configuration primitives.";
+      key "seq";
+      leaf seq {
+        description
+          "Sequence number for the configuration primitive.";
+        type uint64;
+      }
 
-            uses primitive-parameter-value;
+      choice primitive-type {
+        case primitive-definition {
+          leaf name {
+            description
+              "Name of the configuration primitive.";
+            type string;
+          }
 
-            leaf user-defined-script {
-              description
-                "A user defined script.";
-              type string;
-            }
+          uses primitive-parameter-value;
+
+          leaf user-defined-script {
+            description
+              "A user defined script.";
+            type string;
           }
         }
       }
@@ -1959,7 +1950,6 @@ module mano-types
     }
 
     list user {
-      rwpb:msg-new CloudConfigUser;
       key "name";
       description "List of users to be added through cloud-config";
 
