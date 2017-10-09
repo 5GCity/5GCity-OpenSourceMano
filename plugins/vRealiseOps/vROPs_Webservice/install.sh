@@ -26,7 +26,7 @@ SSL_Cert_Dir="${BASEDIR}/SSL_certificate"
 THISHOST=$(hostname)
 Domain_Name="${THISHOST}"
 #Domain_Name="www.vrops_webservice.com"
-WebServiceFile='vrops_webservice.py'
+WebServiceFile="${BASEDIR}/vrops_webservice"
 
 echo '
  #################################################################
