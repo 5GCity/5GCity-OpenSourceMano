@@ -82,7 +82,7 @@ class vim_thread(threading.Thread):
     REFRESH_BUILD = 5      # 5 seconds
     REFRESH_ACTIVE = 60    # 1 minute
 
-    def __init__(self, vimconn, task_lock, name=None, datacenter_name=None, datacenter_tenant_id=None,
+    def __init__(self, myvimconn, task_lock, name=None, datacenter_name=None, datacenter_tenant_id=None,
                  db=None, db_lock=None, ovim=None):
         """Init a thread.
         Arguments:
@@ -92,7 +92,12 @@ class vim_thread(threading.Thread):
             'db', 'db_lock': database class and lock to use it in exclusion
         """
         threading.Thread.__init__(self)
-        self.vim = vimconn
+        if isinstance(myvimconn, vimconn.vimconnException):
+            self.vim = None
+            self.error_status = "Error accesing to VIM: {}".format(myvimconn)
+        else:
+            self.vim = myvimconn
+            self.error_status = None
         self.datacenter_name = datacenter_name
         self.datacenter_tenant_id = datacenter_tenant_id
         self.ovim = ovim
@@ -365,6 +370,8 @@ class vim_thread(threading.Thread):
         """Insert a task at list of refreshing elements. The refreshing list is ordered by threshold_time (task['modified_at']
         It is assumed that this is called inside this thread
         """
+        if not self.vim:
+            return
         if not threshold_time:
             threshold_time = time.time()
         task["modified_at"] = threshold_time
@@ -407,6 +414,11 @@ class vim_thread(threading.Thread):
                 # not needed to do anything but update database with the new status
                 result = True
                 database_update = None
+            elif not self.vim:
+                task["status"] == "ERROR"
+                task["error_msg"] = self.error_status
+                result = False
+                database_update = {"status": "VIM_ERROR", "error_msg": task["error_msg"]}
             elif task["item"] == 'instance_vms':
                 if task["action"] == "CREATE":
                     result, database_update = self.new_vm(task)

@@ -182,6 +182,10 @@ def start_service(mydb):
                     user=vim['user'], passwd=vim['passwd'],
                     config=extra, persistent_info=vim_persistent_info[thread_id]
                 )
+            except vimconn.vimconnException as e:
+                myvim = e
+                logger.error("Cannot launch thread for VIM {} '{}': {}".format(vim['datacenter_name'],
+                                                                               vim['datacenter_id'], e))
             except Exception as e:
                 raise NfvoException("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, e),
                                     HTTP_Internal_Server_Error)
@@ -3749,9 +3753,8 @@ def delete_datacenter(mydb, datacenter):
 
 
 def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=None, vim_tenant_name=None, vim_username=None, vim_password=None, config=None):
-    #get datacenter info
-    datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, None, datacenter, vim_user=vim_username, vim_passwd=vim_password)
-    datacenter_name = myvim["name"]
+    # get datacenter info
+    datacenter_id = get_datacenter_uuid(mydb, None, datacenter)
 
     create_vim_tenant = True if not vim_tenant_id and not vim_tenant_name else False
 
@@ -3785,6 +3788,9 @@ def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=
     else: #if vim_tenant_id==None:
         #create tenant at VIM if not provided
         try:
+            _, myvim = get_datacenter_by_name_uuid(mydb, None, datacenter, vim_user=vim_username,
+                                                               vim_passwd=vim_password)
+            datacenter_name = myvim["name"]
             vim_tenant_id = myvim.new_tenant(vim_tenant_name, "created by openmano for datacenter "+datacenter_name)
         except vimconn.vimconnException as e:
             raise NfvoException("Not possible to create vim_tenant {} at VIM: {}".format(vim_tenant_id, str(e)), HTTP_Internal_Server_Error)
@@ -3809,6 +3815,7 @@ def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=
     mydb.new_row('tenants_datacenters', tenants_datacenter_dict)
     # create thread
     datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_dict['uuid'], datacenter_id)  # reload data
+    datacenter_name = myvim["name"]
     thread_name = get_non_used_vim_name(datacenter_name, datacenter_id, tenant_dict['name'], tenant_dict['uuid'])
     new_thread = vim_thread.vim_thread(myvim, task_lock, thread_name, datacenter_name, datacenter_tenant_id,
                                        db=db, db_lock=db_lock, ovim=ovim)

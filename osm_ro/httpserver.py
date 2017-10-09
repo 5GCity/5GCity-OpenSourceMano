@@ -348,10 +348,10 @@ def http_get_tenant_id(tenant_id):
         select_, where_, limit_ = filter_query_string(bottle.request.query, None,
                                                       ('uuid', 'name', 'description', 'created_at'))
         where_['uuid'] = tenant_id
-        tenant = mydb.get_rows(FROM=from_, SELECT=select_,WHERE=where_)
+        tenants = mydb.get_rows(FROM=from_, SELECT=select_,WHERE=where_)
         #change_keys_http2db(content, http2db_tenant, reverse=True)
-        convert_datetime2str(tenant)
-        data={'tenant' : tenant}
+        convert_datetime2str(tenants)
+        data = {'tenant' : tenants[0]}
         return format_out(data)
     except db_base_Exception as e:
         logger.error("http_get_tenant_id error {}: {}".format(e.http_code, str(e)))
