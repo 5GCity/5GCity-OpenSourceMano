@@ -133,30 +133,28 @@ function update(){
     echo
 }
 
-function so_is_up(){
+function so_is_up() {
     SO_IP=$1
     time=0
     step=5
     timelength=300
     while [ $time -le $timelength ]
     do
-        curl -k https://$SO_IP:8008/api/operational/vcs/info \
-              --header 'accept: application/vnd.yang.data+json' \
-              --header 'authorization: Basic YWRtaW46YWRtaW4=' \
-              --header 'cache-control: no-cache' \
-              --header 'content-type: application/vnd.yang.data+json' &> /dev/null
-        RET=$?
-        if [ "$RET" == 0 ]; then
-            break
+        if [[ `curl -k -X GET   https://$SO_IP:8008/api/operational/vcs/info \
+                -H 'accept: application/vnd.yang.data+json' \
+                -H 'authorization: Basic YWRtaW46YWRtaW4=' \
+                -H 'cache-control: no-cache' 2> /dev/null | jq  '.[].components.component_info[] | select(.component_name=="RW.Restconf")' 2>/dev/null | grep "RUNNING" | wc -l` -eq 1 ]]
+        then
+            echo "RW.Restconf running....SO is up"
+            return 0
         fi
+
         sleep $step
         echo -n "."
         time=$((time+step))
     done
-    if [ "$RET" != 0 ]; then
-        FATAL "OSM Failed to startup"
-    fi
-    echo
+
+    FATAL "OSM Failed to startup"
 }
 
 #Configure VCA, SO and RO with the initial configuration:
@@ -374,8 +372,12 @@ else
     trap 'rm -rf "$TEMPDIR"' EXIT
 fi
 
-echo -e "Checking required packages: git"
-dpkg -l git &>/dev/null || ! echo -e "     git not installed.\nInstalling git requires root privileges" || sudo apt-get install -y git
+need_packages="git jq"
+for package in $need_packages; do
+    echo -e "Checking required packages: $package"
+    dpkg -l $package &>/dev/null || ! echo -e "     $package not installed.\nInstalling $package requires root privileges" || sudo apt-get install -y $package
+done
+
 if [ -z "$TEST_INSTALLER" ]; then
     echo -e "\nCloning devops repo temporarily"
     git clone https://osm.etsi.org/gerrit/osm/devops.git $TEMPDIR
