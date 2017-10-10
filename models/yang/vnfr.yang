@@ -74,6 +74,7 @@ module vnfr
       enum vm-init-phase;
       enum vm-alloc-pending;
       enum running;
+      enum upgrading;
       enum terminate;
       enum vl-terminate-phase;
       enum terminated;
@@ -88,6 +89,7 @@ module vnfr
       enum vl-init-phase;
       enum vm-init-phase;
       enum running;
+      enum upgrading;   // Experimental
       enum terminate;
       enum vm-terminate-phase;
       enum vl-terminate-phase;
@@ -543,6 +545,7 @@ module vnfr
                 vm-init-phase       : The VDUs in the VNF is being created in VIM.
                 vm-alloc-pending    : The  VM alloc is pending in VIM
                 running             : The VDU is active in VM
+                upgrading           : The VDU is being upgraded (EXPERIMENTAL)
                 terminate           : The VDU is being terminated
                 vm-terminate-phase  : The VDU in the VNF is being terminated in VIM.
                 terminated          : The VDU is in the terminated state.

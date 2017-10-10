@@ -74,6 +74,17 @@ module vnfd-base
     }
   }
 
+  typedef vnf-operational-status {
+    type enumeration {
+      enum init;
+      enum running;
+      enum upgrading;
+      enum terminate;
+      enum terminated;
+      enum failed;
+    }
+  }
+
   grouping virtual-interface {
     container virtual-interface {
       description
@@ -160,9 +171,21 @@ module vnfd-base
         type string;
       }
 
-
       container vnf-configuration {
         uses manotypes:vca-configuration;
+      }
+
+      leaf operational-status {
+         description
+           "The operational status of the VNF
+             init                : The VNF has just started.
+             running             : The VNF is active in VM
+             upgrading           : The VNF is being upgraded (EXPERIMENTAL)
+             terminate           : The VNF is being terminated
+             terminated          : The VNF is in the terminated state.
+             failed              : The VNF  instantiation failed.
+           ";
+         type vnf-operational-status;
       }
 
       container mgmt-interface {
