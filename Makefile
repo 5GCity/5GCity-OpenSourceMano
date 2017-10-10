@@ -26,63 +26,57 @@ SHELL := /bin/bash
 all: package install
 
 clean_deb:
-        rm -rf .build
+	rm -rf .build
 
 clean:
-        rm -rf build
+	rm -rf build
 
 prepare:
-        pip install --upgrade setuptools
-        mkdir -p build/
-        VER1=$(shell git describe | sed -e 's/^v//' |cut -d- -f1); \
-        VER2=$(shell git describe | cut -d- -f2); \
-        VER3=$(shell git describe | cut -d- -f3); \
-        cp MANIFEST.in build/
-        cp requirements.txt build/
-        cp README.rst build/
-        cp stdeb.cfg build/
-        cp kafkad build/
-        cp -r core build/
-        cp -r plugins build/
-        cp -r devops_stages build/
-        cp -r test build/
-        cp setup.py build/
+	pip install --upgrade setuptools
+	mkdir -p build/
+	cp MANIFEST.in build/
+	cp requirements.txt build/
+	cp README.rst build/
+	cp stdeb.cfg build/
+	cp kafkad build/
+	cp -r core build/
+	cp -r plugins build/
+	cp -r devops_stages build/
+	cp -r test build/
+	cp -r scripts build/
+	cp setup.py build/
 
 build: clean openstack_plugins prepare
-        python -m py_compile build/plugins/OpenStack/*.py
+	python -m py_compile build/plugins/OpenStack/*.py
 
 build: clean vrops_plugins prepare
-        python -m py_compile build/plugins/vRealiseOps/*.py
+	python -m py_compile build/plugins/vRealiseOps/*.py
 
 build: clean cloudwatch_plugins prepare
-        python -m py_compile build/plugins/CloudWatch/*.py
+	python -m py_compile build/plugins/CloudWatch/*.py
 
 build: clean core prepare
-        python -m py_compile build/core/message_bus/*.py
+	python -m py_compile build/core/message_bus/*.py
 
 pip: prepare
-        cd build ./setup.py sdist
-        cd build ./plugin_setup.py sdist
+	cd build ./setup.py sdist
+	cd build ./plugin_setup.py sdist
 
 package: clean clean_deb prepare
-        apt-get --yes install python-software-properties \
-        python-pip \
-        python-stdeb \
-        libmysqlclient-dev \
-        libxml2 \
-        python-dev
-        cd build && python setup.py --command-packages=stdeb.command sdist_dsc --with-python2=True
-        cd build/deb_dist/* && dpkg-buildpackage -rfakeroot -uc -us
-        mkdir -p .build
-        cp build/deb_dist/python-*.deb .build/
-        pip install -r build/requirements.txt
+	cd build && python setup.py --command-packages=stdeb.command sdist_dsc --with-python2=True
+	cd build/deb_dist/* && dpkg-buildpackage -rfakeroot -uc -us
+	mkdir -p .build
+	cp build/deb_dist/python-*.deb .build/
 
 install:
-        DEBIAN_FRONTEND=noninteractive apt-get update && \
-        DEBIAN_FRONTEND=noninteractive apt-get install --yes python-pip && \
-        pip install --upgrade pip
+	DEBIAN_FRONTEND=noninteractive apt-get update && \
+	DEBIAN_FRONTEND=noninteractive apt-get install --yes python-pip && \
+	pip install --upgrade pip
         #dpkg -i build/deb_dist/*.deb
 
 develop: prepare
-        pip install -r requirements.txt
-        cd build && ./setup.py develop
+	pip install -r requirements.txt
+	cd build && ./setup.py develop
+
+build-docker-from-source:
+	docker build -t osm:MON -f docker/Dockerfile

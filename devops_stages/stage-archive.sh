@@ -19,21 +19,15 @@
 # For those usages not covered by the Apache License, Version 2.0 please
 # contact: prithiv.mohan@intel.com or adrian.hoban@intel.com
 
-[Unit]
-Description=Apache Kafka server (broker)
-Documentation=http://kafka.apache.org/documentation.html
-Requires=network.target remote-fs.target
-After=network.target remote-fs.target
+#__author__ = "Prithiv Mohan"
+#__date__   = "25/Sep/2017"
 
-[Service]
-Type=simple
-PIDFile=/var/run/kafka.pid
-#User=root
-#Group=kafka
-ExecStart=/opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties
-ExecStop=/opt/kafka/bin/kafka-server-stop.sh
-Restart=on-failure
-SyslogIdentifier=kafka
 
-[Install]
-WantedBy=multi-user.target
+#!/bin/sh
+rm -rf pool
+rm -rf dists
+mkdir -p pool/MON
+mv .build/*.deb pool/MON/
+mkdir -p dists/unstable/MON/binary-amd64/
+apt-ftparchive packages pool/MON > dists/unstable/MON/binary-amd64/Packages
+gzip -9fk dists/unstable/MON/binary-amd64/Packages

@@ -38,6 +38,7 @@ _license = 'Apache 2.0'
 _copyright = 'Intel Research and Development Ireland'
 _url = 'https://osm.etsi.org/gitweb/?p=osm/MON.git;a=tree'
 _requirements = [
+    "stdeb",
     "MySQL-python",
     "requests",
     "logutils",
@@ -76,7 +77,7 @@ setup(name="mon_core",
       package_data = {_name: ['core/message_bus/*.py', 'core/models/*.json',
                       'plugins/OpenStack/Aodh/*.py', 'plugins/OpenStack/Gnocchi/*.py',
                       'plugins/vRealiseOps/*', 'plugins/CloudWatch/*']},
-      data_files = [('/etc/systemd/system/', ['core/kafka.service']),
+      data_files = [('/etc/systemd/system/', ['scripts/kafka.sh']),
                    ],
       scripts=['plugins/vRealiseOps/vROPs_Webservice/vrops_webservice',
                'kafkad'],
