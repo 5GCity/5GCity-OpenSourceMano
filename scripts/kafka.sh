@@ -19,24 +19,27 @@
 # For those usages not covered by the Apache License, Version 2.0 please
 # contact: prithiv.mohan@intel.com or adrian.hoban@intel.com
 
-stdeb
-MySQL-python
-lxml
-requests
-logutils
-cherrypy
-jsmin
-jsonschema
-python-openstackclient
-python-novaclient
-python-keystoneclient
-python-neutronclient
-aodhclient
-gnocchiclient
-boto==2.48
-python-cloudwatchlogs-logging
-py-cloudwatch
-pyvcloud
-pyopenssl
-six
-bottle
+mkdir -p /etc/systemd/system/
+cat  > /etc/systemd/system/kafka.service  << EOF
+[Unit]
+Description=Apache Kafka server (broker)
+Documentation=http://kafka.apache.org/documentation.html
+Requires=network.target remote-fs.target
+After=network.target remote-fs.target
+
+[Service]
+Type=simple
+PIDFile=/var/run/kafka.pid
+#User=root
+#Group=kafka
+ExecStart=/opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties
+ExecStop=/opt/kafka/bin/kafka-server-stop.sh
+Restart=on-failure
+SyslogIdentifier=kafka
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable kafka.service
+systemctl start kafka.service
