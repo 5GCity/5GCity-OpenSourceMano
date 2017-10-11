@@ -330,6 +330,8 @@ def http_get_tenants():
         convert_datetime2str(tenants)
         data={'tenants' : tenants}
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except db_base_Exception as e:
         logger.error("http_get_tenants error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -347,12 +349,19 @@ def http_get_tenant_id(tenant_id):
         from_ = 'nfvo_tenants'
         select_, where_, limit_ = filter_query_string(bottle.request.query, None,
                                                       ('uuid', 'name', 'description', 'created_at'))
-        where_['uuid'] = tenant_id
+        what = 'uuid' if utils.check_valid_uuid(tenant_id) else 'name'
+        where_[what] = tenant_id
         tenants = mydb.get_rows(FROM=from_, SELECT=select_,WHERE=where_)
         #change_keys_http2db(content, http2db_tenant, reverse=True)
-        convert_datetime2str(tenants)
-        data = {'tenant' : tenants[0]}
+        if len(tenants) == 0:
+            bottle.abort(HTTP_Not_Found, "No tenant found with {}='{}'".format(what, tenant_id))
+        elif len(tenants) > 1:
+            bottle.abort(HTTP_Bad_Request, "More than one tenant found with {}='{}'".format(what, tenant_id))
+        convert_datetime2str(tenants[0])
+        data = {'tenant': tenants[0]}
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except db_base_Exception as e:
         logger.error("http_get_tenant_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -373,6 +382,8 @@ def http_post_tenants():
     try: 
         data = nfvo.new_tenant(mydb, http_content['tenant'])
         return http_get_tenant_id(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_tenants error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -399,6 +410,8 @@ def http_edit_tenant_id(tenant_id):
         where={'uuid': tenant['uuid']}
         mydb.update_rows('nfvo_tenants', http_content['tenant'], where)
         return http_get_tenant_id(tenant_id)
+    except bottle.HTTPError:
+        raise
     except db_base_Exception as e:
         logger.error("http_edit_tenant_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -414,6 +427,8 @@ def http_delete_tenant_id(tenant_id):
     try:
         data = nfvo.delete_tenant(mydb, tenant_id)
         return format_out({"result":"tenant " + data + " deleted"})
+    except bottle.HTTPError:
+        raise
     except db_base_Exception as e:
         logger.error("http_delete_tenant_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -446,6 +461,8 @@ def http_get_datacenters(tenant_id):
         convert_datetime2str(datacenters)
         data={'datacenters' : datacenters}
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_datacenters error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -524,6 +541,8 @@ def http_get_datacenter_id(tenant_id, datacenter_id):
         convert_datetime2str(datacenter)
         data={'datacenter' : datacenter}
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -544,6 +563,8 @@ def http_post_datacenters():
     try:
         data = nfvo.new_datacenter(mydb, http_content['datacenter'])
         return http_get_datacenter_id('any', data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_datacenters error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -565,6 +586,8 @@ def http_edit_datacenter_id(datacenter_id_name):
     try:
         datacenter_id = nfvo.edit_datacenter(mydb, datacenter_id_name, http_content['datacenter'])
         return http_get_datacenter_id('any', datacenter_id)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_edit_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -584,6 +607,8 @@ def http_post_sdn_controller(tenant_id):
 
         data = nfvo.sdn_controller_create(mydb, tenant_id, http_content['sdn_controller'])
         return format_out({"sdn_controller": nfvo.sdn_controller_list(mydb, tenant_id, data)})
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_sdn_controller error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -607,6 +632,8 @@ def http_put_sdn_controller_update(tenant_id, controller_id):
         data = nfvo.sdn_controller_update(mydb, tenant_id, controller_id, http_content['sdn_controller'])
         return format_out({"sdn_controller": nfvo.sdn_controller_list(mydb, tenant_id, controller_id)})
 
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_sdn_controller error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -622,6 +649,8 @@ def http_get_sdn_controller(tenant_id):
 
         data = {'sdn_controllers': nfvo.sdn_controller_list(mydb, tenant_id)}
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_sdn_controller error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -636,6 +665,8 @@ def http_get_sdn_controller_id(tenant_id, controller_id):
         logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
         data = nfvo.sdn_controller_list(mydb, tenant_id, controller_id)
         return format_out({"sdn_controllers": data})
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_sdn_controller_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -650,6 +681,8 @@ def http_delete_sdn_controller_id(tenant_id, controller_id):
         logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
         data = nfvo.sdn_controller_delete(mydb, tenant_id, controller_id)
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_delete_sdn_controller_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -669,6 +702,8 @@ def http_post_datacenter_sdn_port_mapping(tenant_id, datacenter_id):
     try:
         data = nfvo.datacenter_sdn_port_mapping_set(mydb, tenant_id, datacenter_id, http_content['sdn_port_mapping'])
         return format_out({"sdn_port_mapping": data})
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_datacenter_sdn_port_mapping error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -684,6 +719,8 @@ def http_get_datacenter_sdn_port_mapping(tenant_id, datacenter_id):
 
         data = nfvo.datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id)
         return format_out({"sdn_port_mapping": data})
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_datacenter_sdn_port_mapping error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -698,6 +735,8 @@ def http_delete_datacenter_sdn_port_mapping(tenant_id, datacenter_id):
         logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
         data = nfvo.datacenter_sdn_port_mapping_delete(mydb, tenant_id, datacenter_id)
         return format_out({"result": data})
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_delete_datacenter_sdn_port_mapping error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -733,6 +772,8 @@ def http_getnetmap_datacenter_id(tenant_id, datacenter_id, netmap_id=None):
         else:
             data={'netmaps' : netmaps}
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_getnetwork_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -757,12 +798,14 @@ def http_delnetmap_datacenter_id(tenant_id, datacenter_id, netmap_id=None):
                 where_["name"] = netmap_id
         #change_keys_http2db(content, http2db_tenant, reverse=True)
         deleted = mydb.delete_row(FROM='datacenter_nets', WHERE= where_) 
-        if deleted == 0 and netmap_id :
+        if deleted == 0 and netmap_id:
             bottle.abort(HTTP_Not_Found, "No netmap found with " + " and ".join(map(lambda x: str(x[0])+": "+str(x[1]), where_.iteritems())) )
         if netmap_id:
             return format_out({"result": "netmap %s deleted" % netmap_id})
         else:
             return format_out({"result": "%d netmap deleted" % deleted})
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_delnetmap_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -780,6 +823,8 @@ def http_uploadnetmap_datacenter_id(tenant_id, datacenter_id):
         utils.convert_str2boolean(netmaps, ('shared', 'multipoint') )
         data={'netmaps' : netmaps}
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_uploadnetmap_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -804,6 +849,8 @@ def http_postnetmap_datacenter_id(tenant_id, datacenter_id):
         utils.convert_str2boolean(netmaps, ('shared', 'multipoint') )
         data={'netmaps' : netmaps}
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_postnetmap_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -826,6 +873,8 @@ def http_putnettmap_datacenter_id(tenant_id, datacenter_id, netmap_id):
     try:
         nfvo.datacenter_edit_netmap(mydb, tenant_id, datacenter_id, netmap_id, http_content)
         return http_getnetmap_datacenter_id(tenant_id, datacenter_id, netmap_id)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_putnettmap_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -850,6 +899,8 @@ def http_action_datacenter_id(tenant_id, datacenter_id):
             return http_getnetmap_datacenter_id(datacenter_id)
         else:
             return format_out(result)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_action_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -866,6 +917,8 @@ def http_delete_datacenter_id( datacenter_id):
     try:
         data = nfvo.delete_datacenter(mydb, datacenter_id)
         return format_out({"result":"datacenter '" + data + "' deleted"})
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_delete_datacenter_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -892,6 +945,8 @@ def http_associate_datacenters(tenant_id, datacenter_id):
                                     http_content['datacenter'].get('config')
         )
         return http_get_datacenter_id(tenant_id, id_)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_associate_datacenters error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -917,6 +972,8 @@ def http_associate_datacenters_edit(tenant_id, datacenter_id):
                                     http_content['datacenter'].get('config')
         )
         return http_get_datacenter_id(tenant_id, id_)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_associate_datacenters_edit error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -931,6 +988,8 @@ def http_deassociate_datacenters(tenant_id, datacenter_id):
     try:
         data = nfvo.deassociate_datacenter_to_tenant(mydb, tenant_id, datacenter_id)
         return format_out({"result": data})
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_deassociate_datacenters error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -945,6 +1004,8 @@ def http_post_vim_net_sdn_attach(tenant_id, datacenter_id, network_id):
     try:
         data = nfvo.vim_net_sdn_attach(mydb, tenant_id, datacenter_id, network_id, http_content)
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_vim_net_sdn_attach error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -959,6 +1020,8 @@ def http_delete_vim_net_sdn_detach(tenant_id, datacenter_id, network_id, port_id
     try:
         data = nfvo.vim_net_sdn_detach(mydb, tenant_id, datacenter_id, network_id, port_id)
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_delete_vim_net_sdn_detach error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -973,6 +1036,8 @@ def http_get_vim_items(tenant_id, datacenter_id, item, name=None):
     try:
         data = nfvo.vim_action_get(mydb, tenant_id, datacenter_id, item, name)
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_vim_items error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -987,6 +1052,8 @@ def http_del_vim_items(tenant_id, datacenter_id, item, name):
     try:
         data = nfvo.vim_action_delete(mydb, tenant_id, datacenter_id, item, name)
         return format_out({"result":data})
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_del_vim_items error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1002,6 +1069,8 @@ def http_post_vim_items(tenant_id, datacenter_id, item):
     try:
         data = nfvo.vim_action_create(mydb, tenant_id, datacenter_id, item, http_content)
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_vim_items error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1029,6 +1098,8 @@ def http_get_vnfs(tenant_id):
         convert_datetime2str(vnfs)
         data={'vnfs' : vnfs}
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_vnfs error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1046,6 +1117,8 @@ def http_get_vnf_id(tenant_id,vnf_id):
         utils.convert_str2boolean(vnf, ('public',))
         convert_datetime2str(vnf)
         return format_out(vnf)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_vnf_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1076,6 +1149,8 @@ def http_post_vnfs(tenant_id):
             logger.warning('Unexpected schema_version: %s', http_content.get("schema_version"))
             bottle.abort(HTTP_Bad_Request, "Invalid schema version")
         return http_get_vnf_id(tenant_id, vnf_id)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_vnfs error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1102,6 +1177,8 @@ def http_post_vnfs_v3(tenant_id):
             convert_datetime2str(vnf)
             vnfd_list.append(vnf["vnf"])
         return format_out({"vnfd": vnfd_list})
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_vnfs error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1118,6 +1195,8 @@ def http_delete_vnf_id(tenant_id, vnf_id):
         data = nfvo.delete_vnf(mydb,tenant_id,vnf_id)
         #print json.dumps(data, indent=4)
         return format_out({"result":"VNF " + data + " deleted"})
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_delete_vnf_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1147,6 +1226,8 @@ def http_get_hosts(tenant_id, datacenter):
             convert_datetime2str(data)
             #print json.dumps(data, indent=4)
             return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_hosts error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1182,6 +1263,8 @@ def http_post_deploy(tenant_id):
         instance = nfvo.start_scenario(mydb, tenant_id, scenario_id, http_content['name'], http_content['name'])
         #print json.dumps(data, indent=4)
         return format_out(instance)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_deploy error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1223,6 +1306,8 @@ def http_post_scenarios(tenant_id):
         #print json.dumps(data, indent=4)
         #return format_out(data)
         return http_get_scenario_id(tenant_id, scenario_id)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_scenarios error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1248,6 +1333,8 @@ def http_post_nsds_v3(tenant_id):
             nsd_list.append(scenario)
         data = {'nsd': nsd_list}
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_nsds_v3 error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1290,6 +1377,8 @@ def http_post_scenario_action(tenant_id, scenario_id):
             instance_id = data['uuid']
             nfvo.delete_instance(mydb, tenant_id,instance_id)
             return format_out({"result":"Verify OK"})
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_scenario_action error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1319,6 +1408,8 @@ def http_get_scenarios(tenant_id):
         data={'scenarios':scenarios}
         #print json.dumps(scenarios, indent=4)
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_scenarios error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1340,6 +1431,8 @@ def http_get_scenario_id(tenant_id, scenario_id):
         convert_datetime2str(scenario)
         data={'scenario' : scenario}
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_scenarios error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1360,6 +1453,8 @@ def http_delete_scenario_id(tenant_id, scenario_id):
         data = mydb.delete_scenario(scenario_id, tenant_id)
         #print json.dumps(data, indent=4)
         return format_out({"result":"scenario " + data + " deleted"})
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_delete_scenario_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1381,6 +1476,8 @@ def http_put_scenario_id(tenant_id, scenario_id):
         #print json.dumps(data, indent=4)
         #return format_out(data)
         return http_get_scenario_id(tenant_id, scenario_id)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_put_scenario_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1403,6 +1500,8 @@ def http_post_instances(tenant_id):
             nfvo.check_tenant(mydb, tenant_id) 
         data = nfvo.create_instance(mydb, tenant_id, http_content["instance"])
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_instances error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1429,6 +1528,8 @@ def http_get_instances(tenant_id):
         utils.convert_str2boolean(instances, ('public',) )
         data={'instances':instances}
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_instances error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1466,6 +1567,8 @@ def http_get_instance_id(tenant_id, instance_id):
         convert_datetime2str(instance)
         # print json.dumps(instance, indent=4)
         return format_out(instance)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_instance_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1487,6 +1590,8 @@ def http_delete_instance_id(tenant_id, instance_id):
         #obtain data
         message = nfvo.delete_instance(mydb, tenant_id,instance_id)
         return format_out({"result":message})
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_delete_instance_id error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1521,6 +1626,8 @@ def http_post_instance_scenario_action(tenant_id, instance_id):
         
         data = nfvo.instance_action(mydb, tenant_id, instance_id, http_content)
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_post_instance_scenario_action error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
@@ -1545,6 +1652,8 @@ def http_get_instance_scenario_action(tenant_id, instance_id, action_id=None):
             nfvo.check_tenant(mydb, tenant_id)
         data = nfvo.instance_action_get(mydb, tenant_id, instance_id, action_id)
         return format_out(data)
+    except bottle.HTTPError:
+        raise
     except (nfvo.NfvoException, db_base_Exception) as e:
         logger.error("http_get_instance_scenario_action error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
