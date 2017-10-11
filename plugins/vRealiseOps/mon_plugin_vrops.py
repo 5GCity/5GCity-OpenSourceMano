@@ -35,7 +35,7 @@ import json
 from OpenSSL.crypto import load_certificate, FILETYPE_PEM
 import os
 import datetime
-from socket import gethostname
+from socket import getfqdn
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -48,8 +48,8 @@ PERIOD_MSEC = {'HR':3600000,'DAY':86400000,'WEEK':604800000,'MONTH':2678400000,'
 #To Do - Add actual webhook url & certificate
 #SSL_CERTIFICATE_FILE_NAME = 'vROPs_Webservice/SSL_certificate/www.vrops_webservice.com.cert'
 #webhook_url = "https://mano-dev-1:8080/notify/" #for testing
-webhook_url = "https://" + gethostname() + ":8080/notify/"
-SSL_CERTIFICATE_FILE_NAME = ('vROPs_Webservice/SSL_certificate/' + gethostname() + ".cert")
+webhook_url = "https://" + getfqdn() + ":8080/notify/"
+SSL_CERTIFICATE_FILE_NAME = ('vROPs_Webservice/SSL_certificate/' + getfqdn() + ".cert")
 #SSL_CERTIFICATE_FILE_NAME = 'vROPs_Webservice/SSL_certificate/10.172.137.214.cert' #for testing
 
 MODULE_DIR = os.path.dirname(__file__)

@@ -23,7 +23,7 @@
 
 BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SSL_Cert_Dir="${BASEDIR}/SSL_certificate"
-THISHOST=$(hostname)
+THISHOST=$(hostname -f)
 Domain_Name="${THISHOST}"
 #Domain_Name="www.vrops_webservice.com"
 WebServiceFile="${BASEDIR}/vrops_webservice"
@@ -36,7 +36,7 @@ echo '
 #Function to install packages using apt-get
 function install_packages(){
       [ -x /usr/bin/apt-get ] && apt-get install -y $*
-       
+
        #check properly installed
        for PACKAGE in $*
        do
@@ -49,7 +49,7 @@ function install_packages(){
           fi
        done
    }
-  
+
 apt-get update  # To get the latest package lists
 
 [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-yaml python-bottle python-jsonschema python-requests libxml2-dev libxslt-dev python-dev python-pip openssl"
@@ -78,8 +78,9 @@ echo '
 
 nohup python "${WebServiceFile}" &
 
-echo '	
+echo '
  #################################################################
  #####              Done                                  #####
  #################################################################'
+
 
