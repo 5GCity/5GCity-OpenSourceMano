@@ -24,7 +24,7 @@
 
 FROM ubuntu:16.04
 RUN  apt-get update && \
-  DEBIAN_FRONTEND=noninteractive apt-get --yes install git tox make python-all python-pip debhelper && \
+  DEBIAN_FRONTEND=noninteractive apt-get --yes install git tox make python python-pip debhelper && \
   DEBIAN_FRONTEND=noninteractive apt-get --yes install wget python-dev python-software-properties python-stdeb&& \
   DEBIAN_FRONTEND=noninteractive pip install -U pip && \
   DEBIAN_FRONTENT=noninteractive pip install -U requests logutils jsonschema lxml && \
