@@ -44,8 +44,12 @@ class Vim(object):
                                               datacenter['uuid']), vim_account)
 
     def _detach(self, vim_name):
+        tenant_name = 'osm'
+        tenant = self._get_ro_tenant()
+        if tenant is None:
+            raise ClientException("tenant {} not found".format(tenant_name))
         return self._ro_http.delete_cmd('openmano/{}/datacenters/{}'
-                                        .format('osm', vim_name))
+                                        .format(tenant["uuid"], vim_name))
 
     def create(self, name, vim_access):
         vim_account = {}
@@ -152,6 +156,7 @@ class Vim(object):
         self._update_ro_accounts()
 
     def list(self):
+        self._update_ro_accounts()
         if self._client._so_version == 'v3':
             resp = self._http.get_cmd('v1/api/operational/{}ro-account-state'
                     .format(self._client.so_rbac_project_path))
