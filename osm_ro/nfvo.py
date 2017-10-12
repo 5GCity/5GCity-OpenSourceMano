@@ -803,6 +803,12 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
         db_flavors = []
         uuid_list = []
         vnfd_uuid_list = []
+        vnfd_catalog_descriptor = vnf_descriptor.get("vnfd:vnfd-catalog")
+        if not vnfd_catalog_descriptor:
+            vnfd_catalog_descriptor = vnf_descriptor.get("vnfd-catalog")
+        vnfd_descriptor_list = vnfd_catalog_descriptor.get("vnfd")
+        if not vnfd_descriptor_list:
+            vnfd_descriptor_list = vnfd_catalog_descriptor.get("vnfd:vnfd")
         for vnfd_yang in myvnfd.vnfd_catalog.vnfd.itervalues():
             vnfd = vnfd_yang.get()
 
@@ -820,6 +826,10 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                 "short_name": get_str(vnfd, "short-name", 255),
                 "descriptor": str(vnf_descriptor)[:60000]
             }
+
+            for vnfd_descriptor in vnfd_descriptor_list:
+                if vnfd_descriptor["id"] == str(vnfd["id"]):
+                    break
 
             # table nets (internal-vld)
             net_id2uuid = {}  # for mapping interface with network
@@ -1025,9 +1035,12 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                             db_interface["external_name"] = get_str(cp, "name", 255)
                             cp_name2iface_uuid[db_interface["external_name"]] = iface_uuid
                             cp_name2vm_uuid[db_interface["external_name"]] = vm_uuid
-                            if cp.get("port-security-enabled") == False:
+                            for cp_descriptor in vnfd_descriptor["connection-point"]:
+                                if cp_descriptor["name"] == db_interface["external_name"]:
+                                    break
+                            if str(cp_descriptor.get("port-security-enabled")).lower() == "false":
                                 db_interface["port_security"] = 0
-                            elif cp.get("port-security-enabled") == True:
+                            elif str(cp_descriptor.get("port-security-enabled")).lower() == "true":
                                 db_interface["port_security"] = 1
                         except KeyError:
                             raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'vdu[{vdu}]':"
@@ -1042,9 +1055,12 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                 for cp in vld.get("internal-connection-point").itervalues():
                                     if cp.get("id-ref") == iface.get("internal-connection-point-ref"):
                                         db_interface["net_id"] = net_id2uuid[vld.get("id")]
-                                        if cp.get("port-security-enabled") == False:
+                                        for cp_descriptor in vnfd_descriptor["connection-point"]:
+                                            if cp_descriptor["name"] == db_interface["external_name"]:
+                                                break
+                                        if str(cp_descriptor.get("port-security-enabled")).lower() == "false":
                                             db_interface["port_security"] = 0
-                                        elif cp.get("port-security-enabled") == True:
+                                        elif str(cp_descriptor.get("port-security-enabled")).lower() == "true":
                                             db_interface["port_security"] = 1
                                         break
                         except KeyError:
