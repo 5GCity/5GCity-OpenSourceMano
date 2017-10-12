@@ -33,7 +33,7 @@ __version__ = '0.1'
 
 from bottle import (ServerAdapter, route, run, server_names, redirect, default_app,
                      request, response, template, debug, TEMPLATE_PATH , static_file)
-from socket import gethostname
+from socket import getfqdn
 from datetime import datetime
 from xml.etree import ElementTree as ET
 import logging
@@ -55,8 +55,8 @@ except ImportError:
 #Set Constants
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 CERT_DIR = os.path.join(BASE_DIR, "SSL_certificate")
-certificate_name = gethostname() + ".cert"
-key_name = gethostname() + ".key"
+certificate_name = getfqdn() + ".cert"
+key_name = getfqdn() + ".key"
 CERTIFICATE = os.path.join(CERT_DIR, certificate_name)
 KEY = os.path.join(CERT_DIR, key_name)
 #CERTIFICATE = os.path.join(CERT_DIR, "www.vrops_webservice.com.cert")
@@ -225,17 +225,18 @@ class SSLWebServer(ServerAdapter):
 
         try:
             server.start()
-            logger.info("Started vROPs Web Serverice")
+            logger.info("Started vROPs Web Service")
         except Exception as exp:
             server.stop()
-            logger.error("Exception: {} Stopped vROPs Web Serverice".format(exp))
+            logger.error("Exception: {} Stopped vROPs Web Service".format(exp))
 
 
 if __name__ == "__main__":
     #Start SSL Web Service
-    logger.info("Start vROPs Web Serverice")
+    logger.info("Start vROPs Web Service")
     app = default_app()
     server_names['sslwebserver'] = SSLWebServer
-    run(app=app,host=gethostname(), port=8080, server='sslwebserver')
+    run(app=app,host=getfqdn(), port=8080, server='sslwebserver')
+
 
 
