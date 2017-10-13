@@ -42,11 +42,11 @@ The MON module communication is classified as
 Supported Plugins
 ******************
 
-Supported VIMs are OpenStack, VMWare, AWS for now.MON can send/receive metrics
+Supported VIMs are OpenStack, VMWare, AWS for now. MON can send/receive metrics
 and alarms from the following plugins in this release.
 
  - Gnocchi, Aodh (OpenStack)
- - vrOps (VMWare)
+ - vROps (VMWare)
  - CloudWatch (AWS)
 
 Developers

@@ -22,6 +22,9 @@
 """Aodh plugin for the OSM monitoring module."""
 
 import logging
+import sys
+
+sys.path.append("MON/")
 
 logging.basicConfig(filename='aodh_MON.log', format='%(asctime)s %(message)s',
                     datefmt='%m/%d/%Y %I:%M:%S %p', filemode='a',

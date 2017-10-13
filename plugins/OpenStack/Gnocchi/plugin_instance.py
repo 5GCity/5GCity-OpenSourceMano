@@ -22,6 +22,9 @@
 """Gnocchi plugin for the OSM monitoring module."""
 
 import logging
+import sys
+
+sys.path.append("MON/")
 
 logging.basicConfig(filename='gnocchi_MON.log', datefmt='%m/%d/%Y %I:%M:%S %p',
                     format='%(asctime)s %(message)s', filemode='a',

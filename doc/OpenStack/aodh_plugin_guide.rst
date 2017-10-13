@@ -36,13 +36,21 @@ metrics:
     |      Gnocchi Metric         |            Aodh Alarm           |
     +-----------------------------+---------------------------------+
     | AVERAGE_MEMORY_UTILIZATION  | AVERAGE_MEMORY_UTILIZATION      |
+    |                             |                                 |
     | DISK_READ_OPS               | DISK_READ_OPS                   |
+    |                             |                                 |
     | DISK_WRITE_OPS              | DISK_WRITE_OPS                  |
+    |                             |                                 |
     | DISK_READ_BYTES             | DISK_READ_BYTES                 |
+    |                             |                                 |
     | DISK_WRITE_BYTES            | DISK_WRITE_BYTES                |
+    |                             |                                 |
     | PACKETS_DROPPED             | NET_PACKETS_DROPPED             |
+    |                             |                                 |
     | PACKETS_RECEIVED            | PACKETS_IN_ABOVE_THRESHOLD      |
+    |                             |                                 |
     | PACKETS_SENT                | PACKETS_OUT_ABOVE_THRESHOLD     |
+    |                             |                                 |
     | CPU_UTILIZATION             | CPU_UTILIZATION_ABOVE_THRESHOLD |
     +-----------------------------+---------------------------------+
 
