@@ -24,12 +24,19 @@ CHARM_BUILD_DIR := $(BUILD_DIR)/builds
 CHARM_SRC_DIRS := $(addprefix $(CHARM_SRC_DIR)/, $(CHARMS))
 CHARM_BUILD_DIRS := $(addprefix $(CHARM_BUILD_DIR)/, $(CHARMS))
 CHARM_DOCKER_TAG := charm-tools
+DOCKER_BUILD     ?=
 
 all: $(CHARM_BUILD_DIRS)
 
 clean:
 	-@ $(RM) -rf $(CHARM_BUILD_DIR)
 
+
+ifdef DOCKER_BUILD
 $(CHARM_BUILD_DIR)/%: $(CHARM_SRC_DIR)/%
 	docker build -t $(CHARM_DOCKER_TAG) .
 	docker run -u $$(id -u):$$(id -g) -v$$(pwd):$$(pwd) -w$$(pwd) $(CHARM_DOCKER_TAG) charm-build -o $(BUILD_DIR) $<
+else
+$(CHARM_BUILD_DIR)/%: $(CHARM_SRC_DIR)/%
+	charm-build -o $(BUILD_DIR) $<
+endif

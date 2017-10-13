@@ -140,12 +140,15 @@ $(DESCRIPTOR_DIR)/vnfd/ping_vnf/build/%.tar.gz:
 $(DESCRIPTOR_DIR)/vnfd/pong_vnf/build/%.tar.gz:
 	$(MAKE) -C $(DESCRIPTOR_DIR)/vnfd/pong_vnf
 
-$(DESCRIPTOR_DIR)/vnfd/ping_pong_ns/build/%.tar.gz:
+$(DESCRIPTOR_DIR)/nsd/ping_pong_ns/build/%.tar.gz:
 	$(MAKE) -C $(DESCRIPTOR_DIR)/nsd/ping_pong_ns
 
-ping_pong: check_OSM_HOSTNAME check_openstack_env
+ping_pong: check_OSM_HOSTNAME check_openstack_env \
+    $(DESCRIPTOR_DIR)/vnfd/ping_vnf/build/ping_vnf.tar.gz \
+    $(DESCRIPTOR_DIR)/vnfd/pong_vnf/build/pong_vnf.tar.gz \
+    $(DESCRIPTOR_DIR)/nsd/ping_pong_ns/build/ping_pong_ns.tar.gz
 	$(Q)$(MAKE) \
-        TEST_VNFD_DESCRIPTORS="$(DESCRIPTOR_DIR)/vnfd/ping_vnf/build/ping_vnf.tar.gz $(DESCRIPTOR_DIR)/vnfd/pong_vnf/build/pong_vnf.tar.gz" \
+        TEST_VNFD_DESCRIPTORS="$(DESCRIPTOR_DIR)/vnfd/ping_vnf/build/ping_vnf.tar.gz,$(DESCRIPTOR_DIR)/vnfd/pong_vnf/build/pong_vnf.tar.gz" \
         TEST_NSD_DESCRIPTORS=$(DESCRIPTOR_DIR)/nsd/ping_pong_ns/build/ping_pong_ns.tar.gz \
         JUNITXML=pytest-$@.xml \
         PYTEST_OPTIONS="$(PYTEST_OPTIONS) -m vnf" _run_test

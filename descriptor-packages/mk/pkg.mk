@@ -24,7 +24,7 @@ CHARM_DIR        := $(TOPDIR)/juju-charms
 CHARM_SRC_DIR    := $(CHARM_DIR)/layers
 CHARM_DOCKER_TAG := charm-tools
 CHARM_BUILD_DIR  := $(CHARM_DIR)/builds
-DOCKER_BUILD     ?= $(shell which docker)
+DOCKER_BUILD     ?=
 
 Q=@
 
