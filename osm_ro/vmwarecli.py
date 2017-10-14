@@ -554,7 +554,7 @@ def boot_image(vim=None, image_name=None, vm_name=None):
                 return None
 
         print (" Booting {} image id {} ".format(vm_name, vim_catalog))
-        vm_uuid = vim.new_vminstance(name=vm_name, image_id=vim_catalog)
+        vm_uuid, _ = vim.new_vminstance(name=vm_name, image_id=vim_catalog)
         if vm_uuid is not None and validate_uuid4(vm_uuid):
             print("Image booted and vm uuid {}".format(vm_uuid))
             vapp_dict = vim.get_vapp(vdc_name=namespace.vcdvdc, vapp_name=vm_uuid, isuuid=True)

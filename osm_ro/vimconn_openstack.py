@@ -936,7 +936,7 @@ class vimconnector(vimconn.vimconnector):
 
     def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
                        availability_zone_index=None, availability_zone_list=None):
-        '''Adds a VM instance to VIM
+        """Adds a VM instance to VIM
         Params:
             start: indicates if VM must start or boot in pause mode. Ignored
             image_id,flavor_id: iamge and flavor uuid
@@ -971,20 +971,25 @@ class vimconnector(vimconn.vimconnector):
             availability_zone_list: list of availability zones given by user in the VNFD descriptor.  Ignore if
                 availability_zone_index is None
                 #TODO ip, security groups
-        Returns the instance identifier
-        '''
+        Returns a tuple with the instance identifier and created_items or raises an exception on error
+            created_items can be None or a dictionary where this method can include key-values that will be passed to
+            the method delete_vminstance and action_vminstance. Can be used to store created ports, volumes, etc.
+            Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
+            as not present.
+        """
         self.logger.debug("new_vminstance input: image='%s' flavor='%s' nics='%s'",image_id, flavor_id,str(net_list))
         try:
             server = None
-            metadata={}
-            net_list_vim=[]
-            external_network=[]     # list of external networks to be connected to instance, later on used to create floating_ip
+            created_items = {}
+            metadata = {}
+            net_list_vim = []
+            external_network = []   # list of external networks to be connected to instance, later on used to create floating_ip
             no_secured_ports = []   # List of port-is with port-security disabled
             self._reload_connection()
-            metadata_vpci={}   # For a specific neutron plugin
+            metadata_vpci = {}   # For a specific neutron plugin
             block_device_mapping = None
             for net in net_list:
-                if not net.get("net_id"): #skip non connected iface
+                if not net.get("net_id"):   # skip non connected iface
                     continue
 
                 port_dict={
@@ -1024,6 +1029,7 @@ class vimconnector(vimconn.vimconnector):
                 if net.get("mac_address"):
                     port_dict["mac_address"]=net["mac_address"]
                 new_port = self.neutron.create_port({"port": port_dict })
+                created_items[("port", str(new_port["port"]["id"]))] = True
                 net["mac_adress"] = new_port["port"]["mac_address"]
                 net["vim_id"] = new_port["port"]["id"]
                 # if try to use a network without subnetwork, it will return a emtpy list
@@ -1064,10 +1070,10 @@ class vimconnector(vimconn.vimconnector):
             security_groups   = self.config.get('security_groups')
             if type(security_groups) is str:
                 security_groups = ( security_groups, )
-            #cloud config
+            # cloud config
             config_drive, userdata = self._create_user_data(cloud_config)
 
-            #Create additional volumes in case these are present in disk_list
+            # Create additional volumes in case these are present in disk_list
             base_disk_index = ord('b')
             if disk_list != None:
                 block_device_mapping = {}
@@ -1078,10 +1084,11 @@ class vimconnector(vimconn.vimconnector):
                     else:
                         volume = self.cinder.volumes.create(size=disk['size'], name=name + '_vd' +
                                     chr(base_disk_index))
+                    created_items[("volume", str(volume.id))] = True
                     block_device_mapping['_vd' +  chr(base_disk_index)] = volume.id
                     base_disk_index += 1
 
-                #wait until volumes are with status available
+                # wait until volumes are with status available
                 keep_waiting = True
                 elapsed_time = 0
                 while keep_waiting and elapsed_time < volume_timeout:
@@ -1093,17 +1100,8 @@ class vimconnector(vimconn.vimconnector):
                         time.sleep(1)
                         elapsed_time += 1
 
-                #if we exceeded the timeout rollback
+                # if we exceeded the timeout rollback
                 if elapsed_time >= volume_timeout:
-                    #delete the volumes we just created
-                    for volume_id in block_device_mapping.itervalues():
-                        self.cinder.volumes.delete(volume_id)
-
-                    #delete ports we just created
-                    for net_item  in net_list_vim:
-                        if 'port-id' in net_item:
-                            self.neutron.delete_port(net_item['port-id'])
-
                     raise vimconn.vimconnException('Timeout creating volumes for instance ' + name,
                                                    http_code=vimconn.HTTP_Request_Timeout)
             # get availability Zone
@@ -1130,23 +1128,21 @@ class vimconnector(vimconn.vimconnector):
             for port_id in no_secured_ports:
                 try:
                     self.neutron.update_port(port_id, {"port": {"port_security_enabled": False, "security_groups": None} })
-
                 except Exception as e:
                     self.logger.error("It was not possible to disable port security for port {}".format(port_id))
-                    self.delete_vminstance(server.id)
                     raise
 
-            #print "DONE :-)", server
-            pool_id = None
-            floating_ips = self.neutron.list_floatingips().get("floatingips", ())
+            # print "DONE :-)", server
 
+            pool_id = None
             if external_network:
+                floating_ips = self.neutron.list_floatingips().get("floatingips", ())
                 self.__wait_for_vm(server.id, 'ACTIVE')
 
             for floating_network in external_network:
                 try:
                     assigned = False
-                    while(assigned == False):
+                    while not assigned:
                         if floating_ips:
                             ip = floating_ips.pop(0)
                             if not ip.get("port_id", False) and ip.get('tenant_id') == server.tenant_id:
@@ -1190,7 +1186,7 @@ class vimconnector(vimconn.vimconnector):
                         continue
                     raise
 
-            return server.id
+            return server.id, created_items
 #        except nvExceptions.NotFound as e:
 #            error_value=-vimconn.HTTP_Not_Found
 #            error_text= "vm instance %s not found" % vm_id
@@ -1198,19 +1194,13 @@ class vimconnector(vimconn.vimconnector):
 #            raise vimconn.vimconnException(type(e).__name__ + ": "+  str(e), http_code=vimconn.HTTP_Bad_Request)
 
         except Exception as e:
-            # delete the volumes we just created
-            if block_device_mapping:
-                for volume_id in block_device_mapping.itervalues():
-                    self.cinder.volumes.delete(volume_id)
-
-            # Delete the VM
-            if server != None:
-                self.delete_vminstance(server.id)
-            else:
-                # delete ports we just created
-                for net_item in net_list_vim:
-                    if 'port-id' in net_item:
-                        self.neutron.delete_port(net_item['port-id'])
+            server_id = None
+            if server:
+                server_id = server.id
+            try:
+                self.delete_vminstance(server_id, created_items)
+            except Exception as e2:
+                self.logger.error("new_vminstance rollback fail {}".format(e2))
 
             self._format_exception(e)
 
@@ -1276,50 +1266,57 @@ class vimconnector(vimconn.vimconnector):
         except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, nvExceptions.BadRequest, ConnectionError) as e:
             self._format_exception(e)
 
-    def delete_vminstance(self, vm_id):
+    def delete_vminstance(self, vm_id, created_items=None):
         '''Removes a VM instance from VIM. Returns the old identifier
         '''
         #print "osconnector: Getting VM from VIM"
+        if created_items == None:
+            created_items = {}
         try:
             self._reload_connection()
-            #delete VM ports attached to this networks before the virtual machine
-            ports = self.neutron.list_ports(device_id=vm_id)
-            for p in ports['ports']:
+            # delete VM ports attached to this networks before the virtual machine
+            for k, v in created_items.items():
+                if not v:  # skip already deleted
+                    continue
                 try:
-                    self.neutron.delete_port(p["id"])
+                    if k[0] == "port":
+                        self.neutron.delete_port(k[1])
                 except Exception as e:
                     self.logger.error("Error deleting port: " + type(e).__name__ + ": "+  str(e))
 
-            #commented because detaching the volumes makes the servers.delete not work properly ?!?
-            #dettach volumes attached
-            server = self.nova.servers.get(vm_id)
-            volumes_attached_dict = server._info['os-extended-volumes:volumes_attached']
-            #for volume in volumes_attached_dict:
-            #    self.cinder.volumes.detach(volume['id'])
+            # #commented because detaching the volumes makes the servers.delete not work properly ?!?
+            # #dettach volumes attached
+            # server = self.nova.servers.get(vm_id)
+            # volumes_attached_dict = server._info['os-extended-volumes:volumes_attached']   #volume['id']
+            # #for volume in volumes_attached_dict:
+            # #    self.cinder.volumes.detach(volume['id'])
 
-            self.nova.servers.delete(vm_id)
+            if vm_id:
+                self.nova.servers.delete(vm_id)
 
-            #delete volumes.
-            #Although having detached them should have them  in active status
-            #we ensure in this loop
+            # delete volumes. Although having detached, they should have in active status before deleting
+            # we ensure in this loop
             keep_waiting = True
             elapsed_time = 0
             while keep_waiting and elapsed_time < volume_timeout:
                 keep_waiting = False
-                for volume in volumes_attached_dict:
-                    if self.cinder.volumes.get(volume['id']).status != 'available':
-                        keep_waiting = True
-                    else:
-                        self.cinder.volumes.delete(volume['id'])
+                for k, v in created_items.items():
+                    if not v:  # skip already deleted
+                        continue
+                    try:
+                        if k[0] == "volume":
+                            if self.cinder.volumes.get(k[1]).status != 'available':
+                                keep_waiting = True
+                            else:
+                                self.cinder.volumes.delete(k[1])
+                    except Exception as e:
+                        self.logger.error("Error deleting volume: " + type(e).__name__ + ": " + str(e))
                 if keep_waiting:
                     time.sleep(1)
                     elapsed_time += 1
-
-            return vm_id
+            return None
         except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)
-        #TODO insert exception vimconn.HTTP_Unauthorized
-        #if reaching here is because an exception
 
     def refresh_vms_status(self, vm_list):
         '''Get the status of the virtual machines and their interfaces/ports
@@ -1423,9 +1420,9 @@ class vimconnector(vimconn.vimconnector):
             vm_dict[vm_id] = vm
         return vm_dict
 
-    def action_vminstance(self, vm_id, action_dict):
+    def action_vminstance(self, vm_id, action_dict, created_items={}):
         '''Send and action over a VM instance from VIM
-        Returns the vm_id if the action was successfully sent to the VIM'''
+        Returns None or the console dict if the action was successfully sent to the VIM'''
         self.logger.debug("Action over VM '%s': %s", vm_id, str(action_dict))
         try:
             self._reload_connection()
@@ -1492,7 +1489,7 @@ class vimconnector(vimconn.vimconnector):
                 except Exception as e:
                     raise vimconn.vimconnException("Unexpected response from VIM " + str(console_dict))
 
-            return vm_id
+            return None
         except (ksExceptions.ClientException, nvExceptions.ClientException, nvExceptions.NotFound, ConnectionError) as e:
             self._format_exception(e)
         #TODO insert exception vimconn.HTTP_Unauthorized

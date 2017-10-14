@@ -1005,7 +1005,7 @@ class test_vimconn_new_vminstance(test_base):
 
         net_list = [{'use': self.__class__.net_type, 'name': name, 'floating_ip': False, 'vpci': vpci, 'port_security': True, 'type': 'virtual', 'net_id': self.__class__.network_id}]
 
-        self.__class__.instance_id = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=self.__class__.image_id, flavor_id=flavor_id, net_list=net_list)
+        self.__class__.instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=self.__class__.image_id, flavor_id=flavor_id, net_list=net_list)
 
         self.assertEqual(type(self.__class__.instance_id),str)
 
@@ -1024,7 +1024,7 @@ class test_vimconn_new_vminstance(test_base):
 
         net_list = [{'use': self.__class__.net_type, 'name': name, 'floating_ip': False, 'port_security': True, 'model': model_name, 'type': 'virtual', 'net_id': self.__class__.network_id}]
 
-        instance_id = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=self.__class__.image_id,
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=self.__class__.image_id,
                                                                                            flavor_id=flavor_id,
                                                                                              net_list=net_list)
         self.assertEqual(type(instance_id),str)
@@ -1048,7 +1048,7 @@ class test_vimconn_new_vminstance(test_base):
 
         net_list = [{'use': net_use, 'name': name, 'floating_ip': False, 'port_security': True, 'type': 'virtual', 'net_id': self.__class__.network_id}]
 
-        instance_id = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=self.__class__.image_id,
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=self.__class__.image_id,
                                                                                            flavor_id=flavor_id,
                                                                                              net_list=net_list)
         self.assertEqual(type(instance_id),str)
@@ -1072,7 +1072,7 @@ class test_vimconn_new_vminstance(test_base):
 
         net_list = [{'use': self.__class__.net_type, 'name': name, 'floating_ip': False, 'port_security': True, 'type': _type, 'net_id': self.__class__.network_id}]
 
-        instance_id = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=self.__class__.image_id,
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=self.__class__.image_id,
                                                                                            flavor_id=flavor_id,
                                                                                              net_list=net_list)
         self.assertEqual(type(instance_id),str)
@@ -1102,7 +1102,7 @@ class test_vimconn_new_vminstance(test_base):
 
         net_list = [{'use': self.__class__.net_type, 'name': name, 'floating_ip': False, 'port_security': True, 'type': 'virtual', 'net_id': self.__class__.network_id}]
 
-        instance_id = test_config["vim_conn"].new_vminstance(name='Cloud_vm', image_id=self.__class__.image_id,
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Cloud_vm', image_id=self.__class__.image_id,
                                                                                            flavor_id=flavor_id,
                                                                                              net_list=net_list,
                                                                                        cloud_config=cloud_data)
@@ -1128,7 +1128,7 @@ class test_vimconn_new_vminstance(test_base):
 
         net_list = [{'use': self.__class__.net_type, 'name': name, 'floating_ip': False, 'port_security': True, 'type': 'virtual', 'net_id': self.__class__.network_id}]
 
-        instance_id = test_config["vim_conn"].new_vminstance(name='VM_test1', image_id=self.__class__.image_id,
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='VM_test1', image_id=self.__class__.image_id,
                                                                                            flavor_id=flavor_id,
                                                                                              net_list=net_list,
                                                                                          disk_list=device_data)

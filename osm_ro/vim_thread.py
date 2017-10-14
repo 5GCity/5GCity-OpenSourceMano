@@ -43,6 +43,7 @@ The task content are (M: stored at memory, D: stored at database):
                 iface_id: uuid of intance_interfaces
                 sdn_port_id:
                 sdn_net_id:
+            created_items: dictionary with extra elements created that need to be deleted. e.g. ports, volumes,...
             created:    False if the VIM element is not created by other actions, and it should not be deleted
             vim_status: VIM status of the element. Stored also at database in the instance_XXX
     M   depends:    dict with task_index(from depends_on) to task class
@@ -533,6 +534,10 @@ class vim_thread(threading.Thread):
                             task["extra"]["sdn_vim_id"] = to_supersede["extra"]["sdn_vim_id"]
                         if to_supersede["extra"].get("interfaces"):
                             task["extra"]["interfaces"] = to_supersede["extra"]["interfaces"]
+                        if to_supersede["extra"].get("created_items"):
+                            if not task["extra"].get("created_items"):
+                                task["extra"]["created_items"] = {}
+                            task["extra"]["created_items"].update(to_supersede["extra"]["created_items"])
                     # Mark task as SUPERSEDED.
                     #   If task is in self.pending_tasks, it will be removed and database will be update
                     #   If task is in self.refresh_tasks, it will be removed
@@ -649,7 +654,7 @@ class vim_thread(threading.Thread):
                             "Cannot create VM because depends on a network not created or found: " +
                             str(task_net["error_msg"]))
                     net["net_id"] = network_id
-            vim_vm_id = self.vim.new_vminstance(*params)
+            vim_vm_id, created_items = self.vim.new_vminstance(*params)
 
             # fill task_interfaces. Look for snd_net_id at database for each interface
             task_interfaces = {}
@@ -669,6 +674,7 @@ class vim_thread(threading.Thread):
             task["vim_interfaces"] = {}
             task["extra"]["interfaces"] = task_interfaces
             task["extra"]["created"] = True
+            task["extra"]["created_items"] = created_items
             task["error_msg"] = None
             task["status"] = "DONE"
             task["vim_id"] = vim_vm_id
@@ -698,7 +704,7 @@ class vim_thread(threading.Thread):
                             iface["sdn_port_id"], vm_vim_id) + str(e), exc_info=True)
                         # TODO Set error_msg at instance_nets
 
-            self.vim.delete_vminstance(vm_vim_id)
+            self.vim.delete_vminstance(vm_vim_id, task["extra"].get("created_items"))
             task["status"] = "DONE"
             task["error_msg"] = None
             return True, None
@@ -713,6 +719,13 @@ class vim_thread(threading.Thread):
             return False, None
 
     def _get_net_internal(self, task, filter_param):
+        """
+        Common code for get_net and new_net. It looks for a network on VIM with the filter_params
+        :param task: task for this find or find-or-create action
+        :param filter_param: parameters to send to the vimconnector
+        :return: a dict with the content to update the instance_nets database table. Raises an exception on error, or
+            when network is not found or found more than one
+        """
         vim_nets = self.vim.get_network_list(filter_param)
         if not vim_nets:
             raise VimThreadExceptionNotFound("Network not found with this criteria: '{}'".format(filter))

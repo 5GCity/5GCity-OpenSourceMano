@@ -2409,7 +2409,7 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
                 else:
                     av_index = None
 
-                vm_id = myvim.new_vminstance(myVMDict['name'], myVMDict['description'], myVMDict.get('start', None),
+                vm_id, _ = myvim.new_vminstance(myVMDict['name'], myVMDict['description'], myVMDict.get('start', None),
                                              myVMDict['imageRef'], myVMDict['flavorRef'], myVMDict['networks'],
                                              availability_zone_index=av_index,
                                              availability_zone_list=vnf_availability_zones)

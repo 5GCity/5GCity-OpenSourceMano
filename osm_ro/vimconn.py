@@ -519,7 +519,11 @@ class vimconnector():
             availability_zone_index: Index of availability_zone_list to use for this this VM. None if not AV required
             availability_zone_list: list of availability zones given by user in the VNFD descriptor.  Ignore if
                 availability_zone_index is None
-        Returns the instance identifier or raises an exception on error
+        Returns a tuple with the instance identifier and created_items or raises an exception on error
+            created_items can be None or a dictionary where this method can include key-values that will be passed to
+            the method delete_vminstance and action_vminstance. Can be used to store created ports, volumes, etc.
+            Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
+            as not present.
         """
         raise vimconnNotImplemented( "Should have implemented this" )
         
@@ -527,9 +531,14 @@ class vimconnector():
         """Returns the VM instance information from VIM"""
         raise vimconnNotImplemented( "Should have implemented this" )
         
-    def delete_vminstance(self, vm_id):
-        """Removes a VM instance from VIM
-        Returns the instance identifier"""
+    def delete_vminstance(self, vm_id, created_items=None):
+        """
+        Removes a VM instance from VIM and each associate elements
+        :param vm_id: VIM identifier of the VM, provided by method new_vminstance
+        :param created_items: dictionary with extra items to be deleted. provided by method new_vminstance and/or method
+            action_vminstance
+        :return: None or the same vm_id. Raises an exception on fail
+        """
         raise vimconnNotImplemented( "Should have implemented this" )
 
     def refresh_vms_status(self, vm_list):
@@ -560,9 +569,18 @@ class vimconnector():
         """
         raise vimconnNotImplemented( "Should have implemented this" )
     
-    def action_vminstance(self, vm_id, action_dict):
-        """Send and action over a VM instance from VIM
-        Returns the vm_id if the action was successfully sent to the VIM"""
+    def action_vminstance(self, vm_id, action_dict, created_items={}):
+        """
+        Send and action over a VM instance. Returns created_items if the action was successfully sent to the VIM.
+        created_items is a dictionary with items that
+        :param vm_id: VIM identifier of the VM, provided by method new_vminstance
+        :param action_dict: dictionary with the action to perform
+        :param created_items: provided by method new_vminstance is a dictionary with key-values that will be passed to
+            the method delete_vminstance. Can be used to store created ports, volumes, etc. Format is vimconnector
+            dependent, but do not use nested dictionaries and a value of None should be the same as not present. This
+            method can modify this value
+        :return: None, or a console dict
+        """
         raise vimconnNotImplemented( "Should have implemented this" )
     
     def get_vminstance_console(self, vm_id, console_type="vnc"):

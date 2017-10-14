@@ -634,7 +634,11 @@ class vimconnector(vimconn.vimconnector):
                 disk_list': (optional) list with additional disks to the VM. Each item is a dict with:
                     image_id': (optional). VIM id of an existing image. If not provided an empty disk must be mounted
                     size': (mandatory) string with the size of the disk in GB
-        Returns: instance identifier or raises an exception on error
+        Returns a tuple with the instance identifier and created_items or raises an exception on error
+            created_items can be None or a dictionary where this method can include key-values that will be passed to
+            the method delete_vminstance and action_vminstance. Can be used to store created ports, volumes, etc.
+            Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
+            as not present.
         """
 
         self.logger.debug("Creating a new VM instance")
@@ -682,7 +686,7 @@ class vimconnector(vimconn.vimconnector):
                     net_list[index]['vim_id'] = reservation.instances[0].interfaces[index].id
 
             instance = reservation.instances[0]
-            return instance.id
+            return instance.id, None
         except Exception as e:
             self.format_vimconn_exception(e)
 
@@ -696,7 +700,7 @@ class vimconnector(vimconn.vimconnector):
         except Exception as e:
             self.format_vimconn_exception(e)
 
-    def delete_vminstance(self, vm_id):
+    def delete_vminstance(self, vm_id, created_items=None):
         """Removes a VM instance from VIM
         Returns the instance identifier"""
 
@@ -772,7 +776,7 @@ class vimconnector(vimconn.vimconnector):
             self.logger.error("Exception getting vm status: %s", str(e), exc_info=True)
             self.format_vimconn_exception(e)
 
-    def action_vminstance(self, vm_id, action_dict):
+    def action_vminstance(self, vm_id, action_dict, created_items={}):
         """Send and action over a VM instance from VIM
         Returns the vm_id if the action was successfully sent to the VIM"""
 
@@ -787,6 +791,6 @@ class vimconnector(vimconn.vimconnector):
                 self.conn.terminate_instances(vm_id)
             elif "reboot" in action_dict:
                 self.conn.reboot_instances(vm_id)
-            return vm_id
+            return None
         except Exception as e:
             self.format_vimconn_exception(e)

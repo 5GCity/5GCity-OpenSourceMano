@@ -800,7 +800,11 @@ class vimconnector(vimconn.vimconnector):
                 type: 'virtual', 'PF', 'VF', 'VFnotShared'
                 vim_id: filled/added by this function
                 #TODO ip, security groups
-        Returns the instance identifier
+        Returns a tuple with the instance identifier and created_items or raises an exception on error
+            created_items can be None or a dictionary where this method can include key-values that will be passed to
+            the method delete_vminstance and action_vminstance. Can be used to store created ports, volumes, etc.
+            Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
+            as not present.
         '''
         self.logger.debug("new_vminstance input: image='%s' flavor='%s' nics='%s'", image_id, flavor_id, str(net_list))
         try:
@@ -873,7 +877,7 @@ class vimconnector(vimconn.vimconnector):
                                 #        return result, error_text
                                 break
         
-            return vminstance_id
+            return vminstance_id, None
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
         
@@ -897,7 +901,7 @@ class vimconnector(vimconn.vimconnector):
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
         
-    def delete_vminstance(self, vm_id):
+    def delete_vminstance(self, vm_id, created_items=None):
         '''Removes a VM instance from VIM, returns the deleted vm_id'''
         try:
             self._get_my_tenant()
@@ -1026,7 +1030,7 @@ class vimconnector(vimconn.vimconnector):
             net_dict[net_id] = net
         return net_dict
     
-    def action_vminstance(self, vm_id, action_dict):
+    def action_vminstance(self, vm_id, action_dict, created_items={}):
         '''Send and action over a VM instance from VIM'''
         '''Returns the status'''
         try:
@@ -1037,7 +1041,7 @@ class vimconnector(vimconn.vimconnector):
             self.logger.info("Action over VM instance POST %s", url)
             vim_response = requests.post(url, headers = self.headers_req, data=json.dumps(action_dict) )
             self._check_http_request_response(vim_response)
-            return vm_id
+            return None
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
 

@@ -1420,7 +1420,11 @@ class vimconnector(vimconn.vimconnector):
             availability_zone_index: Index of availability_zone_list to use for this this VM. None if not AV required
             availability_zone_list: list of availability zones given by user in the VNFD descriptor.  Ignore if
                 availability_zone_index is None
-        Returns the instance identifier or raises an exception on error
+        Returns a tuple with the instance identifier and created_items or raises an exception on error
+            created_items can be None or a dictionary where this method can include key-values that will be passed to
+            the method delete_vminstance and action_vminstance. Can be used to store created ports, volumes, etc.
+            Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
+            as not present.
         """
         self.logger.info("Creating new instance for entry {}".format(name))
         self.logger.debug("desc {} boot {} image_id: {} flavor_id: {} net_list: {} cloud_config {} disk_list {}".format(
@@ -1767,7 +1771,7 @@ class vimconnector(vimconn.vimconnector):
             wait_time +=INTERVAL_TIME
 
         if vapp_uuid is not None:
-            return vapp_uuid
+            return vapp_uuid, None
         else:
             raise vimconn.vimconnUnexpectedResponse("new_vminstance(): Failed create new vm instance {}".format(name))
 
@@ -1825,7 +1829,7 @@ class vimconnector(vimconn.vimconnector):
 
         return vm_dict
 
-    def delete_vminstance(self, vm__vim_uuid):
+    def delete_vminstance(self, vm__vim_uuid, created_items=None):
         """Method poweroff and remove VM instance from vcloud director network.
 
         Args:
@@ -2129,7 +2133,7 @@ class vimconnector(vimconn.vimconnector):
             self.logger.debug("ParseError in response from NSX Manager {}".format(Err.message), exc_info=True)
 
 
-    def action_vminstance(self, vm__vim_uuid=None, action_dict=None):
+    def action_vminstance(self, vm__vim_uuid=None, action_dict=None, created_items={}):
         """Send and action over a VM instance from VIM
         Returns the vm_id if the action was successfully sent to the VIM"""
 
@@ -2139,7 +2143,7 @@ class vimconnector(vimconn.vimconnector):
 
         vdc = self.get_vdc_details()
         if vdc is None:
-            return -1, "Failed to get a reference of VDC for a tenant {}".format(self.tenant_name)
+            raise  vimconn.vimconnException("Failed to get a reference of VDC for a tenant {}".format(self.tenant_name))
 
         vapp_name = self.get_namebyvappid(vdc, vm__vim_uuid)
         if vapp_name is None:
@@ -2191,7 +2195,7 @@ class vimconnector(vimconn.vimconnector):
                 reboot_task = the_vapp.reboot()
             else:
                 raise vimconn.vimconnException("action_vminstance: Invalid action {} or action is None.".format(action_dict))
-            return vm__vim_uuid
+            return None
         except Exception as exp :
             self.logger.debug("action_vminstance: Failed with Exception {}".format(exp))
             raise vimconn.vimconnException("action_vminstance: Failed with Exception {}".format(exp))
