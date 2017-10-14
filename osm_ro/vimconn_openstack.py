@@ -981,12 +981,12 @@ class vimconnector(vimconn.vimconnector):
         try:
             server = None
             created_items = {}
-            metadata = {}
+            # metadata = {}
             net_list_vim = []
             external_network = []   # list of external networks to be connected to instance, later on used to create floating_ip
             no_secured_ports = []   # List of port-is with port-security disabled
             self._reload_connection()
-            metadata_vpci = {}   # For a specific neutron plugin
+            # metadata_vpci = {}   # For a specific neutron plugin
             block_device_mapping = None
             for net in net_list:
                 if not net.get("net_id"):   # skip non connected iface
@@ -998,31 +998,33 @@ class vimconnector(vimconn.vimconnector):
                     "admin_state_up": True
                 }
                 if net["type"]=="virtual":
-                    if "vpci" in net:
-                        metadata_vpci[ net["net_id"] ] = [[ net["vpci"], "" ]]
+                    pass
+                    # if "vpci" in net:
+                    #     metadata_vpci[ net["net_id"] ] = [[ net["vpci"], "" ]]
                 elif net["type"]=="VF": # for VF
-                    if "vpci" in net:
-                        if "VF" not in metadata_vpci:
-                            metadata_vpci["VF"]=[]
-                        metadata_vpci["VF"].append([ net["vpci"], "" ])
+                    # if "vpci" in net:
+                    #     if "VF" not in metadata_vpci:
+                    #         metadata_vpci["VF"]=[]
+                    #     metadata_vpci["VF"].append([ net["vpci"], "" ])
                     port_dict["binding:vnic_type"]="direct"
-                    ########## VIO specific Changes #######
+                    # VIO specific Changes
                     if self.vim_type == "VIO":
-                        #Need to create port with port_security_enabled = False and no-security-groups
+                        # Need to create port with port_security_enabled = False and no-security-groups
                         port_dict["port_security_enabled"]=False
                         port_dict["provider_security_groups"]=[]
                         port_dict["security_groups"]=[]
                 else: #For PT
-                    ########## VIO specific Changes #######
-                    #Current VIO release does not support port with type 'direct-physical'
-                    #So no need to create virtual port in case of PCI-device.
-                    #Will update port_dict code when support gets added in next VIO release
+                    # VIO specific Changes
+                    # Current VIO release does not support port with type 'direct-physical'
+                    # So no need to create virtual port in case of PCI-device.
+                    # Will update port_dict code when support gets added in next VIO release
                     if self.vim_type == "VIO":
-                        raise vimconn.vimconnNotSupportedException("Current VIO release does not support full passthrough (PT)")
-                    if "vpci" in net:
-                        if "PF" not in metadata_vpci:
-                            metadata_vpci["PF"]=[]
-                        metadata_vpci["PF"].append([ net["vpci"], "" ])
+                        raise vimconn.vimconnNotSupportedException(
+                            "Current VIO release does not support full passthrough (PT)")
+                    # if "vpci" in net:
+                    #     if "PF" not in metadata_vpci:
+                    #         metadata_vpci["PF"]=[]
+                    #     metadata_vpci["PF"].append([ net["vpci"], "" ])
                     port_dict["binding:vnic_type"]="direct-physical"
                 if not port_dict["name"]:
                     port_dict["name"]=name
@@ -1056,18 +1058,18 @@ class vimconnector(vimconn.vimconnector):
                 if net.get("port_security") == False:
                     no_secured_ports.append(new_port["port"]["id"])
 
-            if metadata_vpci:
-                metadata = {"pci_assignement": json.dumps(metadata_vpci)}
-                if len(metadata["pci_assignement"]) >255:
-                    #limit the metadata size
-                    #metadata["pci_assignement"] = metadata["pci_assignement"][0:255]
-                    self.logger.warn("Metadata deleted since it exceeds the expected length (255) ")
-                    metadata = {}
+            # if metadata_vpci:
+            #     metadata = {"pci_assignement": json.dumps(metadata_vpci)}
+            #     if len(metadata["pci_assignement"]) >255:
+            #         #limit the metadata size
+            #         #metadata["pci_assignement"] = metadata["pci_assignement"][0:255]
+            #         self.logger.warn("Metadata deleted since it exceeds the expected length (255) ")
+            #         metadata = {}
 
-            self.logger.debug("name '%s' image_id '%s'flavor_id '%s' net_list_vim '%s' description '%s' metadata %s",
-                              name, image_id, flavor_id, str(net_list_vim), description, str(metadata))
+            self.logger.debug("name '%s' image_id '%s'flavor_id '%s' net_list_vim '%s' description '%s'",
+                              name, image_id, flavor_id, str(net_list_vim), description)
 
-            security_groups   = self.config.get('security_groups')
+            security_groups = self.config.get('security_groups')
             if type(security_groups) is str:
                 security_groups = ( security_groups, )
             # cloud config
@@ -1088,7 +1090,7 @@ class vimconnector(vimconn.vimconnector):
                     block_device_mapping['_vd' +  chr(base_disk_index)] = volume.id
                     base_disk_index += 1
 
-                # wait until volumes are with status available
+                # Wait until volumes are with status available
                 keep_waiting = True
                 elapsed_time = 0
                 while keep_waiting and elapsed_time < volume_timeout:
@@ -1100,19 +1102,19 @@ class vimconnector(vimconn.vimconnector):
                         time.sleep(1)
                         elapsed_time += 1
 
-                # if we exceeded the timeout rollback
+                # If we exceeded the timeout rollback
                 if elapsed_time >= volume_timeout:
                     raise vimconn.vimconnException('Timeout creating volumes for instance ' + name,
                                                    http_code=vimconn.HTTP_Request_Timeout)
             # get availability Zone
             vm_av_zone = self._get_vm_availability_zone(availability_zone_index, availability_zone_list)
 
-            self.logger.debug("nova.servers.create({}, {}, {}, nics={}, meta={}, security_groups={}, "
+            self.logger.debug("nova.servers.create({}, {}, {}, nics={}, security_groups={}, "
                               "availability_zone={}, key_name={}, userdata={}, config_drive={}, "
-                              "block_device_mapping={})".format(name, image_id, flavor_id, net_list_vim, metadata,
+                              "block_device_mapping={})".format(name, image_id, flavor_id, net_list_vim,
                                                                 security_groups, vm_av_zone, self.config.get('keypair'),
-                              userdata, config_drive, block_device_mapping))
-            server = self.nova.servers.create(name, image_id, flavor_id, nics=net_list_vim, meta=metadata,
+                                                                userdata, config_drive, block_device_mapping))
+            server = self.nova.servers.create(name, image_id, flavor_id, nics=net_list_vim,
                                               security_groups=security_groups,
                                               availability_zone=vm_av_zone,
                                               key_name=self.config.get('keypair'),
