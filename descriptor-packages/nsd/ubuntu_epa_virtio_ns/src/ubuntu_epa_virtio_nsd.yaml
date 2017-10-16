@@ -1,0 +1,24 @@
+nsd:nsd-catalog:
+    nsd:
+    -   id: ubuntu_epa_virtio_ns
+        name: ubuntu_epa_virtio_ns
+        short-name: ubuntu_epa_virtio_ns
+        description: One VNF based on Ubuntu 16.04 with EPA and virtio connected to mgmt
+        vendor: OSM
+        version: '1.0'
+        logo: tef.png
+
+        constituent-vnfd:
+        -   member-vnf-index: 1
+            vnfd-id-ref: ubuntu_epa_virtio_vnf
+
+        vld:
+        -   id: mgmt
+            name: mgmt
+            short-name: mgmt
+            type: ELAN
+            vnfd-connection-point-ref:
+            -   member-vnf-index-ref: 1
+                vnfd-id-ref: ubuntu_epa_virtio_vnf
+                vnfd-connection-point-ref: eth0
+
