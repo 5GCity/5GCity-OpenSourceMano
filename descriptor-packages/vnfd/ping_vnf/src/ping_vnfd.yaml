@@ -31,7 +31,6 @@ vnfd:vnfd-catalog:
             type: VPORT
         http-endpoint:
         -   path: api/v1/ping/stats
-            polling_interval_secs: '2'
             port: '18888'
         mgmt-interface:
             dashboard-params:
@@ -50,11 +49,13 @@ vnfd:vnfd-catalog:
             count: '1'
             interface:
             -   name: eth0
+                position: 0
                 type: EXTERNAL
                 virtual-interface:
                     type: VIRTIO
                 external-connection-point-ref: ping_vnfd/cp0
             -   name: eth1
+                position: 1
                 type: EXTERNAL
                 virtual-interface:
                     type: VIRTIO
@@ -67,7 +68,7 @@ vnfd:vnfd-catalog:
                 storage-gb: '4'
                 vcpu-count: '1'
         vnf-configuration:
-            service-primitive:
+            config-primitive:
             -   name: start
             -   name: stop
             -   name: restart

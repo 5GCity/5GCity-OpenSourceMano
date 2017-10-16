@@ -63,16 +63,16 @@ def start():
         remove_flag('actions.start')
         return
 
+    # Attempt to raise the non-mgmt interface, but ignore failures if
+    # the interface is already up.
     try:
-        cmd =  "sudo timeout 30 /sbin/ifup eth1"
+        cmd = "sudo timeout 30 /sbin/ifup eth1"
         result, err = charms.sshproxy._run(cmd)
     except Exception as e:
-        action_fail('command failed: {}, errors: {}'.format(e, e.output))
-        remove_flag('actions.start')
-        return
+        pass
 
     try:
-        cmd =  "sudo timeout 30 /usr/bin/systemctl start {}". \
+        cmd = "sudo timeout 30 /usr/bin/systemctl start {}". \
               format(cfg['mode'])
         result, err = charms.sshproxy._run(cmd)
     except Exception as e:

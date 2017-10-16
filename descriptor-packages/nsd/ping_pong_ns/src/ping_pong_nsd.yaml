@@ -74,6 +74,7 @@ nsd:nsd-catalog:
             description: Management VL
             name: mgmt_vl
             short-name: mgmt_vl
+            vim-network-name: mgmt
             type: ELAN
             vendor: RIFT.io
             version: '1.0'
