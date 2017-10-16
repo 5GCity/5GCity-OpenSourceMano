@@ -21,6 +21,7 @@ OSM vim API handling
 from osmclient.common.exceptions import ClientException
 from osmclient.common.exceptions import NotFound
 import json
+import time
 
 
 class Vim(object):
@@ -155,8 +156,13 @@ class Vim(object):
             raise ClientException("failed to delete vim {} - {}".format(vim_name, resp))
         self._update_ro_accounts()
 
-    def list(self):
-        self._update_ro_accounts()
+    def list(self, ro_update):
+        if ro_update:
+            self._update_ro_accounts()
+            # the ro_update needs to be made synchronous, for now this works around the issue
+            # and waits a resonable amount of time for the update to finish
+            time.sleep(2)
+
         if self._client._so_version == 'v3':
             resp = self._http.get_cmd('v1/api/operational/{}ro-account-state'
                     .format(self._client.so_rbac_project_path))

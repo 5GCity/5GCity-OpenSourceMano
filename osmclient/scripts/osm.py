@@ -460,9 +460,12 @@ def vim_delete(ctx, name):
 
 
 @cli.command(name='vim-list')
+@click.option('--ro_update/--no_ro_update',
+              default=False,
+              help='update list from RO')
 @click.pass_context
-def vim_list(ctx):
-    resp = ctx.obj.vim.list()
+def vim_list(ctx, ro_update):
+    resp = ctx.obj.vim.list(ro_update)
     table = PrettyTable(['vim name', 'uuid'])
     for vim in resp:
         table.add_row([vim['name'], vim['uuid']])
