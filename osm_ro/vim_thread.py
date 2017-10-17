@@ -24,17 +24,18 @@
 """"
 This is thread that interacts with a VIM. It processes TASKs sequentially against a single VIM.
 The tasks are stored at database in table vim_actions
-The task content is:
+The task content are (M: stored at memory, D: stored at database):
     MD  instance_action_id:  reference a global action over an instance-scenario: database instance_actions
     MD  task_index:     index number of the task. This with the previous are a key
     MD  datacenter_vim_id:  should contain the uuid of the VIM managed by this thread
     MD  vim_id:     id of the vm,net,etc at VIM
-    MD  action:     CREATE, DELETE, LOOK, TODO: LOOK_CREATE
+    MD  action:     CREATE, DELETE, FIND
     MD  item:       database table name, can be instance_vms, instance_nets, TODO: datacenter_flavors, datacenter_images
     MD  item_id:    uuid of the referenced entry in the preious table
     MD  status:     SCHEDULED,BUILD,DONE,FAILED,SUPERSEDED
     MD  extra:      text with yaml format at database, dict at memory with:
-            params:     list with the params to be sent to the VIM for CREATE or LOOK. For DELETE the vim_id is taken from other related tasks
+            params:     list with the params to be sent to the VIM for CREATE or FIND. For DELETE the vim_id is taken from other related tasks
+            find:       (only for CREATE tasks) if present it should FIND before creating and use if existing. Contains the FIND params
             depends_on: list with the 'task_index'es of tasks that must be completed before. e.g. a vm depends on a net
             sdn_net_id: used for net.
             tries:
@@ -75,6 +76,10 @@ def is_task_id(task_id):
 
 
 class VimThreadException(Exception):
+    pass
+
+
+class VimThreadExceptionNotFound(VimThreadException):
     pass
 
 
@@ -520,7 +525,8 @@ class vim_thread(threading.Thread):
                 for to_supersede in self.grouped_tasks.get(action_key, ()):
                     if to_supersede["action"] == "FIND" and to_supersede.get("vim_id"):
                         task["vim_id"] = to_supersede["vim_id"]
-                    if to_supersede["action"] == "CREATE" and to_supersede.get("vim_id"):
+                    if to_supersede["action"] == "CREATE" and to_supersede.get("vim_id") and \
+                            to_supersede["extra"].get("created", True):
                         need_delete_action = True
                         task["vim_id"] = to_supersede["vim_id"]
                         if to_supersede["extra"].get("sdn_vim_id"):
@@ -621,48 +627,6 @@ class vim_thread(threading.Thread):
             return error_text[:max_length//2-3] + " ... " + error_text[-max_length//2+3:]
         return error_text
 
-    def new_net(self, task):
-        try:
-            task_id = task["instance_action_id"] + "." + str(task["task_index"])
-            params = task["params"]
-            vim_net_id = self.vim.new_network(*params)
-
-            net_name = params[0]
-            net_type = params[1]
-
-            network = None
-            sdn_net_id = None
-            sdn_controller = self.vim.config.get('sdn-controller')
-            if sdn_controller and (net_type == "data" or net_type == "ptp"):
-                network = {"name": net_name, "type": net_type, "region": self.vim["config"]["datacenter_id"]}
-
-                vim_net = self.vim.get_network(vim_net_id)
-                if vim_net.get('encapsulation') != 'vlan':
-                    raise vimconn.vimconnException(
-                        "net '{}' defined as type '{}' has not vlan encapsulation '{}'".format(
-                            net_name, net_type, vim_net['encapsulation']))
-                network["vlan"] = vim_net.get('segmentation_id')
-                try:
-                    with self.db_lock:
-                        sdn_net_id = self.ovim.new_network(network)
-                except (ovimException, Exception) as e:
-                    self.logger.error("task=%s cannot create SDN network vim_net_id=%s input='%s' ovimException='%s'",
-                                      str(task_id), vim_net_id, str(network), str(e))
-            task["status"] = "DONE"
-            task["extra"]["vim_info"] = {}
-            task["extra"]["sdn_net_id"] = sdn_net_id
-            task["error_msg"] = None
-            task["vim_id"] = vim_net_id
-            instance_element_update = {"vim_net_id": vim_net_id, "sdn_net_id": sdn_net_id, "status": "BUILD", "error_msg": None}
-            return True, instance_element_update
-        except vimconn.vimconnException as e:
-            self.logger.error("Error creating NET, task=%s: %s", str(task_id), str(e))
-            task["status"] = "FAILED"
-            task["vim_id"] = None
-            task["error_msg"] = self._format_vim_error_msg(str(e))
-            instance_element_update = {"vim_net_id": None, "sdn_net_id": None, "status": "VIM_ERROR", "error_msg": task["error_msg"]}
-            return False, instance_element_update
-
     def new_vm(self, task):
         try:
             params = task["params"]
@@ -704,6 +668,7 @@ class vim_thread(threading.Thread):
             task["vim_info"] = {}
             task["vim_interfaces"] = {}
             task["extra"]["interfaces"] = task_interfaces
+            task["extra"]["created"] = True
             task["error_msg"] = None
             task["status"] = "DONE"
             task["vim_id"] = vim_vm_id
@@ -747,6 +712,105 @@ class vim_thread(threading.Thread):
             task["status"] = "FAILED"
             return False, None
 
+    def _get_net_internal(self, task, filter_param):
+        vim_nets = self.vim.get_network_list(filter_param)
+        if not vim_nets:
+            raise VimThreadExceptionNotFound("Network not found with this criteria: '{}'".format(filter))
+        elif len(vim_nets) > 1:
+            raise VimThreadException("More than one network found with this criteria: '{}'".format(filter))
+        vim_net_id = vim_nets[0]["id"]
+
+        # Discover if this network is managed by a sdn controller
+        sdn_net_id = None
+        with self.db_lock:
+            result = self.db.get_rows(SELECT=('sdn_net_id',), FROM='instance_nets',
+                                      WHERE={'vim_net_id': vim_net_id, 'instance_scenario_id': None,
+                                             'datacenter_tenant_id': self.datacenter_tenant_id})
+        if result:
+            sdn_net_id = result[0]['sdn_net_id']
+
+        task["status"] = "DONE"
+        task["extra"]["vim_info"] = {}
+        task["extra"]["created"] = False
+        task["extra"]["sdn_net_id"] = sdn_net_id
+        task["error_msg"] = None
+        task["vim_id"] = vim_net_id
+        instance_element_update = {"vim_net_id": vim_net_id, "created": False, "status": "BUILD",
+                                   "error_msg": None}
+        return instance_element_update
+
+    def get_net(self, task):
+        try:
+            task_id = task["instance_action_id"] + "." + str(task["task_index"])
+            params = task["params"]
+            filter_param = params[0]
+            instance_element_update = self._get_net_internal(task, filter_param)
+            return True, instance_element_update
+
+        except (vimconn.vimconnException, VimThreadException) as e:
+            self.logger.error("Error looking for  NET, task=%s: %s", str(task_id), str(e))
+            task["status"] = "FAILED"
+            task["vim_id"] = None
+            task["error_msg"] = self._format_vim_error_msg(str(e))
+            instance_element_update = {"vim_net_id": None, "status": "VIM_ERROR",
+                                       "error_msg": task["error_msg"]}
+            return False, instance_element_update
+
+    def new_net(self, task):
+        try:
+            task_id = task["instance_action_id"] + "." + str(task["task_index"])
+            # FIND
+            if task["extra"].get("find"):
+                action_text = "finding"
+                filter_param = task["extra"]["find"][0]
+                try:
+                    instance_element_update = self._get_net_internal(task, filter_param)
+                    return True, instance_element_update
+                except VimThreadExceptionNotFound:
+                    pass
+            # CREATE
+            params = task["params"]
+            action_text = "creating"
+            vim_net_id = self.vim.new_network(*params)
+
+            net_name = params[0]
+            net_type = params[1]
+
+            sdn_net_id = None
+            sdn_controller = self.vim.config.get('sdn-controller')
+            if sdn_controller and (net_type == "data" or net_type == "ptp"):
+                network = {"name": net_name, "type": net_type, "region": self.vim["config"]["datacenter_id"]}
+
+                vim_net = self.vim.get_network(vim_net_id)
+                if vim_net.get('encapsulation') != 'vlan':
+                    raise vimconn.vimconnException(
+                        "net '{}' defined as type '{}' has not vlan encapsulation '{}'".format(
+                            net_name, net_type, vim_net['encapsulation']))
+                network["vlan"] = vim_net.get('segmentation_id')
+                try:
+                    with self.db_lock:
+                        sdn_net_id = self.ovim.new_network(network)
+                except (ovimException, Exception) as e:
+                    self.logger.error("task=%s cannot create SDN network vim_net_id=%s input='%s' ovimException='%s'",
+                                      str(task_id), vim_net_id, str(network), str(e))
+            task["status"] = "DONE"
+            task["extra"]["vim_info"] = {}
+            task["extra"]["sdn_net_id"] = sdn_net_id
+            task["extra"]["created"] = True
+            task["error_msg"] = None
+            task["vim_id"] = vim_net_id
+            instance_element_update = {"vim_net_id": vim_net_id, "sdn_net_id": sdn_net_id, "status": "BUILD",
+                                       "created": True, "error_msg": None}
+            return True, instance_element_update
+        except vimconn.vimconnException as e:
+            self.logger.error("Error {} NET, task=%s: %s", action_text, str(task_id), str(e))
+            task["status"] = "FAILED"
+            task["vim_id"] = None
+            task["error_msg"] = self._format_vim_error_msg(str(e))
+            instance_element_update = {"vim_net_id": None, "sdn_net_id": None, "status": "VIM_ERROR",
+                                       "error_msg": task["error_msg"]}
+            return False, instance_element_update
+
     def del_net(self, task):
         net_vim_id = task["vim_id"]
         sdn_net_id = task["extra"].get("sdn_net_id")
@@ -775,42 +839,3 @@ class vim_thread(threading.Thread):
                 return True, None
         task["status"] = "FAILED"
         return False, None
-
-    def get_net(self, task):
-        try:
-            task_id = task["instance_action_id"] + "." + str(task["task_index"])
-            params = task["params"]
-            filter = params[0]
-            vim_nets = self.vim.get_network_list(filter)
-            if not vim_nets:
-                raise VimThreadException("Network not found with this criteria: '{}'".format(filter))
-            elif len(vim_nets) > 1:
-                raise VimThreadException("More than one network found with this criteria: '{}'".format(filter))
-            vim_net_id = vim_nets[0]["id"]
-
-            # Discover if this network is managed by a sdn controller
-            sdn_net_id = None
-            with self.db_lock:
-                result = self.db.get_rows(SELECT=('sdn_net_id',), FROM='instance_nets',
-                    WHERE={'vim_net_id': vim_net_id, 'instance_scenario_id': None,
-                           'datacenter_tenant_id': self.datacenter_tenant_id})
-            if result:
-                sdn_net_id = result[0]['sdn_net_id']
-
-            task["status"] = "DONE"
-            task["extra"]["vim_info"] = {}
-            task["extra"]["created"] = False
-            task["extra"]["sdn_net_id"] = sdn_net_id
-            task["error_msg"] = None
-            task["vim_id"] = vim_net_id
-            instance_element_update = {"vim_net_id": vim_net_id, "created": False, "status": "BUILD",
-                                       "error_msg": None}
-            return True, instance_element_update
-        except (vimconn.vimconnException, VimThreadException) as e:
-            self.logger.error("Error looking for  NET, task=%s: %s", str(task_id), str(e))
-            task["status"] = "FAILED"
-            task["vim_id"] = None
-            task["error_msg"] = self._format_vim_error_msg(str(e))
-            instance_element_update = {"vim_net_id": None, "status": "VIM_ERROR",
-                                       "error_msg": task["error_msg"]}
-            return False, instance_element_update

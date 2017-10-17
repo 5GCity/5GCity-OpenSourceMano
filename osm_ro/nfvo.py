@@ -2823,19 +2823,15 @@ def create_instance(mydb, tenant_id, instance_dict):
                     create_network = True
                     lookfor_network = False
 
-                if lookfor_network and create_network:
-                    # TODO create two tasks FIND + CREATE with their relationship
-                    task_action = "FIND"
-                    task_params = (lookfor_filter,)
-                    # task_action = "CREATE"
-                    # task_params = (net_vim_name, net_type, sce_net.get('ip_profile', None))
-                    # task
+                task_extra = {}
+                if create_network:
+                    task_action = "CREATE"
+                    task_extra["params"] = (net_vim_name, net_type, sce_net.get('ip_profile', None))
+                    if lookfor_network:
+                        task_extra["find"] = (lookfor_filter,)
                 elif lookfor_network:
                     task_action = "FIND"
-                    task_params = (lookfor_filter,)
-                elif create_network:
-                    task_action = "CREATE"
-                    task_params = (net_vim_name, net_type, sce_net.get('ip_profile', None))
+                    task_extra["params"] = (lookfor_filter,)
 
                 # fill database content
                 net_uuid = str(uuid4())
@@ -2860,7 +2856,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                     "action": task_action,
                     "item": "instance_nets",
                     "item_id": net_uuid,
-                    "extra": yaml.safe_dump({"params": task_params}, default_flow_style=True, width=256)
+                    "extra": yaml.safe_dump(task_extra, default_flow_style=True, width=256)
                 }
                 net2task_id['scenario'][sce_net['uuid']][datacenter_id] = task_index
                 task_index += 1
