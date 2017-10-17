@@ -3770,75 +3770,78 @@ def delete_datacenter(mydb, datacenter):
 
 def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=None, vim_tenant_name=None, vim_username=None, vim_password=None, config=None):
     # get datacenter info
-    datacenter_id = get_datacenter_uuid(mydb, None, datacenter)
+    try:
+        datacenter_id = get_datacenter_uuid(mydb, None, datacenter)
 
-    create_vim_tenant = True if not vim_tenant_id and not vim_tenant_name else False
+        create_vim_tenant = True if not vim_tenant_id and not vim_tenant_name else False
 
-    # get nfvo_tenant info
-    tenant_dict = mydb.get_table_by_uuid_name('nfvo_tenants', nfvo_tenant)
-    if vim_tenant_name==None:
-        vim_tenant_name=tenant_dict['name']
+        # get nfvo_tenant info
+        tenant_dict = mydb.get_table_by_uuid_name('nfvo_tenants', nfvo_tenant)
+        if vim_tenant_name==None:
+            vim_tenant_name=tenant_dict['name']
 
-    #check that this association does not exist before
-    tenants_datacenter_dict={"nfvo_tenant_id":tenant_dict['uuid'], "datacenter_id":datacenter_id }
-    tenants_datacenters = mydb.get_rows(FROM='tenants_datacenters', WHERE=tenants_datacenter_dict)
-    if len(tenants_datacenters)>0:
-        raise NfvoException("datacenter '{}' and tenant'{}' are already attached".format(datacenter_id, tenant_dict['uuid']), HTTP_Conflict)
+        #check that this association does not exist before
+        tenants_datacenter_dict={"nfvo_tenant_id":tenant_dict['uuid'], "datacenter_id":datacenter_id }
+        tenants_datacenters = mydb.get_rows(FROM='tenants_datacenters', WHERE=tenants_datacenter_dict)
+        if len(tenants_datacenters)>0:
+            raise NfvoException("datacenter '{}' and tenant'{}' are already attached".format(datacenter_id, tenant_dict['uuid']), HTTP_Conflict)
 
-    vim_tenant_id_exist_atdb=False
-    if not create_vim_tenant:
-        where_={"datacenter_id": datacenter_id}
-        if vim_tenant_id!=None:
-            where_["vim_tenant_id"] = vim_tenant_id
-        if vim_tenant_name!=None:
-            where_["vim_tenant_name"] = vim_tenant_name
-        #check if vim_tenant_id is already at database
-        datacenter_tenants_dict = mydb.get_rows(FROM='datacenter_tenants', WHERE=where_)
-        if len(datacenter_tenants_dict)>=1:
-            datacenter_tenants_dict = datacenter_tenants_dict[0]
-            vim_tenant_id_exist_atdb=True
-            #TODO check if a field has changed and edit entry at datacenter_tenants at DB
-        else: #result=0
+        vim_tenant_id_exist_atdb=False
+        if not create_vim_tenant:
+            where_={"datacenter_id": datacenter_id}
+            if vim_tenant_id!=None:
+                where_["vim_tenant_id"] = vim_tenant_id
+            if vim_tenant_name!=None:
+                where_["vim_tenant_name"] = vim_tenant_name
+            #check if vim_tenant_id is already at database
+            datacenter_tenants_dict = mydb.get_rows(FROM='datacenter_tenants', WHERE=where_)
+            if len(datacenter_tenants_dict)>=1:
+                datacenter_tenants_dict = datacenter_tenants_dict[0]
+                vim_tenant_id_exist_atdb=True
+                #TODO check if a field has changed and edit entry at datacenter_tenants at DB
+            else: #result=0
+                datacenter_tenants_dict = {}
+                #insert at table datacenter_tenants
+        else: #if vim_tenant_id==None:
+            #create tenant at VIM if not provided
+            try:
+                _, myvim = get_datacenter_by_name_uuid(mydb, None, datacenter, vim_user=vim_username,
+                                                                   vim_passwd=vim_password)
+                datacenter_name = myvim["name"]
+                vim_tenant_id = myvim.new_tenant(vim_tenant_name, "created by openmano for datacenter "+datacenter_name)
+            except vimconn.vimconnException as e:
+                raise NfvoException("Not possible to create vim_tenant {} at VIM: {}".format(vim_tenant_id, str(e)), HTTP_Internal_Server_Error)
             datacenter_tenants_dict = {}
-            #insert at table datacenter_tenants
-    else: #if vim_tenant_id==None:
-        #create tenant at VIM if not provided
-        try:
-            _, myvim = get_datacenter_by_name_uuid(mydb, None, datacenter, vim_user=vim_username,
-                                                               vim_passwd=vim_password)
-            datacenter_name = myvim["name"]
-            vim_tenant_id = myvim.new_tenant(vim_tenant_name, "created by openmano for datacenter "+datacenter_name)
-        except vimconn.vimconnException as e:
-            raise NfvoException("Not possible to create vim_tenant {} at VIM: {}".format(vim_tenant_id, str(e)), HTTP_Internal_Server_Error)
-        datacenter_tenants_dict = {}
-        datacenter_tenants_dict["created"]="true"
+            datacenter_tenants_dict["created"]="true"
 
-    #fill datacenter_tenants table
-    if not vim_tenant_id_exist_atdb:
-        datacenter_tenants_dict["vim_tenant_id"] = vim_tenant_id
-        datacenter_tenants_dict["vim_tenant_name"] = vim_tenant_name
-        datacenter_tenants_dict["user"] = vim_username
-        datacenter_tenants_dict["passwd"] = vim_password
-        datacenter_tenants_dict["datacenter_id"] = datacenter_id
-        if config:
-            datacenter_tenants_dict["config"] = yaml.safe_dump(config, default_flow_style=True, width=256)
-        id_ = mydb.new_row('datacenter_tenants', datacenter_tenants_dict, add_uuid=True, confidential_data=True)
-        datacenter_tenants_dict["uuid"] = id_
+        #fill datacenter_tenants table
+        if not vim_tenant_id_exist_atdb:
+            datacenter_tenants_dict["vim_tenant_id"] = vim_tenant_id
+            datacenter_tenants_dict["vim_tenant_name"] = vim_tenant_name
+            datacenter_tenants_dict["user"] = vim_username
+            datacenter_tenants_dict["passwd"] = vim_password
+            datacenter_tenants_dict["datacenter_id"] = datacenter_id
+            if config:
+                datacenter_tenants_dict["config"] = yaml.safe_dump(config, default_flow_style=True, width=256)
+            id_ = mydb.new_row('datacenter_tenants', datacenter_tenants_dict, add_uuid=True, confidential_data=True)
+            datacenter_tenants_dict["uuid"] = id_
 
-    #fill tenants_datacenters table
-    datacenter_tenant_id = datacenter_tenants_dict["uuid"]
-    tenants_datacenter_dict["datacenter_tenant_id"] = datacenter_tenant_id
-    mydb.new_row('tenants_datacenters', tenants_datacenter_dict)
-    # create thread
-    datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_dict['uuid'], datacenter_id)  # reload data
-    datacenter_name = myvim["name"]
-    thread_name = get_non_used_vim_name(datacenter_name, datacenter_id, tenant_dict['name'], tenant_dict['uuid'])
-    new_thread = vim_thread.vim_thread(myvim, task_lock, thread_name, datacenter_name, datacenter_tenant_id,
-                                       db=db, db_lock=db_lock, ovim=ovim)
-    new_thread.start()
-    thread_id = datacenter_tenants_dict["uuid"]
-    vim_threads["running"][thread_id] = new_thread
-    return datacenter_id
+        #fill tenants_datacenters table
+        datacenter_tenant_id = datacenter_tenants_dict["uuid"]
+        tenants_datacenter_dict["datacenter_tenant_id"] = datacenter_tenant_id
+        mydb.new_row('tenants_datacenters', tenants_datacenter_dict)
+        # create thread
+        datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_dict['uuid'], datacenter_id)  # reload data
+        datacenter_name = myvim["name"]
+        thread_name = get_non_used_vim_name(datacenter_name, datacenter_id, tenant_dict['name'], tenant_dict['uuid'])
+        new_thread = vim_thread.vim_thread(myvim, task_lock, thread_name, datacenter_name, datacenter_tenant_id,
+                                           db=db, db_lock=db_lock, ovim=ovim)
+        new_thread.start()
+        thread_id = datacenter_tenants_dict["uuid"]
+        vim_threads["running"][thread_id] = new_thread
+        return datacenter_id
+    except vimconn.vimconnException as e:
+        raise NfvoException(str(e), HTTP_Bad_Request)
 
 
 def edit_datacenter_to_tenant(mydb, nfvo_tenant, datacenter_id, vim_tenant_id=None, vim_tenant_name=None,
@@ -3880,9 +3883,6 @@ def edit_datacenter_to_tenant(mydb, nfvo_tenant, datacenter_id, vim_tenant_id=No
     return datacenter_id
 
 def deassociate_datacenter_to_tenant(mydb, tenant_id, datacenter, vim_tenant_id=None):
-    #get datacenter info
-    datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_id, datacenter)
-
     #get nfvo_tenant info
     if not tenant_id or tenant_id=="any":
         tenant_uuid = None
@@ -3890,8 +3890,9 @@ def deassociate_datacenter_to_tenant(mydb, tenant_id, datacenter, vim_tenant_id=
         tenant_dict = mydb.get_table_by_uuid_name('nfvo_tenants', tenant_id)
         tenant_uuid = tenant_dict['uuid']
 
+    datacenter_id = get_datacenter_uuid(mydb, tenant_uuid, datacenter)
     #check that this association exist before
-    tenants_datacenter_dict={"datacenter_id":datacenter_id }
+    tenants_datacenter_dict={"datacenter_id": datacenter_id }
     if tenant_uuid:
         tenants_datacenter_dict["nfvo_tenant_id"] = tenant_uuid
     tenant_datacenter_list = mydb.get_rows(FROM='tenants_datacenters', WHERE=tenants_datacenter_dict)
@@ -3911,6 +3912,7 @@ def deassociate_datacenter_to_tenant(mydb, tenant_id, datacenter, vim_tenant_id=
             if vim_tenant_dict['created']=='true':
                 #delete tenant at VIM if created by NFVO
                 try:
+                    datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_id, datacenter)
                     myvim.delete_tenant(vim_tenant_dict['vim_tenant_id'])
                 except vimconn.vimconnException as e:
                     warning = "Not possible to delete vim_tenant_id {} from VIM: {} ".format(vim_tenant_dict['vim_tenant_id'], str(e))
