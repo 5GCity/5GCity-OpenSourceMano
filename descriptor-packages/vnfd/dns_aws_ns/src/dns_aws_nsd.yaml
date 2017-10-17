@@ -1,0 +1,19 @@
+nsd:nsd-catalog:
+    nsd:nsd:
+    -   nsd:constituent-vnfd:
+        -   nsd:member-vnf-index: '1'
+            nsd:start-by-default: 'true'
+            nsd:vnfd-id-ref: dns_forwarder
+        nsd:id: dns_forwarder_ns
+        nsd:logo: dns.jpg
+        nsd:name: dns_forwarder_ns
+        nsd:vld:
+        -   nsd:id: management
+            nsd:mgmt-network: 'true'
+            nsd:name: management
+            nsd:vim-network-name: subnet-8a91b2c0
+            nsd:vnfd-connection-point-ref:
+            -   nsd:member-vnf-index-ref: '1'
+                nsd:vnfd-connection-point-ref: eth0
+                nsd:vnfd-id-ref: dns_forwarder
+        rw-nsd:meta: '{"containerPositionMap":{"1":{"top":210.5,"left":248,"right":498,"bottom":265.5,"width":250,"height":55},"ada27681-7f3e-4768-8be8-41973f849066":{"top":30,"left":135,"right":385,"bottom":85,"width":250,"height":55},"vld-1":{"top":60,"left":495,"right":745,"bottom":98,"width":250,"height":38},"management":{"top":90,"left":480,"right":730,"bottom":128,"width":250,"height":38}}}'
