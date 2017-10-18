@@ -10,26 +10,42 @@ from charms.reactive import (
     remove_state as remove_flag,
     set_state as set_flag,
     when,
+    when_not,
 )
 import charms.sshproxy
-from subprocess import (
-    Popen,
-    CalledProcessError,
-    PIPE,
-)
+# from subprocess import (
+#     Popen,
+#     CalledProcessError,
+#     PIPE,
+# )
 
 
 cfg = config()
 
 
-@when('config.changed')
+@when('config.changed', 'sshproxy.configured')
 def config_changed():
+    """Verify the configuration.
+    Verify that the charm has been configured
+    """
+    (validated, output) = charms.sshproxy.verify_ssh_credentials()
+    if not validated:
+        status_set('blocked', 'Unable to verify SSH credentials: {}'.format(
+            output
+        ))
     if all(k in cfg for k in ['mode']):
         if cfg['mode'] in ['ping', 'pong']:
             set_flag('pingpong.configured')
             status_set('active', 'ready!')
             return
     status_set('blocked', 'Waiting for configuration')
+
+
+@when('config.changed')
+@when_not('sshproxy.configured')
+def invalid_credentials():
+    status_set('blocked', 'Waiting for SSH credentials.')
+    pass
 
 
 def is_ping():
