@@ -27,13 +27,15 @@ export OSM_MDG=UI
 OSM_load_config
 OSM_git_checkout "$@"
 
+trap 'WARNING "INTERRUPT"; exit 1' INT
 
 INFO "starting build"
 make clean || FATAL "Make clean failed"
-make -j16 || FATAL "Make failed"
-sudo make install || FATAL "Make install Failed"
+./BUILD.sh
 
-INFO "build done"
-exit 0
+RC=$?
+
+INFO "done, RC=$RC"
+exit $RC
 
 
