@@ -61,6 +61,11 @@ function nat(){
     sudo $OSM_DEVOPS/installers/nat_osm
 }
 
+function FATAL(){
+    echo "FATAL error: Cannot install OSM due to \"$1\""
+    exit 1
+}
+
 #Update RO, SO and UI:
 function update(){
     echo -e "\nUpdating components"
@@ -375,7 +380,10 @@ fi
 need_packages="git jq"
 for package in $need_packages; do
     echo -e "Checking required packages: $package"
-    dpkg -l $package &>/dev/null || ! echo -e "     $package not installed.\nInstalling $package requires root privileges" || sudo apt-get install -y $package
+    dpkg -l $package &>/dev/null \
+        || ! echo -e "     $package not installed.\nInstalling $package requires root privileges" \
+        || sudo apt-get install -y $package \
+        || FATAL "failed to install $package"
 done
 
 if [ -z "$TEST_INSTALLER" ]; then
