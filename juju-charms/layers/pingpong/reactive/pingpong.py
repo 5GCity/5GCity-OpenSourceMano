@@ -23,11 +23,20 @@ import charms.sshproxy
 cfg = config()
 
 
+@when_not('pingpong.configured')
+def not_configured():
+    """Check the current configuration.
+    Check the current values in config to see if we have enough
+    information to continue."""
+    config_changed()
+
+
 @when('config.changed', 'sshproxy.configured')
 def config_changed():
     """Verify the configuration.
     Verify that the charm has been configured
     """
+    status_set('maintenance', 'Verifying configuration data...')
     (validated, output) = charms.sshproxy.verify_ssh_credentials()
     if not validated:
         status_set('blocked', 'Unable to verify SSH credentials: {}'.format(
