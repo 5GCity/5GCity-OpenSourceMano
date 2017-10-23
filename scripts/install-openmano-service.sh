@@ -25,7 +25,7 @@
 #it configures openmano to run as a service
 
 function usage(){
-    echo -e "usage: sudo $0 [OPTIONS]"
+    echo -e "usage: sudo -E $0 [OPTIONS]"
     echo -e "Configures openmano to run as a service at /opt"
     echo -e "  OPTIONS"
     echo -e "     -u USER_OWNER  user owner of the service, 'root' by default"

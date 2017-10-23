@@ -26,7 +26,7 @@
 #Ask for database user and password if not provided
 
 function usage(){
-    echo -e "usage: sudo $0 [OPTIONS]"
+    echo -e "usage: sudo -E $0 [OPTIONS]"
     echo -e "Install last stable source code in ./openmano and the needed packages"
     echo -e "On a Ubuntu 16.04 it configures openmano as a service"
     echo -e "  OPTIONS"
@@ -217,10 +217,10 @@ then
     [ "$_DISTRO" == "Ubuntu" ] && apt-get update -y
 
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && yum check-update -y
-    [ "$_DISTRO" == "CentOS" ] && sudo yum install -y epel-release
+    [ "$_DISTRO" == "CentOS" ] && yum install -y epel-release
     [ "$_DISTRO" == "Red" ] && wget http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm \
-        && sudo rpm -ivh epel-release-7-5.noarch.rpm && sudo yum install -y epel-release && rm -f epel-release-7-5.noarch.rpm
-    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && sudo yum repolist
+        && rpm -ivh epel-release-7-5.noarch.rpm && yum install -y epel-release && rm -f epel-release-7-5.noarch.rpm
+    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && yum repolist
 
     echo -e "\n"\
         "#################################################################\n"\
@@ -239,11 +239,11 @@ then
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && easy_install -U bottle
 
     # required for vmware connector TODO move that to separete opt in install script
-    sudo pip install --upgrade pip
-    sudo pip install pyvcloud
-    sudo pip install progressbar
-    sudo pip install prettytable
-    sudo pip install pyvmomi
+    pip install --upgrade pip
+    pip install pyvcloud
+    pip install progressbar
+    pip install prettytable
+    pip install pyvmomi
 
     # required for AWS connector
     [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-boto"
@@ -427,7 +427,7 @@ then
     # echo 'alias service-openmano="service openmano"' >> ${HOME}/.bashrc
     echo
     echo "Done!  installed at /opt/openmano"
-    echo " Manage server with 'sudo service osm-ro start|stop|status|...' "
+    echo " Manage server with 'sudo -E service osm-ro start|stop|status|...' "
 else
     echo
     echo "Done!  you may need to logout and login again for loading client configuration"
