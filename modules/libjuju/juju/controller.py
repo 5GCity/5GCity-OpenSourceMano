@@ -1,11 +1,13 @@
 import asyncio
 import logging
 
+from . import errors
 from . import tag
 from . import utils
 from .client import client
 from .client import connection
 from .model import Model
+from .user import User
 
 log = logging.getLogger(__name__)
 
@@ -39,9 +41,11 @@ class Controller(object):
         """Connect to the current Juju controller.
 
         """
-        self.connection = (
-            await connection.Connection.connect_current_controller(
-                max_frame_size=self.max_frame_size))
+        jujudata = connection.JujuData()
+        controller_name = jujudata.current_controller()
+        if not controller_name:
+            raise errors.JujuConnectionError('No current controller')
+        return await self.connect_controller(controller_name)
 
     async def connect_controller(self, controller_name):
         """Connect to a Juju controller by name.
@@ -61,6 +65,47 @@ class Controller(object):
             await self.connection.close()
             self.connection = None
 
+    async def add_credential(self, name=None, credential=None, cloud=None,
+                             owner=None):
+        """Add or update a credential to the controller.
+
+        :param str name: Name of new credential. If None, the default
+            local credential is used.  Name must be provided if a credential
+            is given.
+        :param CloudCredential credential: Credential to add. If not given,
+            it will attempt to read from local data, if available.
+        :param str cloud: Name of cloud to associate the credential with.
+            Defaults to the same cloud as the controller.
+        :param str owner: Username that will own the credential. Defaults to
+            the current user.
+        :returns: Name of credential that was uploaded.
+        """
+        if not cloud:
+            cloud = await self.get_cloud()
+
+        if not owner:
+            owner = self.connection.info['user-info']['identity']
+
+        if credential and not name:
+            raise errors.JujuError('Name must be provided for credential')
+
+        if not credential:
+            name, credential = connection.JujuData().load_credential(cloud,
+                                                                     name)
+            if credential is None:
+                raise errors.JujuError('Unable to find credential: '
+                                       '{}'.format(name))
+
+        log.debug('Uploading credential %s', name)
+        cloud_facade = client.CloudFacade.from_connection(self.connection)
+        await cloud_facade.UpdateCredentials([
+            client.UpdateCloudCredential(
+                tag=tag.credential(cloud, tag.untag('user-', owner), name),
+                credential=credential,
+            )])
+
+        return name
+
     async def add_model(
             self, model_name, cloud_name=None, credential_name=None,
             owner=None, config=None, region=None):
@@ -70,9 +115,8 @@ class Controller(object):
         :param str cloud_name: Name of the cloud in which to create the
             model, e.g. 'aws'. Defaults to same cloud as controller.
         :param str credential_name: Name of the credential to use when
-            creating the model. Defaults to current credential. If you
-            pass a credential_name, you must also pass a cloud_name,
-            even if it's the default cloud.
+            creating the model. If not given, it will attempt to find a
+            default credential.
         :param str owner: Username that will own the model. Defaults to
             the current user.
         :param dict config: Model configuration.
@@ -85,6 +129,16 @@ class Controller(object):
         owner = owner or self.connection.info['user-info']['identity']
         cloud_name = cloud_name or await self.get_cloud()
 
+        try:
+            # attempt to add/update the credential from local data if available
+            credential_name = await self.add_credential(
+                name=credential_name,
+                cloud=cloud_name,
+                owner=owner)
+        except errors.JujuError:
+            # if it's not available locally, assume it's on the controller
+            pass
+
         if credential_name:
             credential = tag.credential(
                 cloud_name,
@@ -96,6 +150,11 @@ class Controller(object):
 
         log.debug('Creating model %s', model_name)
 
+        if not config or 'authorized-keys' not in config:
+            config = config or {}
+            config['authorized-keys'] = await utils.read_ssh_key(
+                loop=self.loop)
+
         model_info = await model_facade.CreateModel(
             tag.cloud(cloud_name),
             config,
@@ -104,24 +163,6 @@ class Controller(object):
             owner,
             region
         )
-
-        # Add our ssh key to the model, to work around
-        # https://bugs.launchpad.net/juju/+bug/1643076
-        try:
-            ssh_key = await utils.read_ssh_key(loop=self.loop)
-
-            if self.controller_name:
-                model_name = "{}:{}".format(self.controller_name, model_name)
-
-            cmd = ['juju', 'add-ssh-key', '-m', model_name, ssh_key]
-
-            await utils.execute_process(*cmd, log=log, loop=self.loop)
-        except Exception:
-            log.exception(
-                "Could not add ssh key to model. You will not be able "
-                "to ssh into machines in this model. "
-                "Manually running `juju add-ssh-key <key>` in the cli "
-                "may fix this problem.")
 
         model = Model()
         await model.connect(
@@ -136,24 +177,28 @@ class Controller(object):
 
         return model
 
-    async def destroy_models(self, *uuids):
+    async def destroy_models(self, *models):
         """Destroy one or more models.
 
-        :param str \*uuids: UUIDs of models to destroy
+        :param str \*models: Names or UUIDs of models to destroy
 
         """
+        uuids = await self._model_uuids()
+        models = [uuids[model] if model in uuids else model
+                  for model in models]
+
         model_facade = client.ModelManagerFacade.from_connection(
             self.connection)
 
         log.debug(
             'Destroying model%s %s',
-            '' if len(uuids) == 1 else 's',
-            ', '.join(uuids)
+            '' if len(models) == 1 else 's',
+            ', '.join(models)
         )
 
         await model_facade.DestroyModels([
-            client.Entity(tag.model(uuid))
-            for uuid in uuids
+            client.Entity(tag.model(model))
+            for model in models
         ])
     destroy_model = destroy_models
 
@@ -161,18 +206,26 @@ class Controller(object):
         """Add a user to this controller.
 
         :param str username: Username
+        :param str password: Password
         :param str display_name: Display name
-        :param str acl: Access control, e.g. 'read'
-        :param list models: Models to which the user is granted access
-
+        :returns: A :class:`~juju.user.User` instance
         """
         if not display_name:
             display_name = username
         user_facade = client.UserManagerFacade.from_connection(self.connection)
-        users = [{'display_name': display_name,
-                  'password': password,
-                  'username': username}]
-        return await user_facade.AddUser(users)
+        users = [client.AddUser(display_name=display_name,
+                                username=username,
+                                password=password)]
+        await user_facade.AddUser(users)
+        return await self.get_user(username)
+
+    async def remove_user(self, username):
+        """Remove a user from this controller.
+        """
+        client_facade = client.UserManagerFacade.from_connection(
+            self.connection)
+        user = tag.user(username)
+        await client_facade.RemoveUser([client.Entity(user)])
 
     async def change_user_password(self, username, password):
         """Change the password for a user in this controller.
@@ -231,17 +284,31 @@ class Controller(object):
         cloud = list(result.clouds.keys())[0]  # only lives on one cloud
         return tag.untag('cloud-', cloud)
 
-    async def get_models(self, all_=False, username=None):
-        """Return list of available models on this controller.
+    async def _model_uuids(self, all_=False, username=None):
+        controller_facade = client.ControllerFacade.from_connection(
+            self.connection)
+        for attempt in (1, 2, 3):
+            try:
+                response = await controller_facade.AllModels()
+                return {um.model.name: um.model.uuid
+                        for um in response.user_models}
+            except errors.JujuAPIError as e:
+                # retry concurrency error until resolved in Juju
+                # see: https://bugs.launchpad.net/juju/+bug/1721786
+                if 'has been removed' not in e.message or attempt == 3:
+                    raise
+                await asyncio.sleep(attempt, loop=self.loop)
+
+    async def list_models(self, all_=False, username=None):
+        """Return list of names of the available models on this controller.
 
         :param bool all_: List all models, regardless of user accessibilty
             (admin use only)
         :param str username: User for which to list models (admin use only)
 
         """
-        controller_facade = client.ControllerFacade.from_connection(
-            self.connection)
-        return await controller_facade.AllModels()
+        uuids = await self._model_uuids(all_, username)
+        return sorted(uuids.keys())
 
     def get_payloads(self, *patterns):
         """Return list of known payloads.
@@ -261,14 +328,6 @@ class Controller(object):
         """
         raise NotImplementedError()
 
-    def get_users(self, all_=False):
-        """Return list of users that can connect to this controller.
-
-        :param bool all_: Include disabled users
-
-        """
-        raise NotImplementedError()
-
     def login(self):
         """Log in to this controller.
 
@@ -284,25 +343,62 @@ class Controller(object):
         """
         raise NotImplementedError()
 
-    def get_model(self, name):
-        """Get a model by name.
+    async def get_model(self, model):
+        """Get a model by name or UUID.
 
-        :param str name: Model name
+        :param str model: Model name or UUID
 
         """
-        raise NotImplementedError()
+        uuids = await self._model_uuids()
+        if model in uuids:
+            name_or_uuid = uuids[model]
+        else:
+            name_or_uuid = model
 
-    async def get_user(self, username, include_disabled=False):
+        model = Model()
+        await model.connect(
+            self.connection.endpoint,
+            name_or_uuid,
+            self.connection.username,
+            self.connection.password,
+            self.connection.cacert,
+            self.connection.macaroons,
+            loop=self.loop,
+        )
+        return model
+
+    async def get_user(self, username):
         """Get a user by name.
 
         :param str username: Username
-
+        :returns: A :class:`~juju.user.User` instance
         """
         client_facade = client.UserManagerFacade.from_connection(
             self.connection)
         user = tag.user(username)
-        return await client_facade.UserInfo([client.Entity(user)],
-                                            include_disabled)
+        args = [client.Entity(user)]
+        try:
+            response = await client_facade.UserInfo(args, True)
+        except errors.JujuError as e:
+            if 'permission denied' in e.errors:
+                # apparently, trying to get info for a nonexistent user returns
+                # a "permission denied" error rather than an empty result set
+                return None
+            raise
+        if response.results and response.results[0].result:
+            return User(self, response.results[0].result)
+        return None
+
+    async def get_users(self, include_disabled=False):
+        """Return list of users that can connect to this controller.
+
+        :param bool include_disabled: Include disabled users
+        :returns: A list of :class:`~juju.user.User` instances
+        """
+        client_facade = client.UserManagerFacade.from_connection(
+            self.connection)
+        response = await client_facade.UserInfo(None, include_disabled)
+        return [User(self, r.result) for r in response.results]
 
     async def grant(self, username, acl='login'):
         """Set access level of the given user on the controller

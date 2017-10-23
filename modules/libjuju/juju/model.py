@@ -1402,7 +1402,7 @@ class Model(object):
         key_facade = client.KeyManagerFacade.from_connection(self.connection)
         key = base64.b64decode(bytes(key.strip().split()[1].encode('ascii')))
         key = hashlib.md5(key).hexdigest()
-        key = ':'.join(a+b for a, b in zip(key[::2], key[1::2]))
+        key = ':'.join(a + b for a, b in zip(key[::2], key[1::2]))
         await key_facade.DeleteKeys([key], user)
     remove_ssh_keys = remove_ssh_key
 
@@ -1658,8 +1658,9 @@ class BundleHandler(object):
         apps, args = [], []
 
         default_series = bundle.get('series')
+        apps_dict = bundle.get('applications', bundle.get('services', {}))
         for app_name in self.applications:
-            app_dict = bundle['services'][app_name]
+            app_dict = apps_dict[app_name]
             charm_dir = os.path.abspath(os.path.expanduser(app_dict['charm']))
             if not os.path.isdir(charm_dir):
                 continue
@@ -1688,7 +1689,7 @@ class BundleHandler(object):
             ], loop=self.model.loop)
             # Update the 'charm:' entry for each app with the new 'local:' url.
             for app_name, charm_url in zip(apps, charm_urls):
-                bundle['services'][app_name]['charm'] = charm_url
+                apps_dict[app_name]['charm'] = charm_url
 
         return bundle
 
@@ -1714,7 +1715,9 @@ class BundleHandler(object):
 
     @property
     def applications(self):
-        return list(self.bundle['services'].keys())
+        apps_dict = self.bundle.get('applications',
+                                    self.bundle.get('services', {}))
+        return list(apps_dict.keys())
 
     def resolve(self, reference):
         if reference and reference.startswith('$'):
