@@ -43,7 +43,7 @@ connectors: prepare
 	# python-novaclient is required for that
 	rm -f build/osm_ro/openmanolinkervimconn.py
 	cd build/osm_ro; for i in `ls vimconn_*.py |sed "s/\.py//"` ; do echo "import $$i" >> openmanolinkervimconn.py; done
-	python build/osm_ro/openmanolinkervimconn.py
+	python build/osm_ro/openmanolinkervimconn.py 2>&1
 	rm -f build/osm_ro/openmanolinkervimconn.py
 
 build: connectors prepare

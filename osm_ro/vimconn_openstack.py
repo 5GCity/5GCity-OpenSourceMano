@@ -161,16 +161,26 @@ class vimconnector(vimconn.vimconnector):
             if self.config.get('APIversion'):
                 self.api_version3 = self.config['APIversion'] == 'v3.3' or self.config['APIversion'] == '3'
             else:  # get from ending auth_url that end with v3 or with v2.0
-                self.api_version3 =  self.url.split("/")[-1] == "v3"
+                self.api_version3 =  self.url.endswith("/v3") or self.url.endswith("/v3/")
             self.session['api_version3'] = self.api_version3
             if self.api_version3:
+                if self.config.get('project_domain_id') or self.config.get('project_domain_name'):
+                    project_domain_id_default = None
+                else:
+                    project_domain_id_default = 'default'
+                if self.config.get('user_domain_id') or self.config.get('user_domain_name'):
+                    user_domain_id_default = None
+                else:
+                    user_domain_id_default = 'default'
                 auth = v3.Password(auth_url=self.url,
                                    username=self.user,
                                    password=self.passwd,
                                    project_name=self.tenant_name,
                                    project_id=self.tenant_id,
-                                   project_domain_id=self.config.get('project_domain_id', 'default'),
-                                   user_domain_id=self.config.get('user_domain_id', 'default'))
+                                   project_domain_id=self.config.get('project_domain_id', project_domain_id_default),
+                                   user_domain_id=self.config.get('user_domain_id', user_domain_id_default),
+                                   project_domain_name=self.config.get('project_domain_name'),
+                                   user_domain_name=self.config.get('user_domain_name'))
             else:
                 auth = v2.Password(auth_url=self.url,
                                    username=self.user,
@@ -831,15 +841,18 @@ class vimconnector(vimconn.vimconnector):
             filter_dict_os=filter_dict.copy()
             #First we filter by the available filter fields: name, id. The others are removed.
             filter_dict_os.pop('checksum',None)
-            image_list=self.nova.images.findall(**filter_dict_os)
-            if len(image_list)==0:
+            image_list = self.nova.images.findall(**filter_dict_os)
+            if len(image_list) == 0:
                 return []
             #Then we filter by the rest of filter fields: checksum
             filtered_list = []
             for image in image_list:
-                image_class=self.glance.images.get(image.id)
-                if 'checksum' not in filter_dict or image_class['checksum']==filter_dict.get('checksum'):
-                    filtered_list.append(image_class.copy())
+                try:
+                    image_class = self.glance.images.get(image.id)
+                    if 'checksum' not in filter_dict or image_class['checksum']==filter_dict.get('checksum'):
+                        filtered_list.append(image_class.copy())
+                except gl1Exceptions.HTTPNotFound:
+                    pass
             return filtered_list
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
             self._format_exception(e)
