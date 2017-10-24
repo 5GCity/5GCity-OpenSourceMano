@@ -1088,15 +1088,13 @@ def http_get_vnfs(tenant_id):
             nfvo.check_tenant(mydb, tenant_id)
         select_,where_,limit_ = filter_query_string(bottle.request.query, None,
                 ('uuid', 'name', 'osm_id', 'description', 'public', "tenant_id", "created_at") )
-        where_or = {}
         if tenant_id != "any":
-            where_or["tenant_id"] = tenant_id
-            where_or["public"] = True
-        vnfs = mydb.get_rows(FROM='vnfs', SELECT=select_,WHERE=where_,WHERE_OR=where_or, WHERE_AND_OR="AND",LIMIT=limit_)
-        #change_keys_http2db(content, http2db_vnf, reverse=True)
+            where_["OR"]={"tenant_id": tenant_id, "public": True}
+        vnfs = mydb.get_rows(FROM='vnfs', SELECT=select_, WHERE=where_, LIMIT=limit_)
+        # change_keys_http2db(content, http2db_vnf, reverse=True)
         utils.convert_str2boolean(vnfs, ('public',))
         convert_datetime2str(vnfs)
-        data={'vnfs' : vnfs}
+        data={'vnfs': vnfs}
         return format_out(data)
     except bottle.HTTPError:
         raise
@@ -1398,11 +1396,9 @@ def http_get_scenarios(tenant_id):
         #obtain data
         s,w,l=filter_query_string(bottle.request.query, None,
                                   ('uuid', 'name', 'osm_id', 'description', 'tenant_id', 'created_at', 'public'))
-        where_or={}
         if tenant_id != "any":
-            where_or["tenant_id"] = tenant_id
-            where_or["public"] = True
-        scenarios = mydb.get_rows(SELECT=s, WHERE=w, WHERE_OR=where_or, WHERE_AND_OR="AND", LIMIT=l, FROM='scenarios')
+            w["OR"] = {"tenant_id": tenant_id, "public": True}
+        scenarios = mydb.get_rows(SELECT=s, WHERE=w, LIMIT=l, FROM='scenarios')
         convert_datetime2str(scenarios)
         utils.convert_str2boolean(scenarios, ('public',) )
         data={'scenarios':scenarios}

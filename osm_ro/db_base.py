@@ -290,34 +290,58 @@ class db_base():
         else:
             return str(data[0]) + '=' + json.dumps(str(data[1]))
     
-    def __tuple2db_format_where(self, data):
-        '''Compose the needed text for a SQL WHERE, parameter 'data' is a pair tuple (A,B),
-        and it returns the text 'A="B"', where A is a field of a table and B is the value 
-        If B is None it returns the 'A is Null' text, without surrounding Null by quotes
-        If B is not None it returns the text "A='B'" or 'A="B"' where B is surrounded by quotes,
-        and it ensures internal quotes of B are escaped.
-        '''
-        if data[1]==None:
-            return str(data[0]) + " is Null"
-        elif isinstance(data[1], str):
-            return str(data[0]) + '=' + json.dumps(data[1])
-        else:
-            return str(data[0]) + '=' + json.dumps(str(data[1]))
+    def __create_where(self, data, use_or=None):
+        """
+        Compose the needed text for a SQL WHERE, parameter 'data' can be a dict or a list of dict. By default lists are
+        concatenated with OR and dict with AND, unless parameter 'use_or' indicates other thing.
+        If a dict it will generate 'key1="value1" AND key2="value2" AND ...'.
+            If value is None, it will produce 'key is null'
+            If value is a list or tuple, it will produce 'key="value[0]" OR key="value[1]" OR ...'
+            keys can be suffixed by >,<,<>,>=,<= so that this is used to compare key and value instead of "="
+        The special keys "OR", "AND" with a dict value is used to create a nested WHERE
+        If a list, each item will be a dictionary that will be concatenated with OR by default
+        :param data: dict or list of dicts
+        :param use_or: Can be None (use default behaviour), True (use OR) or False (use AND)
+        :return: a string with the content to send to mysql
+        """
+        cmd = []
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if k == "OR":
+                    cmd.append("(" + self.__create_where(v, use_or=True) + ")")
+                    continue
+                elif k == "AND":
+                    cmd.append("(" + self.__create_where(v, use_or=False) + ")")
+                    continue
 
-    def __tuple2db_format_where_not(self, data):
-        '''Compose the needed text for a SQL WHERE(not). parameter 'data' is a pair tuple (A,B),
-        and it returns the text 'A<>"B"', where A is a field of a table and B is the value 
-        If B is None it returns the 'A is not Null' text, without surrounding Null by quotes
-        If B is not None it returns the text "A<>'B'" or 'A<>"B"' where B is surrounded by quotes,
-        and it ensures internal quotes of B are escaped.
-        '''
-        if data[1]==None:
-            return str(data[0]) + " is not Null"
-        elif isinstance(data[1], str):
-            return str(data[0]) + '<>' + json.dumps(data[1])
+                if k.endswith(">") or k.endswith("<") or k.endswith("="):
+                    pass
+                else:
+                    k += "="
+
+                if v is None:
+                    cmd.append(k.replace("=", " is").replace("<>", " is not") + " Null")
+                elif isinstance(v, (tuple, list)):
+                    cmd2 = []
+                    for v2 in v:
+                        if v2 is None:
+                            cmd2.append(k.replace("=", " is").replace("<>", " is not") + " Null")
+                        else:
+                            cmd2.append(k + json.dumps(str(v2)))
+                    cmd.append("(" + " OR ".join(cmd2) + ")")
+                else:
+                    cmd.append(k + json.dumps(str(v)))
+        elif isinstance(data, (tuple, list)):
+            if use_or is None:
+                use_or = True
+            for k in data:
+                cmd.append("(" + self.__create_where(k) + ")")
         else:
-            return str(data[0]) + '<>' + json.dumps(str(data[1]))
-    
+            raise db_base_Exception("invalid WHERE clause at '{}'".format(data))
+        if use_or:
+            return " OR ".join(cmd)
+        return " AND ".join(cmd)
+
     def __remove_quotes(self, data):
         '''remove single quotes ' of any string content of data dictionary'''
         for k,v in data.items():
@@ -326,19 +350,23 @@ class db_base():
                     data[k] = data[k].replace("'","_")
     
     def _update_rows(self, table, UPDATE, WHERE, modified_time=0):
-        ''' Update one or several rows into a table.
-        Atributes
-            UPDATE: dictionary with the key: value to change
-            table: table where to update
-            WHERE: dictionary of elements to update
-        Return: the number of updated rows, exception if error
-        '''
-                #gettting uuid 
+        """ Update one or several rows of a table.
+        :param UPDATE: dictionary with the changes. dict keys are database columns that will be set with the dict values
+        :param table: database table to update
+        :param WHERE: dict or list of dicts to compose the SQL WHERE clause.
+            If a dict it will generate 'key1="value1" AND key2="value2" AND ...'.
+                If value is None, it will produce 'key is null'
+                If value is a list or tuple, it will produce 'key="value[0]" OR key="value[1]" OR ...'
+                keys can be suffixed by >,<,<>,>=,<= so that this is used to compare key and value instead of "="
+                The special keys "OR", "AND" with a dict value is used to create a nested WHERE
+            If a list, each item will be a dictionary that will be concatenated with OR
+        :return: the number of updated rows, raises exception upon error
+        """
+        # gettting uuid
         values = ",".join(map(self.__tuple2db_format_set, UPDATE.iteritems() ))
         if modified_time:
             values += ",modified_at={:f}".format(modified_time)
-        cmd= "UPDATE " + table +" SET " + values +\
-            " WHERE " + " and ".join(map(self.__tuple2db_format_where, WHERE.iteritems() ))
+        cmd= "UPDATE " + table + " SET " + values + " WHERE " + self.__create_where(WHERE)
         self.logger.debug(cmd)
         self.cur.execute(cmd) 
         return self.cur.rowcount
@@ -444,13 +472,19 @@ class db_base():
             tries -= 1
 
     def update_rows(self, table, UPDATE, WHERE, modified_time=0):
-        ''' Update one or several rows into a table.
-        Atributes
-            UPDATE: dictionary with the key: value to change
-            table: table where to update
-            WHERE: dictionary of elements to update
-        Return: (result, descriptive text) where result indicates the number of updated files
-        '''
+        """ Update one or several rows of a table.
+        :param UPDATE: dictionary with the changes. dict keys are database columns that will be set with the dict values
+        :param table: database table to update
+        :param WHERE: dict or list of dicts to compose the SQL WHERE clause.
+            If a dict it will generate 'key1="value1" AND key2="value2" AND ...'.
+                If value is None, it will produce 'key is null'
+                If value is a list or tuple, it will produce 'key="value[0]" OR key="value[1]" OR ...'
+                keys can be suffixed by >,<,<>,>=,<= so that this is used to compare key and value instead of "="
+                The special keys "OR", "AND" with a dict value is used to create a nested WHERE
+            If a list, each item will be a dictionary that will be concatenated with OR
+        :param modified_time: Can contain the time to be set to the table row
+        :return: the number of updated rows, raises exception upon error
+        """
         if table in self.tables_with_created_field and modified_time==0:
             modified_time=time.time()
         tries = 2
@@ -487,31 +521,24 @@ class db_base():
             tries -= 1
 
     def delete_row(self, **sql_dict):
-        ''' Deletes rows from a table.
-        Attribute sql_dir: dictionary with the following key: value
-            'FROM': string of table name (Mandatory)
-            'WHERE': dict of key:values, translated to key=value AND ... (Optional)
-            'WHERE_NOT': dict of key:values, translated to key<>value AND ... (Optional) 
-                if value is None, it is translated to key is not null
-            'LIMIT': limit of number of rows (Optional)
-        Return: the number of deleted or exception if error
-        '''
-        #print sql_dict
-        from_  = "FROM " + str(sql_dict['FROM'])
-        #print 'from_', from_
-        if 'WHERE' in sql_dict and len(sql_dict['WHERE']) > 0:
-            w=sql_dict['WHERE']
-            where_ = "WHERE " + " AND ".join(map(self.__tuple2db_format_where, w.iteritems())) 
-        else: where_ = ""
-        if 'WHERE_NOT' in sql_dict and len(sql_dict['WHERE_NOT']) > 0: 
-            w=sql_dict['WHERE_NOT']
-            where_2 = " AND ".join(map(self.__tuple2db_format_where_not, w.iteritems()))
-            if len(where_)==0:   where_ = "WHERE " + where_2
-            else:                where_ = where_ + " AND " + where_2
-        #print 'where_', where_
-        limit_ = "LIMIT " + str(sql_dict['LIMIT']) if 'LIMIT' in sql_dict else ""
-        #print 'limit_', limit_
-        cmd =  " ".join( ("DELETE", from_, where_, limit_) )
+        """ Deletes rows from a table.
+        :param UPDATE: dictionary with the changes. dict keys are database columns that will be set with the dict values
+        :param FROM: string with table name (Mandatory)
+        :param WHERE: dict or list of dicts to compose the SQL WHERE clause. (Optional)
+            If a dict it will generate 'key1="value1" AND key2="value2" AND ...'.
+                If value is None, it will produce 'key is null'
+                If value is a list or tuple, it will produce 'key="value[0]" OR key="value[1]" OR ...'
+                keys can be suffixed by >,<,<>,>=,<= so that this is used to compare key and value instead of "="
+                The special keys "OR", "AND" with a dict value is used to create a nested WHERE
+            If a list, each item will be a dictionary that will be concatenated with OR
+        :return: the number of deleted rows, raises exception upon error
+        """
+        # print sql_dict
+        cmd = "DELETE FROM " + str(sql_dict['FROM'])
+        if sql_dict.get('WHERE'):
+            cmd += " WHERE " + self.__create_where(sql_dict['WHERE'])
+        if sql_dict.get('LIMIT'):
+            cmd += " LIMIT " + str(sql_dict['LIMIT'])
         tries = 2
         while tries:
             try:
@@ -542,52 +569,44 @@ class db_base():
             tries -= 1
     
     def get_rows(self, **sql_dict):
-        ''' Obtain rows from a table.
-        Attribute sql_dir: dictionary with the following key: value
-            'SELECT':    list or tuple of fields to retrieve) (by default all)
-            'FROM':      string of table name (Mandatory)
-            'WHERE':     dict of key:values, translated to key=value (key is null) AND ... (Optional)
-            'WHERE_NOT': dict of key:values, translated to key<>value (key is not null) AND ... (Optional)
-            'WHERE_OR': dict of key:values, translated to key=value OR ... (Optional)
-            'WHERE_AND_OR: str 'AND' or 'OR'(by default) mark the priority to 'WHERE AND (WHERE_OR)' or (WHERE) OR WHERE_OR' (Optional)
-            'LIMIT':     limit of number of rows (Optional)
-            'ORDER_BY':  list or tuple of fields to order, add ' DESC'  to each item if inverse order is required
-        Return: a list with dictionaries at each row
-        '''
-        #print sql_dict
-        select_= "SELECT " + ("*" if 'SELECT' not in sql_dict else ",".join(map(str,sql_dict['SELECT'])) )
-        #print 'select_', select_
-        from_  = "FROM " + str(sql_dict['FROM'])
-        #print 'from_', from_
-        where_and = ""
-        where_or = ""
-        w=sql_dict.get('WHERE')
-        if w:
-            where_and = " AND ".join(map(self.__tuple2db_format_where, w.iteritems() ))
-        w=sql_dict.get('WHERE_NOT')
-        if w: 
-            if where_and: where_and += " AND "
-            where_and += " AND ".join(map(self.__tuple2db_format_where_not, w.iteritems() ) )
-        w=sql_dict.get('WHERE_OR')
-        if w:
-            where_or =  " OR ".join(map(self.__tuple2db_format_where, w.iteritems() ))
-        if where_and and where_or:
-            if sql_dict.get("WHERE_AND_OR") == "AND":
-                where_ = "WHERE " + where_and + " AND (" + where_or + ")"
+        """ Obtain rows from a table.
+        :param SELECT: list or tuple of fields to retrieve) (by default all)
+        :param FROM: string with table name (Mandatory)
+        :param WHERE: dict or list of dicts to compose the SQL WHERE clause. (Optional)
+            If a dict it will generate 'key1="value1" AND key2="value2" AND ...'.
+                If value is None, it will produce 'key is null'
+                If value is a list or tuple, it will produce 'key="value[0]" OR key="value[1]" OR ...'
+                keys can be suffixed by >,<,<>,>=,<= so that this is used to compare key and value instead of "="
+                The special keys "OR", "AND" with a dict value is used to create a nested WHERE
+            If a list, each item will be a dictionary that will be concatenated with OR
+        :param LIMIT: limit the number of obtianied entries (Optional)
+        :param ORDER_BY:  list or tuple of fields to order, add ' DESC' to each item if inverse order is required
+        :return: a list with dictionaries at each row, raises exception upon error
+        """
+        # print sql_dict
+        cmd = "SELECT "
+        if 'SELECT' in sql_dict:
+            if isinstance(sql_dict['SELECT'], (tuple, list)):
+                cmd += ",".join(map(str, sql_dict['SELECT']))
             else:
-                where_ = "WHERE (" + where_and + ") OR " + where_or
-        elif where_and and not where_or:
-            where_ = "WHERE " + where_and
-        elif not where_and and where_or:
-            where_ = "WHERE " + where_or
+                cmd += sql_dict['SELECT']
         else:
-            where_ = ""
-        #print 'where_', where_
-        limit_ = "LIMIT " + str(sql_dict['LIMIT']) if 'LIMIT' in sql_dict else ""
-        order_ = "ORDER BY " + ",".join(map(str,sql_dict['ORDER_BY'])) if 'ORDER_BY' in sql_dict else ""
-        
-        #print 'limit_', limit_
-        cmd =  " ".join( (select_, from_, where_, limit_, order_) )
+            cmd += "*"
+
+        cmd += " FROM " + str(sql_dict['FROM'])
+        if sql_dict.get('WHERE'):
+            cmd += " WHERE " + self.__create_where(sql_dict['WHERE'])
+
+        if 'ORDER_BY' in sql_dict:
+            cmd += " ORDER BY "
+            if isinstance(sql_dict['ORDER_BY'], (tuple, list)):
+                cmd += ",".join(map(str, sql_dict['ORDER_BY']))
+            else:
+                cmd += str(sql_dict['ORDER_BY'])
+
+        if 'LIMIT' in sql_dict:
+            cmd += " LIMIT " + str(sql_dict['LIMIT'])
+
         tries = 2
         while tries:
             try:
@@ -617,15 +636,14 @@ class db_base():
         if error_item_text==None:
             error_item_text = table
         what = 'uuid' if af.check_valid_uuid(uuid_name) else 'name'
-        cmd =  " SELECT * FROM {} WHERE {}='{}'".format(table, what, uuid_name)
+        cmd = " SELECT * FROM {} WHERE {}='{}'".format(table, what, uuid_name)
         if WHERE_OR:
-            where_or =  " OR ".join(map(self.__tuple2db_format_where, WHERE_OR.iteritems() ))
+            where_or = self.__create_where(WHERE_OR, use_or=True)
             if WHERE_AND_OR == "AND":
                 cmd += " AND (" + where_or + ")"
             else:
                 cmd += " OR " + where_or
 
-        
         tries = 2
         while tries:
             try:
