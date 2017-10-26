@@ -26,7 +26,7 @@ def project_checkout(url_prefix,project,refspec,revision) {
     }
 }
 
-def ci_pipeline(mdg,url_prefix,project,branch,refspec,revision,build_system,artifactory_server) {
+def ci_pipeline(mdg,url_prefix,project,branch,refspec,revision,build_system,artifactory_server,docker_args="") {
     println("build_system = ${build_system}")
     ci_helper = load "devops/jenkins/ci-pipelines/ci_helper.groovy"
 
@@ -52,7 +52,7 @@ def ci_pipeline(mdg,url_prefix,project,branch,refspec,revision,build_system,arti
         sh "docker build -t ${container_name} ."
     }
 
-    withDockerContainer("${container_name}") {
+    withDockerContainer(image: "${container_name}", args: docker_args) {
         stage('Test') {
             sh 'devops-stages/stage-test.sh'
         }
