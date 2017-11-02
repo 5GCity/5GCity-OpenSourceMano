@@ -34,6 +34,11 @@ function usage(){
     echo -e "     -p PASS:    database admin password to be used or installed. Prompts if needed"
     echo -e "     -q --quiet: install in unattended mode"
     echo -e "     -h --help:  show this help"
+    echo -e "     -b REFSPEC: install from source code using a specific branch (master, v2.0, ...) or tag"
+    echo -e "                    -b master          (main RO branch)"
+    echo -e "                    -b v2.0            (v2.0 branch)"
+    echo -e "                    -b tags/v1.1.0     (a specific tag)"
+    echo -e "                    ..."
     echo -e "     --develop:  install last version for developers, and do not configure as a service"
     echo -e "     --forcedb:  reinstall mano_db DB, deleting previous database if exists and creating a new one"
     echo -e "     --updatedb: do not reinstall mano_db DB if it exists, just update database"
@@ -89,8 +94,9 @@ FORCE=""
 NOCLONE=""
 NO_PACKAGES=""
 NO_DB=""
+COMMIT_ID=""
 
-while getopts ":u:p:hiq-:" o; do
+while getopts ":u:p:b:hiq-:" o; do
     case "${o}" in
         u)
             export DBUSER="$OPTARG"
@@ -98,6 +104,9 @@ while getopts ":u:p:hiq-:" o; do
         p)
             export DBPASSWD="$OPTARG"
             export DBPASSWD_PARAM="-p$OPTARG"
+            ;;
+        b)
+            export COMMIT_ID=${OPTARG}
             ;;
         q)
             export QUIET_MODE=yes
@@ -239,11 +248,11 @@ then
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && easy_install -U bottle
 
     # required for vmware connector TODO move that to separete opt in install script
-    pip install --upgrade pip
-    pip install pyvcloud
-    pip install progressbar
-    pip install prettytable
-    pip install pyvmomi
+    pip install --upgrade pip || exit 1
+    pip install pyvcloud || exit 1
+    pip install progressbar || exit 1
+    pip install prettytable || exit 1
+    pip install pyvmomi || exit 1
 
     # required for AWS connector
     [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-boto"
@@ -273,9 +282,19 @@ if [[ -z $NOCLONE ]]; then
             echo "'${BASEFOLDER}' folder exists. Use "--force" to overwrite" >&2 && exit 1
         fi
     fi
-    su $SUDO_USER -c "git clone ${GIT_URL} ${BASEFOLDER}"
-    LATEST_STABLE_TAG=`git -C "${BASEFOLDER}" tag -l v[0-9].* | tail -n1`
-    [[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER} checkout tags/${LATEST_STABLE_TAG}"
+    su $SUDO_USER -c "git clone ${GIT_URL} ${BASEFOLDER}" || ! echo "Error cannot clone from '$GIT_URL'" >&2 || exit 1
+    if [[ -n $COMMIT_ID ]] ; then
+        echo -e "Installing osm-RO from refspec: $COMMIT_ID"
+        su $SUDO_USER -c "git -C ${BASEFOLDER} checkout $COMMIT_ID" ||
+            ! echo "Error cannot checkout '$COMMIT_ID' from '$GIT_URL'" >&2 || exit 1
+    elif [[ -z $DEVELOP ]]; then
+        LATEST_STABLE_TAG=`git -C "${BASEFOLDER}" tag -l "v[0-9]*" | sort -V | tail -n1`
+        echo -e "Installing osm-RO from refspec: tags/${LATEST_STABLE_TAG}"
+        su $SUDO_USER -c "git -C ${BASEFOLDER} checkout tags/${LATEST_STABLE_TAG}" ||
+            ! echo "Error cannot checkout 'tags/${LATEST_STABLE_TAG}' from '$GIT_URL'" >&2 || exit 1
+    else
+        echo -e "Installing osm-RO from refspec: master"
+    fi
     su $SUDO_USER -c "cp ${BASEFOLDER}/.gitignore-common ${BASEFOLDER}/.gitignore"
 fi
 
@@ -283,9 +302,20 @@ echo -e "\n"\
     "#################################################################\n"\
     "#####        INSTALLING OSM-IM LIBRARY                      #####\n"\
     "#################################################################"
-su $SUDO_USER -c "git -C ${BASEFOLDER} clone ${GIT_OSMIM_URL} IM"
-LATEST_STABLE_TAG=`git -C "${BASEFOLDER}/IM" tag -l v[0-9].* | tail -n1`
-[[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER}/IM checkout tags/${LATEST_STABLE_TAG}"
+su $SUDO_USER -c "git -C ${BASEFOLDER} clone ${GIT_OSMIM_URL} IM" ||
+    ! echo "Error cannot clone from '${GIT_OSMIM_URL}'" >&2 || exit 1
+if [[ -n $COMMIT_ID ]] ; then
+    echo -e "Installing osm-IM from refspec: $COMMIT_ID"
+    su $SUDO_USER -c "git -C ${BASEFOLDER}/IM checkout $COMMIT_ID" ||
+        ! echo "Error cannot checkout '$COMMIT_ID' from '${GIT_OSMIM_URL}'" >&2 || exit 1
+elif [[ -z $DEVELOP ]]; then
+    LATEST_STABLE_TAG=`git -C "${BASEFOLDER}/IM" tag -l "v[0-9]*" | sort -V | tail -n1`
+    echo -e "Installing osm-IM from refspec: tags/${LATEST_STABLE_TAG}"
+    su $SUDO_USER -c "git -C ${BASEFOLDER}/IM checkout tags/${LATEST_STABLE_TAG}" ||
+        ! echo "Error cannot checkout 'tags/${LATEST_STABLE_TAG}' from '${GIT_OSMIM_URL}'" >&2 || exit 1
+else
+    echo -e "Installing osm-IM from refspec: master"
+fi
 
 # Install debian dependencies before setup.py
 if [[ -z "$NO_PACKAGES" ]]
@@ -293,7 +323,7 @@ then
     [ "$_DISTRO" == "Ubuntu" ] && install_packages "tox debhelper python-bitarray"
     # TODO check packages for CentOS and RedHat
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "tox debhelper python-bitarray"
-    pip install stdeb pyangbind
+    pip install stdeb pyangbind || exit 1
 fi
 su $SUDO_USER -c "make -C ${BASEFOLDER}/IM all"
 dpkg -i ${BASEFOLDER}/IM/deb_dist/python-osm-im*.deb ${BASEFOLDER}/IM/pyangbind/deb_dist/*.deb \
@@ -307,16 +337,26 @@ echo -e "\n"\
     "#################################################################\n"\
     "#####        INSTALLING OVIM LIBRARY                        #####\n"\
     "#################################################################"
-su $SUDO_USER -c "git -C ${BASEFOLDER} clone ${GIT_OVIM_URL} openvim"
-LATEST_STABLE_TAG=`git -C "${BASEFOLDER}/openvim" tag -l v[0-9].* | tail -n1`
-[[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER}/openvim checkout 005a9dc"
-# disable because a problem with this version[[ -z $DEVELOP ]] && su $SUDO_USER -c "git -C ${BASEFOLDER}/openvim checkout tags/${LATEST_STABLE_TAG}"
+su $SUDO_USER -c "git -C ${BASEFOLDER} clone ${GIT_OVIM_URL} openvim" ||
+    ! echo "Error cannot clone from '${GIT_OVIM_URL}'" || exit 1
+if [[ -n $COMMIT_ID ]] ; then
+    echo -e "Installing lib_osm_openvim from refspec: $COMMIT_ID"
+    su $SUDO_USER -c "git -C ${BASEFOLDER}/openvim checkout $COMMIT_ID" ||
+        ! echo "Error cannot checkout '$COMMIT_ID' from '${GIT_OVIM_URL}'" || exit 1
+elif [[ -z $DEVELOP ]]; then
+    LATEST_STABLE_TAG=`git -C "${BASEFOLDER}/openvim" tag -l "v[0-9]*" | sort -V | tail -n1`
+    echo -e "Installing lib_osm_openvim from refspec: tags/${LATEST_STABLE_TAG}"
+    su $SUDO_USER -c "git -C ${BASEFOLDER}/openvim checkout tags/${LATEST_STABLE_TAG}" ||
+        ! echo "Error cannot checkout 'tags/${LATEST_STABLE_TAG}' from '${GIT_OVIM_URL}'" || exit 1
+else
+    echo -e "Installing lib_osm_openvim from refspec: master"
+fi
 
 # Install debian dependencies before setup.py
 if [[ -z "$NO_PACKAGES" ]]
 then
     [ "$_DISTRO" == "Ubuntu" ] && install_packages "libmysqlclient-dev"
-    #TODO check if that is the name in CentOS and RedHat
+    # TODO check if that is the name in CentOS and RedHat
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "libmysqlclient-dev"
 fi
 make -C ${BASEFOLDER}/openvim lite
