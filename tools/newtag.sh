@@ -1,9 +1,10 @@
 #!/bin/bash
-if [ $# -ne 2 ]; then
-    echo "Usage $0 <repo> <tag>"
+if [ $# -ne 3 ]; then
+    echo "Usage $0 <repo> <tag> <user>"
     exit 1
 fi
 
+USER=$3
 TAG="$2"
 tag_header="OSM Release THREE:" tag_message="$tag_header version $TAG"
 
@@ -27,7 +28,7 @@ for i in $list; do
     echo
     echo $i
     if [ ! -d $i ]; then
-        git clone https://osm.etsi.org/gerrit/osm/$i
+        git clone ssh://$USER@osm.etsi.org:29418/osm/$i
     fi
     git -C $i checkout master
     git -C $i pull --rebase
