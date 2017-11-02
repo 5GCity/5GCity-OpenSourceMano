@@ -998,6 +998,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                 # table interfaces (internal/external interfaces)
                 cp_name2iface_uuid = {}
                 cp_name2vm_uuid = {}
+                cp_name2db_interface = {}
                 # for iface in chain(vdu.get("internal-interface").itervalues(), vdu.get("external-interface").itervalues()):
                 for iface in vdu.get("interface").itervalues():
                     iface_uuid = str(uuid4())
@@ -1035,6 +1036,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                             db_interface["external_name"] = get_str(cp, "name", 255)
                             cp_name2iface_uuid[db_interface["external_name"]] = iface_uuid
                             cp_name2vm_uuid[db_interface["external_name"]] = vm_uuid
+                            cp_name2db_interface[db_interface["external_name"]] = db_interface
                             for cp_descriptor in vnfd_descriptor["connection-point"]:
                                 if cp_descriptor["name"] == db_interface["external_name"]:
                                     break
@@ -1107,6 +1109,9 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                         HTTP_Bad_Request)
                 mgmt_access["vm_id"] = cp_name2vm_uuid[vnfd["mgmt-interface"]["cp"]]
                 mgmt_access["interface_id"] = cp_name2iface_uuid[vnfd["mgmt-interface"]["cp"]]
+                # mark this interface as of type mgmt
+                cp_name2db_interface[vnfd["mgmt-interface"]["cp"]]["type"] = "mgmt"
+
             default_user = get_str(vnfd.get("vnf-configuration", {}).get("config-access", {}).get("ssh-access", {}),
                                     "default-user", 64)
 
