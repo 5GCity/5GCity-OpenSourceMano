@@ -12,6 +12,7 @@ nsd:nsd-catalog:
             nsd:mgmt-network: 'false'
             nsd:name: mgmt
             nsd:short-name: mgmt
+            mgmt-network: 'true'
             nsd:vnfd-connection-point-ref:
             -   nsd:member-vnf-index-ref: '1'
                 nsd:vnfd-connection-point-ref: eth0

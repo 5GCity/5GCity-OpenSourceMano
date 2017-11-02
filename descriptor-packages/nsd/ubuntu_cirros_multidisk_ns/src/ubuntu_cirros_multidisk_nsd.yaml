@@ -24,6 +24,7 @@ nsd:nsd-catalog:
                 name: management
                 short-name: management
                 type: ELAN
+                mgmt-network: 'true'
                 vnfd-connection-point-ref:
                 # Specify the constituent VNFs
                 -   member-vnf-index-ref: 1
