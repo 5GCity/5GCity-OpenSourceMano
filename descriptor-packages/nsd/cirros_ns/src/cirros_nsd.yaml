@@ -34,6 +34,7 @@ nsd:nsd-catalog:
             -   id: cirros_nsd_vld1
                 name: cirros_nsd_vld1
                 type: ELAN
+                mgmt-network: 'true'
                 # vim-network-name: <update>
                 # provider-network:
                 #     overlay-type: VLAN

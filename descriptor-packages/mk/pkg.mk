@@ -36,25 +36,27 @@ BUILD_VNFD   := $(shell readlink -f .|sed -e 's/\/.*descriptor-packages//' | gre
 DEP_FILES = $(wildcard src/*)
 
 ifdef BUILD_VNFD
-$(BUILD_DIR)/$(PKG_BASE_NAME): src $(DEP_FILES)
+$(BUILD_DIR)/$(PKG_BASE_NAME): src
 	$(Q)mkdir -p $@
 	$(Q)cp -rf $</. $@
 	$(Q)$(GEN_VNFD_PKG) $< $@
 else
-$(BUILD_DIR)/$(PKG_BASE_NAME): src $(DEP_FILES)
+$(BUILD_DIR)/$(PKG_BASE_NAME): src
 	$(Q)mkdir -p $@
 	$(Q)cp -rf $</. $@
 	$(Q)$(GEN_NSD_PKG) $< $@
 endif
 
 ifdef VNFD_CHARM
-$(BUILD_DIR)/$(PKG_NAME): $(BUILD_DIR)/$(PKG_BASE_NAME) $(CHARM_BUILD_DIR)/$(VNFD_CHARM)
+$(BUILD_DIR)/$(PKG_NAME): $(DEP_FILES) $(CHARM_BUILD_DIR)/$(VNFD_CHARM)
 	$(Q)echo "building $(PKG_BASE_NAME) with charm $(VNFD_CHARM)"
+	$(Q)$(MAKE) --no-print-directory $(BUILD_DIR)/$(PKG_BASE_NAME)
 	$(Q)cp -rf $(CHARM_BUILD_DIR)/$(VNFD_CHARM) $(BUILD_DIR)/$(PKG_BASE_NAME)/charms
 	$(Q)$(GEN_PKG) --no-remove-files -d $(BUILD_DIR) $(BUILD_DIR)/$(PKG_BASE_NAME)
 else
-$(BUILD_DIR)/$(PKG_NAME): $(BUILD_DIR)/$(PKG_BASE_NAME)
-	$(Q)echo "building $(PKG_BASE_NAME)"
+$(BUILD_DIR)/$(PKG_NAME): $(DEP_FILES)
+	$(Q)echo "building $(PKG_BASE_NAME) $(BUILD_DIR)"
+	$(Q)$(MAKE) --no-print-directory $(BUILD_DIR)/$(PKG_BASE_NAME)
 	$(Q)$(GEN_PKG) --no-remove-files -d $(BUILD_DIR) $(BUILD_DIR)/$(PKG_BASE_NAME)
 endif
 
