@@ -23,6 +23,7 @@ nsd:nsd-catalog:
                 vnfd-connection-point-ref: eth0
                 vnfd-id-ref: IMS-ALLIN1_2p
         -   id: management
+            mgmt-network: 'true'
             name: management
             short-name: management
             type: ELAN

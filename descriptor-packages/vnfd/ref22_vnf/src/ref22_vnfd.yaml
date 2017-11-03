@@ -11,12 +11,14 @@ vnfd:vnfd-catalog:
         id: Ref_Vnf_22
         name: Ref_VNF_22
         short-name: Ref_VNF_22
+        mgmt-interface:
+            cp: mgmt
         vdu:
         -   interface:
             -   name: iface60
                 type: EXTERNAL
                 virtual-interface:
-                    type: OM-MGMT
+                    type: VIRTIO
                 external-connection-point-ref: mgmt
             -   name: iface61
                 type: EXTERNAL

@@ -8,7 +8,7 @@ vnfd:vnfd-catalog:
         vnfd:id: dns_forwarder
         vnfd:logo: dns.jpg
         vnfd:mgmt-interface:
-            vnfd:vdu-id: dns_forwarder-VM
+            vnfd:cp: eth0
         vnfd:name: dns_forwarder
         vnfd:service-function-chain: UNAWARE
         vnfd:short-name: dns_forwarder
@@ -17,9 +17,10 @@ vnfd:vnfd-catalog:
             vnfd:description: dns_forwarder-VM
             vnfd:interface:
             -   vnfd:name: eth0
+                vnfd:type: EXTERNAL
                 vnfd:virtual-interface:
                     vnfd:bandwidth: '0'
-                    vnfd:type: OM-MGMT
+                    vnfd:type: VIRTIO
                     vnfd:vpci: 0000:00:0a.0
                 vnfd:external-connection-point-ref: eth0
             vnfd:guest-epa:

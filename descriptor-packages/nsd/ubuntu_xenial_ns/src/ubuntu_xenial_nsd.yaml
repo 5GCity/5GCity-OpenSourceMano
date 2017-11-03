@@ -21,6 +21,7 @@ nsd:nsd-catalog:
         vld:
         # Networks for the VNFs
             -   id: ubuntu_xenial_nsd_vld1
+                mgmt-network: 'true'
                 name: management
                 short-name: management
                 type: ELAN

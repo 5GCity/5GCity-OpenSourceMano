@@ -6,7 +6,7 @@ vnfd:vnfd-catalog:
         description: VyOS Router
         logo: osm_2x.png
         mgmt-interface:
-            vdu-id: VyOS-VM
+            cp: eth0
         vnf-configuration:
             service-primitive:
             -   name: config
@@ -64,7 +64,7 @@ vnfd:vnfd-catalog:
                 type: EXTERNAL
                 virtual-interface:
                     bandwidth: '0'
-                    type: OM-MGMT
+                    type: VIRTIO
                     vpci: 0000:00:0a.0
                 external-connection-point-ref: eth0
             -   name: eth1

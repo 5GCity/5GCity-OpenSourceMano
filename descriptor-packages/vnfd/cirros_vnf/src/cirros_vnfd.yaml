@@ -12,7 +12,7 @@ vnfd:vnfd-catalog:
 
         # Management interface
         mgmt-interface:
-            vdu-id: cirros_vnfd-VM
+            cp: eth0
 
         # Atleast one VDU need to be specified
         vdu:
@@ -38,7 +38,7 @@ vnfd:vnfd-catalog:
             -   name: eth0
                 type: EXTERNAL
                 virtual-interface:
-                    type: OM-MGMT
+                    type: VIRTIO
                     bandwidth: '0'
                     vpci: 0000:00:0a.0
                 external-connection-point-ref: eth0

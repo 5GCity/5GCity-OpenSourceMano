@@ -6,7 +6,7 @@ vnfd:vnfd-catalog:
         description: IMS-ALLIN1_2p
         logo: metaswitch_2x.png
         mgmt-interface:
-            vdu-id: IMS-ALLIN1_2p-VM
+            cp: eth1
         vnf-configuration:
             service-primitive:
             -   name: config
@@ -67,7 +67,7 @@ vnfd:vnfd-catalog:
                 type: EXTERNAL
                 virtual-interface:
                     bandwidth: '0'
-                    type: OM-MGMT
+                    type: VIRTIO
                     vpci: 0000:00:0b.0
                 external-connection-point-ref: eth1
             guest-epa:

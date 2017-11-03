@@ -12,6 +12,7 @@ nsd:nsd-catalog:
         vendor: ETSI
         vld:
         -   description: Mgmt VL
+            mgmt-network: 'true'
             id: 54c04
             name: VL1
             short-name: VL1

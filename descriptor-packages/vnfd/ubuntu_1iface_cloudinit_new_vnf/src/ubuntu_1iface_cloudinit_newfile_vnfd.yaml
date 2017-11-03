@@ -12,7 +12,7 @@ vnfd:vnfd-catalog:
 
         # Management interface
         mgmt-interface:
-            vdu-id: ubuntu_1iface_cloudinit_newfile_vnfd-VM
+            cp: eth0
 
         # Atleast one VDU need to be specified
         vdu:
@@ -37,8 +37,9 @@ vnfd:vnfd-catalog:
             # Specify the external interfaces
             # There can be multiple interfaces defined
             -   name: eth0
+                type: EXTERNAL
                 virtual-interface:
-                    type: OM-MGMT
+                    type: VIRTIO
                     bandwidth: '0'
                     vpci: 0000:00:0a.0
                 external-connection-point-ref: eth0

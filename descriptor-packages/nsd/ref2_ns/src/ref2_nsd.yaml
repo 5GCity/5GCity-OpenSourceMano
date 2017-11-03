@@ -11,6 +11,7 @@ nsd:nsd-catalog:
         vendor: ETSI
         vld:
         -   id: '97465'
+            mgmt-network: 'true'
             name: VL1
             vnfd-connection-point-ref:
             -   member-vnf-index-ref: '1'

@@ -9,6 +9,8 @@ vnfd:vnfd-catalog:
         id: Ref_Vnf_11
         name: Ref_VNF_11
         short-name: Ref_VNF_11
+        mgmt-interface:
+            cp: mgmt0
         internal-vld:
         -   description: Internal VL
             id: VL12
@@ -24,7 +26,7 @@ vnfd:vnfd-catalog:
             -   name: iface10
                 type: EXTERNAL
                 virtual-interface:
-                    type: OM-MGMT
+                    type: VIRTIO
                 external-connection-point-ref: mgmt0
             -   name: iface11
                 type: INTERNAL

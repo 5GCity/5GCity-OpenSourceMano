@@ -23,6 +23,7 @@ nsd:nsd-catalog:
         -   id: management
             name: management
             short-name: management
+            mgmt-network: 'true'
             type: ELAN
             vim-network-name: net-mgmtOS
             provider-network:

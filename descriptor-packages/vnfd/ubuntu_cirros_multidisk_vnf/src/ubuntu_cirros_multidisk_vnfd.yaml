@@ -9,7 +9,7 @@ vnfd:vnfd-catalog:
 
         # Management interface
         mgmt-interface:
-            vdu-id: ubuntu_cirros_multidisk_vnfd-VM
+            cp: eth0
 
         # Atleast one VDU need to be specified
         vdu:
@@ -33,7 +33,7 @@ vnfd:vnfd-catalog:
             -   name: eth0
                 type: EXTERNAL
                 virtual-interface:
-                    type: OM-MGMT
+                    type: VIRTIO
                 external-connection-point-ref: eth0
             # Specify the volume
             # There can be multiple interfaces defined

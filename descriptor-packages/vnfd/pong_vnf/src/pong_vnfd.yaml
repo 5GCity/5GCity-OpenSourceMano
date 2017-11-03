@@ -37,7 +37,7 @@ vnfd:vnfd-catalog:
                 path: api/v1/pong/stats
                 port: '18889'
             port: '18889'
-            vdu-id: iovdu_0
+            cp: pong_vnfd/cp0
         # placement-groups:
         # -   member-vdus:
         #     -   member-vdu-ref: iovdu_0
