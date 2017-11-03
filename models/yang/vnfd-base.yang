@@ -100,7 +100,7 @@ module vnfd-base
              E1000           : Emulate E1000 interface.
              RTL8139         : Emulate RTL8139 interface.
              PCNET           : Emulate PCNET interface.
-             OM-MGMT         : Used to specify openmano mgmt external-connection type";
+             OM-MGMT         : Deprecated! Use VIRTIO instead and set the VNF management interface at vnfd:mgmt-interface:cp";
 
         type enumeration {
           enum OM-MGMT;
@@ -216,7 +216,7 @@ module vnfd-base
 
           case cp {
             description
-                "Use the ip address associated with this connection point.";
+                "Use the ip address associated with this connection point. This cp is then considered as management.";
             leaf cp {
               type leafref {
                 path "../../connection-point/name";
