@@ -89,7 +89,7 @@ class TestClass(object):
             assert utils.wait_for_value(lambda: osm.get_api().ns.get_field(ns_name,'operational-status'),result='vnf-init-phase')
 
             # make sure ns is running
-            assert utils.wait_for_value(lambda: osm.get_api().ns.get_field(ns_name,'operational-status'),result='running',wait_time=240)
+            assert utils.wait_for_value(lambda: osm.get_api().ns.get_field(ns_name,'operational-status'),result='running',wait_time=120)
 
             if ns_scale:
                 # for each descriptor, scale it
@@ -98,10 +98,10 @@ class TestClass(object):
                     assert not osm.get_api().ns.scale(ns_name, scale['name'], 1)
 
                     # ensure ns is scaling-out
-                    assert utils.wait_for_value(lambda: osm.get_api().ns.get_field(ns_name,'operational-status'),result='scaling-out',wait_time=240)
+                    assert utils.wait_for_value(lambda: osm.get_api().ns.get_field(ns_name,'operational-status'),result='scaling-out',wait_time=120)
 
                     # wait for ns to be in running-state
-                    assert utils.wait_for_value(lambda: osm.get_api().ns.get_field(ns_name,'operational-status'),result='running',wait_time=240)
+                    assert utils.wait_for_value(lambda: osm.get_api().ns.get_field(ns_name,'operational-status'),result='running',wait_time=120)
 
             time.sleep(10)
 

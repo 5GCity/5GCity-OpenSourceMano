@@ -23,6 +23,7 @@ def openstack_add_options(parser):
     parser.addoption("--os-username", default="", help="openstack username")
     parser.addoption("--os-password", default="", help="openstack password")
     parser.addoption("--os-project-name", default="", help="openstack project name")
+    parser.addoption("--vim-config", default="", help="vim/openstack specific configuration")
 
 @pytest.fixture
 def openstack(request):
@@ -34,5 +35,6 @@ def openstack(request):
     access['vim-tenant-name'] = request.config.getoption("--os-project-name")
     access['vim-type'] = 'openstack'
     access['description'] = 'pytest system test'
+    access['config'] = request.config.getoption("--vim-config")
 
     return openstack.Openstack(access)

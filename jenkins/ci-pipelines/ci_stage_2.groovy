@@ -26,8 +26,8 @@ def project_checkout(url_prefix,project,refspec,revision) {
     }
 }
 
-def ci_pipeline(mdg,url_prefix,project,branch,refspec,revision,build_system,artifactory_server,docker_args="") {
-    println("build_system = ${build_system}")
+def ci_pipeline(mdg,url_prefix,project,branch,refspec,revision,do_stage_3,artifactory_server,docker_args="",do_stage_4=false) {
+    println("do_stage_3= ${do_stage_3}")
     ci_helper = load "devops/jenkins/ci-pipelines/ci_helper.groovy"
 
     stage('Prepare') {
@@ -66,13 +66,14 @@ def ci_pipeline(mdg,url_prefix,project,branch,refspec,revision,build_system,arti
         ci_helper.archive(artifactory_server,mdg,branch,'untested')
     }
 
-    if ( build_system ) {
+    if ( do_stage_3 ) {
 
         stage('Build System') {
             def downstream_params_stage_3 = [
                 string(name: 'GERRIT_BRANCH', value: "${branch}"),
                 string(name: 'UPSTREAM_JOB_NAME', value: "${JOB_NAME}" ),
                 string(name: 'UPSTREAM_JOB_NUMBER', value: "${BUILD_NUMBER}" ),
+                booleanParam(name: 'DO_STAGE_4', value: do_stage_4 )
             ]
             stage_3_job = "osm-stage_3"
             if ( JOB_NAME.contains('merge') ) {

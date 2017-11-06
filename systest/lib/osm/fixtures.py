@@ -20,6 +20,7 @@ import json
 
 def osm_add_options(parser):
     parser.addoption("--osmhost", default="", help="osm hostname")
+    parser.addoption("--osm_ro_host", default="", help="osm ro_host")
     parser.addoption("--osm-descriptor-packages", default="", help="location of descriptor packages")
     parser.addoption("--osm-vnfd-descriptor-packages", default="", help="vnfd packages to test")
     parser.addoption("--osm-nsd-descriptor-packages", default="", help="nsd package to test")
@@ -40,11 +41,13 @@ def osm(request):
 def osm(request):
     from lib.osm import osm
     osmhost=request.config.getoption("--osmhost")
+    osm_ro_host=request.config.getoption("--osm_ro_host")
     descriptors_dir=request.config.getoption("--osm-descriptor-packages")
     vnfd_descriptors_list=request.config.getoption("--osm-vnfd-descriptor-packages").split(',')
     nsd_descriptors_list=request.config.getoption("--osm-nsd-descriptor-packages").split(',')
     ns_name_prefix=request.config.getoption("--osm-ns-name-prefix")
     return osm.Osm(osmhost,
+                   ro_host=osm_ro_host,
                    descriptors_dir=descriptors_dir,
                    vnfd_descriptors_list=vnfd_descriptors_list,
                    nsd_descriptors_list=nsd_descriptors_list,

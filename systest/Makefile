@@ -23,10 +23,12 @@
 #    export OS_PASSWORD=admin
 #    export OS_PROJECT_NAME=admin
 OSM_HOSTNAME ?=
+OSM_RO_HOSTNAME ?=
 OS_AUTH_URL ?=
 OS_USERNAME ?=
 OS_PASSWORD_NAME ?=
 OS_PROJECT_NAME ?=
+VIM_CONFIG ?=
 
 TOPDIR=$(shell readlink -f .|sed -e 's/systest.*//')
 
@@ -49,11 +51,22 @@ endif
 ifdef TEST_NSD_DESCRIPTORS
     OPTION_TEST_NSD_DESCRIPTORS=--osm-nsd-descriptor-packages $(TEST_NSD_DESCRIPTORS)
 endif
+ifdef OSM_RO_HOSTNAME
+    OPTION_RO_HOSTNAME=--osm_ro_host $(OSM_RO_HOSTNAME)
+else
+    OPTION_RO_HOSTNAME=--osm_ro_host $(OSM_HOSTNAME)
+endif
+
+ifdef VIM_CONFIG
+    OPTION_VIM_CONFIG=--vim-config "$(VIM_CONFIG)"
+else
+endif
 
 DESCRIPTOR_DIR ?= $(TOPDIR)/descriptor-packages
 
-TEST_OSM_NS_NAME_PREFIX=pytest-$(shell date +%D-%T)-
-OPTION_TEST_OSM_NS_NAME_PREFIX=--osm-ns-name-prefix $(TEST_OSM_NS_NAME_PREFIX)
+#TODO: Need to re-add this once charm application name length issue is resolved
+#TEST_OSM_NS_NAME_PREFIX=pytest-$(shell date +%D-%T)-
+#OPTION_TEST_OSM_NS_NAME_PREFIX=--osm-ns-name-prefix $(TEST_OSM_NS_NAME_PREFIX)
 
 JUNITXML_DIR = reports
 
@@ -87,11 +100,13 @@ report_dir:
 	@mkdir -p reports
 
 _run_test: report_dir
-	$(Q)py.test \
+	-$(Q)py.test \
         --osmhost $(OSM_HOSTNAME) \
+        $(OPTION_RO_HOSTNAME) \
         $(OPTION_OS_AUTH_URL) \
         $(OPTION_OS_USERNAME) \
         $(OPTION_OS_PASSWORD) \
+        $(OPTION_VIM_CONFIG) \
         $(OPTION_OS_PROJECT_NAME) \
         $(OPTION_TEST_VNFD_DESCRIPTORS) \
         $(OPTION_TEST_NSD_DESCRIPTORS) \
@@ -106,9 +121,34 @@ $(DESCRIPTOR_DIR)/vnfd/cirros_vnf/build/%.tar.gz:
 $(DESCRIPTOR_DIR)/nsd/cirros_ns/build/%.tar.gz:
 	$(MAKE) -C $(DESCRIPTOR_DIR)/nsd/cirros_ns
 
+images/cache/cirros-0.3.5-x86_64-disk.img:
+	$(Q)mkdir -p images/cache
+	$(Q)wget http://download.cirros-cloud.net/0.3.5/cirros-0.3.5-x86_64-disk.img -O $@
+
+images/cache/Fedora-x86_64-20-20131211.1-sda-ping.qcow2:
+	$(Q)mkdir -p images/cache
+	$(Q)wget ftp://osm-download.etsi.org/examples/ping_pong_ns/images/Fedora-x86_64-20-20131211.1-sda-ping.qcow2 -O $@
+
+images/cache/Fedora-x86_64-20-20131211.1-sda-pong.qcow2:
+	$(Q)mkdir -p images/cache
+	$(Q)wget ftp://osm-download.etsi.org/examples/ping_pong_ns/images/Fedora-x86_64-20-20131211.1-sda-pong.qcow2 -O $@
+
+# images are prefixed with 'osm/' to separate osm uploaded images from VIM installed images
+OSM_IMAGE_PREFIX ?=
+
+ifdef OS_AUTH_URL
+images/%.qcow2 images/%.img:
+	$(Q)openstack image show $(OSM_IMAGE_PREFIX)$(shell basename $@) || \
+          sh -c "make images/cache/$(shell basename $@) && openstack image create --file images/cache/$(shell basename $@) $(OSM_IMAGE_PREFIX)$(shell basename $@)"
+else
+images/%.img:
+	echo "No method selected to upload image to VIM"
+endif
+
 cirros: check_OSM_HOSTNAME check_openstack_env \
         $(DESCRIPTOR_DIR)/vnfd/cirros_vnf/build/cirros_vnf.tar.gz \
-        $(DESCRIPTOR_DIR)/nsd/cirros_ns/build/cirros_ns.tar.gz
+        $(DESCRIPTOR_DIR)/nsd/cirros_ns/build/cirros_ns.tar.gz \
+        images/cirros-0.3.5-x86_64-disk.img
 	$(Q)$(MAKE) \
         TEST_VNFD_DESCRIPTORS=$(DESCRIPTOR_DIR)/vnfd/cirros_vnf/build/cirros_vnf.tar.gz \
         TEST_NSD_DESCRIPTORS=$(DESCRIPTOR_DIR)/nsd/cirros_ns/build/cirros_ns.tar.gz \
@@ -117,7 +157,8 @@ cirros: check_OSM_HOSTNAME check_openstack_env \
 
 ns_scale: check_OSM_HOSTNAME check_openstack_env \
         $(DESCRIPTOR_DIR)/vnfd/cirros_vnf/build/cirros_vnf.tar.gz \
-        $(DESCRIPTOR_DIR)/nsd/cirros_ns/build/cirros_ns.tar.gz
+        $(DESCRIPTOR_DIR)/nsd/cirros_ns/build/cirros_ns.tar.gz \
+        images/cirros-0.3.5-x86_64-disk.img
 	$(Q)$(MAKE) \
         TEST_VNFD_DESCRIPTORS=$(DESCRIPTOR_DIR)/vnfd/cirros_vnf/build/cirros_vnf.tar.gz \
         TEST_NSD_DESCRIPTORS=$(DESCRIPTOR_DIR)/nsd/cirros_ns/build/cirros_ns.tar.gz \
@@ -146,7 +187,9 @@ $(DESCRIPTOR_DIR)/nsd/ping_pong_ns/build/%.tar.gz:
 ping_pong: check_OSM_HOSTNAME check_openstack_env \
     $(DESCRIPTOR_DIR)/vnfd/ping_vnf/build/ping_vnf.tar.gz \
     $(DESCRIPTOR_DIR)/vnfd/pong_vnf/build/pong_vnf.tar.gz \
-    $(DESCRIPTOR_DIR)/nsd/ping_pong_ns/build/ping_pong_ns.tar.gz
+    $(DESCRIPTOR_DIR)/nsd/ping_pong_ns/build/ping_pong_ns.tar.gz \
+    images/Fedora-x86_64-20-20131211.1-sda-ping.qcow2 \
+    images/Fedora-x86_64-20-20131211.1-sda-pong.qcow2
 	$(Q)$(MAKE) \
         TEST_VNFD_DESCRIPTORS="$(DESCRIPTOR_DIR)/vnfd/ping_vnf/build/ping_vnf.tar.gz,$(DESCRIPTOR_DIR)/vnfd/pong_vnf/build/pong_vnf.tar.gz" \
         TEST_NSD_DESCRIPTORS=$(DESCRIPTOR_DIR)/nsd/ping_pong_ns/build/ping_pong_ns.tar.gz \

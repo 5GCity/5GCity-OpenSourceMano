@@ -30,8 +30,10 @@ properties([
         string(defaultValue: '', description: '', name: 'UPSTREAM_JOB_NUMBER'),
         string(defaultValue: 'dpkg1', description: '', name: 'GPG_KEY_NAME'),
         string(defaultValue: 'artifactory-osm', description: '', name: 'ARTIFACTORY_SERVER'),
+        string(defaultValue: 'osm-stage_4', description: '', name: 'DOWNSTREAM_STAGE_NAME'),
         booleanParam(defaultValue: false, description: '', name: 'SAVE_CONTAINER_ON_FAIL'),
-        booleanParam(defaultValue: false, description: '', name: 'SAVE_CONTAINER_ON_PASS')
+        booleanParam(defaultValue: false, description: '', name: 'SAVE_CONTAINER_ON_PASS'),
+        booleanParam(defaultValue: false, description: '', name: 'DO_STAGE_4'),
     ])
 ])
 
@@ -181,9 +183,20 @@ node("${params.NODE}") {
                """
         }
 
-        stage("Test") {
+        stage("Smoke") {
             ci_helper.systest_run(container_name, 'smoke')
             junit '*.xml'
+        }
+
+        if ( params.DO_STAGE_4 ) {
+            stage("stage_4") {
+                def downstream_params = [
+                    string(name: 'CONTAINER_NAME', value: container_name),
+                ]
+                stage_4_result = build job: "${params.DOWNSTREAM_STAGE_NAME}/${GERRIT_BRANCH}", parameters: downstream_params, propagate: false 
+               
+                currentBuild.result = stage_4_result.result
+            }
         }
 
         // save the artifacts of this build if this is a merge job
@@ -200,6 +213,7 @@ node("${params.NODE}") {
         }
     }
     catch(caughtError) {
+        println("Caught error!")
         error = caughtError
         currentBuild.result = 'FAILURE'
     }

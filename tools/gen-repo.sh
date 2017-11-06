@@ -14,6 +14,7 @@ function usage() {
     echo -e "  -h  <rsync user@host>    "
     echo -e "  -R  <rsync options>      "
     echo -e "  -P  <public key file>    "
+    echo -e "  -c  <changelogfile>      "
     exit 1
 }
 
@@ -46,8 +47,9 @@ RELEASE_DIR=ReleaseTWO
 RSYNC_USER_HOST=osmusers@osm-download.etsi.org
 CURR_DIR=$(pwd)
 PUBLIC_KEY_FILE=~/OSM\ ETSI\ Release\ Key.gpg
+CHANGE_LOG_FILE=
 
-while getopts ":p:i:o:k:j::d:b:r:h:R:P:" o; do
+while getopts ":p:i:o:k:j::d:b:r:h:R:P:c:" o; do
     case "${o}" in
         p)
             PASSPHRASE_FILE=${OPTARG}
@@ -81,6 +83,9 @@ while getopts ":p:i:o:k:j::d:b:r:h:R:P:" o; do
             ;;
         P)
             PUBLIC_KEY_FILE=${OPTARG}
+            ;;
+        c)
+            CHANGE_LOG_FILE=${OPTARG}
             ;;
         *)
             usage
@@ -138,5 +143,8 @@ cd $CURR_DIR/$REPO_BASE
 
 # copy over the public key file
 [ "$PUBLIC_KEY_FILE" ] && cp "$PUBLIC_KEY_FILE" osm/debian/$RELEASE_DIR
+
+# copy over the changelog file
+[ "$CHANGE_LOG_FILE" ] && cp "$CHANGE_LOG_FILE" osm/debian/$RELEASE_DIR
 
 rsync -avR $RSYNC_OPTIONS osm/debian/$RELEASE_DIR rsync://$RSYNC_USER_HOST/repos

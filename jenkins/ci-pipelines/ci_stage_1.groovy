@@ -48,6 +48,11 @@ node("${params.NODE}") {
                stage_name = "stage_2"
                break
         }
+        do_stage_4 = false
+        if (params.DO_STAGE_4)
+        {
+            do_stage_4 = params.DO_STAGE_4
+        }
 
         // pipeline running from gerrit trigger.
         // kickoff the downstream multibranch pipeline
@@ -58,6 +63,7 @@ node("${params.NODE}") {
             string(name: 'GERRIT_PATCHSET_REVISION', value: GERRIT_PATCHSET_REVISION),
             string(name: 'PROJECT_URL_PREFIX', value: params.PROJECT_URL_PREFIX),
             booleanParam(name: 'TEST_INSTALL', value: params.TEST_INSTALL),
+            booleanParam(name: 'DO_STAGE_4', value: do_stage_4),
         ]
      
         if ( params.STAGE )

@@ -17,9 +17,10 @@
 
 properties([
     parameters([
+        string(defaultValue: '', description: '', name: 'CONTAINER_NAME' ),
         string(defaultValue: 'osm-stage_3', description: '', name: 'UPSTREAM_PROJECT'),
-        string(defaultValue: 'release', description: '', name: 'RELEASE'),
         string(defaultValue: 'pipeline', description: '', name: 'NODE'),
+        string(defaultValue: '/home/jenkins/hive/openstack-telefonica.rc', description: '', name: 'HIVE_VIM_1'),
     ])
 ])
 
@@ -31,25 +32,26 @@ node("${params.NODE}") {
 
     ci_helper = load "jenkins/ci-pipelines/ci_helper.groovy"
 
-    stage("get artifacts") {
-        // grab the upstream artifact name
+    if ( params.CONTAINER_NAME ) {
+        container_name = params.CONTAINER_NAME
+    }
+    else if ( params.UPSTREAM_PROJECT ) {
         step ([$class: 'CopyArtifact',
               projectName: "${params.UPSTREAM_PROJECT}/${BRANCH_NAME}"])
+        container_name = sh(returnStdout: true, script: 'cat build_version.txt').trim()
     }
-
-    container_name = sh(returnStdout: true, script: 'cat build_version.txt').trim()
-
-    stage("Test") {
-        ci_helper.systest_run(container_name, 'smoke')
-        junit '*.xml'
+    else {
+        println("no OSM container found")
+        currentBuild.result = 'FAILURE'
+        return
     }
+    println("OSM container = ${container_name}")
 
-/*  os_credentials = "OS_AUTH_URL=${params.OS_AUTH_URL} OS_USERNAME=${params.OS_USERNAME} OS_PASSWORD=${params.OS_PASSWORD} OS_PROJECT_NAME=${params.OS_PROJECT_NAME}"
-        stage("cirros-test") {
-            sh """
-               make -C systest OSM_HOSTNAME=${osm_ip} ${os_credentials} cirros
-               """
-            junit 'systest/reports/pytest-cirros.xml'
+    if ( params.HIVE_VIM_1 ) {
+        stage( "${params.HIVE_VIM_1}" ) {
+            ci_helper.systest_run(container_name, 'cirros', params.HIVE_VIM_1)
+            ci_helper.systest_run(container_name, 'ns_scale', params.HIVE_VIM_1)
+            junit '*.xml'
         }
-*/
+    }
 }

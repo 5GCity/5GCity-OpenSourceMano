@@ -53,7 +53,7 @@ EOF
 systemctl enable lxd-bridge
 systemctl start lxd-bridge
 
-apt-get install -y python-pip python python-pycurl charm-tools python-pytest
+apt-get install -y python-pip python python-pycurl charm-tools python-pytest python-openstackclient
 
 apt-get install -y python-osmclient
 

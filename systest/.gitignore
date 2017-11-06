@@ -3,3 +3,4 @@ pytest-output.xml
 .cache
 descriptor-packages/
 *.xml
+images/*

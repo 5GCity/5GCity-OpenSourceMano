@@ -45,6 +45,10 @@ def lxc_run(container_name,cmd) {
     return sh(returnStdout: true, script: "lxc exec ${container_name} -- ${cmd}").trim()
 }
 
+def lxc_file_push(container_name,file,destination) {
+    return sh(returnStdout: true, script: "lxc file push ${file} ${container_name}/${destination}").trim()
+}
+
 // start a http server
 // return the http server URL
 def start_http_server(repo_dir,server_name) {
@@ -57,12 +61,22 @@ def lxc_get_file(container_name,file,destination) {
     sh "lxc file pull ${container_name}/${file} ${destination}"
 }
 
-def systest_run(container_name, test) {
+def systest_run(container_name, test, source_rc = null) {
     // need to get the SO IP inside the running container
     so_ip = lxc_run(container_name,"lxc list SO-ub -c 4|grep eth0 |awk '{print \$2}'")
+    ro_ip = lxc_run(container_name,"lxc list RO -c 4|grep eth0 |awk '{print \$2}'")
     //container_ip = get_ip_from_container(container_name)
-    // 
-    lxc_run(container_name, "make -C devops/systest OSM_HOSTNAME=${so_ip} ${test}")
+ 
+    if ( source_rc ) {
+        pre_source = "/tmp/" + source_rc.substring(source_rc.lastIndexOf('/')+1)
+ 
+        lxc_file_push(container_name,source_rc,pre_source)
+        lxc_run(container_name, "sh -c '. ${pre_source}; make -C devops/systest OSM_HOSTNAME=${so_ip} OSM_RO_HOSTNAME=${ro_ip} ${test}'")
+    }
+    else
+    {
+        lxc_run(container_name, "make -C devops/systest OSM_HOSTNAME=${so_ip} OSM_RO_HOSTNAME=${ro_ip} ${test}")
+    }
     lxc_get_file(container_name, "/root/devops/systest/reports/pytest-${test}.xml",'.')
 }
 
