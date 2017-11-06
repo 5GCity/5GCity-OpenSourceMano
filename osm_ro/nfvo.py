@@ -2107,7 +2107,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
     :param mydb:
     :param tenant_id:
     :param nsd_descriptor:
-    :return: The list of cretated NSD ids
+    :return: The list of created NSD ids
     """
     try:
         mynsd = nsd_catalog.nsd()
@@ -2119,6 +2119,11 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
         db_sce_nets = []
         db_sce_vnfs = []
         db_sce_interfaces = []
+        db_sce_vnffgs = []
+        db_sce_rsps = []
+        db_sce_rsp_hops = []
+        db_sce_classifiers = []
+        db_sce_classifier_matches = []
         db_ip_profiles = []
         db_ip_profiles_index = 0
         uuid_list = []
@@ -2126,7 +2131,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
         for nsd_yang in mynsd.nsd_catalog.nsd.itervalues():
             nsd = nsd_yang.get()
 
-            # table sceanrios
+            # table scenarios
             scenario_uuid = str(uuid4())
             uuid_list.append(scenario_uuid)
             nsd_uuid_list.append(scenario_uuid)
@@ -2261,15 +2266,141 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                 if not db_sce_net["type"]:
                     db_sce_net["type"] = "bridge"
 
+            # table sce_vnffgs (vnffgd)
+            for vnffg in nsd.get("vnffgd").itervalues():
+                sce_vnffg_uuid = str(uuid4())
+                uuid_list.append(sce_vnffg_uuid)
+                db_sce_vnffg = {
+                    "uuid": sce_vnffg_uuid,
+                    "name": get_str(vnffg, "name", 255),
+                    "scenario_id": scenario_uuid,
+                    "vendor": get_str(vnffg, "vendor", 255),
+                    "description": get_str(vld, "description", 255),
+                }
+                db_sce_vnffgs.append(db_sce_vnffg)
+
+                # deal with rsps
+                db_sce_rsps = []
+                for rsp in vnffg.get("rsp").itervalues():
+                    sce_rsp_uuid = str(uuid4())
+                    uuid_list.append(sce_rsp_uuid)
+                    db_sce_rsp = {
+                        "uuid": sce_rsp_uuid,
+                        "name": get_str(rsp, "name", 255),
+                        "sce_vnffg_id": sce_vnffg_uuid,
+                        "id": get_str(rsp, "id", 255), # only useful to link with classifiers; will be removed later in the code
+                    }
+                    db_sce_rsps.append(db_sce_rsp)
+                    db_sce_rsp_hops = []
+                    for iface in rsp.get("vnfd-connection-point-ref").itervalues():
+                        vnf_index = int(iface['member-vnf-index-ref'])
+                        if_order = int(iface['order'])
+                        # check correct parameters
+                        if vnf_index not in vnf_index2vnf_uuid:
+                            raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'rsp[{}]':'vnfd-connection-point"
+                                                "-ref':'member-vnf-index-ref':'{}'. Reference to a non-existing index at "
+                                                "'nsd':'constituent-vnfd'".format(
+                                                    str(nsd["id"]), str(rsp["id"]), str(iface["member-vnf-index-ref"])),
+                                                HTTP_Bad_Request)
+
+                        existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid',),
+                                                        FROM="interfaces as i join vms on i.vm_id=vms.uuid",
+                                                        WHERE={'vnf_id': vnf_index2vnf_uuid[vnf_index],
+                                                               'external_name': get_str(iface, "vnfd-connection-point-ref",
+                                                                                        255)})
+                        if not existing_ifaces:
+                            raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'rsp[{}]':'vnfd-connection-point"
+                                                "-ref':'vnfd-connection-point-ref':'{}'. Reference to a non-existing "
+                                                "connection-point name at VNFD '{}'".format(
+                                                    str(nsd["id"]), str(rsp["id"]), str(iface["vnfd-connection-point-ref"]),
+                                                    str(iface.get("vnfd-id-ref"))[:255]),
+                                                HTTP_Bad_Request)
+                        interface_uuid = existing_ifaces[0]["uuid"]
+                        sce_rsp_hop_uuid = str(uuid4())
+                        uuid_list.append(sce_rsp_hop_uuid)
+                        db_sce_rsp_hop = {
+                            "uuid": sce_rsp_hop_uuid,
+                            "if_order": if_order,
+                            "interface_id": interface_uuid,
+                            "sce_vnf_id": vnf_index2scevnf_uuid[vnf_index],
+                            "sce_rsp_id": sce_rsp_uuid,
+                        }
+                        db_sce_rsp_hops.append(db_sce_rsp_hop)
+
+                # deal with classifiers
+                db_sce_classifiers = []
+                for classifier in vnffg.get("classifier").itervalues():
+                    sce_classifier_uuid = str(uuid4())
+                    uuid_list.append(sce_classifier_uuid)
+
+                    # source VNF
+                    vnf_index = int(classifier['member-vnf-index-ref'])
+                    if vnf_index not in vnf_index2vnf_uuid:
+                        raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'classifier[{}]':'vnfd-connection-point"
+                                            "-ref':'member-vnf-index-ref':'{}'. Reference to a non-existing index at "
+                                            "'nsd':'constituent-vnfd'".format(
+                                                str(nsd["id"]), str(classifier["id"]), str(classifier["member-vnf-index-ref"])),
+                                            HTTP_Bad_Request)
+                    existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid',),
+                                                    FROM="interfaces as i join vms on i.vm_id=vms.uuid",
+                                                    WHERE={'vnf_id': vnf_index2vnf_uuid[vnf_index],
+                                                           'external_name': get_str(classifier, "vnfd-connection-point-ref",
+                                                                                    255)})
+                    if not existing_ifaces:
+                        raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'rsp[{}]':'vnfd-connection-point"
+                                            "-ref':'vnfd-connection-point-ref':'{}'. Reference to a non-existing "
+                                            "connection-point name at VNFD '{}'".format(
+                                                str(nsd["id"]), str(rsp["id"]), str(iface["vnfd-connection-point-ref"]),
+                                                str(iface.get("vnfd-id-ref"))[:255]),
+                                            HTTP_Bad_Request)
+                    interface_uuid = existing_ifaces[0]["uuid"]
+
+                    db_sce_classifier = {
+                        "uuid": sce_classifier_uuid,
+                        "name": get_str(classifier, "name", 255),
+                        "sce_vnffg_id": sce_vnffg_uuid,
+                        "sce_vnf_id": vnf_index2scevnf_uuid[vnf_index],
+                        "interface_id": interface_uuid,
+                    }
+                    rsp_id = get_str(classifier, "rsp-id-ref", 255)
+                    rsp = next((item for item in db_sce_rsps if item["id"] == rsp_id), None)
+                    db_sce_classifier["sce_rsp_id"] = rsp["uuid"]
+                    db_sce_classifiers.append(db_sce_classifier)
+
+                    db_sce_classifier_matches = []
+                    for match in classifier.get("match-attributes").itervalues():
+                        sce_classifier_match_uuid = str(uuid4())
+                        uuid_list.append(sce_classifier_match_uuid)
+                        db_sce_classifier_match = {
+                            "uuid": sce_classifier_match_uuid,
+                            "ip_proto": get_str(match, "ip-proto", 2),
+                            "source_ip": get_str(match, "source-ip-address", 16),
+                            "destination_ip": get_str(match, "destination-ip-address", 16),
+                            "source_port": get_str(match, "source-port", 5),
+                            "destination_port": get_str(match, "destination-port", 5),
+                            "sce_classifier_id": sce_classifier_uuid,
+                        }
+                        db_sce_classifier_matches.append(db_sce_classifier_match)
+                    # TODO: vnf/cp keys
+
+        # remove unneeded id's in sce_rsps
+        for rsp in db_sce_rsps:
+            rsp.pop('id')
+
         db_tables = [
             {"scenarios": db_scenarios},
             {"sce_nets": db_sce_nets},
             {"ip_profiles": db_ip_profiles},
             {"sce_vnfs": db_sce_vnfs},
             {"sce_interfaces": db_sce_interfaces},
+            {"sce_vnffgs": db_sce_vnffgs},
+            {"sce_rsps": db_sce_rsps},
+            {"sce_rsp_hops": db_sce_rsp_hops},
+            {"sce_classifiers": db_sce_classifiers},
+            {"sce_classifier_matches": db_sce_classifier_matches},
         ]
 
-        logger.debug("create_vnf Deployment done vnfDict: %s",
+        logger.debug("new_nsd_v3 done: %s",
                     yaml.safe_dump(db_tables, indent=4, default_flow_style=False) )
         mydb.new_rows(db_tables, uuid_list)
         return nsd_uuid_list
@@ -2694,7 +2825,6 @@ def create_instance(mydb, tenant_id, instance_dict):
     myvim_threads_id[default_datacenter_id], _ = get_vim_thread(mydb, tenant_id, default_datacenter_id)
     tenant = mydb.get_rows_by_id('nfvo_tenants', tenant_id)
     # myvim_tenant = myvim['tenant_id']
-
     rollbackList=[]
 
     # print "Checking that the scenario exists and getting the scenario dictionary"
@@ -2708,6 +2838,10 @@ def create_instance(mydb, tenant_id, instance_dict):
     db_instance_vnfs = []
     db_instance_vms = []
     db_instance_interfaces = []
+    db_instance_sfis = []
+    db_instance_sfs = []
+    db_instance_classifications = []
+    db_instance_sfps = []
     db_ip_profiles = []
     db_vim_actions = []
     uuid_list = []
@@ -3244,6 +3378,157 @@ def create_instance(mydb, tenant_id, instance_dict):
                     task_index += 1
                     db_vim_actions.append(db_vim_action)
 
+        task_depends_on = []
+        for vnffg in scenarioDict['vnffgs']:
+            for rsp in vnffg['rsps']:
+                sfs_created = []
+                for cp in rsp['connection_points']:
+                    count = mydb.get_rows(
+                            SELECT=('vms.count'),
+                            FROM="vms join interfaces on vms.uuid=interfaces.vm_id join sce_rsp_hops as h on interfaces.uuid=h.interface_id",
+                            WHERE={'h.uuid': cp['uuid']})[0]['count']
+                    instance_vnf = next((item for item in db_instance_vnfs if item['sce_vnf_id'] == cp['sce_vnf_id']), None)
+                    instance_vms = [item for item in db_instance_vms if item['instance_vnf_id'] == instance_vnf['uuid']]
+                    dependencies = []
+                    for instance_vm in instance_vms:
+                        action = next((item for item in db_vim_actions if item['item_id'] == instance_vm['uuid']), None)
+                        if action:
+                            dependencies.append(action['task_index'])
+                        # TODO: throw exception if count != len(instance_vms)
+                        # TODO: and action shouldn't ever be None
+                    sfis_created = []
+                    for i in range(count):
+                        # create sfis
+                        sfi_uuid = str(uuid4())
+                        uuid_list.append(sfi_uuid)
+                        db_sfi = {
+                            "uuid": sfi_uuid,
+                            "instance_scenario_id": instance_uuid,
+                            'sce_rsp_hop_id': cp['uuid'],
+                            'datacenter_id': datacenter_id,
+                            'datacenter_tenant_id': myvim_thread_id,
+                            "vim_sfi_id": None, # vim thread will populate
+                        }
+                        db_instance_sfis.append(db_sfi)
+                        db_vim_action = {
+                            "instance_action_id": instance_action_id,
+                            "task_index": task_index,
+                            "datacenter_vim_id": myvim_thread_id,
+                            "action": "CREATE",
+                            "status": "SCHEDULED",
+                            "item": "instance_sfis",
+                            "item_id": sfi_uuid,
+                            "extra": yaml.safe_dump({"params": "", "depends_on": [dependencies[i]]},
+                                                    default_flow_style=True, width=256)
+                        }
+                        sfis_created.append(task_index)
+                        task_index += 1
+                        db_vim_actions.append(db_vim_action)
+                    # create sfs
+                    sf_uuid = str(uuid4())
+                    uuid_list.append(sf_uuid)
+                    db_sf = {
+                        "uuid": sf_uuid,
+                        "instance_scenario_id": instance_uuid,
+                        'sce_rsp_hop_id': cp['uuid'],
+                        'datacenter_id': datacenter_id,
+                        'datacenter_tenant_id': myvim_thread_id,
+                        "vim_sf_id": None, # vim thread will populate
+                    }
+                    db_instance_sfs.append(db_sf)
+                    db_vim_action = {
+                        "instance_action_id": instance_action_id,
+                        "task_index": task_index,
+                        "datacenter_vim_id": myvim_thread_id,
+                        "action": "CREATE",
+                        "status": "SCHEDULED",
+                        "item": "instance_sfs",
+                        "item_id": sf_uuid,
+                        "extra": yaml.safe_dump({"params": "", "depends_on": sfis_created},
+                                                default_flow_style=True, width=256)
+                    }
+                    sfs_created.append(task_index)
+                    task_index += 1
+                    db_vim_actions.append(db_vim_action)
+                classifier = rsp['classifier']
+
+                # TODO the following ~13 lines can be reused for the sfi case
+                count = mydb.get_rows(
+                        SELECT=('vms.count'),
+                        FROM="vms join interfaces on vms.uuid=interfaces.vm_id join sce_classifiers as c on interfaces.uuid=c.interface_id",
+                        WHERE={'c.uuid': classifier['uuid']})[0]['count']
+                instance_vnf = next((item for item in db_instance_vnfs if item['sce_vnf_id'] == classifier['sce_vnf_id']), None)
+                instance_vms = [item for item in db_instance_vms if item['instance_vnf_id'] == instance_vnf['uuid']]
+                dependencies = []
+                for instance_vm in instance_vms:
+                    action = next((item for item in db_vim_actions if item['item_id'] == instance_vm['uuid']), None)
+                    if action:
+                        dependencies.append(action['task_index'])
+                    # TODO: throw exception if count != len(instance_vms)
+                    # TODO: and action shouldn't ever be None
+                classifications_created = []
+                for i in range(count):
+                    for match in classifier['matches']:
+                        # create classifications
+                        classification_uuid = str(uuid4())
+                        uuid_list.append(classification_uuid)
+                        db_classification = {
+                            "uuid": classification_uuid,
+                            "instance_scenario_id": instance_uuid,
+                            'sce_classifier_match_id': match['uuid'],
+                            'datacenter_id': datacenter_id,
+                            'datacenter_tenant_id': myvim_thread_id,
+                            "vim_classification_id": None, # vim thread will populate
+                        }
+                        db_instance_classifications.append(db_classification)
+                        classification_params = {
+                            "ip_proto": match["ip_proto"],
+                            "source_ip": match["source_ip"],
+                            "destination_ip": match["destination_ip"],
+                            "source_port": match["source_port"],
+                            "destination_port": match["destination_port"]
+                        }
+                        db_vim_action = {
+                            "instance_action_id": instance_action_id,
+                            "task_index": task_index,
+                            "datacenter_vim_id": myvim_thread_id,
+                            "action": "CREATE",
+                            "status": "SCHEDULED",
+                            "item": "instance_classifications",
+                            "item_id": classification_uuid,
+                            "extra": yaml.safe_dump({"params": classification_params, "depends_on": [dependencies[i]]},
+                                                    default_flow_style=True, width=256)
+                        }
+                        classifications_created.append(task_index)
+                        task_index += 1
+                        db_vim_actions.append(db_vim_action)
+
+                # create sfps
+                sfp_uuid = str(uuid4())
+                uuid_list.append(sfp_uuid)
+                db_sfp = {
+                    "uuid": sfp_uuid,
+                    "instance_scenario_id": instance_uuid,
+                    'sce_rsp_id': rsp['uuid'],
+                    'datacenter_id': datacenter_id,
+                    'datacenter_tenant_id': myvim_thread_id,
+                    "vim_sfp_id": None, # vim thread will populate
+                }
+                db_instance_sfps.append(db_sfp)
+                db_vim_action = {
+                    "instance_action_id": instance_action_id,
+                    "task_index": task_index,
+                    "datacenter_vim_id": myvim_thread_id,
+                    "action": "CREATE",
+                    "status": "SCHEDULED",
+                    "item": "instance_sfps",
+                    "item_id": sfp_uuid,
+                    "extra": yaml.safe_dump({"params": "", "depends_on": sfs_created + classifications_created},
+                                            default_flow_style=True, width=256)
+                }
+                task_index += 1
+                db_vim_actions.append(db_vim_action)
+
         scenarioDict["datacenter2tenant"] = myvim_threads_id
 
         db_instance_action["number_tasks"] = task_index
@@ -3257,6 +3542,10 @@ def create_instance(mydb, tenant_id, instance_dict):
             {"instance_vms": db_instance_vms},
             {"instance_interfaces": db_instance_interfaces},
             {"instance_actions": db_instance_action},
+            {"instance_sfis": db_instance_sfis},
+            {"instance_sfs": db_instance_sfs},
+            {"instance_classifications": db_instance_classifications},
+            {"instance_sfps": db_instance_sfps},
             {"vim_actions": db_vim_actions}
         ]
 
@@ -3288,7 +3577,6 @@ def delete_instance(mydb, tenant_id, instance_id):
     # print yaml.safe_dump(instanceDict, indent=4, default_flow_style=False)
     tenant_id = instanceDict["tenant_id"]
     # print "Checking that nfvo_tenant_id exists and getting the VIM URI and the VIM tenant_id"
-
     # 1. Delete from Database
     message = mydb.delete_instance_scenario(instance_id, tenant_id)
 
@@ -3392,6 +3680,156 @@ def delete_instance(mydb, tenant_id, instance_id):
             "status": "SCHEDULED",
             "item": "instance_nets",
             "item_id": net["uuid"],
+            "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
+        }
+        task_index += 1
+        db_vim_actions.append(db_vim_action)
+
+    # 2.3 deleting VNFFGs
+
+    for sfp in instanceDict['sfps']:
+        vimthread_affected[sfp["datacenter_tenant_id"]] = None
+        datacenter_key = (sfp["datacenter_id"], sfp["datacenter_tenant_id"])
+        if datacenter_key not in myvims:
+            try:
+                _,myvim_thread = get_vim_thread(mydb, tenant_id, sfp["datacenter_id"], sfp["datacenter_tenant_id"])
+            except NfvoException as e:
+                logger.error(str(e))
+                myvim_thread = None
+            myvim_threads[datacenter_key] = myvim_thread
+            vims = get_vim(mydb, tenant_id, datacenter_id=sfp["datacenter_id"],
+                           datacenter_tenant_id=sfp["datacenter_tenant_id"])
+            if len(vims) == 0:
+                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(sfp["datacenter_id"], sfp["datacenter_tenant_id"]))
+                myvims[datacenter_key] = None
+            else:
+                myvims[datacenter_key] = vims.values()[0]
+        myvim = myvims[datacenter_key]
+        myvim_thread = myvim_threads[datacenter_key]
+
+        if not myvim:
+            error_msg += "\n    vim_sfp_id={} cannot be deleted because datacenter={} not found".format(sfp['vim_sfp_id'], sfp["datacenter_id"])
+            continue
+        extra = {"params": (sfp['vim_sfp_id'])}
+        db_vim_action = {
+            "instance_action_id": instance_action_id,
+            "task_index": task_index,
+            "datacenter_vim_id": sfp["datacenter_tenant_id"],
+            "action": "DELETE",
+            "status": "SCHEDULED",
+            "item": "instance_sfps",
+            "item_id": sfp["uuid"],
+            "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
+        }
+        task_index += 1
+        db_vim_actions.append(db_vim_action)
+
+    for sf in instanceDict['sfs']:
+        vimthread_affected[sf["datacenter_tenant_id"]] = None
+        datacenter_key = (sf["datacenter_id"], sf["datacenter_tenant_id"])
+        if datacenter_key not in myvims:
+            try:
+                _,myvim_thread = get_vim_thread(mydb, tenant_id, sf["datacenter_id"], sf["datacenter_tenant_id"])
+            except NfvoException as e:
+                logger.error(str(e))
+                myvim_thread = None
+            myvim_threads[datacenter_key] = myvim_thread
+            vims = get_vim(mydb, tenant_id, datacenter_id=sf["datacenter_id"],
+                           datacenter_tenant_id=sf["datacenter_tenant_id"])
+            if len(vims) == 0:
+                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(sf["datacenter_id"], sf["datacenter_tenant_id"]))
+                myvims[datacenter_key] = None
+            else:
+                myvims[datacenter_key] = vims.values()[0]
+        myvim = myvims[datacenter_key]
+        myvim_thread = myvim_threads[datacenter_key]
+
+        if not myvim:
+            error_msg += "\n    vim_sf_id={} cannot be deleted because datacenter={} not found".format(sf['vim_sf_id'], sf["datacenter_id"])
+            continue
+        extra = {"params": (sf['vim_sf_id'])}
+        db_vim_action = {
+            "instance_action_id": instance_action_id,
+            "task_index": task_index,
+            "datacenter_vim_id": sf["datacenter_tenant_id"],
+            "action": "DELETE",
+            "status": "SCHEDULED",
+            "item": "instance_sfs",
+            "item_id": sf["uuid"],
+            "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
+        }
+        task_index += 1
+        db_vim_actions.append(db_vim_action)
+
+    for sfi in instanceDict['sfis']:
+        vimthread_affected[sfi["datacenter_tenant_id"]] = None
+        datacenter_key = (sfi["datacenter_id"], sfi["datacenter_tenant_id"])
+        if datacenter_key not in myvims:
+            try:
+                _,myvim_thread = get_vim_thread(mydb, tenant_id, sfi["datacenter_id"], sfi["datacenter_tenant_id"])
+            except NfvoException as e:
+                logger.error(str(e))
+                myvim_thread = None
+            myvim_threads[datacenter_key] = myvim_thread
+            vims = get_vim(mydb, tenant_id, datacenter_id=sfi["datacenter_id"],
+                           datacenter_tenant_id=sfi["datacenter_tenant_id"])
+            if len(vims) == 0:
+                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(sfi["datacenter_id"], sfi["datacenter_tenant_id"]))
+                myvims[datacenter_key] = None
+            else:
+                myvims[datacenter_key] = vims.values()[0]
+        myvim = myvims[datacenter_key]
+        myvim_thread = myvim_threads[datacenter_key]
+
+        if not myvim:
+            error_msg += "\n    vim_sfi_id={} cannot be deleted because datacenter={} not found".format(sfi['vim_sfi_id'], sfi["datacenter_id"])
+            continue
+        extra = {"params": (sfi['vim_sfi_id'])}
+        db_vim_action = {
+            "instance_action_id": instance_action_id,
+            "task_index": task_index,
+            "datacenter_vim_id": sfi["datacenter_tenant_id"],
+            "action": "DELETE",
+            "status": "SCHEDULED",
+            "item": "instance_sfis",
+            "item_id": sfi["uuid"],
+            "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
+        }
+        task_index += 1
+        db_vim_actions.append(db_vim_action)
+
+    for classification in instanceDict['classifications']:
+        vimthread_affected[classification["datacenter_tenant_id"]] = None
+        datacenter_key = (classification["datacenter_id"], classification["datacenter_tenant_id"])
+        if datacenter_key not in myvims:
+            try:
+                _,myvim_thread = get_vim_thread(mydb, tenant_id, classification["datacenter_id"], classification["datacenter_tenant_id"])
+            except NfvoException as e:
+                logger.error(str(e))
+                myvim_thread = None
+            myvim_threads[datacenter_key] = myvim_thread
+            vims = get_vim(mydb, tenant_id, datacenter_id=classification["datacenter_id"],
+                           datacenter_tenant_id=classification["datacenter_tenant_id"])
+            if len(vims) == 0:
+                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(classification["datacenter_id"], classification["datacenter_tenant_id"]))
+                myvims[datacenter_key] = None
+            else:
+                myvims[datacenter_key] = vims.values()[0]
+        myvim = myvims[datacenter_key]
+        myvim_thread = myvim_threads[datacenter_key]
+
+        if not myvim:
+            error_msg += "\n    vim_classification_id={} cannot be deleted because datacenter={} not found".format(classification['vim_classification_id'], classification["datacenter_id"])
+            continue
+        extra = {"params": (classification['vim_classification_id'])}
+        db_vim_action = {
+            "instance_action_id": instance_action_id,
+            "task_index": task_index,
+            "datacenter_vim_id": classification["datacenter_tenant_id"],
+            "action": "DELETE",
+            "status": "SCHEDULED",
+            "item": "instance_classifications",
+            "item_id": classification["uuid"],
             "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
         }
         task_index += 1

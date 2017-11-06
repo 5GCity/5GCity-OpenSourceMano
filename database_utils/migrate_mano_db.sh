@@ -33,8 +33,8 @@ DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=27
- 
+LAST_DB_VERSION=28
+
 # Detect paths
 MYSQL=$(which mysql)
 AWK=$(which awk)
@@ -195,6 +195,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5022 ] && DB_VERSION=25  #0.5.22 =>  25
 #[ $OPENMANO_VER_NUM -ge 5024 ] && DB_VERSION=26  #0.5.24 =>  26
 #[ $OPENMANO_VER_NUM -ge 5025 ] && DB_VERSION=27  #0.5.25 =>  27
+#[ $OPENMANO_VER_NUM -ge 5052 ] && DB_VERSION=28  #0.5.52 =>  28
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -1018,6 +1019,223 @@ function downgrade_from_27(){
     sql "ALTER TABLE nfvo_tenants DROP COLUMN encrypted_RO_priv_key;"
     sql "ALTER TABLE nfvo_tenants DROP COLUMN RO_pub_key;"
     sql "DELETE FROM schema_version WHERE version_int='27';"
+}
+function upgrade_to_28(){
+    echo "      [Adding necessary tables for VNFFG]"
+    echo "      Adding sce_vnffgs"
+    sql "CREATE TABLE IF NOT EXISTS sce_vnffgs (
+            uuid VARCHAR(36) NOT NULL,
+            tenant_id VARCHAR(36) NULL DEFAULT NULL,
+            name VARCHAR(255) NOT NULL,
+            description VARCHAR(255) NULL DEFAULT NULL,
+            vendor VARCHAR(255) NULL DEFAULT NULL,
+            scenario_id VARCHAR(36) NOT NULL,
+            created_at DOUBLE NOT NULL,
+            modified_at DOUBLE NULL DEFAULT NULL,
+        PRIMARY KEY (uuid),
+        INDEX FK_scenarios_sce_vnffg (scenario_id),
+        CONSTRAINT FK_scenarios_vnffg FOREIGN KEY (tenant_id) REFERENCES scenarios (uuid) ON UPDATE CASCADE ON DELETE CASCADE)
+        COLLATE='utf8_general_ci'
+        ENGINE=InnoDB;"
+    echo "      Adding sce_rsps"
+    sql "CREATE TABLE IF NOT EXISTS sce_rsps (
+            uuid VARCHAR(36) NOT NULL,
+            tenant_id VARCHAR(36) NULL DEFAULT NULL,
+            name VARCHAR(255) NOT NULL,
+            sce_vnffg_id VARCHAR(36) NOT NULL,
+            created_at DOUBLE NOT NULL,
+            modified_at DOUBLE NULL DEFAULT NULL,
+        PRIMARY KEY (uuid),
+        INDEX FK_sce_vnffgs_rsp (sce_vnffg_id),
+        CONSTRAINT FK_sce_vnffgs_rsp FOREIGN KEY (sce_vnffg_id) REFERENCES sce_vnffgs (uuid) ON UPDATE CASCADE ON DELETE CASCADE)
+        COLLATE='utf8_general_ci'
+        ENGINE=InnoDB;"
+    echo "      Adding sce_rsp_hops"
+    sql "CREATE TABLE IF NOT EXISTS sce_rsp_hops (
+            uuid VARCHAR(36) NOT NULL,
+            if_order INT DEFAULT 0 NOT NULL,
+            interface_id VARCHAR(36) NOT NULL,
+            sce_vnf_id VARCHAR(36) NOT NULL,
+            sce_rsp_id VARCHAR(36) NOT NULL,
+            created_at DOUBLE NOT NULL,
+            modified_at DOUBLE NULL DEFAULT NULL,
+        PRIMARY KEY (uuid),
+        INDEX FK_interfaces_rsp_hop (interface_id),
+        INDEX FK_sce_vnfs_rsp_hop (sce_vnf_id),
+        INDEX FK_sce_rsps_rsp_hop (sce_rsp_id),
+        CONSTRAINT FK_interfaces_rsp_hop FOREIGN KEY (interface_id) REFERENCES interfaces (uuid) ON UPDATE CASCADE ON DELETE CASCADE,
+        CONSTRAINT FK_sce_vnfs_rsp_hop FOREIGN KEY (sce_vnf_id) REFERENCES sce_vnfs (uuid) ON UPDATE CASCADE ON DELETE CASCADE,
+        CONSTRAINT FK_sce_rsps_rsp_hop FOREIGN KEY (sce_rsp_id) REFERENCES sce_rsps (uuid) ON UPDATE CASCADE ON DELETE CASCADE)
+        COLLATE='utf8_general_ci'
+        ENGINE=InnoDB;"
+    echo "      Adding sce_classifiers"
+    sql "CREATE TABLE IF NOT EXISTS sce_classifiers (
+            uuid VARCHAR(36) NOT NULL,
+            tenant_id VARCHAR(36) NULL DEFAULT NULL,
+            name VARCHAR(255) NOT NULL,
+            sce_vnffg_id VARCHAR(36) NOT NULL,
+            sce_rsp_id VARCHAR(36) NOT NULL,
+            sce_vnf_id VARCHAR(36) NOT NULL,
+            interface_id VARCHAR(36) NOT NULL,
+            created_at DOUBLE NOT NULL,
+            modified_at DOUBLE NULL DEFAULT NULL,
+        PRIMARY KEY (uuid),
+        INDEX FK_sce_vnffgs_classifier (sce_vnffg_id),
+        INDEX FK_sce_rsps_classifier (sce_rsp_id),
+        INDEX FK_sce_vnfs_classifier (sce_vnf_id),
+        INDEX FK_interfaces_classifier (interface_id),
+        CONSTRAINT FK_sce_vnffgs_classifier FOREIGN KEY (sce_vnffg_id) REFERENCES sce_vnffgs (uuid) ON UPDATE CASCADE ON DELETE CASCADE,
+        CONSTRAINT FK_sce_rsps_classifier FOREIGN KEY (sce_rsp_id) REFERENCES sce_rsps (uuid) ON UPDATE CASCADE ON DELETE CASCADE,
+        CONSTRAINT FK_sce_vnfs_classifier FOREIGN KEY (sce_vnf_id) REFERENCES sce_vnfs (uuid) ON UPDATE CASCADE ON DELETE CASCADE,
+        CONSTRAINT FK_interfaces_classifier FOREIGN KEY (interface_id) REFERENCES interfaces (uuid) ON UPDATE CASCADE ON DELETE CASCADE)
+        COLLATE='utf8_general_ci'
+        ENGINE=InnoDB;"
+    echo "      Adding sce_classifier_matches"
+    sql "CREATE TABLE IF NOT EXISTS sce_classifier_matches (
+            uuid VARCHAR(36) NOT NULL,
+            ip_proto VARCHAR(2) NOT NULL,
+            source_ip VARCHAR(16) NOT NULL,
+            destination_ip VARCHAR(16) NOT NULL,
+            source_port VARCHAR(5) NOT NULL,
+            destination_port VARCHAR(5) NOT NULL,
+            sce_classifier_id VARCHAR(36) NOT NULL,
+            created_at DOUBLE NOT NULL,
+            modified_at DOUBLE NULL DEFAULT NULL,
+        PRIMARY KEY (uuid),
+        INDEX FK_classifiers_classifier_match (sce_classifier_id),
+        CONSTRAINT FK_sce_classifiers_classifier_match FOREIGN KEY (sce_classifier_id) REFERENCES sce_classifiers (uuid) ON UPDATE CASCADE ON DELETE CASCADE)
+        COLLATE='utf8_general_ci'
+        ENGINE=InnoDB;"
+
+    echo "      [Adding necessary tables for VNFFG-SFC instance mapping]"
+    echo "      Adding instance_sfis"
+    sql "CREATE TABLE IF NOT EXISTS instance_sfis (
+          uuid varchar(36) NOT NULL,
+          instance_scenario_id varchar(36) NOT NULL,
+          vim_sfi_id varchar(36) DEFAULT NULL,
+          sce_rsp_hop_id varchar(36) DEFAULT NULL,
+          datacenter_id varchar(36) DEFAULT NULL,
+          datacenter_tenant_id varchar(36) DEFAULT NULL,
+          status enum('ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
+          error_msg varchar(1024) DEFAULT NULL,
+          vim_info text,
+          created_at double NOT NULL,
+          modified_at double DEFAULT NULL,
+          PRIMARY KEY (uuid),
+      KEY FK_instance_sfis_instance_scenarios (instance_scenario_id),
+      KEY FK_instance_sfis_sce_rsp_hops (sce_rsp_hop_id),
+      KEY FK_instance_sfis_datacenters (datacenter_id),
+      KEY FK_instance_sfis_datacenter_tenants (datacenter_tenant_id),
+      CONSTRAINT FK_instance_sfis_datacenter_tenants FOREIGN KEY (datacenter_tenant_id) REFERENCES datacenter_tenants (uuid),
+      CONSTRAINT FK_instance_sfis_datacenters FOREIGN KEY (datacenter_id) REFERENCES datacenters (uuid),
+      CONSTRAINT FK_instance_sfis_instance_scenarios FOREIGN KEY (instance_scenario_id) REFERENCES instance_scenarios (uuid) ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT FK_instance_sfis_sce_rsp_hops FOREIGN KEY (sce_rsp_hop_id) REFERENCES sce_rsp_hops (uuid) ON DELETE SET NULL ON UPDATE CASCADE)
+      COLLATE='utf8_general_ci'
+      ENGINE=InnoDB;"
+    echo "      Adding instance_sfs"
+    sql "CREATE TABLE IF NOT EXISTS instance_sfs (
+          uuid varchar(36) NOT NULL,
+          instance_scenario_id varchar(36) NOT NULL,
+          vim_sf_id varchar(36) DEFAULT NULL,
+          sce_rsp_hop_id varchar(36) DEFAULT NULL,
+          datacenter_id varchar(36) DEFAULT NULL,
+          datacenter_tenant_id varchar(36) DEFAULT NULL,
+          status enum('ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
+          error_msg varchar(1024) DEFAULT NULL,
+          vim_info text,
+          created_at double NOT NULL,
+          modified_at double DEFAULT NULL,
+      PRIMARY KEY (uuid),
+      KEY FK_instance_sfs_instance_scenarios (instance_scenario_id),
+      KEY FK_instance_sfs_sce_rsp_hops (sce_rsp_hop_id),
+      KEY FK_instance_sfs_datacenters (datacenter_id),
+      KEY FK_instance_sfs_datacenter_tenants (datacenter_tenant_id),
+      CONSTRAINT FK_instance_sfs_datacenter_tenants FOREIGN KEY (datacenter_tenant_id) REFERENCES datacenter_tenants (uuid),
+      CONSTRAINT FK_instance_sfs_datacenters FOREIGN KEY (datacenter_id) REFERENCES datacenters (uuid),
+      CONSTRAINT FK_instance_sfs_instance_scenarios FOREIGN KEY (instance_scenario_id) REFERENCES instance_scenarios (uuid) ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT FK_instance_sfs_sce_rsp_hops FOREIGN KEY (sce_rsp_hop_id) REFERENCES sce_rsp_hops (uuid) ON DELETE SET NULL ON UPDATE CASCADE)
+      COLLATE='utf8_general_ci'
+      ENGINE=InnoDB;"
+    echo "      Adding instance_classifications"
+    sql "CREATE TABLE IF NOT EXISTS instance_classifications (
+          uuid varchar(36) NOT NULL,
+          instance_scenario_id varchar(36) NOT NULL,
+          vim_classification_id varchar(36) DEFAULT NULL,
+          sce_classifier_match_id varchar(36) DEFAULT NULL,
+          datacenter_id varchar(36) DEFAULT NULL,
+          datacenter_tenant_id varchar(36) DEFAULT NULL,
+          status enum('ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
+          error_msg varchar(1024) DEFAULT NULL,
+          vim_info text,
+          created_at double NOT NULL,
+          modified_at double DEFAULT NULL,
+      PRIMARY KEY (uuid),
+      KEY FK_instance_classifications_instance_scenarios (instance_scenario_id),
+      KEY FK_instance_classifications_sce_classifier_matches (sce_classifier_match_id),
+      KEY FK_instance_classifications_datacenters (datacenter_id),
+      KEY FK_instance_classifications_datacenter_tenants (datacenter_tenant_id),
+      CONSTRAINT FK_instance_classifications_datacenter_tenants FOREIGN KEY (datacenter_tenant_id) REFERENCES datacenter_tenants (uuid),
+      CONSTRAINT FK_instance_classifications_datacenters FOREIGN KEY (datacenter_id) REFERENCES datacenters (uuid),
+      CONSTRAINT FK_instance_classifications_instance_scenarios FOREIGN KEY (instance_scenario_id) REFERENCES instance_scenarios (uuid) ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT FK_instance_classifications_sce_classifier_matches FOREIGN KEY (sce_classifier_match_id) REFERENCES sce_classifier_matches (uuid) ON DELETE SET NULL ON UPDATE CASCADE)
+      COLLATE='utf8_general_ci'
+      ENGINE=InnoDB;"
+    echo "      Adding instance_sfps"
+    sql "CREATE TABLE IF NOT EXISTS instance_sfps (
+          uuid varchar(36) NOT NULL,
+          instance_scenario_id varchar(36) NOT NULL,
+          vim_sfp_id varchar(36) DEFAULT NULL,
+          sce_rsp_id varchar(36) DEFAULT NULL,
+          datacenter_id varchar(36) DEFAULT NULL,
+          datacenter_tenant_id varchar(36) DEFAULT NULL,
+          status enum('ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
+          error_msg varchar(1024) DEFAULT NULL,
+          vim_info text,
+          created_at double NOT NULL,
+          modified_at double DEFAULT NULL,
+      PRIMARY KEY (uuid),
+      KEY FK_instance_sfps_instance_scenarios (instance_scenario_id),
+      KEY FK_instance_sfps_sce_rsps (sce_rsp_id),
+      KEY FK_instance_sfps_datacenters (datacenter_id),
+      KEY FK_instance_sfps_datacenter_tenants (datacenter_tenant_id),
+      CONSTRAINT FK_instance_sfps_datacenter_tenants FOREIGN KEY (datacenter_tenant_id) REFERENCES datacenter_tenants (uuid),
+      CONSTRAINT FK_instance_sfps_datacenters FOREIGN KEY (datacenter_id) REFERENCES datacenters (uuid),
+      CONSTRAINT FK_instance_sfps_instance_scenarios FOREIGN KEY (instance_scenario_id) REFERENCES instance_scenarios (uuid) ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT FK_instance_sfps_sce_rsps FOREIGN KEY (sce_rsp_id) REFERENCES sce_rsps (uuid) ON DELETE SET NULL ON UPDATE CASCADE)
+      COLLATE='utf8_general_ci'
+      ENGINE=InnoDB;"
+
+
+    echo "      [Altering vim_actions table]"
+    sql "ALTER TABLE vim_actions MODIFY COLUMN item ENUM('datacenters_flavors','datacenter_images','instance_nets','instance_vms','instance_interfaces','instance_sfis','instance_sfs','instance_classifications','instance_sfps') NOT NULL COMMENT 'table where the item is stored'"
+
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
+         "VALUES (28, '0.28', '0.5.28', 'Adding VNFFG-related tables', '2017-11-20');"
+}
+function downgrade_from_28(){
+    echo "      [Undo adding the VNFFG tables]"
+    echo "      Dropping instance_sfps"
+    sql "DROP TABLE instance_sfps;"
+    echo "      Dropping sce_classifications"
+    sql "DROP TABLE instance_classifications;"
+    echo "      Dropping instance_sfs"
+    sql "DROP TABLE instance_sfs;"
+    echo "      Dropping instance_sfis"
+    sql "DROP TABLE instance_sfis;"
+    echo "      Dropping sce_classifier_matches"
+    echo "      [Undo adding the VNFFG-SFC instance mapping tables]"
+    sql "DROP TABLE sce_classifier_matches;"
+    echo "      Dropping sce_classifiers"
+    sql "DROP TABLE sce_classifiers;"
+    echo "      Dropping sce_rsp_hops"
+    sql "DROP TABLE sce_rsp_hops;"
+    echo "      Dropping sce_rsps"
+    sql "DROP TABLE sce_rsps;"
+    echo "      Dropping sce_vnffgs"
+    sql "DROP TABLE sce_vnffgs;"
+    echo "      [Altering vim_actions table]"
+    sql "ALTER TABLE vim_actions MODIFY COLUMN item ENUM('datacenters_flavors','datacenter_images','instance_nets','instance_vms','instance_interfaces') NOT NULL COMMENT 'table where the item is stored'"
+    sql "DELETE FROM schema_version WHERE version_int='28';"
 }
 function upgrade_to_X(){
     echo "      change 'datacenter_nets'"

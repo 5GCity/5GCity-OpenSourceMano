@@ -1691,7 +1691,7 @@ class vimconnector(vimconn.vimconnector):
             classification_dict = definition
             classification_dict['name'] = name
 
-            new_class = self.neutron.create_flow_classifier(
+            new_class = self.neutron.create_sfc_flow_classifier(
                 {'flow_classifier': classification_dict})
             return new_class['flow_classifier']['id']
         except (neExceptions.ConnectionFailed, ksExceptions.ClientException,
@@ -1720,9 +1720,9 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             if self.api_version3 and "tenant_id" in filter_dict:
                 filter_dict['project_id'] = filter_dict.pop('tenant_id')
-            classification_dict = self.neutron.list_flow_classifier(
+            classification_dict = self.neutron.list_sfc_flow_classifiers(
                 **filter_dict)
-            classification_list = classification_dict["flow_classifiers"]
+            classification_list = cliassification_dict["flow_classifiers"]
             self.__classification_os2mano(classification_list)
             return classification_list
         except (neExceptions.ConnectionFailed, ksExceptions.ClientException,
@@ -1733,7 +1733,7 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Deleting Classification '%s' from VIM", class_id)
         try:
             self._reload_connection()
-            self.neutron.delete_flow_classifier(class_id)
+            self.neutron.delete_sfc_flow_classifier(class_id)
             return class_id
         except (neExceptions.ConnectionFailed, neExceptions.NeutronException,
                 ksExceptions.ClientException, neExceptions.NeutronException,
@@ -1748,9 +1748,7 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             correlation = None
             if sfc_encap:
-                # TODO(igordc): must be changed to NSH in Queens
-                # (MPLS is a workaround)
-                correlation = 'mpls'
+                correlation = 'nsh'
             if len(ingress_ports) != 1:
                 raise vimconn.vimconnNotSupportedException(
                     "OpenStack VIM connector can only have "
@@ -1764,13 +1762,13 @@ class vimconnector(vimconn.vimconnector):
                         'egress': egress_ports[0],
                         'service_function_parameters': {
                             'correlation': correlation}}
-            new_sfi = self.neutron.create_port_pair({'port_pair': sfi_dict})
+            new_sfi = self.neutron.create_sfc_port_pair({'port_pair': sfi_dict})
             return new_sfi['port_pair']['id']
         except (neExceptions.ConnectionFailed, ksExceptions.ClientException,
                 neExceptions.NeutronException, ConnectionError) as e:
             if new_sfi:
                 try:
-                    self.neutron.delete_port_pair_group(
+                    self.neutron.delete_sfc_port_pair(
                         new_sfi['port_pair']['id'])
                 except Exception:
                     self.logger.error(
@@ -1800,7 +1798,7 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             if self.api_version3 and "tenant_id" in filter_dict:
                 filter_dict['project_id'] = filter_dict.pop('tenant_id')
-            sfi_dict = self.neutron.list_port_pair(**filter_dict)
+            sfi_dict = self.neutron.list_sfc_port_pairs(**filter_dict)
             sfi_list = sfi_dict["port_pairs"]
             self.__sfi_os2mano(sfi_list)
             return sfi_list
@@ -1813,7 +1811,7 @@ class vimconnector(vimconn.vimconnector):
                           "from VIM", sfi_id)
         try:
             self._reload_connection()
-            self.neutron.delete_port_pair(sfi_id)
+            self.neutron.delete_sfc_port_pair(sfi_id)
             return sfi_id
         except (neExceptions.ConnectionFailed, neExceptions.NeutronException,
                 ksExceptions.ClientException, neExceptions.NeutronException,
@@ -1828,25 +1826,23 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             correlation = None
             if sfc_encap:
-                # TODO(igordc): must be changed to NSH in Queens
-                # (MPLS is a workaround)
-                correlation = 'mpls'
+                correlation = 'nsh'
             for instance in sfis:
                 sfi = self.get_sfi(instance)
-                if sfi.get('sfc_encap') != correlation:
+                if sfi.get('sfc_encap') != sfc_encap:
                     raise vimconn.vimconnNotSupportedException(
                         "OpenStack VIM connector requires all SFIs of the "
                         "same SF to share the same SFC Encapsulation")
             sf_dict = {'name': name,
                        'port_pairs': sfis}
-            new_sf = self.neutron.create_port_pair_group({
+            new_sf = self.neutron.create_sfc_port_pair_group({
                 'port_pair_group': sf_dict})
             return new_sf['port_pair_group']['id']
         except (neExceptions.ConnectionFailed, ksExceptions.ClientException,
                 neExceptions.NeutronException, ConnectionError) as e:
             if new_sf:
                 try:
-                    self.neutron.delete_port_pair_group(
+                    self.neutron.delete_sfc_port_pair_group(
                         new_sf['port_pair_group']['id'])
                 except Exception:
                     self.logger.error(
@@ -1874,7 +1870,7 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             if self.api_version3 and "tenant_id" in filter_dict:
                 filter_dict['project_id'] = filter_dict.pop('tenant_id')
-            sf_dict = self.neutron.list_port_pair_group(**filter_dict)
+            sf_dict = self.neutron.list_sfc_port_pair_groups(**filter_dict)
             sf_list = sf_dict["port_pair_groups"]
             self.__sf_os2mano(sf_list)
             return sf_list
@@ -1886,7 +1882,7 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Deleting Service Function '%s' from VIM", sf_id)
         try:
             self._reload_connection()
-            self.neutron.delete_port_pair_group(sf_id)
+            self.neutron.delete_sfc_port_pair_group(sf_id)
             return sf_id
         except (neExceptions.ConnectionFailed, neExceptions.NeutronException,
                 ksExceptions.ClientException, neExceptions.NeutronException,
@@ -1899,26 +1895,24 @@ class vimconnector(vimconn.vimconnector):
         try:
             new_sfp = None
             self._reload_connection()
-            if not sfc_encap:
-                raise vimconn.vimconnNotSupportedException(
-                    "OpenStack VIM connector only supports "
-                    "SFC-Encapsulated chains")
-            # TODO(igordc): must be changed to NSH in Queens
-            # (MPLS is a workaround)
-            correlation = 'mpls'
+            # In networking-sfc the MPLS encapsulation is legacy
+            # should be used when no full SFC Encapsulation is intended
+            sfc_encap = 'mpls'
+            if sfc_encap:
+                correlation = 'nsh'
             sfp_dict = {'name': name,
                         'flow_classifiers': classifications,
                         'port_pair_groups': sfs,
                         'chain_parameters': {'correlation': correlation}}
             if spi:
                 sfp_dict['chain_id'] = spi
-            new_sfp = self.neutron.create_port_chain({'port_chain': sfp_dict})
+            new_sfp = self.neutron.create_sfc_port_chain({'port_chain': sfp_dict})
             return new_sfp["port_chain"]["id"]
         except (neExceptions.ConnectionFailed, ksExceptions.ClientException,
                 neExceptions.NeutronException, ConnectionError) as e:
             if new_sfp:
                 try:
-                    self.neutron.delete_port_chain(new_sfp['port_chain']['id'])
+                    self.neutron.delete_sfc_port_chain(new_sfp['port_chain']['id'])
                 except Exception:
                     self.logger.error(
                         'Creation of Service Function Path failed, with '
@@ -1945,7 +1939,7 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             if self.api_version3 and "tenant_id" in filter_dict:
                 filter_dict['project_id'] = filter_dict.pop('tenant_id')
-            sfp_dict = self.neutron.list_port_chain(**filter_dict)
+            sfp_dict = self.neutron.list_sfc_port_chains(**filter_dict)
             sfp_list = sfp_dict["port_chains"]
             self.__sfp_os2mano(sfp_list)
             return sfp_list
@@ -1958,7 +1952,7 @@ class vimconnector(vimconn.vimconnector):
             "Deleting Service Function Path '%s' from VIM", sfp_id)
         try:
             self._reload_connection()
-            self.neutron.delete_port_chain(sfp_id)
+            self.neutron.delete_sfc_port_chain(sfp_id)
             return sfp_id
         except (neExceptions.ConnectionFailed, neExceptions.NeutronException,
                 ksExceptions.ClientException, neExceptions.NeutronException,

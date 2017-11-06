@@ -37,7 +37,9 @@ import time
 tables_with_createdat_field=["datacenters","instance_nets","instance_scenarios","instance_vms","instance_vnfs",
                            "interfaces","nets","nfvo_tenants","scenarios","sce_interfaces","sce_nets",
                            "sce_vnfs","tenants_datacenters","datacenter_tenants","vms","vnfs", "datacenter_nets",
-                           "instance_actions", "vim_actions"]
+                           "instance_actions", "vim_actions", "sce_vnffgs", "sce_rsps", "sce_rsp_hops",
+                           "sce_classifiers", "sce_classifier_matches", "instance_sfis", "instance_sfs",
+                           "instance_classifications", "instance_sfps"]
 
 
 class nfvo_db(db_base.db_base):
@@ -695,6 +697,36 @@ class nfvo_db(db_base.db_base):
                     
                     db_base._convert_datetime2str(scenario_dict)
                     db_base._convert_str2boolean(scenario_dict, ('public','shared','external','port-security','floating-ip') )
+
+                    #forwarding graphs
+                    cmd = "SELECT uuid,name,description,vendor FROM sce_vnffgs WHERE scenario_id='{}' "\
+                          "ORDER BY created_at".format(scenario_dict['uuid'])
+                    self.logger.debug(cmd)
+                    self.cur.execute(cmd)
+                    scenario_dict['vnffgs'] = self.cur.fetchall()
+                    for vnffg in scenario_dict['vnffgs']:
+                        cmd = "SELECT uuid,name FROM sce_rsps WHERE sce_vnffg_id='{}' "\
+                              "ORDER BY created_at".format(vnffg['uuid'])
+                        self.logger.debug(cmd)
+                        self.cur.execute(cmd)
+                        vnffg['rsps'] = self.cur.fetchall()
+                        for rsp in vnffg['rsps']:
+                            cmd = "SELECT uuid,if_order,interface_id,sce_vnf_id FROM sce_rsp_hops WHERE sce_rsp_id='{}' "\
+                                  "ORDER BY created_at".format(rsp['uuid'])
+                            self.logger.debug(cmd)
+                            self.cur.execute(cmd)
+                            rsp['connection_points'] = self.cur.fetchall();
+                            cmd = "SELECT uuid,name,sce_vnf_id,interface_id FROM sce_classifiers WHERE sce_vnffg_id='{}' "\
+                                  "AND sce_rsp_id='{}' ORDER BY created_at".format(vnffg['uuid'], rsp['uuid'])
+                            self.logger.debug(cmd)
+                            self.cur.execute(cmd)
+                            rsp['classifier'] = self.cur.fetchone();
+                            cmd = "SELECT uuid,ip_proto,source_ip,destination_ip,source_port,destination_port FROM sce_classifier_matches "\
+                                  "WHERE sce_classifier_id='{}' ORDER BY created_at".format(rsp['classifier']['uuid'])
+                            self.logger.debug(cmd)
+                            self.cur.execute(cmd)
+                            rsp['classifier']['matches'] = self.cur.fetchall()
+
                     return scenario_dict
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries)
@@ -983,7 +1015,47 @@ class nfvo_db(db_base.db_base):
                     self.logger.debug(cmd)
                     self.cur.execute(cmd)
                     instance_dict['nets'] = self.cur.fetchall()
-                    
+
+                    #instance_sfps
+                    cmd = "SELECT uuid,vim_sfp_id,sce_rsp_id,datacenter_id,"\
+                          "datacenter_tenant_id,status,error_msg,vim_info"\
+                            " FROM instance_sfps" \
+                            " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid'])
+                    self.logger.debug(cmd)
+                    self.cur.execute(cmd)
+                    instance_dict['sfps'] = self.cur.fetchall()
+
+                    for sfp in instance_dict['sfps']:
+                        #instance_sfs
+                        cmd = "SELECT uuid,vim_sf_id,sce_rsp_hop_id,datacenter_id,"\
+                              "datacenter_tenant_id,status,error_msg,vim_info"\
+                                " FROM instance_sfs" \
+                                " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid']) # TODO: replace instance_scenario_id with instance_sfp_id
+                        self.logger.debug(cmd)
+                        self.cur.execute(cmd)
+                        instance_dict['sfs'] = self.cur.fetchall()
+
+                        for sf in instance_dict['sfs']:
+                            #instance_sfis
+                            cmd = "SELECT uuid,vim_sfi_id,sce_rsp_hop_id,datacenter_id,"\
+                                  "datacenter_tenant_id,status,error_msg,vim_info"\
+                                    " FROM instance_sfis" \
+                                    " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid']) # TODO: replace instance_scenario_id with instance_sf_id
+                            self.logger.debug(cmd)
+                            self.cur.execute(cmd)
+                            instance_dict['sfis'] = self.cur.fetchall()
+#                            for sfi in instance_dict['sfi']:
+
+                    #instance_classifications
+                    cmd = "SELECT uuid,vim_classification_id,sce_classifier_match_id,datacenter_id,"\
+                          "datacenter_tenant_id,status,error_msg,vim_info"\
+                            " FROM instance_classifications" \
+                            " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid'])
+                    self.logger.debug(cmd)
+                    self.cur.execute(cmd)
+                    instance_dict['classifications'] = self.cur.fetchall()
+#                    for classification in instance_dict['classifications']
+
                     db_base._convert_datetime2str(instance_dict)
                     db_base._convert_str2boolean(instance_dict, ('public','shared','created') )
                     return instance_dict
