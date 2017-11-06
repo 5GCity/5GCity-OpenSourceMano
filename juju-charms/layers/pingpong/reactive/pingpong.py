@@ -26,14 +26,17 @@ cfg = config()
 @when_not('pingpong.configured')
 def not_configured():
     """Check the current configuration.
+
     Check the current values in config to see if we have enough
-    information to continue."""
+    information to continue.
+    """
     config_changed()
 
 
 @when('config.changed', 'sshproxy.configured')
 def config_changed():
     """Verify the configuration.
+
     Verify that the charm has been configured
     """
     status_set('maintenance', 'Verifying configuration data...')
@@ -42,6 +45,7 @@ def config_changed():
         status_set('blocked', 'Unable to verify SSH credentials: {}'.format(
             output
         ))
+        return
     if all(k in cfg for k in ['mode']):
         if cfg['mode'] in ['ping', 'pong']:
             set_flag('pingpong.configured')
