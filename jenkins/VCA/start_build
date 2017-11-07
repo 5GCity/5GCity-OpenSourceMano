@@ -63,8 +63,13 @@ INFO "Setting lxdbr0 MTU to $DEFAULT_MTU"
 ifconfig lxdbr0 mtu $DEFAULT_MTU
 
 # Make the MTU change persistent between reboots
+sed -i '/lxc list/d' /etc/rc.local
+sed -i "$ i lxc list > /dev/null" /etc/rc.local
 sed -i '/ifconfig lxdbr0 mtu/d' /etc/rc.local
 sed -i "$ i ifconfig lxdbr0 mtu $DEFAULT_MTU" /etc/rc.local
+
+# Enable the rc-local service so our changes get executed upon boot
+systemctl enable rc-local.service
 
 INFO "Pre-caching Ubuntu:16.04 image (this may take several minutes)..."
 
