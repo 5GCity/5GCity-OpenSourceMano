@@ -36,7 +36,7 @@ set -o nounset    # Expanding an unset variable is an error.  Variables must be
 ###############################################################################
 # Set up repo and version
 PLATFORM_REPOSITORY=OSM3
-PLATFORM_VERSION=5.2.0.2.72254
+PLATFORM_VERSION=5.2.0.3.73627
 
 while getopts ":P:V:h" o; do
     case "${o}" in
