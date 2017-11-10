@@ -39,7 +39,7 @@ vnfd:vnfd-catalog:
                 type: EXTERNAL
                 position: 0
                 virtual-interface:
-                    type: OM-MGMT
+                    type: VIRTIO
                     bandwidth: '0'
                 # vnfd-connection-point-ref: eth0
                 external-connection-point-ref: eth0

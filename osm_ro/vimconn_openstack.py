@@ -947,7 +947,7 @@ class vimconnector(vimconn.vimconnector):
                 model: interface model, ignored #TODO
                 mac_address: used for  SR-IOV ifaces #TODO for other types
                 use: 'data', 'bridge',  'mgmt'
-                type: 'virtual', 'PF', 'VF', 'VFnotShared'
+                type: 'virtual', 'PCI-PASSTHROUGH'('PF'), 'SR-IOV'('VF'), 'VFnotShared'
                 vim_id: filled/added by this function
                 floating_ip: True/False (or it can be None)
                 'cloud_config': (optional) dictionary with:
@@ -1001,7 +1001,7 @@ class vimconnector(vimconn.vimconnector):
                     pass
                     # if "vpci" in net:
                     #     metadata_vpci[ net["net_id"] ] = [[ net["vpci"], "" ]]
-                elif net["type"]=="VF": # for VF
+                elif net["type"] == "VF" or net["type"] == "SR-IOV":  # for VF
                     # if "vpci" in net:
                     #     if "VF" not in metadata_vpci:
                     #         metadata_vpci["VF"]=[]
@@ -1013,7 +1013,7 @@ class vimconnector(vimconn.vimconnector):
                         port_dict["port_security_enabled"]=False
                         port_dict["provider_security_groups"]=[]
                         port_dict["security_groups"]=[]
-                else: #For PT
+                else:   # For PT PCI-PASSTHROUGH
                     # VIO specific Changes
                     # Current VIO release does not support port with type 'direct-physical'
                     # So no need to create virtual port in case of PCI-device.

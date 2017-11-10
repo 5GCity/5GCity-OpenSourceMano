@@ -38,6 +38,7 @@ nsd:nsd-catalog:
         vld:
         # Networks for the VNFs
             -   id: vld1
+                mgmt-network: 'true'
                 name: vld1-name
                 short-name: vld1-sname
                 type: ELAN

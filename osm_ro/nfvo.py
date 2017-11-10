@@ -38,6 +38,7 @@ import console_proxy_thread as cli
 import vimconn
 import logging
 import collections
+import math
 from uuid import uuid4
 from db_base import db_base_Exception
 
@@ -852,9 +853,10 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
             vnf_uuid = str(uuid4())
             uuid_list.append(vnf_uuid)
             vnfd_uuid_list.append(vnf_uuid)
+            vnfd_id = get_str(vnfd, "id", 255)
             db_vnf = {
                 "uuid": vnf_uuid,
-                "osm_id": get_str(vnfd, "id", 255),
+                "osm_id": vnfd_id,
                 "name": get_str(vnfd, "name", 255),
                 "description": get_str(vnfd, "description", 255),
                 "tenant_id": tenant_id,
@@ -888,9 +890,10 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
             for vdu in vnfd.get("vdu").itervalues():
                 vm_uuid = str(uuid4())
                 uuid_list.append(vm_uuid)
+                vdu_id = get_str(vdu, "id", 255)
                 db_vm = {
                     "uuid": vm_uuid,
-                    "osm_id": get_str(vdu, "id", 255),
+                    "osm_id": vdu_id,
                     "name": get_str(vdu, "name", 255),
                     "description": get_str(vdu, "description", 255),
                     "vnf_id": vnf_uuid,
@@ -937,6 +940,130 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                     device["image checksum"] = str(volume["image-checksum"])
                             devices.append(device)
 
+                # cloud-init
+                boot_data = {}
+                if vdu.get("cloud-init"):
+                    boot_data["user-data"] = str(vdu["cloud-init"])
+                elif vdu.get("cloud-init-file"):
+                    # TODO Where this file content is present???
+                    # boot_data["user-data"] = vnfd_yang.files[vdu["cloud-init-file"]]
+                    boot_data["user-data"] = str(vdu["cloud-init-file"])
+
+                if vdu.get("supplemental-boot-data"):
+                    if vdu["supplemental-boot-data"].get('boot-data-drive'):
+                            boot_data['boot-data-drive'] = True
+                    if vdu["supplemental-boot-data"].get('config-file'):
+                        om_cfgfile_list = list()
+                        for custom_config_file in vdu["supplemental-boot-data"]['config-file'].itervalues():
+                            # TODO Where this file content is present???
+                            cfg_source = str(custom_config_file["source"])
+                            om_cfgfile_list.append({"dest": custom_config_file["dest"],
+                                                    "content": cfg_source})
+                        boot_data['config-files'] = om_cfgfile_list
+                if boot_data:
+                    db_vm["boot_data"] = yaml.safe_dump(boot_data, default_flow_style=True, width=256)
+
+                db_vms.append(db_vm)
+                db_vms_index += 1
+
+                # table interfaces (internal/external interfaces)
+                flavor_epa_interfaces = []
+                cp_name2iface_uuid = {}
+                cp_name2vm_uuid = {}
+                cp_name2db_interface = {}
+                vdu_id2cp_name = {}  # stored only when one external connection point is presented at this VDU
+                # for iface in chain(vdu.get("internal-interface").itervalues(), vdu.get("external-interface").itervalues()):
+                for iface in vdu.get("interface").itervalues():
+                    flavor_epa_interface = {}
+                    iface_uuid = str(uuid4())
+                    uuid_list.append(iface_uuid)
+                    db_interface = {
+                        "uuid": iface_uuid,
+                        "internal_name": get_str(iface, "name", 255),
+                        "vm_id": vm_uuid,
+                    }
+                    flavor_epa_interface["name"] = db_interface["internal_name"]
+                    if iface.get("virtual-interface").get("vpci"):
+                        db_interface["vpci"] = get_str(iface.get("virtual-interface"), "vpci", 12)
+                        flavor_epa_interface["vpci"] = db_interface["vpci"]
+
+                    if iface.get("virtual-interface").get("bandwidth"):
+                        bps = int(iface.get("virtual-interface").get("bandwidth"))
+                        db_interface["bw"] = int(math.ceil(bps/1000000.0))
+                        flavor_epa_interface["bandwidth"] = "{} Mbps".format(db_interface["bw"])
+
+                    if iface.get("virtual-interface").get("type") == "OM-MGMT":
+                        db_interface["type"] = "mgmt"
+                    elif iface.get("virtual-interface").get("type") in ("VIRTIO", "E1000"):
+                        db_interface["type"] = "bridge"
+                        db_interface["model"] = get_str(iface.get("virtual-interface"), "type", 12)
+                    elif iface.get("virtual-interface").get("type") in ("SR-IOV", "PCI-PASSTHROUGH"):
+                        db_interface["type"] = "data"
+                        db_interface["model"] = get_str(iface.get("virtual-interface"), "type", 12)
+                        flavor_epa_interface["dedicated"] = "no" if iface["virtual-interface"]["type"] == "SR-IOV" \
+                            else "yes"
+                        flavor_epa_interfaces.append(flavor_epa_interface)
+                    else:
+                        raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{}]':'vdu[{}]':'interface':'virtual"
+                                            "-interface':'type':'{}'. Interface type is not supported".format(
+                                                vnfd_id, vdu_id, iface.get("virtual-interface").get("type")),
+                                            HTTP_Bad_Request)
+
+                    if iface.get("external-connection-point-ref"):
+                        try:
+                            cp = vnfd.get("connection-point")[iface.get("external-connection-point-ref")]
+                            db_interface["external_name"] = get_str(cp, "name", 255)
+                            cp_name2iface_uuid[db_interface["external_name"]] = iface_uuid
+                            cp_name2vm_uuid[db_interface["external_name"]] = vm_uuid
+                            cp_name2db_interface[db_interface["external_name"]] = db_interface
+                            for cp_descriptor in vnfd_descriptor["connection-point"]:
+                                if cp_descriptor["name"] == db_interface["external_name"]:
+                                    break
+                            else:
+                                raise KeyError()
+
+                            if vdu_id in vdu_id2cp_name:
+                                vdu_id2cp_name[vdu_id] = None  # more than two connecdtion point for this VDU
+                            else:
+                                vdu_id2cp_name[vdu_id] = db_interface["external_name"]
+
+                            # port security
+                            if str(cp_descriptor.get("port-security-enabled")).lower() == "false":
+                                db_interface["port_security"] = 0
+                            elif str(cp_descriptor.get("port-security-enabled")).lower() == "true":
+                                db_interface["port_security"] = 1
+                        except KeyError:
+                            raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'vdu[{vdu}]':"
+                                                "'interface[{iface}]':'vnfd-connection-point-ref':'{cp}' is not present"
+                                                " at connection-point".format(
+                                                    vnf=vnfd_id, vdu=vdu_id, iface=iface["name"],
+                                                    cp=iface.get("vnfd-connection-point-ref")),
+                                                HTTP_Bad_Request)
+                    elif iface.get("internal-connection-point-ref"):
+                        try:
+                            for vld in vnfd.get("internal-vld").itervalues():
+                                for cp in vld.get("internal-connection-point").itervalues():
+                                    if cp.get("id-ref") == iface.get("internal-connection-point-ref"):
+                                        db_interface["net_id"] = net_id2uuid[vld.get("id")]
+                                        for cp_descriptor in vnfd_descriptor["connection-point"]:
+                                            if cp_descriptor["name"] == db_interface["external_name"]:
+                                                break
+                                        if str(cp_descriptor.get("port-security-enabled")).lower() == "false":
+                                            db_interface["port_security"] = 0
+                                        elif str(cp_descriptor.get("port-security-enabled")).lower() == "true":
+                                            db_interface["port_security"] = 1
+                                        break
+                        except KeyError:
+                            raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'vdu[{vdu}]':"
+                                                "'interface[{iface}]':'vdu-internal-connection-point-ref':'{cp}' is not"
+                                                " referenced by any internal-vld".format(
+                                                    vnf=vnfd_id, vdu=vdu_id, iface=iface["name"],
+                                                    cp=iface.get("vdu-internal-connection-point-ref")),
+                                                HTTP_Bad_Request)
+                    if iface.get("position") is not None:
+                        db_interface["created_at"] = int(iface.get("position")) - 1000
+                    db_interfaces.append(db_interface)
+
                 # table flavors
                 db_flavor = {
                     "name": get_str(vdu, "name", 250) + "-flv",
@@ -949,6 +1076,8 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                 numa = {}
                 if devices:
                     extended["devices"] = devices
+                if flavor_epa_interfaces:
+                    numa["interfaces"] = flavor_epa_interfaces
                 if vdu.get("guest-epa"):   # TODO or dedicated_int:
                     epa_vcpu_set = False
                     if vdu["guest-epa"].get("numa-node-policy"):  # TODO or dedicated_int:
@@ -989,7 +1118,6 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     extended_text = yaml.safe_dump(extended, default_flow_style=True, width=256)
                     db_flavor["extended"] = extended_text
                 # look if flavor exist
-
                 temp_flavor_dict = {'disk': db_flavor.get('disk', 1),
                                     'ram': db_flavor.get('ram'),
                                     'vcpus': db_flavor.get('vcpus'),
@@ -1005,113 +1133,6 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     db_flavors.append(db_flavor)
                 db_vm["flavor_id"] = flavor_uuid
 
-                # cloud-init
-                boot_data = {}
-                if vdu.get("cloud-init"):
-                    boot_data["user-data"] = str(vdu["cloud-init"])
-                elif vdu.get("cloud-init-file"):
-                    # TODO Where this file content is present???
-                    # boot_data["user-data"] = vnfd_yang.files[vdu["cloud-init-file"]]
-                    boot_data["user-data"] = str(vdu["cloud-init-file"])
-
-                if vdu.get("supplemental-boot-data"):
-                    if vdu["supplemental-boot-data"].get('boot-data-drive'):
-                            boot_data['boot-data-drive'] = True
-                    if vdu["supplemental-boot-data"].get('config-file'):
-                        om_cfgfile_list = list()
-                        for custom_config_file in vdu["supplemental-boot-data"]['config-file'].itervalues():
-                            # TODO Where this file content is present???
-                            cfg_source = str(custom_config_file["source"])
-                            om_cfgfile_list.append({"dest": custom_config_file["dest"],
-                                                    "content": cfg_source})
-                        boot_data['config-files'] = om_cfgfile_list
-                if boot_data:
-                    db_vm["boot_data"] = yaml.safe_dump(boot_data, default_flow_style=True, width=256)
-
-                db_vms.append(db_vm)
-                db_vms_index += 1
-
-                # table interfaces (internal/external interfaces)
-                cp_name2iface_uuid = {}
-                cp_name2vm_uuid = {}
-                cp_name2db_interface = {}
-                # for iface in chain(vdu.get("internal-interface").itervalues(), vdu.get("external-interface").itervalues()):
-                for iface in vdu.get("interface").itervalues():
-                    iface_uuid = str(uuid4())
-                    uuid_list.append(iface_uuid)
-                    db_interface = {
-                        "uuid": iface_uuid,
-                        "internal_name": get_str(iface, "name", 255),
-                        "vm_id": vm_uuid,
-                    }
-                    if iface.get("virtual-interface").get("vpci"):
-                        db_interface["vpci"] = get_str(iface.get("virtual-interface"), "vpci", 12)
-
-                    if iface.get("virtual-interface").get("bandwidth"):
-                        bps = int(iface.get("virtual-interface").get("bandwidth"))
-                        db_interface["bw"] = bps/1000
-
-                    if iface.get("virtual-interface").get("type") == "OM-MGMT":
-                        db_interface["type"] = "mgmt"
-                    elif iface.get("virtual-interface").get("type") in ("VIRTIO", "E1000"):
-                        db_interface["type"] = "bridge"
-                        db_interface["model"] = get_str(iface.get("virtual-interface"), "type", 12)
-                    elif iface.get("virtual-interface").get("type") in ("SR-IOV", "PCI-PASSTHROUGH"):
-                        db_interface["type"] = "data"
-                        db_interface["model"] = get_str(iface.get("virtual-interface"), "type", 12)
-                    else:
-                        raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{}]':'vdu[{}]':'interface':'virtual"
-                                            "-interface':'type':'{}'. Interface type is not supported".format(
-                                                str(vnfd["id"])[:255], str(vdu["id"])[:255],
-                                                iface.get("virtual-interface").get("type")),
-                                            HTTP_Bad_Request)
-
-                    if iface.get("external-connection-point-ref"):
-                        try:
-                            cp = vnfd.get("connection-point")[iface.get("external-connection-point-ref")]
-                            db_interface["external_name"] = get_str(cp, "name", 255)
-                            cp_name2iface_uuid[db_interface["external_name"]] = iface_uuid
-                            cp_name2vm_uuid[db_interface["external_name"]] = vm_uuid
-                            cp_name2db_interface[db_interface["external_name"]] = db_interface
-                            for cp_descriptor in vnfd_descriptor["connection-point"]:
-                                if cp_descriptor["name"] == db_interface["external_name"]:
-                                    break
-                            if str(cp_descriptor.get("port-security-enabled")).lower() == "false":
-                                db_interface["port_security"] = 0
-                            elif str(cp_descriptor.get("port-security-enabled")).lower() == "true":
-                                db_interface["port_security"] = 1
-                        except KeyError:
-                            raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'vdu[{vdu}]':"
-                                                "'interface[{iface}]':'vnfd-connection-point-ref':'{cp}' is not present"
-                                                " at connection-point".format(
-                                                    vnf=vnfd["id"], vdu=vdu["id"], iface=iface["name"],
-                                                    cp=iface.get("vnfd-connection-point-ref")),
-                                                HTTP_Bad_Request)
-                    elif iface.get("internal-connection-point-ref"):
-                        try:
-                            for vld in vnfd.get("internal-vld").itervalues():
-                                for cp in vld.get("internal-connection-point").itervalues():
-                                    if cp.get("id-ref") == iface.get("internal-connection-point-ref"):
-                                        db_interface["net_id"] = net_id2uuid[vld.get("id")]
-                                        for cp_descriptor in vnfd_descriptor["connection-point"]:
-                                            if cp_descriptor["name"] == db_interface["external_name"]:
-                                                break
-                                        if str(cp_descriptor.get("port-security-enabled")).lower() == "false":
-                                            db_interface["port_security"] = 0
-                                        elif str(cp_descriptor.get("port-security-enabled")).lower() == "true":
-                                            db_interface["port_security"] = 1
-                                        break
-                        except KeyError:
-                            raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'vdu[{vdu}]':"
-                                                "'interface[{iface}]':'vdu-internal-connection-point-ref':'{cp}' is not"
-                                                " referenced by any internal-vld".format(
-                                                    vnf=vnfd["id"], vdu=vdu["id"], iface=iface["name"],
-                                                    cp=iface.get("vdu-internal-connection-point-ref")),
-                                                HTTP_Bad_Request)
-                    if iface.get("position") is not None:
-                        db_interface["created_at"] = int(iface.get("position")) - 1000
-                    db_interfaces.append(db_interface)
-
             # VNF affinity and antiaffinity
             for pg in vnfd.get("placement-groups").itervalues():
                 pg_name = get_str(pg, "name", 255)
@@ -1120,7 +1141,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     if vdu_id not in vdu_id2db_table_index:
                         raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'placement-groups[{pg}]':"
                                             "'member-vdus':'{vdu}'. Reference to a non-existing vdu".format(
-                                                vnf=vnfd["id"], pg=pg_name, vdu=vdu_id),
+                                                vnf=vnfd_id, pg=pg_name, vdu=vdu_id),
                                             HTTP_Bad_Request)
                     db_vms[vdu_id2db_table_index[vdu_id]]["availability_zone"] = pg_name
                     # TODO consider the case of isolation and not colocation
@@ -1129,19 +1150,24 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
             # VNF mgmt configuration
             mgmt_access = {}
             if vnfd["mgmt-interface"].get("vdu-id"):
-                if vnfd["mgmt-interface"]["vdu-id"] not in vdu_id2uuid:
+                mgmt_vdu_id = get_str(vnfd["mgmt-interface"], "vdu-id", 255)
+                if mgmt_vdu_id not in vdu_id2uuid:
                     raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'mgmt-interface':'vdu-id':"
                                         "'{vdu}'. Reference to a non-existing vdu".format(
-                                            vnf=vnfd["id"], vdu=vnfd["mgmt-interface"]["vdu-id"]),
+                                            vnf=vnfd_id, vdu=mgmt_vdu_id),
                                         HTTP_Bad_Request)
                 mgmt_access["vm_id"] = vdu_id2uuid[vnfd["mgmt-interface"]["vdu-id"]]
+                # if only one cp is defined by this VDU, mark this interface as of type "mgmt"
+                if vdu_id2cp_name.get(mgmt_vdu_id):
+                    cp_name2db_interface[vdu_id2cp_name[mgmt_vdu_id]]["type"] = "mgmt"
+
             if vnfd["mgmt-interface"].get("ip-address"):
                 mgmt_access["ip-address"] = str(vnfd["mgmt-interface"].get("ip-address"))
             if vnfd["mgmt-interface"].get("cp"):
                 if vnfd["mgmt-interface"]["cp"] not in cp_name2iface_uuid:
                     raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'mgmt-interface':'cp':'{cp}'. "
                                         "Reference to a non-existing connection-point".format(
-                                            vnf=vnfd["id"], cp=vnfd["mgmt-interface"]["cp"]),
+                                            vnf=vnfd_id, cp=vnfd["mgmt-interface"]["cp"]),
                                         HTTP_Bad_Request)
                 mgmt_access["vm_id"] = cp_name2vm_uuid[vnfd["mgmt-interface"]["cp"]]
                 mgmt_access["interface_id"] = cp_name2iface_uuid[vnfd["mgmt-interface"]["cp"]]
@@ -2173,7 +2199,8 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                 elif vld.get("provider-network").get("overlay-type") == "VLAN":
                     db_sce_net["type"] = "data"
                 else:
-                    db_sce_net["type"] = "bridge"
+                    # later on it will be fixed to bridge or data depending on the type of interfaces attached to it
+                    db_sce_net["type"] = None
                 db_sce_nets.append(db_sce_net)
 
                 # ip-profile, link db_ip_profile with db_sce_net
@@ -2197,7 +2224,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                                                 str(nsd["id"]), str(vld["id"]), str(iface["member-vnf-index-ref"])),
                                             HTTP_Bad_Request)
 
-                    existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid',),
+                    existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid', 'i.type as iface_type'),
                                                     FROM="interfaces as i join vms on i.vm_id=vms.uuid",
                                                     WHERE={'vnf_id': vnf_index2vnf_uuid[vnf_index],
                                                            'external_name': get_str(iface, "vnfd-connection-point-ref",
@@ -2210,6 +2237,8 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                                                 str(iface.get("vnfd-id-ref"))[:255]),
                                             HTTP_Bad_Request)
                     interface_uuid = existing_ifaces[0]["uuid"]
+                    if existing_ifaces[0]["iface_type"] == "data" and not db_sce_net["type"]:
+                        db_sce_net["type"] = "data"
                     sce_interface_uuid = str(uuid4())
                     uuid_list.append(sce_net_uuid)
                     db_sce_interface = {
@@ -2220,6 +2249,8 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                         # "ip_address": #TODO
                     }
                     db_sce_interfaces.append(db_sce_interface)
+                if not db_sce_net["type"]:
+                    db_sce_net["type"] = "bridge"
 
         db_tables = [
             {"scenarios": db_scenarios},

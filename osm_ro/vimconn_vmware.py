@@ -1388,9 +1388,9 @@ class vimconnector(vimconn.vimconnector):
                     the VLAN tag to be used. In case net_id is provided, the internal network vlan is used for tagging VF
                 'type': (mandatory) can be one of:
                     'virtual', in this case always connected to a network of type 'net_type=bridge'
-                     'PF' (passthrough): depending on VIM capabilities it can be connected to a data/ptp network ot it
+                     'PCI-PASSTHROUGH' or 'PF' (passthrough): depending on VIM capabilities it can be connected to a data/ptp network ot it
                            can created unconnected
-                     'VF' (SRIOV with VLAN tag): same as PF for network connectivity.
+                     'SR-IOV' or 'VF' (SRIOV with VLAN tag): same as PF for network connectivity.
                      'VFnotShared'(SRIOV without VLAN tag) same as PF for network connectivity. VF where no other VFs
                             are allocated on the same physical NIC
                 'bw': (optional) only for PF/VF/VFnotShared. Minimal Bandwidth required for the interface in GBPS
@@ -1564,9 +1564,9 @@ class vimconnector(vimconn.vimconnector):
         reserve_memory = False
 
         for net in net_list:
-            if net["type"]=="PF":
+            if net["type"] == "PF" or net["type"] == "PCI-PASSTHROUGH":
                 pci_devices_info.append(net)
-            elif  (net["type"]=="VF" or  net["type"]=="VFnotShared") and 'net_id'in net:
+            elif (net["type"] == "VF" or net["type"] == "SR-IOV" or net["type"] == "VFnotShared") and 'net_id'in net:
                 sriov_net_info.append(net)
 
         #Add PCI
@@ -1670,7 +1670,7 @@ class vimconnector(vimconn.vimconnector):
                             self.vca.block_until_completed(task)
                         # connect network to VM - with all DHCP by default
 
-                        type_list = ['PF','VF','VFnotShared']
+                        type_list = ('PF', 'PCI-PASSTHROUGH', 'VF', 'SR-IOV', 'VFnotShared')
                         if 'type' in net and net['type'] not in type_list:
                             # fetching nic type from vnf
                             if 'model' in net:
@@ -4637,7 +4637,7 @@ class vimconnector(vimconn.vimconnector):
                             for sriov_net in sriov_nets:
                                 network_name = sriov_net.get('net_id')
                                 dvs_portgr_name = self.create_dvPort_group(network_name)
-                                if sriov_net.get('type') == "VF":
+                                if sriov_net.get('type') == "VF" or sriov_net.get('type') == "SR-IOV":
                                     #add vlan ID ,Modify portgroup for vlan ID
                                     self.configure_vlanID(content, vcenter_conect, network_name)
 

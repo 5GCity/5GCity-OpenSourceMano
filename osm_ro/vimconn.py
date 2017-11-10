@@ -487,9 +487,9 @@ class vimconnector():
                     the VLAN tag to be used. In case net_id is provided, the internal network vlan is used for tagging VF
                 'type': (mandatory) can be one of:
                     'virtual', in this case always connected to a network of type 'net_type=bridge'
-                     'PF' (passthrough): depending on VIM capabilities it can be connected to a data/ptp network ot it
+                     'PCI-PASSTHROUGH' or 'PF' (passthrough): depending on VIM capabilities it can be connected to a data/ptp network ot it
                            can created unconnected
-                     'VF' (SRIOV with VLAN tag): same as PF for network connectivity.
+                     'SR-IOV' or 'VF' (SRIOV with VLAN tag): same as PF for network connectivity.
                      'VFnotShared'(SRIOV without VLAN tag) same as PF for network connectivity. VF where no other VFs
                             are allocated on the same physical NIC
                 'bw': (optional) only for PF/VF/VFnotShared. Minimal Bandwidth required for the interface in GBPS

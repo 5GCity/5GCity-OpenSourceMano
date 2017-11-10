@@ -32,6 +32,7 @@ import requests
 import json
 import yaml
 import logging
+import math
 from openmano_schemas import id_schema, name_schema, nameshort_schema, description_schema, \
                             vlan1000_schema, integer0_schema
 from jsonschema import validate as js_v, exceptions as js_e
@@ -599,6 +600,18 @@ class vimconnector(vimconn.vimconnector):
             for device in new_flavor_dict.get('extended', {}).get('devices', ()):
                 if 'image name' in device:
                     del device['image name']
+            numas = new_flavor_dict.get('extended', {}).get('numas')
+            if numas:
+                numa = numas[0]
+                # translate memory, cpus to EPA
+                if "cores" not in numa and "threads" not in numa and "paired-threads" not in numa:
+                    numa["paired-threads"] = new_flavor_dict["vcpus"]
+                if "memory" not in numa:
+                    numa["memory"] = int(math.ceil(new_flavor_dict["ram"]/1024.0))
+                for iface in numa.get("interfaces", ()):
+                    if not iface.get("bandwidth"):
+                        iface["bandwidth"] = "1 Mbps"
+
             new_flavor_dict["name"] = flavor_data["name"][:64]
             self._get_my_tenant()
             payload_req = json.dumps({'flavor': new_flavor_dict})
@@ -786,7 +799,7 @@ class vimconnector(vimconn.vimconnector):
 
     def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
                        availability_zone_index=None, availability_zone_list=None):
-        '''Adds a VM instance to VIM
+        """Adds a VM instance to VIM
         Params:
             start: indicates if VM must start or boot in pause mode. Ignored
             image_id,flavor_id: image and flavor uuid
@@ -797,7 +810,7 @@ class vimconnector(vimconn.vimconnector):
                 model: interface model, virtio, e2000, ...
                 mac_address: 
                 use: 'data', 'bridge',  'mgmt'
-                type: 'virtual', 'PF', 'VF', 'VFnotShared'
+                type: 'virtual', 'PCI-PASSTHROUGH'('PF'), 'SR-IOV'('VF'), 'VFnotShared'
                 vim_id: filled/added by this function
                 #TODO ip, security groups
         Returns a tuple with the instance identifier and created_items or raises an exception on error
@@ -805,7 +818,7 @@ class vimconnector(vimconn.vimconnector):
             the method delete_vminstance and action_vminstance. Can be used to store created ports, volumes, etc.
             Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
             as not present.
-        '''
+        """
         self.logger.debug("new_vminstance input: image='%s' flavor='%s' nics='%s'", image_id, flavor_id, str(net_list))
         try:
             self._get_my_tenant()
@@ -818,12 +831,25 @@ class vimconnector(vimconn.vimconnector):
             for net in net_list:
                 if not net.get("net_id"):
                     continue
-                net_dict={'uuid': net["net_id"]}
-                if net.get("type"):        net_dict["type"] = net["type"]
-                if net.get("name"):        net_dict["name"] = net["name"]
-                if net.get("vpci"):        net_dict["vpci"] = net["vpci"]
-                if net.get("model"):       net_dict["model"] = net["model"]
-                if net.get("mac_address"): net_dict["mac_address"] = net["mac_address"]
+                net_dict = {'uuid': net["net_id"]}
+                if net.get("type"):
+                    if net["type"] == "SR-IOV":
+                        net_dict["type"] = "VF"
+                    elif net["type"] == "PCI-PASSTHROUGH":
+                        net_dict["type"] = "PF"
+                    else:
+                        net_dict["type"] = net["type"]
+                if net.get("name"):
+                    net_dict["name"] = net["name"]
+                if net.get("vpci"):
+                    net_dict["vpci"] = net["vpci"]
+                if net.get("model"):
+                    if net["model"] == "VIRTIO":
+                        net_dict["model"] = "virtio"
+                    else:
+                        net_dict["model"] = net["model"]
+                if net.get("mac_address"):
+                    net_dict["mac_address"] = net["mac_address"]
                 virtio_net_list.append(net_dict)
             payload_dict={  "name":        name[:64],
                             "description": description,
