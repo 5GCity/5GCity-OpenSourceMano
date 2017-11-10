@@ -39,19 +39,26 @@ def config_changed():
 
     Verify that the charm has been configured
     """
-    status_set('maintenance', 'Verifying configuration data...')
-    (validated, output) = charms.sshproxy.verify_ssh_credentials()
-    if not validated:
-        status_set('blocked', 'Unable to verify SSH credentials: {}'.format(
-            output
-        ))
-        return
-    if all(k in cfg for k in ['mode']):
-        if cfg['mode'] in ['ping', 'pong']:
-            set_flag('pingpong.configured')
-            status_set('active', 'ready!')
+
+    try:
+        status_set('maintenance', 'Verifying configuration data...')
+
+        (validated, output) = charms.sshproxy.verify_ssh_credentials()
+        if not validated:
+            status_set('blocked', 'Unable to verify SSH credentials: {}'.format(
+                output
+            ))
             return
-    status_set('blocked', 'Waiting for configuration')
+
+        if all(k in cfg for k in ['mode']):
+            if cfg['mode'] in ['ping', 'pong']:
+                set_flag('pingpong.configured')
+                status_set('active', 'ready!')
+                return
+        status_set('blocked', 'Waiting for configuration')
+
+    except Exception as err:
+        status_set('blocked', 'Waiting for valid configuration ({})'.format(err))
 
 
 @when('config.changed')
