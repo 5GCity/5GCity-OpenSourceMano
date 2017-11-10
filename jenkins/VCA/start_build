@@ -60,16 +60,15 @@ DEFAULT_INTERFACE=$(route -n | awk '$1~/^0.0.0.0/ {print $8}')
 DEFAULT_MTU=$( ip addr show $DEFAULT_INTERFACE | perl -ne 'if (/mtu\s(\d+)/) {print $1;}')
 
 INFO "Setting lxdbr0 MTU to $DEFAULT_MTU"
+
+# This sets the MTU of lxdbr0 on the host machine without the need to recycle
+# the interface or reboot the machine.
 ifconfig lxdbr0 mtu $DEFAULT_MTU
 
-# Make the MTU change persistent between reboots
-sed -i '/lxc list/d' /etc/rc.local
-sed -i "$ i lxc list > /dev/null" /etc/rc.local
-sed -i '/ifconfig lxdbr0 mtu/d' /etc/rc.local
-sed -i "$ i ifconfig lxdbr0 mtu $DEFAULT_MTU" /etc/rc.local
-
-# Enable the rc-local service so our changes get executed upon boot
-systemctl enable rc-local.service
+# Setting the MTU in the default profile will be applied to every lxc container.
+# Existing containers will need to be restarted for the new MTU to take effect.
+# This will also persist the MTU change for the host's lxdbr0
+lxc profile device set default eth0 mtu $DEFAULT_MTU
 
 INFO "Pre-caching Ubuntu:16.04 image (this may take several minutes)..."
 
