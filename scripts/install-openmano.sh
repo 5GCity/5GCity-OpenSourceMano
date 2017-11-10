@@ -320,10 +320,10 @@ fi
 # Install debian dependencies before setup.py
 if [[ -z "$NO_PACKAGES" ]]
 then
-    [ "$_DISTRO" == "Ubuntu" ] && install_packages "tox debhelper python-bitarray"
+    [ "$_DISTRO" == "Ubuntu" ] && install_packages "tox debhelper python-bitarray python-lxml python-six"
     # TODO check packages for CentOS and RedHat
-    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "tox debhelper python-bitarray"
-    pip install stdeb pyangbind || exit 1
+    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "tox debhelper python-bitarray python-lxml python-six"
+    pip install --upgrade stdeb pyangbind || exit 1
 fi
 su $SUDO_USER -c "make -C ${BASEFOLDER}/IM all"
 dpkg -i ${BASEFOLDER}/IM/deb_dist/python-osm-im*.deb ${BASEFOLDER}/IM/pyangbind/deb_dist/*.deb \
@@ -355,11 +355,15 @@ fi
 # Install debian dependencies before setup.py
 if [[ -z "$NO_PACKAGES" ]]
 then
-    [ "$_DISTRO" == "Ubuntu" ] && install_packages "libmysqlclient-dev"
+    [ "$_DISTRO" == "Ubuntu" ] && install_packages \
+        "libmysqlclient-dev python-cffi python-packaging python-pkgconfig python-pycparser libssl-dev libffi-dev"
     # TODO check if that is the name in CentOS and RedHat
-    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "libmysqlclient-dev"
+    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages \
+        "libmysqlclient-dev python-cffi python-packaging python-pkgconfig python-pycparser libssl-dev libffi-dev"
+    pip install --upgrade stdeb setuptools-version-command || exit 1
 fi
-make -C ${BASEFOLDER}/openvim lite
+su $SUDO_USER -c "make -C ${BASEFOLDER}/openvim lite"
+dpkg -i ${BASEFOLDER}/openvim/.build/python-lib-osm-openvim*.deb
 rm -rf "${BASEFOLDER}/openvim"
 OSMLIBOVIM_PATH=`python -c 'import lib_osm_openvim; print lib_osm_openvim.__path__[0]'` ||
     ! echo "ERROR installing python-lib-osm-openvim library!!!" >&2  || exit 1
