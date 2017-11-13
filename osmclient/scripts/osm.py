@@ -407,10 +407,6 @@ def config_agent_add(ctx, name, account_type, server, user, secret):
 @click.option('--tenant',
               prompt=True,
               help='tenant name')
-@click.option('--floating_ip_pool',
-              default=None)
-@click.option('--keypair',
-              default=None)
 @click.option('--config',
               default=None,
               help='VIM specific config parameters')
@@ -426,8 +422,6 @@ def vim_create(ctx,
                password,
                auth_url,
                tenant,
-               floating_ip_pool,
-               keypair,
                config,
                account_type,
                description):
@@ -436,8 +430,6 @@ def vim_create(ctx,
     vim['vim-password'] = password
     vim['vim-url'] = auth_url
     vim['vim-tenant-name'] = tenant
-    vim['floating_ip_pool'] = floating_ip_pool
-    vim['keypair'] = keypair
     vim['config'] = config
     vim['vim-type'] = account_type
     vim['description'] = description

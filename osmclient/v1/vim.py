@@ -20,7 +20,7 @@ OSM vim API handling
 
 from osmclient.common.exceptions import ClientException
 from osmclient.common.exceptions import NotFound
-import json
+import yaml 
 import time
 
 
@@ -65,17 +65,8 @@ class Vim(object):
         vim_account['datacenter']['type'] = vim_access['vim-type']
 
         vim_config = {}
-        vim_config['use_floating_ip'] = False
-
-        if ('floating_ip_pool' in vim_access and
-           vim_access['floating_ip_pool'] is not None):
-            vim_config['use_floating_ip'] = True
-
-        if 'keypair' in vim_access and vim_access['keypair'] is not None:
-            vim_config['keypair'] = vim_access['keypair']
-        elif 'config' in vim_access and vim_access['config'] is not None:
-            if any(var in vim_access['config'] for var in ["admin_password","admin_username","orgname","nsx_user","nsx_password","nsx_manager","vcenter_ip","vcenter_port","vcenter_user","vcenter_password"]):
-                vim_config = json.loads(vim_access['config'])
+        if 'config' in vim_access and vim_access['config'] is not None:
+           vim_config = yaml.load(vim_access['config'])
 
         vim_account['datacenter']['config'] = vim_config
 
