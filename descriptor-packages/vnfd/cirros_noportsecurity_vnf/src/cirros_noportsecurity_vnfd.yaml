@@ -29,7 +29,7 @@ vnfd:vnfd-catalog:
                 storage-gb: 2
 
             # Image/checksum or image including the full path
-            image: 'CirrOS 0.3.4 64-bit'
+            image:     cirros034
             #checksum: 
 
             interface:
