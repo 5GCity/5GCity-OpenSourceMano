@@ -52,8 +52,10 @@ node("${params.NODE}") {
     def upstream_main_job = params.UPSTREAM_SUFFIX
     def save_artifacts = false
 
+    // upstream jobs always use merged artifacts
+    upstream_main_job += '-merge'
+
     if ( JOB_NAME.contains('merge') ) {
-        upstream_main_job += '-merge'
         save_artifacts = true
         println("merge job, saving artifacts")
     }
