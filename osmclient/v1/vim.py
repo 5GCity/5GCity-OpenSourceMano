@@ -68,7 +68,8 @@ class Vim(object):
         if 'config' in vim_access and vim_access['config'] is not None:
            vim_config = yaml.load(vim_access['config'])
 
-        vim_account['datacenter']['config'] = vim_config
+        if vim_config:
+            vim_account['datacenter']['config'] = vim_config
 
         vim_account = self.update_vim_account_dict(vim_account, vim_access, vim_config)
 
