@@ -40,8 +40,6 @@ node("${params.NODE}") {
     sh 'env'
 
     tag_or_branch = params.GERRIT_BRANCH.replaceAll(/\./,"")
-    container_name_prefix = "osm-${tag_or_branch}" 
-    container_name = "${container_name_prefix}-${BUILD_NUMBER}"
 
     stage("Checkout") {
         checkout scm
@@ -54,11 +52,14 @@ node("${params.NODE}") {
 
     // upstream jobs always use merged artifacts
     upstream_main_job += '-merge'
-
+    container_name_prefix = "osm-${tag_or_branch}"
+    container_name = "${container_name_prefix}"
     if ( JOB_NAME.contains('merge') ) {
         save_artifacts = true
         println("merge job, saving artifacts")
+        container_name += "-merge"
     }
+    container_name += "-${BUILD_NUMBER}"
 
     // Copy the artifacts from the upstream jobs
     stage("Copy Artifacts") {
