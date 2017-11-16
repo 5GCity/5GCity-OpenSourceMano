@@ -300,6 +300,7 @@ SHOWOPTS=""
 COMMIT_ID=""
 ASSUME_YES=""
 INSTALL_FROM_SOURCE=""
+RELEASE="-R ReleaseTHREE"
 
 while getopts ":hy-:b:r:k:u:R:" o; do
     case "${o}" in
