@@ -25,7 +25,6 @@ if [ -z "$list" ]; then
 fi
 
 for i in $list; do
-    echo
     echo $i
     if [ ! -d $i ]; then
         git clone ssh://$USER@osm.etsi.org:29418/osm/$i
