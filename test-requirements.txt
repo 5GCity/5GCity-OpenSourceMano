@@ -20,10 +20,17 @@
 # contact: helena.mcgough@intel.com or adrian.hoban@intel.com
 ##
 
-flake8
+hacking>=0.10.0,<0.11
+
+flake8<3.0
 mock
+oslosphinx>=2.5.0 # Apache-2.0
+oslotest>=1.10.0 # Apache-2.0
 os-testr
-testrepository
-testscenarios
-testtools
+testrepository>=0.0.18
+pylint
+python-subunit>=0.0.18
+pytest
+testscenarios>=0.4
+testtools>=1.4.0
 kafka

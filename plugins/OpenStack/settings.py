@@ -22,7 +22,6 @@
 """Configurations for the OpenStack plugins."""
 
 import logging
-log = logging.getLogger(__name__)
 import os
 
 from collections import namedtuple
@@ -32,6 +31,8 @@ from plugins.OpenStack.singleton import Singleton
 import six
 
 __author__ = "Helena McGough"
+
+log = logging.getLogger(__name__)
 
 
 class BadConfigError(Exception):

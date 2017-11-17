@@ -21,13 +21,39 @@
 ##
 """Tests for all common OpenStack methods."""
 
+import json
+
+import logging
+
 import unittest
+
+from keystoneclient.v3 import client
 
 import mock
 
 from plugins.OpenStack.common import Common
+from plugins.OpenStack.settings import Config
 
 import requests
+
+__author__ = "Helena McGough"
+
+log = logging.getLogger(__name__)
+
+
+class Message(object):
+    """Mock a message for an access credentials request."""
+
+    def __init__(self):
+        """Initialise the topic and value of access_cred message."""
+        self.topic = "access_credentials"
+        self.value = json.dumps({"mock_value": "mock_details",
+                                 "vim_type": "OPENSTACK",
+                                 "access_config":
+                                 {"openstack_site": "my_site",
+                                  "user": "my_user",
+                                  "password": "my_password",
+                                  "vim_tenant_name": "my_tenant"}})
 
 
 class TestCommon(unittest.TestCase):
@@ -37,6 +63,52 @@ class TestCommon(unittest.TestCase):
         """Test Setup."""
         super(TestCommon, self).setUp()
         self.common = Common()
+
+    @mock.patch.object(client, "Client")
+    def test_authenticate_exists(self, key_client):
+        """Testing if an authentication token already exists."""
+        # If the auth_token is already generated a new one will not be creates
+        self.common._auth_token = "my_auth_token"
+        token = self.common._authenticate()
+
+        self.assertEqual(token, "my_auth_token")
+
+    @mock.patch.object(Config, "instance")
+    @mock.patch.object(client, "Client")
+    def test_authenticate_none(self, key_client, cfg):
+        """Test generating a new authentication token."""
+        # If auth_token doesn't exist one will try to be created with keystone
+        # With the configuration values from the environment
+        self.common._auth_token = None
+        config = cfg.return_value
+        url = config.OS_AUTH_URL
+        user = config.OS_USERNAME
+        pword = config.OS_PASSWORD
+        tenant = config.OS_TENANT_NAME
+
+        self.common._authenticate()
+
+        key_client.assert_called_with(auth_url=url,
+                                      username=user,
+                                      password=pword,
+                                      tenant_name=tenant)
+        key_client.reset_mock()
+
+    @mock.patch.object(client, "Client")
+    def test_authenticate_access_cred(self, key_client):
+        """Test generating an auth_token using access_credentials from SO."""
+        # Mock valid message from SO
+        self.common._auth_token = None
+        message = Message()
+
+        self.common._authenticate(message=message)
+
+        # The class variables are set for each consifugration
+        self.assertEqual(self.common.openstack_url, "my_site")
+        self.assertEqual(self.common.user, "my_user")
+        self.assertEqual(self.common.password, "my_password")
+        self.assertEqual(self.common.tenant, "my_tenant")
+        key_client.assert_called
 
     @mock.patch.object(requests, 'post')
     def test_post_req(self, post):

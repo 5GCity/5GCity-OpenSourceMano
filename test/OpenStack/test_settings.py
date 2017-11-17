@@ -19,13 +19,41 @@
 # For those usages not covered by the Apache License, Version 2.0 please
 # contact: helena.mcgough@intel.com or adrian.hoban@intel.com
 ##
-"""OpenStack plugin tests."""
+"""Tests for settings for OpenStack plugins configurations."""
 
 import logging
 
-# Initialise a logger for tests
-logging.basicConfig(filename='OpenStack_tests.log',
-                    format='%(asctime)s %(message)s',
-                    datefmt='%m/%d/%Y %I:%M:%S %p', filemode='a',
-                    level=logging.INFO)
+import os
+
+import unittest
+
+import mock
+
+from plugins.OpenStack.settings import Config
+
+__author__ = "Helena McGough"
+
 log = logging.getLogger(__name__)
+
+
+class TestSettings(unittest.TestCase):
+    """Test the settings class for OpenStack plugin configuration."""
+
+    def setUp(self):
+        """Test Setup."""
+        super(TestSettings, self).setUp()
+        self.cfg = Config.instance()
+
+    def test_set_os_username(self):
+        """Test reading the environment for OpenStack plugin configuration."""
+        self.cfg.read_environ("my_service")
+
+        self.assertEqual(self.cfg.OS_USERNAME, "my_service")
+
+    @mock.patch.object(os, "environ")
+    def test_read_environ(self, environ):
+        """Test reading environment variables for configuration."""
+        self.cfg.read_environ("my_service")
+
+        # Called for each key in the configuration dictionary
+        environ.assert_called_once

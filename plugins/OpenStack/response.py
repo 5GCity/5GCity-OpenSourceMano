@@ -60,6 +60,7 @@ class OpenStack_Response(object):
             message = self.notify_alarm(**kwargs)
         else:
             log.warn("Failed to generate a valid response message.")
+            message = None
 
         return message
 

@@ -84,17 +84,12 @@ please refer to the following documentation:
 These documents will also describe what alarming and monitoring functionality
 the plugins support.
 
-* To run the Gnocchi plugin run the following command:
+* The Gnocchi and Aodh plugins work from a common KafkaConsumer that checks for
+  the appropriate topics and keys. To run this consumer:
 
       ::
 
-          lxc exec MON - python /root/MON/plugins/OpenStack/Gnocchi/plugin_instance.py
-
-* To run the Aodh plugin run the following command:
-
-      ::
-
-          lxc exec MON - python /root/MON/plugins/OpenStack/Aodh/plugin_instance.py
+          lxc exec MON - python /root/MON/core/message_bus/common_consumer.py
 
 CloudWatch
 ~~~~~~~~~~

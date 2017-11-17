@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # Copyright 2017 Intel Research and Development Ireland Limited
 # *************************************************************
 
@@ -19,3 +21,4 @@
 # For those usages not covered by the Apache License, Version 2.0 please
 # contact: helena.mcgough@intel.com or adrian.hoban@intel.com
 ##
+"""Plugins for OSM MON."""

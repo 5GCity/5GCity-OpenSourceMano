@@ -27,7 +27,7 @@ alarms and metrics responses.
 '''
 
 __author__ = "Prithiv Mohan"
-__date__   = "06/Sep/2017"
+__date__ = "06/Sep/2017"
 
 
 from kafka import KafkaConsumer
@@ -36,6 +36,7 @@ import json
 import logging
 import logging.config
 import os
+
 
 def logging_handler(filename, mode='a+', encoding=None):
     if not os.path.exists(filename):
@@ -50,9 +51,9 @@ log_config = {
         },
     },
     'handlers': {
-        'file':{
+        'file': {
             '()': logging_handler,
-            'level':'DEBUG',
+            'level': 'DEBUG',
             'formatter': 'default',
             'filename': '/var/log/osm_mon.log',
             'mode': 'a+',
@@ -78,8 +79,10 @@ if "BROKER_URI" in os.environ:
 else:
     broker = "localhost:9092"
 
-alarm_consumer = KafkaConsumer('alarm_response', 'osm_mon', bootstrap_servers = broker)
-metric_consumer = KafkaConsumer('metric_response', 'osm_mon', bootstrap_servers = broker)
+alarm_consumer = KafkaConsumer(
+    'alarm_response', 'osm_mon', bootstrap_servers=broker)
+metric_consumer = KafkaConsumer(
+    'metric_response', 'osm_mon', bootstrap_servers=broker)
 try:
     for message in alarm_consumer:
         logger.debug(message)
