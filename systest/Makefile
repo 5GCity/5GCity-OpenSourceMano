@@ -165,10 +165,14 @@ ns_scale: check_OSM_HOSTNAME check_openstack_env \
         JUNITXML=pytest-$@.xml \
         PYTEST_OPTIONS="$(PYTEST_OPTIONS) -m ns_scale" _run_test
 
-smoke: check_OSM_HOSTNAME
+smoke: check_OSM_HOSTNAME \
+        $(DESCRIPTOR_DIR)/vnfd/cirros_vnf/build/cirros_vnf.tar.gz \
+        $(DESCRIPTOR_DIR)/nsd/cirros_ns/build/cirros_ns.tar.gz
 	$(Q)$(MAKE) \
         JUNITXML=pytest-$@.xml \
-        PYTEST_OPTIONS="$(PYTEST_OPTIONS) -m smoke" _run_test
+        PYTEST_OPTIONS="$(PYTEST_OPTIONS) -m smoke" _run_test \
+        TEST_VNFD_DESCRIPTORS=$(DESCRIPTOR_DIR)/vnfd/cirros_vnf/build/cirros_vnf.tar.gz \
+        TEST_NSD_DESCRIPTORS=$(DESCRIPTOR_DIR)/nsd/cirros_ns/build/cirros_ns.tar.gz
 
 vim: check_OSM_HOSTNAME check_openstack_env
 	$(Q)$(MAKE) \
