@@ -17,23 +17,27 @@ function usage(){
     echo -e "usage: $0 [OPTIONS]"
     echo -e "Install OSM from binaries or source code (by default, from binaries)"
     echo -e "  OPTIONS"
-    echo -e "     --uninstall:   uninstall OSM: remove the containers and delete NAT rules"
-    echo -e "     --source:      install OSM from source code using the latest stable tag"
+    echo -e "     --uninstall:    uninstall OSM: remove the containers and delete NAT rules"
+    echo -e "     --source:       install OSM from source code using the latest stable tag"
     echo -e "     -r <repo>:      use specified repository name for osm packages"
-    echo -e "     -R <release>:   use specified release for osm packages"
+    echo -e "     -R <release>:   use specified release for osm binaries (deb packages, lxd images, ...)"
     echo -e "     -u <repo base>: use specified repository url for osm packages"
     echo -e "     -k <repo key>:  use specified repository public key url"
-    echo -e "     -b <refspec>:  install OSM from source code using a specific branch (master, v2.0, ...) or tag"
-    echo -e "                    -b master          (main dev branch)"
-    echo -e "                    -b v2.0            (v2.0 branch)"
-    echo -e "                    -b tags/v1.1.0     (a specific tag)"
-    echo -e "                    ..."
-    echo -e "     --develop:     (deprecated, use '-b master') install OSM from source code using the master branch"
-    echo -e "     --nat:         install only NAT rules"
-#    echo -e "     --update:      update to the latest stable release or to the latest commit if using a specific branch"
-    echo -e "     --showopts:    print chosen options and exit (only for debugging)"
-    echo -e "     -y:            do not prompt for confirmation, assumes yes"
-    echo -e "     -h / --help:   print this help"
+    echo -e "     -b <refspec>:   install OSM from source code using a specific branch (master, v2.0, ...) or tag"
+    echo -e "                     -b master          (main dev branch)"
+    echo -e "                     -b v2.0            (v2.0 branch)"
+    echo -e "                     -b tags/v1.1.0     (a specific tag)"
+    echo -e "                     ..."
+    echo -e "     --lxdimages:    download lxd images from OSM repository instead of creating them from scratch"
+    echo -e "     -l <lxd_repo>:  use specified repository url for lxd images"
+    echo -e "     --develop:      (deprecated, use '-b master') install OSM from source code using the master branch"
+#    echo -e "     --reconfigure:  reconfigure the modules (DO NOT change NAT rules)"
+    echo -e "     --nat:          install only NAT rules"
+    echo -e "     --noconfigure:  DO NOT install osmclient, DO NOT install NAT rules, DO NOT configure modules"
+#    echo -e "     --update:       update to the latest stable release or to the latest commit if using a specific branch"
+    echo -e "     --showopts:     print chosen options and exit (only for debugging)"
+    echo -e "     -y:             do not prompt for confirmation, assumes yes"
+    echo -e "     -h / --help:    print this help"
 }
 
 #Uninstall OSM: remove containers
@@ -139,7 +143,11 @@ function update(){
 }
 
 function so_is_up() {
-    SO_IP=$1
+    if [ -n "$1" ]; then
+        SO_IP=$1
+    else
+        SO_IP=`lxc list SO-ub -c 4|grep eth0 |awk '{print $2}'`
+    fi
     time=0
     step=5
     timelength=300
@@ -159,39 +167,69 @@ function so_is_up() {
         time=$((time+step))
     done
 
-    FATAL "OSM Failed to startup"
+    FATAL "OSM Failed to startup. SO failed to startup"
 }
 
-#Configure VCA, SO and RO with the initial configuration:
-#  RO -> tenant:osm, logs to be sent to SO
-#  VCA -> juju-password
-#  SO -> route to Juju Controller, add RO account, add VCA account
-function configure(){
-    #Configure components
-    echo -e "\nConfiguring components"
-    . $OSM_DEVOPS/installers/export_ips
+function vca_is_up() {
+    if [[ `lxc exec VCA -- juju status | grep "osm" | wc -l` -eq 1 ]]; then
+            echo "VCA is up and running"
+            return 0
+    fi
 
+    FATAL "OSM Failed to startup. VCA failed to startup"
+}
+
+function ro_is_up() {
+    if [ -n "$1" ]; then
+        RO_IP=$1
+    else
+        RO_IP=`lxc list RO -c 4|grep eth0 |awk '{print $2}'`
+    fi
+    time=0
+    step=2
+    timelength=20
+    while [ $time -le $timelength ]; do
+        if [[ `curl http://$RO_IP:9090/openmano/ | grep "works" | wc -l` -eq 1 ]]; then
+            echo "RO is up and running"
+            return 0
+        fi
+        sleep $step
+        echo -n "."
+        time=$((time+step))
+    done
+
+    FATAL "OSM Failed to startup. RO failed to startup"
+}
+
+
+function configure_RO(){
+    . $OSM_DEVOPS/installers/export_ips
     echo -e "       Configuring RO"
     lxc exec RO -- sed -i -e "s/^\#\?log_socket_host:.*/log_socket_host: $SO_CONTAINER_IP/g" /etc/osm/openmanod.cfg
     lxc exec RO -- service osm-ro restart
 
-    time=0; step=2; timelength=20; while [ $time -le $timelength ]; do sleep $step; echo -n "."; time=$((time+step)); done; echo
+    ro_is_up
 
     lxc exec RO -- openmano tenant-delete -f osm >/dev/null
-    RO_TENANT_ID=`lxc exec RO -- openmano tenant-create osm |awk '{print $1}'`
     lxc exec RO -- sed -i '/export OPENMANO_TENANT=osm/d' .bashrc 
     lxc exec RO -- sed -i '$ i export OPENMANO_TENANT=osm' .bashrc
     #lxc exec RO -- sh -c 'echo "export OPENMANO_TENANT=osm" >> .bashrc'
+}
 
+function configure_VCA(){
     echo -e "       Configuring VCA"
     JUJU_PASSWD=`date +%s | sha256sum | base64 | head -c 32`
     echo -e "$JUJU_PASSWD\n$JUJU_PASSWD" | lxc exec VCA -- juju change-user-password
+}
+
+function configure_SOUI(){
+    . $OSM_DEVOPS/installers/export_ips
     JUJU_CONTROLLER_IP=`lxc exec VCA -- lxc list -c 4 |grep eth0 |awk '{print $2}'`
+    RO_TENANT_ID=`lxc exec RO -- openmano tenant-create osm |awk '{print $1}'`
 
     echo -e "       Configuring SO"
     sudo route add -host $JUJU_CONTROLLER_IP gw $VCA_CONTAINER_IP
     sudo sed -i "$ i route add -host $JUJU_CONTROLLER_IP gw $VCA_CONTAINER_IP" /etc/rc.local
-
     # make journaling persistent
     lxc exec SO-ub -- mkdir -p /var/log/journal
     lxc exec SO-ub -- systemd-tmpfiles --create --prefix /var/log/journal
@@ -263,16 +301,34 @@ iface lo:1 inet static
         netmask 255.255.255.255
 EOF
     lxc exec SO-ub ifup lo:1
+}
 
+#Configure RO, VCA, and SO with the initial configuration:
+#  RO -> tenant:osm, logs to be sent to SO
+#  VCA -> juju-password
+#  SO -> route to Juju Controller, add RO account, add VCA account
+function configure(){
+    #Configure components
+    echo -e "\nConfiguring components"
+    configure_RO
+    configure_VCA
+    configure_SOUI
 }
 
 function install_lxd() {
+    sudo apt-get update
+    sudo apt-get install -y lxd
+    newgrp lxd
     lxd init --auto
     lxd waitready
-    systemctl stop lxd-bridge
-    systemctl --system daemon-reload
-    systemctl enable lxd-bridge
-    systemctl start lxd-bridge
+    lxc network create lxdbr0 ipv4.address=auto ipv4.nat=true ipv6.address=none ipv6.nat=false
+    DEFAULT_INTERFACE=$(route -n | awk '$1~/^0.0.0.0/ {print $8}')
+    DEFAULT_MTU=$( ip addr show $DEFAULT_INTERFACE | perl -ne 'if (/mtu\s(\d+)/) {print $1;}')
+    lxc profile device set default eth0 mtu $DEFAULT_MTU
+    #sudo systemctl stop lxd-bridge
+    #sudo systemctl --system daemon-reload
+    #sudo systemctl enable lxd-bridge
+    #sudo systemctl start lxd-bridge
 }
 
 function ask_user(){
@@ -289,20 +345,112 @@ function ask_user(){
     done
 }
 
+function launch_container_from_lxd(){
+    export OSM_MDG=$1
+    OSM_load_config
+    export OSM_BASE_IMAGE=$2
+    if ! container_exists $OSM_BUILD_CONTAINER; then
+        CONTAINER_OPTS=""
+        [[ "$OSM_BUILD_CONTAINER_PRIVILEGED" == yes ]] && CONTAINER_OPTS="$CONTAINER_OPTS -c security.privileged=true"
+        [[ "$OSM_BUILD_CONTAINER_ALLOW_NESTED" == yes ]] && CONTAINER_OPTS="$CONTAINER_OPTS -c security.nesting=true"
+        create_container $OSM_BASE_IMAGE $OSM_BUILD_CONTAINER $CONTAINER_OPTS
+        wait_container_up $OSM_BUILD_CONTAINER
+    fi
+}
+
+function install_osmclient(){
+    CLIENT_RELEASE=${RELEASE#"-R "}
+    CLIENT_REPOSITORY_KEY="OSM%20ETSI%20Release%20Key.gpg"
+    CLIENT_REPOSITORY="stable"
+    [ -z "$REPOSITORY_BASE" ] && REPOSITORY_BASE="-u https://osm-download.etsi.org/repository/osm/debian"
+    CLIENT_REPOSITORY_BASE=${REPOSITORY_BASE#"-u "}
+    key_location=$CLIENT_REPOSITORY_BASE/$CLIENT_RELEASE/$CLIENT_REPOSITORY_KEY
+    curl $key_location | sudo apt-key add -
+    sudo add-apt-repository -y "deb [arch=amd64] $CLIENT_REPOSITORY_BASE/$CLIENT_RELEASE $CLIENT_REPOSITORY osmclient"
+    sudo apt-get update
+    sudo apt-get install -y python-osmclient
+    export OSM_HOSTNAME=`lxc list | awk '($2=="SO-ub"){print $6}'`
+    export OSM_RO_HOSTNAME=`lxc list | awk '($2=="RO"){print $6}'`
+    echo -e "\nOSM client installed"
+    echo -e "You might be interested in adding the following OSM client env variables to your .bashrc file:"
+    echo "     export OSM_HOSTNAME=${OSM_HOSTNAME}"
+    echo "     export OSM_RO_HOSTNAME=${OSM_RO_HOSTNAME}"
+}
+
+function install_from_lxdimages(){
+    LXD_RELEASE=${RELEASE#"-R "}
+    LXD_IMAGE_DIR="$(mktemp -d -q --tmpdir "osmimages.XXXXXX")"
+    trap 'rm -rf "$LXD_IMAGE_DIR"' EXIT
+    wget -O $LXD_IMAGE_DIR/osm-ro.tar.gz $LXD_REPOSITORY_BASE/$LXD_RELEASE/osm-ro.tar.gz
+    lxc image import $LXD_IMAGE_DIR/osm-ro.tar.gz --alias osm-ro
+    rm -f $LXD_IMAGE_DIR/osm-ro.tar.gz
+    wget -O $LXD_IMAGE_DIR/osm-vca.tar.gz $LXD_REPOSITORY_BASE/$LXD_RELEASE/osm-vca.tar.gz
+    lxc image import $LXD_IMAGE_DIR/osm-vca.tar.gz --alias osm-vca
+    rm -f $LXD_IMAGE_DIR/osm-vca.tar.gz
+    wget -O $LXD_IMAGE_DIR/osm-soui.tar.gz $LXD_REPOSITORY_BASE/$LXD_RELEASE/osm-soui.tar.gz
+    lxc image import $LXD_IMAGE_DIR/osm-soui.tar.gz --alias osm-soui
+    rm -f $LXD_IMAGE_DIR/osm-soui.tar.gz
+    launch_container_from_lxd RO osm-ro
+    ro_is_up && track RO
+    launch_container_from_lxd VCA osm-vca
+    vca_is_up && track VCA
+    launch_container_from_lxd SO osm-soui
+    #so_is_up && track SOUI
+    track SOUI
+}
+
+function dump_vars(){
+    echo "DEVELOP=$DEVELOP"
+    echo "INSTALL_FROM_SOURCE=$INSTALL_FROM_SOURCE"
+    echo "UNINSTALL=$UNINSTALL"
+    echo "NAT=$NAT"
+    echo "UPDATE=$UPDATE"
+    echo "RECONFIGURE=$RECONFIGURE"
+    echo "TEST_INSTALLER=$TEST_INSTALLER"
+    echo "INSTALL_LXD=$INSTALL_LXD"
+    echo "INSTALL_FROM_LXDIMAGES=$INSTALL_FROM_LXDIMAGES"
+    echo "LXD_REPOSITORY_BASE=$LXD_REPOSITORY_BASE"
+    echo "RELEASE=$RELEASE"
+    echo "REPOSITORY=$REPOSITORY"
+    echo "REPOSITORY_BASE=$REPOSITORY_BASE"
+    echo "REPOSITORY_KEY=$REPOSITORY_KEY"
+    echo "NOCONFIGURE=$NOCONFIGURE"
+    echo "SHOWOPTS=$SHOWOPTS"
+    echo "Install from specific refspec (-b): $COMMIT_ID"
+}
+
+function track(){
+    ctime=`date +%s`
+    duration=$((ctime - SESSION_ID))
+    url="http://www.woopra.com/track/ce?project=osm.etsi.org&cookie=${SESSION_ID}"
+    #url="${url}&ce_campaign_name=${CAMPAIGN_NAME}"
+    event_name="bin"
+    [ -n "$INSTALL_FROM_SOURCE" ] && event_name="src"
+    [ -n "$INSTALL_FROM_LXDIMAGES" ] && event_name="lxd"
+    event_name="${event_name}_$1"
+    url="${url}&event=${event_name}&ce_duration=${duration}"
+    wget -q -O /dev/null $url
+}
+
 UNINSTALL=""
 DEVELOP=""
 NAT=""
 UPDATE=""
 RECONFIGURE=""
 TEST_INSTALLER=""
-LXD=""
+INSTALL_LXD=""
 SHOWOPTS=""
 COMMIT_ID=""
 ASSUME_YES=""
 INSTALL_FROM_SOURCE=""
 RELEASE="-R ReleaseTHREE"
+INSTALL_FROM_LXDIMAGES=""
+LXD_REPOSITORY_BASE="https://osm-download.etsi.org/repository/osm/lxd"
+NOCONFIGURE=""
 
-while getopts ":hy-:b:r:k:u:R:" o; do
+SESSION_ID=`date +%s`
+
+while getopts ":hy-:b:r:k:u:R:l:" o; do
     case "${o}" in
         h)
             usage && exit 0
@@ -322,6 +470,9 @@ while getopts ":hy-:b:r:k:u:R:" o; do
         u)
             REPOSITORY_BASE="-u ${OPTARG}"
             ;;
+        l)
+            LXD_REPOSITORY_BASE="${OPTARG}"
+            ;;
         -)
             [ "${OPTARG}" == "help" ] && usage && exit 0
             [ "${OPTARG}" == "source" ] && INSTALL_FROM_SOURCE="y" && continue
@@ -331,7 +482,9 @@ while getopts ":hy-:b:r:k:u:R:" o; do
             [ "${OPTARG}" == "update" ] && UPDATE="y" && continue
             [ "${OPTARG}" == "reconfigure" ] && RECONFIGURE="y" && continue
             [ "${OPTARG}" == "test" ] && TEST_INSTALLER="y" && continue
-            [ "${OPTARG}" == "lxd" ] && LXD="y" && continue
+            [ "${OPTARG}" == "lxdinstall" ] && INSTALL_LXD="y" && continue
+            [ "${OPTARG}" == "lxdimages" ] && INSTALL_FROM_LXDIMAGES="y" && continue
+            [ "${OPTARG}" == "noconfigure" ] && NOCONFIGURE="y" && continue
             [ "${OPTARG}" == "showopts" ] && SHOWOPTS="y" && continue
             echo -e "Invalid option: '--$OPTARG'\n" >&2
             usage && exit 1
@@ -350,16 +503,7 @@ while getopts ":hy-:b:r:k:u:R:" o; do
 done
 
 if [ -n "$SHOWOPTS" ]; then
-    echo "DEVELOP=$DEVELOP"
-    echo "INSTALL_FROM_SOURCE=$INSTALL_FROM_SOURCE"
-    echo "UNINSTALL=$UNINSTALL"
-    echo "NAT=$NAT"
-    echo "UPDATE=$UPDATE"
-    echo "RECONFIGURE=$RECONFIGURE"
-    echo "TEST_INSTALLER=$TEST_INSTALLER"
-    echo "LXD=$LXD"
-    echo "SHOWOPTS=$SHOWOPTS"
-    echo "Install from specific refspec (-b): $COMMIT_ID"
+    dump_vars
     exit 0
 fi
 
@@ -420,31 +564,48 @@ dpkg -l wget curl tar &>/dev/null || ! echo -e "    One or several packages are 
 
 echo -e "Checking required packages: lxd"
 lxd --version &>/dev/null || FATAL "lxd not present, exiting."
-[ -n "$LXD" ] && echo -e "\nConfiguring lxd" && install_lxd
+[ -n "$INSTALL_LXD" ] && echo -e "\nInstalling and configuring lxd" && install_lxd
 
 wget -q -O- https://osm-download.etsi.org/ftp/osm-3.0-three/README.txt &> /dev/null
+track start
 
 # use local devops for containers
 export OSM_USE_LOCAL_DEVOPS=true
-if [ -z "$INSTALL_FROM_SOURCE" ]; then
-    echo -e "\nCreating the containers and installing from binaries ..."
-    $OSM_DEVOPS/jenkins/host/install RO $REPOSITORY $RELEASE $REPOSITORY_KEY $REPOSITORY_BASE || FATAL "RO install failed"
-    $OSM_DEVOPS/jenkins/host/start_build VCA || FATAL "VCA install failed"
-    $OSM_DEVOPS/jenkins/host/install SO $REPOSITORY $RELEASE $REPOSITORY_KEY $REPOSITORY_BASE || FATAL "SO install failed"
-    $OSM_DEVOPS/jenkins/host/install UI $REPOSITORY $RELEASE $REPOSITORY_KEY $REPOSITORY_BASE || FATAL "UI install failed"
-else #install from source
+if [ -n "$INSTALL_FROM_SOURCE" ]; then #install from source
     echo -e "\nCreating the containers and building from source ..."
     $OSM_DEVOPS/jenkins/host/start_build RO --notest checkout $COMMIT_ID || FATAL "RO container build failed (refspec: '$COMMIT_ID')"
+    ro_is_up && track RO
     $OSM_DEVOPS/jenkins/host/start_build VCA || FATAL "VCA container build failed"
+    vca_is_up && track VCA
     $OSM_DEVOPS/jenkins/host/start_build SO checkout $COMMIT_ID || FATAL "SO container build failed (refspec: '$COMMIT_ID')"
     $OSM_DEVOPS/jenkins/host/start_build UI checkout $COMMIT_ID || FATAL "UI container build failed (refspec: '$COMMIT_ID')"
+    #so_is_up && track SOUI
+    track SOUI
+elif [ -n "$INSTALL_FROM_LXDIMAGES" ]; then #install from LXD images stored in OSM repo
+    echo -e "\nInstalling from lxd images ..."
+    install_from_lxdimages
+else #install from binaries
+    echo -e "\nCreating the containers and installing from binaries ..."
+    $OSM_DEVOPS/jenkins/host/install RO $REPOSITORY $RELEASE $REPOSITORY_KEY $REPOSITORY_BASE || FATAL "RO install failed"
+    ro_is_up && track RO
+    $OSM_DEVOPS/jenkins/host/start_build VCA || FATAL "VCA install failed"
+    vca_is_up && track VCA
+    $OSM_DEVOPS/jenkins/host/install SO $REPOSITORY $RELEASE $REPOSITORY_KEY $REPOSITORY_BASE || FATAL "SO install failed"
+    $OSM_DEVOPS/jenkins/host/install UI $REPOSITORY $RELEASE $REPOSITORY_KEY $REPOSITORY_BASE || FATAL "UI install failed"
+    #so_is_up && track SOUI
+    track SOUI
 fi
 
 #Install iptables-persistent and configure NAT rules
-nat
+[ -z "$NOCONFIGURE" ] && nat
 
 #Configure components
-configure
+[ -z "$NOCONFIGURE" ] && configure
+
+#Install osmclient
+[ -z "$NOCONFIGURE" ] && install_osmclient
 
 wget -q -O- https://osm-download.etsi.org/ftp/osm-3.0-three/README2.txt &> /dev/null
+track end
 echo -e "\nDONE"
+
