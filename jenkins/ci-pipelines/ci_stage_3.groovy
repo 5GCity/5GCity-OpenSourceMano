@@ -129,6 +129,12 @@ node("${params.NODE}") {
                 // copy the public key into the release folder
                 // this pulls the key from the home dir of the current user (jenkins)
                 sh "cp ~/${REPO_KEY_NAME} ."
+
+                // merge the change logs
+                sh """
+                   rm -f changelog/osm-changelog.html
+                   [ -d changelog ] && for mdgchange in \$(ls changelog); do cat changelog/\$mdgchange >> changelog/osm-changelog.html; done
+                   """
             }
             // start an apache server to serve up the images
             http_server_name = "${container_name}-apache"

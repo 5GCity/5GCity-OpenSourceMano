@@ -92,6 +92,12 @@ def archive(artifactory_server,mdg,branch,status) {
     def uploadSpec = """{
      "files": [
         {
+          "pattern": "changelog/*",
+          "target": "${repo_prefix}${mdg}/${branch}/${BUILD_NUMBER}/",
+          "props": "${properties}",
+          "flat": false
+        },
+        {
           "pattern": "dists/*.gz",
           "target": "${repo_prefix}${mdg}/${branch}/${BUILD_NUMBER}/",
           "props": "${properties}",

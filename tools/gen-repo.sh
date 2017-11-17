@@ -113,6 +113,7 @@ mkdir -p $BASE_DIR/dists
 
 cp -R $BUILD_NUMBER/dists/$IN_REPO $BASE_DIR/dists/$OUT_REPO
 cp -R $BUILD_NUMBER/pool $BASE_DIR/
+[ -d "$BUILD_NUMBER/changelog" ] && cp -R $BUILD_NUMBER/changelog $BASE_DIR/
 
 cd $BASE_DIR
 
