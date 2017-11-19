@@ -7,4 +7,4 @@ TAG_START=$(git tag | sort -Vr | head -1)
 git pull --tags origin master &> /dev/null
 echo "<h1>$REPO_NAME Changelog</h1>"
 echo "<h2>tag: ${TAG_START} -> ${TAG_END}</h2>"
-git log --pretty=format:"<li> <a href=https://osm.etsi.org/gitweb/?p=osm/$i.git;a=commitdiff;h=%H>%h &bull;</a> %s</li> " --reverse  ${TAG_START}..${TAG_END}
+git log --pretty=format:"<li> <a href=https://osm.etsi.org/gitweb/?p=osm/$REPO_NAME.git;a=commitdiff;h=%H>%h &bull;</a> %s</li> " --reverse  ${TAG_START}..${TAG_END}
