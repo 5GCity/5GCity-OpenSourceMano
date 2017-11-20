@@ -22,6 +22,7 @@ from osmclient.common import utils
 from osmclient.common.exceptions import ClientException
 from osmclient.common.exceptions import NotFound
 import uuid
+import yaml
 
 
 class Ns(object):
@@ -68,7 +69,7 @@ class Ns(object):
                     ns_name,
                     resp))
 
-    def create(self, nsd_name, nsr_name, account, vim_network_prefix=None,
+    def create(self, nsd_name, nsr_name, account, config=None,
                ssh_keys=None, description='default description',
                admin_status='ENABLED'):
         postdata = {}
@@ -112,11 +113,18 @@ class Ns(object):
 
             nsr['ssh-authorized-key'] = ssh_keys_format
 
-        if vim_network_prefix is not None:
-            for index, vld in enumerate(nsr['nsd']['vld']):
-                network_name = vld['name']
-                nsr['nsd']['vld'][index]['vim-network-name'] = '{}-{}'.format(
-                    vim_network_prefix, network_name)
+        if config: 
+            ns_config = yaml.load(config)
+
+        if ns_config and 'vim-network-name' in ns_config:
+            for network in ns_config['vim-network-name']:
+                # now find this network
+                vld_name = network['name']
+                vim_vld_name = network['vim-network-name']
+
+                for index, vld in enumerate(nsr['nsd']['vld']):
+                    if vld['name'] == vld_name:
+                        nsr['nsd']['vld'][index]['vim-network-name'] = network['vim-network-name']
 
         postdata['nsr'].append(nsr)
 

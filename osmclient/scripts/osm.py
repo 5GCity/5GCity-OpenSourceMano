@@ -207,9 +207,9 @@ def ns_monitoring_show(ctx, ns_name):
 @click.option('--ssh_keys',
               default=None,
               help='comma separated list of keys to inject to vnfs')
-@click.option('--vim_network_prefix',
+@click.option('--config',
               default=None,
-              help='vim network name prefix')
+              help='ns specific yaml configuration')
 @click.pass_context
 def ns_create(ctx,
               nsd_name,
@@ -217,12 +217,12 @@ def ns_create(ctx,
               vim_account,
               admin_status,
               ssh_keys,
-              vim_network_prefix):
+              config):
     try:
         ctx.obj.ns.create(
             nsd_name,
             ns_name,
-            vim_network_prefix=vim_network_prefix,
+            config=config,
             ssh_keys=ssh_keys,
             account=vim_account)
     except ClientException as inst:
