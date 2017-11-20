@@ -884,6 +884,11 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                 net_id2uuid[vld.get("id")] = net_uuid
                 db_nets.append(db_net)
 
+            # connection points vaiable declaration
+            cp_name2iface_uuid = {}
+            cp_name2vm_uuid = {}
+            cp_name2db_interface = {}
+
             # table vms (vdus)
             vdu_id2uuid = {}
             vdu_id2db_table_index = {}
@@ -968,9 +973,6 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
 
                 # table interfaces (internal/external interfaces)
                 flavor_epa_interfaces = []
-                cp_name2iface_uuid = {}
-                cp_name2vm_uuid = {}
-                cp_name2db_interface = {}
                 vdu_id2cp_name = {}  # stored only when one external connection point is presented at this VDU
                 # for iface in chain(vdu.get("internal-interface").itervalues(), vdu.get("external-interface").itervalues()):
                 for iface in vdu.get("interface").itervalues():
@@ -1071,7 +1073,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     "ram": int(vdu["vm-flavor"].get("memory-mb", 1)),
                     "disk": int(vdu["vm-flavor"].get("storage-gb", 1)),
                 }
-                # EPA  TODO revise
+                # TODO revise the case of several numa-node-policy node
                 extended = {}
                 numa = {}
                 if devices:
@@ -1083,7 +1085,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     if vdu["guest-epa"].get("numa-node-policy"):  # TODO or dedicated_int:
                         numa_node_policy = vdu["guest-epa"].get("numa-node-policy")
                         if numa_node_policy.get("node"):
-                            numa_node = numa_node_policy["node"]['0']
+                            numa_node = numa_node_policy["node"].values()[0]
                             if numa_node.get("num-cores"):
                                 numa["cores"] = numa_node["num-cores"]
                                 epa_vcpu_set = True
