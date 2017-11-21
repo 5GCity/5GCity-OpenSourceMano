@@ -20,19 +20,23 @@ def get_archive(artifactory_server, mdg, branch, build_name, build_number, patte
 
     println("retrieve archive for ${mdg}/${branch}/${build_name}/${build_number}/${pattern}")
 
+    // if the build name does not contain merge, then this is a patchset/staging job
+    if (!build_name.contains('merge')) {
+        branch += '-staging'
+    }
     def repo_prefix = 'osm-'
     def downloadSpec = """{
      "files": [
         {
           "target": "./",
-          "pattern": "${repo_prefix}${mdg}/${branch}/${pattern}",
+          "pattern": "${repo_prefix}${mdg}/${branch}/${build_number}/${pattern}",
           "build": "${build_name}/${build_number}"
         }
      ]
     }"""
 
     server.download(downloadSpec)
-    // workaround.  flatten and repo the specific build num from the directory
+    // workaround.  flatten repo to remove specific build num from the directory
     sh "cp -R ${branch}/${build_num}/* ."
     sh "rm -rf ${branch}/${build_num}"
 }
@@ -87,16 +91,16 @@ def get_ip_from_container( container_name ) {
 def archive(artifactory_server,mdg,branch,status) {
     server = Artifactory.server artifactory_server
 
-    def properties = "branch=${branch};status=${status}"
+    def properties = ""
+    //def properties = "branch=${branch};status=${status}"
     def repo_prefix = 'osm-'
+
+    // if the build name does not contain merge, then this is a patchset/staging job
+    if ( !JOB_NAME.contains('merge') ) {
+        branch += '-staging'
+    }
     def uploadSpec = """{
      "files": [
-        {
-          "pattern": "changelog/*",
-          "target": "${repo_prefix}${mdg}/${branch}/${BUILD_NUMBER}/",
-          "props": "${properties}",
-          "flat": false
-        },
         {
           "pattern": "dists/*.gz",
           "target": "${repo_prefix}${mdg}/${branch}/${BUILD_NUMBER}/",
@@ -111,6 +115,12 @@ def archive(artifactory_server,mdg,branch,status) {
         },
         {
           "pattern": "pool/*/*.deb",
+          "target": "${repo_prefix}${mdg}/${branch}/${BUILD_NUMBER}/",
+          "props": "${properties}",
+          "flat": false
+        },
+        {
+          "pattern": "changelog/*",
           "target": "${repo_prefix}${mdg}/${branch}/${BUILD_NUMBER}/",
           "props": "${properties}",
           "flat": false

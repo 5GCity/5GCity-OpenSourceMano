@@ -132,8 +132,8 @@ node("${params.NODE}") {
 
                 // merge the change logs
                 sh """
-                   rm -f changelog/osm-changelog.html
-                   [ ! -d changelog ] || for mdgchange in \$(ls changelog); do cat changelog/\$mdgchange >> changelog/osm-changelog.html; done
+                   rm -f changelog/changelog-osm.html
+                   [ ! -d changelog ] || for mdgchange in \$(ls changelog); do cat changelog/\$mdgchange >> changelog/changelog-osm.html; done
                    """
             }
             // start an apache server to serve up the images
