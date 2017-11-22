@@ -69,7 +69,7 @@ node("${params.NODE}") {
         if ( params.STAGE )
         {
             // go directly to stage 3 (osm system)
-            stage_name = "stage_3"
+            stage_name = params.STAGE
             mdg = "osm"
             if ( ! params.TEST_INSTALL )
             {
