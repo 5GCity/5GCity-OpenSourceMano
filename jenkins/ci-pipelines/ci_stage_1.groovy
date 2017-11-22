@@ -36,18 +36,24 @@ node("${params.NODE}") {
     }
 
     stage('downstream') {
-        // initially use stage_name as the event_type
-        def stage_name = GERRIT_EVENT_TYPE
+        // default to stage_2 (patchset)
+        def stage_name = "stage_2"
 
-        switch(GERRIT_EVENT_TYPE) {
-            case "change-merged":
-               stage_name = "stage_2-merge"
-               break
+        try {
+            switch(GERRIT_EVENT_TYPE) {
+                case "change-merged":
+                   stage_name = "stage_2-merge"
+                   break
 
-            case "patchset-created":
-               stage_name = "stage_2"
-               break
+                case "patchset-created":
+                   stage_name = "stage_2"
+                   break
+            }
         }
+        catch(caughtError) {
+            println("No gerrit event found")
+        }
+
         do_stage_4 = false
         if (params.DO_STAGE_4)
         {
