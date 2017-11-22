@@ -198,6 +198,7 @@ node("${params.NODE}") {
             stage("stage_4") {
                 def downstream_params = [
                     string(name: 'CONTAINER_NAME', value: container_name),
+                    string(name: 'NODE', value: NODE_NAME.split()[0]),
                 ]
                 stage_4_result = build job: "${params.DOWNSTREAM_STAGE_NAME}/${GERRIT_BRANCH}", parameters: downstream_params, propagate: false 
                
