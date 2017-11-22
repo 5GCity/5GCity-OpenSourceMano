@@ -21,13 +21,9 @@
 
 __author__ = "Prithiv Mohan"
 __date__   = "14/Sep/2017"
-
-#!/usr/bin/env python
-
 from setuptools import setup
 from os import system
-
-_name = 'core'
+_name = 'osm-mon'
 _version = '1.0'
 _description = 'OSM Monitoring Module'
 _author = 'Prithiv Mohan'
@@ -35,33 +31,8 @@ _author_email = 'prithiv.mohan@intel.com'
 _maintainer = 'Adrian Hoban'
 _maintainer_email = 'adrian.hoban@intel.com'
 _license = 'Apache 2.0'
-_copyright = 'Intel Research and Development Ireland'
 _url = 'https://osm.etsi.org/gitweb/?p=osm/MON.git;a=tree'
-_requirements = [
-    "stdeb",
-    "MySQL-python",
-    "requests",
-    "logutils",
-    "cherrypy",
-    "jsmin",
-    "jsonschema",
-    "python-openstackclient",
-    "python-novaclient",
-    "python-keystoneclient",
-    "python-neutronclient",
-    "aodhclient",
-    "gnocchiclient",
-    "boto==2.48",
-    "python-cloudwatchlogs-logging",
-    "py-cloudwatch",
-    "pyvcloud",
-    "pyopenssl",
-    "cherrypy",
-    "bottle",
-    "six",
-]
-
-setup(name="mon_core",
+setup(name="osm_mon",
       version = _version,
       description = _description,
       long_description = open('README.rst').read(),
@@ -71,16 +42,14 @@ setup(name="mon_core",
       maintainer_email = _maintainer_email,
       url = _url,
       license = _license,
-      copyright = _copyright,
       packages = [_name],
       package_dir = {_name: _name},
-      package_data = {_name: ['core/message_bus/*.py', 'core/models/*.json',
-                      'plugins/OpenStack/Aodh/*.py', 'plugins/OpenStack/Gnocchi/*.py',
-                      'plugins/vRealiseOps/*', 'plugins/CloudWatch/*']},
+      package_data = {_name: ['osm-mon/core/message_bus/*.py', 'osm-mon/core/models/*.json',
+                      'osm-mon/plugins/OpenStack/Aodh/*.py', 'osm-mon/plugins/OpenStack/Gnocchi/*.py',
+                      'osm-mon/plugins/vRealiseOps/*', 'osm-mon/plugins/CloudWatch/*']},
       data_files = [('/etc/systemd/system/', ['scripts/kafka.sh']),
                    ],
-      scripts=['plugins/vRealiseOps/vROPs_Webservice/vrops_webservice',
-               'kafkad'],
-      install_requires = _requirements,
+      scripts=['osm-mon/plugins/vRealiseOps/vROPs_Webservice/vrops_webservice',
+               'kafkad', 'osm-mon/core/message_bus/common_consumer'],
       include_package_data=True,
       )

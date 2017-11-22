@@ -19,9 +19,8 @@
 # For those usages not covered by the Apache License, Version 2.0 please
 # contact: prithiv.mohan@intel.com or adrian.hoban@intel.com
 
-include requirements.txt
-include README.rst
-include kafkad
-recursive-include osm-mon *
-recursive-include devops-stages *
-recursive-include test *
+#__author__ = "Prithiv Mohan"
+#__date__   = "14/Sep/2017"
+
+#!/bin/bash
+echo "UNITTEST"

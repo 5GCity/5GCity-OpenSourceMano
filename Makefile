@@ -30,53 +30,53 @@ clean_deb:
 
 clean:
 	rm -rf build
+	rm -rf .build
 
 prepare:
-	pip install --upgrade setuptools
+	#apt-get --yes install python-stdeb python-pip libmysqlclient-dev debhelper
+	#pip install --upgrade setuptools
 	mkdir -p build/
+	cp tox.ini build/
 	cp MANIFEST.in build/
 	cp requirements.txt build/
+	cp test-requirements.txt build/
 	cp README.rst build/
-	cp stdeb.cfg build/
-	cp kafkad build/
-	cp -r core build/
-	cp -r plugins build/
-	cp -r devops_stages build/
-	cp -r test build/
-	cp -r scripts build/
 	cp setup.py build/
+	cp kafkad build/
+	cp -r osm-mon build/
+	cp -r devops-stages build/
+	cp -r scripts build/
+	#pip install -r requirements.txt
+	#pip install -r test-requirements.txt
 
 build: clean openstack_plugins prepare
-	python -m py_compile build/plugins/OpenStack/*.py
+	python -m py_compile build/osm-mon/plugins/OpenStack/*.py
 
 build: clean vrops_plugins prepare
-	python -m py_compile build/plugins/vRealiseOps/*.py
+	python -m py_compile build/osm-mon/plugins/vRealiseOps/*.py
 
 build: clean cloudwatch_plugins prepare
-	python -m py_compile build/plugins/CloudWatch/*.py
+	python -m py_compile build/osm-mon/plugins/CloudWatch/*.py
 
 build: clean core prepare
-	python -m py_compile build/core/message_bus/*.py
+	python -m py_compile build/osm-mon/core/message_bus/*.py
 
 pip: prepare
 	cd build ./setup.py sdist
-	cd build ./plugin_setup.py sdist
 
 package: clean clean_deb prepare
-	cd build && python setup.py --command-packages=stdeb.command sdist_dsc --with-python2=True
-	cd build/deb_dist/* && dpkg-buildpackage -rfakeroot -uc -us
+	cd build && python setup.py --command-packages=stdeb.command sdist_dsc --with-python2=True --with-python3=False bdist_deb
 	mkdir -p .build
 	cp build/deb_dist/python-*.deb .build/
+
+develop: prepare
+	cd build && ./setup.py develop
 
 install:
 	DEBIAN_FRONTEND=noninteractive apt-get update && \
 	DEBIAN_FRONTEND=noninteractive apt-get install --yes python-pip && \
 	pip install --upgrade pip
-        #dpkg -i build/deb_dist/*.deb
-
-develop: prepare
-	pip install -r requirements.txt
-	cd build && ./setup.py develop
+	dpkg -i build/deb_dist/*.deb
 
 build-docker-from-source:
 	docker build -t osm:MON -f docker/Dockerfile

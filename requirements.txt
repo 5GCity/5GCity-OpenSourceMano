@@ -21,6 +21,7 @@
 
 stdeb
 MySQL-python
+kafka
 lxml
 requests
 logutils

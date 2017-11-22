@@ -19,7 +19,15 @@
 # For those usages not covered by the Apache License, Version 2.0 please
 # contact: prithiv.mohan@intel.com or adrian.hoban@intel.com
 
-[DEFAULT]
-Suite: xenial
-XS-Python-Version: >= 2.7
-Depends: python-pip, libmysqlclient-dev, libssl-dev, libffi-dev, python-argcomplete, python-boto, python-bottle, python-jsonschema, python-logutils,python-openstackclient, python-mysqldb, aodhclient, gnocchiclient, python-cloudwatchlogs-logging, py-cloudwatch, pyvcloud, pyopenssl, cherrypy, python-bottle, boto2.8, python-neutronclient, python-keystoneclient, python-novaclient
+#__author__ = "Prithiv Mohan"
+#__date__   = "25/Sep/2017"
+
+
+#!/bin/sh
+rm -rf pool
+rm -rf dists
+mkdir -p pool/MON
+mv .build/*.deb pool/MON/
+mkdir -p dists/unstable/MON/binary-amd64/
+apt-ftparchive packages pool/MON > dists/unstable/MON/binary-amd64/Packages
+gzip -9fk dists/unstable/MON/binary-amd64/Packages
