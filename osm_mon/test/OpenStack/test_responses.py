@@ -27,9 +27,7 @@ import unittest
 
 import mock
 
-from plugins.OpenStack import response as resp
-
-__author__ = "Helena McGough"
+from osm_mon.plugins.OpenStack import response as resp
 
 log = logging.getLogger(__name__)
 

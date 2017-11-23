@@ -22,8 +22,9 @@
 import json
 import logging
 import sys
+import os
 
-sys.path.append("/root/MON")
+sys.path.insert(0, os.path.abspath('../'))
 
 logging.basicConfig(filename='MON_plugins.log',
                     format='%(asctime)s %(message)s',
@@ -34,9 +35,9 @@ log = logging.getLogger(__name__)
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 
-from plugins.OpenStack.Aodh import alarming
-from plugins.OpenStack.common import Common
-from plugins.OpenStack.Gnocchi import metrics
+from osm_mon.plugins.OpenStack.Aodh import alarming
+from osm_mon.plugins.OpenStack.common import Common
+from osm_mon.plugins.OpenStack.Gnocchi import metrics
 
 
 # Initialize servers

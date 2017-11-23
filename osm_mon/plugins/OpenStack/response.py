@@ -23,9 +23,8 @@
 
 import json
 import logging
-log = logging.getLogger(__name__)
 
-__author__ = "Helena McGough"
+log = logging.getLogger(__name__)
 
 schema_version = "1.0"
 

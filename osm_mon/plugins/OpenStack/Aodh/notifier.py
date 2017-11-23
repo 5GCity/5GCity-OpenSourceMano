@@ -26,6 +26,8 @@ import json
 
 import logging
 
+import os
+
 import sys
 
 import time
@@ -40,14 +42,14 @@ logging.basicConfig(filename='aodh_notify.log',
                     level=logging.INFO)
 log = logging.getLogger(__name__)
 
-sys.path.append("/root/MON")
+sys.path.insert(0, os.path.abspath('../'))
 
-from core.message_bus.producer import KafkaProducer
+from osm_mon.core.message_bus.producer import KafkaProducer
 
-from plugins.OpenStack.Aodh.alarming import Alarming
-from plugins.OpenStack.common import Common
-from plugins.OpenStack.response import OpenStack_Response
-from plugins.OpenStack.settings import Config
+from osm_mon.plugins.OpenStack.Aodh.alarming import Alarming
+from osm_mon.plugins.OpenStack.common import Common
+from osm_mon.plugins.OpenStack.response import OpenStack_Response
+from osm_mon.plugins.OpenStack.settings import Config
 
 
 class NotifierHandler(BaseHTTPRequestHandler):

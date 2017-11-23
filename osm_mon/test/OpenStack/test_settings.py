@@ -29,9 +29,7 @@ import unittest
 
 import mock
 
-from plugins.OpenStack.settings import Config
-
-__author__ = "Helena McGough"
+from osm_mon.plugins.OpenStack.settings import Config
 
 log = logging.getLogger(__name__)
 

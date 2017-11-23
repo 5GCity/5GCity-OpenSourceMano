@@ -26,7 +26,7 @@ import logging
 
 from keystoneclient.v3 import client
 
-from plugins.OpenStack.settings import Config
+from osm_mon.plugins.OpenStack.settings import Config
 
 import requests
 

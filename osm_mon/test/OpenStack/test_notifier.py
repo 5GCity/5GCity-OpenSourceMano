@@ -27,16 +27,14 @@ import unittest
 
 from BaseHTTPServer import BaseHTTPRequestHandler
 
-from core.message_bus.producer import KafkaProducer
-
 import mock
 
-from plugins.OpenStack.Aodh.alarming import Alarming
-from plugins.OpenStack.common import Common
-from plugins.OpenStack.response import OpenStack_Response
-from plugins.OpenStack.settings import Config
+from osm_mon.core.message_bus.producer import KafkaProducer
 
-__author__ = "Helena McGough"
+from osm_mon.plugins.OpenStack.Aodh.alarming import Alarming
+from osm_mon.plugins.OpenStack.common import Common
+from osm_mon.plugins.OpenStack.response import OpenStack_Response
+from osm_mon.plugins.OpenStack.settings import Config
 
 # Mock data from post request
 post_data = json.dumps({"severity": "critical",

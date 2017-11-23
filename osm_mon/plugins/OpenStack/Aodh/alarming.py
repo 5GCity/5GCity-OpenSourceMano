@@ -25,12 +25,10 @@ import json
 
 import logging
 
-from core.message_bus.producer import KafkaProducer
+from osm_mon.core.message_bus.producer import KafkaProducer
 
-from plugins.OpenStack.response import OpenStack_Response
-from plugins.OpenStack.settings import Config
-
-__author__ = "Helena McGough"
+from osm_mon.plugins.OpenStack.response import OpenStack_Response
+from osm_mon.plugins.OpenStack.settings import Config
 
 log = logging.getLogger(__name__)
 

@@ -26,7 +26,7 @@ import os
 
 from collections import namedtuple
 
-from plugins.OpenStack.singleton import Singleton
+from osm_mon.plugins.OpenStack.singleton import Singleton
 
 import six
 

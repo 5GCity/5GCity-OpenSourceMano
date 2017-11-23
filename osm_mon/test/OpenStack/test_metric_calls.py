@@ -29,11 +29,9 @@ import unittest
 
 import mock
 
-from plugins.OpenStack.Gnocchi import metrics as metric_req
+from osm_mon.plugins.OpenStack.Gnocchi import metrics as metric_req
 
-from plugins.OpenStack.common import Common
-
-__author__ = "Helena McGough"
+from osm_mon.plugins.OpenStack.common import Common
 
 log = logging.getLogger(__name__)
 

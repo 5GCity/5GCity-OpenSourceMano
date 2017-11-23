@@ -23,8 +23,6 @@
 
 from __future__ import unicode_literals
 
-__author__ = "Helena McGough"
-
 
 class Singleton(object):
     """Simple singleton class."""

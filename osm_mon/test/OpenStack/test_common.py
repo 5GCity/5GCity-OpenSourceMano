@@ -31,8 +31,8 @@ from keystoneclient.v3 import client
 
 import mock
 
-from plugins.OpenStack.common import Common
-from plugins.OpenStack.settings import Config
+from osm_mon.plugins.OpenStack.common import Common
+from osm_mon.plugins.OpenStack.settings import Config
 
 import requests
 
