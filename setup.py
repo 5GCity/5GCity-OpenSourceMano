@@ -23,7 +23,7 @@ __author__ = "Prithiv Mohan"
 __date__   = "14/Sep/2017"
 from setuptools import setup
 from os import system
-_name = 'osm-mon'
+_name = 'osm_mon'
 _version = '1.0'
 _description = 'OSM Monitoring Module'
 _author = 'Prithiv Mohan'
@@ -44,12 +44,12 @@ setup(name="osm_mon",
       license = _license,
       packages = [_name],
       package_dir = {_name: _name},
-      package_data = {_name: ['osm-mon/core/message_bus/*.py', 'osm-mon/core/models/*.json',
-                      'osm-mon/plugins/OpenStack/Aodh/*.py', 'osm-mon/plugins/OpenStack/Gnocchi/*.py',
-                      'osm-mon/plugins/vRealiseOps/*', 'osm-mon/plugins/CloudWatch/*']},
+      package_data = {_name: ['osm_mon/core/message_bus/*.py', 'osm_mon/core/models/*.json',
+                      'osm_mon/plugins/OpenStack/Aodh/*.py', 'osm_mon/plugins/OpenStack/Gnocchi/*.py',
+                      'osm_mon/plugins/vRealiseOps/*', 'osm_mon/plugins/CloudWatch/*']},
       data_files = [('/etc/systemd/system/', ['scripts/kafka.sh']),
                    ],
-      scripts=['osm-mon/plugins/vRealiseOps/vROPs_Webservice/vrops_webservice',
-               'kafkad', 'osm-mon/core/message_bus/common_consumer'],
+      scripts=['osm_mon/plugins/vRealiseOps/vROPs_Webservice/vrops_webservice',
+               'kafkad', 'osm_mon/core/message_bus/common_consumer'],
       include_package_data=True,
       )

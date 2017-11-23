@@ -23,4 +23,5 @@
 #__date__   = "14/Sep/2017"
 
 #!/bin/bash
+make clean all BRANCH=master
 make package

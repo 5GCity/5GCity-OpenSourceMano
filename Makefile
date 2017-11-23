@@ -43,23 +43,23 @@ prepare:
 	cp README.rst build/
 	cp setup.py build/
 	cp kafkad build/
-	cp -r osm-mon build/
+	cp -r osm_mon build/
 	cp -r devops-stages build/
 	cp -r scripts build/
 	#pip install -r requirements.txt
 	#pip install -r test-requirements.txt
 
 build: clean openstack_plugins prepare
-	python -m py_compile build/osm-mon/plugins/OpenStack/*.py
+	python -m py_compile build/osm_mon/plugins/OpenStack/*.py
 
 build: clean vrops_plugins prepare
-	python -m py_compile build/osm-mon/plugins/vRealiseOps/*.py
+	python -m py_compile build/osm_mon/plugins/vRealiseOps/*.py
 
 build: clean cloudwatch_plugins prepare
-	python -m py_compile build/osm-mon/plugins/CloudWatch/*.py
+	python -m py_compile build/osm_mon/plugins/CloudWatch/*.py
 
 build: clean core prepare
-	python -m py_compile build/osm-mon/core/message_bus/*.py
+	python -m py_compile build/osm_mon/core/message_bus/*.py
 
 pip: prepare
 	cd build ./setup.py sdist

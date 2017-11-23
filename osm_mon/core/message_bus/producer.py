@@ -36,8 +36,7 @@ from jsmin import jsmin
 __author__ = "Prithiv Mohan"
 __date__ = "06/Sep/2017"
 
-json_path = os.path.join(os.pardir+"/models/")
-
+json_path=os.path.abspath(os.pardir+"/MON/osm_mon/core/models/")
 
 class KafkaProducer(object):
 
