@@ -27,7 +27,7 @@ RUN  apt-get update && \
   DEBIAN_FRONTEND=noninteractive apt-get --yes install git tox make python python-pip debhelper && \
   DEBIAN_FRONTEND=noninteractive apt-get --yes install wget python-dev python-software-properties python-stdeb&& \
   DEBIAN_FRONTEND=noninteractive pip install -U pip && \
-  DEBIAN_FRONTENT=noninteractive pip install -U requests logutils jsonschema lxml && \
+  DEBIAN_FRONTENT=noninteractive pip install -U requests logutils jsonschema lxml kafka mock && \
   DEBIAN_FRONTEND=noninteractive pip install -U setuptools setuptools-version-command stdeb jsmin && \
   DEBIAN_FRONTEND=noninteractive pip install -U six pyvcloud bottle cherrypy pyopenssl && \
   DEBIAN_FRONTEND=noninteractive apt-get --yes install default-jre libmysqlclient-dev && \
