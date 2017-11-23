@@ -120,7 +120,7 @@ class Alarming(object):
                     cor_id=alarm_details['correlation_id'])
                 log.info("Response Message: %s", resp_message)
                 self._producer.create_alarm_response(
-                    'create_alarm_resonse', resp_message,
+                    'create_alarm_response', resp_message,
                     'alarm_response')
             except Exception as exc:
                 log.warn("Response creation failed: %s", exc)
@@ -405,12 +405,13 @@ class Alarming(object):
                     'metric': metric_name,
                     'resource_id': resource_id,
                     'resource_type': 'generic',
-                    'aggregation_method': STATISTICS[statistic]}
+                    'aggregation_method': STATISTICS[statistic], }
             payload = json.dumps({'state': alarm_state,
                                   'name': alarm_name,
                                   'severity': SEVERITIES[severity],
                                   'type': 'gnocchi_resources_threshold',
-                                  'gnocchi_resources_threshold_rule': rule, })
+                                  'gnocchi_resources_threshold_rule': rule,
+                                  'alarm_actions': ['http://localhost:8662'], })
             return payload
         except KeyError as exc:
             log.warn("Alarm is not configured correctly: %s", exc)

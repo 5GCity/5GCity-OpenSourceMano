@@ -52,6 +52,8 @@ class Response(object):
 class TestAlarming(unittest.TestCase):
     """Tests for alarming class functions."""
 
+    maxDiff = None
+
     def setUp(self):
         """Setup for tests."""
         super(TestAlarming, self).setUp()
@@ -219,7 +221,8 @@ class TestAlarming(unittest.TestCase):
                                    "resource_type": "generic"},
                                   "severity": "low",
                                   "state": "ok",
-                                  "type": "gnocchi_resources_threshold"})
+                                  "type": "gnocchi_resources_threshold",
+                                  "alarm_actions": ["http://localhost:8662"]})
 
     def test_check_valid_state_payload(self):
         """Test the check payload function for a valid payload with state."""
@@ -241,7 +244,8 @@ class TestAlarming(unittest.TestCase):
                                    "resource_type": "generic"},
                                   "severity": "low",
                                   "state": "alarm",
-                                  "type": "gnocchi_resources_threshold"})
+                                  "type": "gnocchi_resources_threshold",
+                                  "alarm_actions": ["http://localhost:8662"]})
 
     def test_check_invalid_payload(self):
         """Test the check payload function for an invalid payload."""

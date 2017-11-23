@@ -32,12 +32,6 @@ The topics that the plugins will consume messages based on are:
 * alarm_request
 * metric_request
 
-In return the plugins will send messages back to the SO with the following
-topics:
-
-* alarm_response
-* metric_response
-
 Each type of request has it's own unique key:
 * create_alarm_request
 * create_metric_request
@@ -50,11 +44,35 @@ Each type of request has it's own unique key:
 * acknowledge_alarm_request
 * read_metric_data_request
 
-Sending Messages
-----------------
+In return the plugins will send messages back to the SO with the following
+topics:
+
+* alarm_response
+* metric_response
+
+Each request has a corresponding response key:
+* create_alarm_reponse
+* create_metric_response
+* list_alarm_response
+* list_metric_response
+* delete_alarm_response
+* delete_metric_response
+* update_alarm_response
+* update_metric_response
+* acknowledge_alarm_response
+* read_metric_data_response
+
+  .. note::
+
+      There is an additional response key to send notifications to the SO
+      when an alarm has been triggered:
+      * notify_alarm
+
+Sending Request Messages
+------------------------
 For each of the request message that can be sent there is a json schema defined
 in the models directory of the MON repo:
-: `</MON/core/models/>`
+: `</MON/osm_mon/core/models/>`
 
 To send a valid message to the MON module for use by one of the plugins, your
 message must match the json schema for that request type.

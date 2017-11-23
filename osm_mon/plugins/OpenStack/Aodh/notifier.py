@@ -19,89 +19,127 @@
 # For those usages not covered by the Apache License, Version 2.0 please
 # contact: helena.mcgough@intel.com or adrian.hoban@intel.com
 ##
-"""Notifier class for alarm notification response."""
-
+# __author__ = Helena McGough
+#
+"""A Webserver to send alarm notifications from Aodh to the SO."""
 import json
-import logging as log
 
-try:
-    import aodhclient
-except ImportError:
-    log.warn("Failed to import the aodhclient")
+import logging
 
+import sys
+
+import time
+
+from BaseHTTPServer import BaseHTTPRequestHandler
+from BaseHTTPServer import HTTPServer
+
+# Initialise a logger for alarm notifier
+logging.basicConfig(filename='aodh_notify.log',
+                    format='%(asctime)s %(message)s',
+                    datefmt='%m/%d/%Y %I:%M:%S %p', filemode='a',
+                    level=logging.INFO)
+log = logging.getLogger(__name__)
+
+sys.path.append("/root/MON")
 
 from core.message_bus.producer import KafkaProducer
 
 from plugins.OpenStack.Aodh.alarming import Alarming
+from plugins.OpenStack.common import Common
 from plugins.OpenStack.response import OpenStack_Response
 from plugins.OpenStack.settings import Config
 
-__author__ = "Helena McGough"
 
-ALARM_NAMES = [
-    "average_memory_usage_above_threshold",
-    "disk_read_ops",
-    "disk_write_ops",
-    "disk_read_bytes",
-    "disk_write_bytes",
-    "net_packets_dropped",
-    "packets_in_above_threshold",
-    "packets_out_above_threshold",
-    "cpu_utilization_above_threshold"]
+class NotifierHandler(BaseHTTPRequestHandler):
+    """Handler class for alarm_actions triggered by OSM alarms."""
 
+    def _set_headers(self):
+        """Set the headers for a request."""
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
 
-def register_notifier():
-    """Run the notifier instance."""
-    config = Config.instance()
-    instance = Notifier(config=config)
-    instance.config()
-    instance.notify()
+    def do_GET(self):
+        """Get request functionality."""
+        self._set_headers()
+        self.wfile.write("<html><body><h1>hi!</h1></body></html>")
 
+    def do_POST(self):
+        """POST request function."""
+        # Gets header and data from the post request and records info
+        self._set_headers()
+        # Gets the size of data
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
+        self.wfile.write("<html><body><h1>POST!</h1></body></tml>")
+        log.info("This alarm was triggered: %s", json.loads(post_data))
 
-class Notifier(object):
-    """Alarm Notification class."""
+        # Generate a notify_alarm response for the SO
+        self.notify_alarm(json.loads(post_data))
 
-    def __init__(self, config):
-        """Initialize alarm notifier."""
-        log.info("Initialize the notifier for the SO.")
-        self._config = config
-        self._response = OpenStack_Response()
-        self._producer = KafkaProducer("alarm_response")
+    def notify_alarm(self, values):
+        """Send a notifcation repsonse message to the SO."""
+        # Initialiase configuration and authentication for response message
+        config = Config.instance()
+        config.read_environ("aodh")
         self._alarming = Alarming()
+        self._common = Common()
+        self._response = OpenStack_Response()
+        self._producer = KafkaProducer('alarm_response')
 
-    def config(self):
-        """Configure the alarm notifier."""
-        log.info("Configure the notifier instance.")
-        self._config.read_environ("aodh")
+        alarm_id = values['alarm_id']
+        auth_token = self._common._authenticate()
+        endpoint = self._common.get_endpoint("alarming")
 
-    def notify(self):
-        """Send alarm notifications responses to the SO."""
-        log.info("Checking for alarm notifications")
-        auth_token, endpoint = self._alarming.authenticate()
+        # If authenticated generate and send response message
+        if (auth_token is not None and endpoint is not None):
+            url = "{}/v2/alarms/%s".format(endpoint) % alarm_id
 
-        while(1):
-            alarm_list = self._alarming.list_alarms(endpoint, auth_token)
-            for alarm in json.loads(alarm_list):
-                alarm_id = alarm['alarm_id']
-                alarm_name = alarm['name']
-                # Send a notification response to the SO on alarm trigger
-                if alarm_name in ALARM_NAMES:
-                    alarm_state = self._alarming.get_alarm_state(
-                        endpoint, auth_token, alarm_id)
-                    if alarm_state == "alarm":
-                        # Generate and send an alarm notification response
-                        try:
-                            a_date = alarm['state_timestamp'].replace("T", " ")
-                            rule = alarm['gnocchi_resources_threshold_rule']
-                            resp_message = self._response.generate_response(
-                                'notify_alarm', a_id=alarm_id,
-                                r_id=rule['resource_id'],
-                                sev=alarm['severity'], date=a_date,
-                                state=alarm_state, vim_type="OpenStack")
-                            self._producer.notify_alarm(
-                                'notify_alarm', resp_message, 'alarm_response')
-                        except Exception as exc:
-                            log.warn("Failed to send notify response:%s", exc)
+            # Get the resource_id of the triggered alarm
+            result = self._common._perform_request(
+                url, auth_token, req_type="get")
+            alarm_details = json.loads(result.text)
+            gnocchi_rule = alarm_details['gnocchi_resources_threshold_rule']
+            resource_id = gnocchi_rule['resource_id']
 
-if aodhclient:
-    register_notifier()
+            # Process an alarm notification if resource_id is valid
+            if resource_id is not None:
+                # Get date and time for response message
+                a_date = time.strftime("%d-%m-%Y") + " " + time.strftime("%X")
+                # Try generate and send response
+                try:
+                    resp_message = self._response.generate_response(
+                        'notify_alarm', a_id=alarm_id,
+                        r_id=resource_id,
+                        sev=values['severity'], date=a_date,
+                        state=values['current'], vim_type="OpenStack")
+                    self._producer.notify_alarm(
+                        'notify_alarm', resp_message, 'alarm_response')
+                    log.info("Sent an alarm response to SO: %s", resp_message)
+                except Exception as exc:
+                    log.warn("Couldn't notify SO of the alarm: %s", exc)
+            else:
+                log.warn("No resource_id for alarm; no SO response sent.")
+        else:
+            log.warn("Authentication failure; SO notification not sent.")
+
+
+def run(server_class=HTTPServer, handler_class=NotifierHandler, port=8662):
+    """Run the webserver application to retreive alarm notifications."""
+    try:
+        server_address = ('', port)
+        httpd = server_class(server_address, handler_class)
+        print('Starting alarm notifier...')
+        log.info("Starting alarm notifier server on port: %s", port)
+        httpd.serve_forever()
+    except Exception as exc:
+        log.warn("Failed to start webserver, %s", exc)
+
+if __name__ == "__main__":
+    from sys import argv
+
+    # Runs the webserver
+    if len(argv) == 2:
+        run(port=int(argv[1]))
+    else:
+        run()

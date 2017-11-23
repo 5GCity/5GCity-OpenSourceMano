@@ -89,11 +89,17 @@ the plugins support.
 
       ::
 
-          lxc exec MON - python /root/MON/core/message_bus/common_consumer.py
+          lxc exec MON - python /root/MON/osm_mon/core/message_bus/common_consumer.py
+
+* To enable Aodh alarm notifications to be sent to SO:
+
+      ::
+
+          lxc exec MON - python /root/MON/osm_mon/plugins/OpenStack/Aodh/notifier.py
 
 CloudWatch
 ~~~~~~~~~~
-The MON container supports a CloudWatch plugin as well.
+The MON container supports a CloudWatch plugin on installation.
 
 
 Verification

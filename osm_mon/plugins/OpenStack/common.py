@@ -134,6 +134,6 @@ class Common(object):
         except Exception:
             # Log out the result of the request for debugging purpose
             log.debug(
-                'Result: %s, %d',
+                'Result: %s, %s',
                 response.status_code, response.text)
         return response

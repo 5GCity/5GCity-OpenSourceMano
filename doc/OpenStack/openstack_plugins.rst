@@ -38,7 +38,7 @@ For more information on Gnocchi please refer to the source code/documentation:
 
 For plugin specific instructions and configuration options please refer to the
 following guide:
-: `<doc/plugins/OpenStack/gnocchi_plugin_guide.rst>`
+: `<doc/OpenStack/gnocchi_plugin_guide.rst>`
 
 Aodh
 ----
@@ -54,4 +54,4 @@ code/documentation:
 
 For plugin specific instructions and configuration options please refer to the
 following guide:
-: `<doc/plugins/OpenStack/aodh_plugin_guide.rst>`
+: `<doc/OpenStack/aodh_plugin_guide.rst>`
