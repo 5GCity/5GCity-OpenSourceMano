@@ -34,6 +34,7 @@ properties([
         booleanParam(defaultValue: false, description: '', name: 'SAVE_CONTAINER_ON_FAIL'),
         booleanParam(defaultValue: false, description: '', name: 'SAVE_CONTAINER_ON_PASS'),
         booleanParam(defaultValue: false, description: '', name: 'DO_STAGE_4'),
+        booleanParam(defaultValue: false, description: '', name: 'SAVE_ARTIFACTS_OVERRIDE'),
     ])
 ])
 
@@ -50,15 +51,12 @@ node("${params.NODE}") {
     ci_helper = load "jenkins/ci-pipelines/ci_helper.groovy"
 
     def upstream_main_job = params.UPSTREAM_SUFFIX
-    def save_artifacts = false
 
     // upstream jobs always use merged artifacts
     upstream_main_job += '-merge'
     container_name_prefix = "osm-${tag_or_branch}"
     container_name = "${container_name_prefix}"
     if ( JOB_NAME.contains('merge') ) {
-        save_artifacts = true
-        println("merge job, saving artifacts")
         container_name += "-merge"
     }
     container_name += "-${BUILD_NUMBER}"
@@ -194,6 +192,7 @@ node("${params.NODE}") {
             junit '*.xml'
         }
 
+        stage_4_archive = false
         if ( params.DO_STAGE_4 ) {
             stage("stage_4") {
                 def downstream_params = [
@@ -201,13 +200,16 @@ node("${params.NODE}") {
                     string(name: 'NODE', value: NODE_NAME.split()[0]),
                 ]
                 stage_4_result = build job: "${params.DOWNSTREAM_STAGE_NAME}/${GERRIT_BRANCH}", parameters: downstream_params, propagate: false 
-               
                 currentBuild.result = stage_4_result.result
+
+                if ( stage_4_result.getResult().equals('SUCCESS') ) {
+                    stage_4_archive = true;
+                }
             }
         }
 
-        // save the artifacts of this build if this is a merge job
-        if ( save_artifacts ) {
+        // override to save the artifacts
+        if ( params.SAVE_ARTIFACTS_OVERRIDE || stage_4_archive ) {
             stage("Archive") {
                 sh "echo ${container_name} > build_version.txt"
                 archiveArtifacts artifacts: "build_version.txt", fingerprint: true
