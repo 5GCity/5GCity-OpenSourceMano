@@ -686,7 +686,9 @@ class vimconnector(vimconn.vimconnector):
                             numa_properties["vmware:latency_sensitivity_level"] = "high"
                         for numa in numas:
                             #overwrite ram and vcpus
-                            ram = numa['memory']*1024
+                            #check if key 'memory' is present in numa else use ram value at flavor
+                            if 'memory' in numa:
+                                ram = numa['memory']*1024
                             #See for reference: https://specs.openstack.org/openstack/nova-specs/specs/mitaka/implemented/virt-driver-cpu-thread-pinning.html
                             if 'paired-threads' in numa:
                                 vcpus = numa['paired-threads']*2
