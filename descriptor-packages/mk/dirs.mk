@@ -15,6 +15,7 @@
 #
 
 SUBDIRS_CLEAN = $(addsuffix .clean, $(SUBDIRS))
+SUBDIRS_TEST = $(addsuffix .test, $(SUBDIRS))
 
 .PHONY: $(SUBDIRS) $(SUBDIRS_CLEAN) clean
 
@@ -22,8 +23,13 @@ all: $(SUBDIRS)
 
 clean: $(SUBDIRS_CLEAN)
 
+test: $(SUBDIRS_TEST)
+
 $(SUBDIRS_CLEAN): %.clean:
 	@$(MAKE) --no-print-directory -C $* clean
+
+$(SUBDIRS_TEST): %.test:
+	@$(MAKE) --no-print-directory -C $* test
 
 $(SUBDIRS):
 	@$(MAKE) --no-print-directory -C $@
