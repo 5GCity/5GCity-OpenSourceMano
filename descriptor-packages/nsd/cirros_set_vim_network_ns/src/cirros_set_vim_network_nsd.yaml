@@ -1,4 +1,4 @@
-nsd:nsd-catalog:
+nsd-catalog:
     nsd:
     -   id: cirros_set_vim_network_ns
         name: cirros_set_vim_network_ns
@@ -37,7 +37,6 @@ nsd:nsd-catalog:
                 mgmt-network: 'true'
                 # vim-network-name: <update>
                 # provider-network:
-                #     overlay-type: VLAN
                 #     segmentation_id: <update>
                 vim-network-name: mgmt
                 vnfd-connection-point-ref:
@@ -45,7 +44,7 @@ nsd:nsd-catalog:
                 # member-vnf-index-ref - entry from constituent vnf
                 # vnfd-id-ref - VNFD id
                 # vnfd-connection-point-ref - connection point name in the VNFD
-                -   nsd:member-vnf-index-ref: 1
-                    nsd:vnfd-id-ref: cirros_vnfd
+                -   member-vnf-index-ref: 1
+                    vnfd-id-ref: cirros_vnfd
                     # NOTE: Validate the entry below
-                    nsd:vnfd-connection-point-ref: eth0
+                    vnfd-connection-point-ref: eth0

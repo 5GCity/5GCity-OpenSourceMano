@@ -1,39 +1,38 @@
-vnfd:vnfd-catalog:
-    vnfd:vnfd:
-    -   rw-vnfd:meta: '{"containerPositionMap":{"dns_forwarder":{"top":30,"left":260,"right":510,"bottom":85,"width":250,"height":55},"dns_forwarder/dns_forwarder-VM":{"top":130,"left":260,"right":510,"bottom":185,"width":250,"height":55}}}'
-        vnfd:connection-point:
-        -   vnfd:name: eth0
-            vnfd:type: VPORT
-        vnfd:description: Simple VNF example with a DNS forwarder
-        vnfd:id: dns_forwarder
-        vnfd:logo: dns.jpg
-        vnfd:mgmt-interface:
-            vnfd:cp: eth0
-        vnfd:name: dns_forwarder
-        vnfd:service-function-chain: UNAWARE
-        vnfd:short-name: dns_forwarder
-        vnfd:vdu:
-        -   vnfd:count: '1'
-            vnfd:description: dns_forwarder-VM
-            vnfd:interface:
-            -   vnfd:name: eth0
-                vnfd:type: EXTERNAL
-                vnfd:virtual-interface:
-                    vnfd:bandwidth: '0'
-                    vnfd:type: VIRTIO
-                    vnfd:vpci: 0000:00:0a.0
-                vnfd:external-connection-point-ref: eth0
-            vnfd:guest-epa:
-                vnfd:cpu-pinning-policy: ANY
-            vnfd:id: dns_forwarder-VM
-            vnfd:image: ubuntu/images/hvm-ssd/ubuntu-zesty-17.04-amd64-server-20170619.1
-            vnfd:cloud-init-file: cloud_init.cfg
-            vnfd:name: dns_forwarder-VM
-            vnfd:supplemental-boot-data:
-                vnfd:boot-data-drive: 'false'
-            vnfd:vm-flavor:
-                vnfd:memory-mb: '1024'
-                vnfd:storage-gb: '1'
-                vnfd:vcpu-count: '1'
-        vnfd:vendor: OSM
-        vnfd:version: '1.0'
+vnfd-catalog:
+    vnfd:
+    -   connection-point:
+        -   name: eth0
+            type: VPORT
+        description: Simple VNF example with a DNS forwarder
+        id: dns_forwarder
+        logo: dns.jpg
+        mgmt-interface:
+            cp: eth0
+        name: dns_forwarder
+        service-function-chain: UNAWARE
+        short-name: dns_forwarder
+        vdu:
+        -   count: '1'
+            description: dns_forwarder-VM
+            interface:
+            -   name: eth0
+                type: EXTERNAL
+                virtual-interface:
+                    bandwidth: '0'
+                    type: VIRTIO
+                    vpci: 0000:00:0a.0
+                external-connection-point-ref: eth0
+            guest-epa:
+                cpu-pinning-policy: ANY
+            id: dns_forwarder-VM
+            image: ubuntu/images/hvm-ssd/ubuntu-zesty-17.04-amd64-server-20170619.1
+            cloud-init-file: cloud_init.cfg
+            name: dns_forwarder-VM
+            supplemental-boot-data:
+                boot-data-drive: 'false'
+            vm-flavor:
+                memory-mb: '1024'
+                storage-gb: '1'
+                vcpu-count: '1'
+        vendor: OSM
+        version: '1.0'

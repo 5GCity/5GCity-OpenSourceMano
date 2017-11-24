@@ -1,4 +1,4 @@
-vnfd:vnfd-catalog:
+vnfd-catalog:
     vnfd:
     -   id: VyOS
         name: VyOS
@@ -8,7 +8,7 @@ vnfd:vnfd-catalog:
         mgmt-interface:
             cp: eth0
         vnf-configuration:
-            service-primitive:
+            config-primitive:
             -   name: config
                 parameter:
                 -   name: user

@@ -15,7 +15,7 @@
 #
 #
 
-vnfd:vnfd-catalog:
+vnfd-catalog:
     vnfd:
      -  id: rift_pong_vnf
         name: pong_vnf

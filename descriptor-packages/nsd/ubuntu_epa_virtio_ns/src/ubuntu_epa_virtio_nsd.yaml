@@ -1,4 +1,4 @@
-nsd:nsd-catalog:
+nsd-catalog:
     nsd:
     -   id: ubuntu_epa_virtio_ns
         name: ubuntu_epa_virtio_ns

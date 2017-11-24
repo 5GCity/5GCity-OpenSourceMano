@@ -15,7 +15,7 @@
 #
 #
 
-nsd:nsd-catalog:
+nsd-catalog:
     nsd:
      -  id: rift_ping_pong_ns
         logo: rift_logo.png

@@ -1,4 +1,4 @@
-nsd:nsd-catalog:
+nsd-catalog:
     nsd:
     -   constituent-vnfd:
         -   member-vnf-index: '1'

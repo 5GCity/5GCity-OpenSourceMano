@@ -1,4 +1,4 @@
-vnfd:vnfd-catalog:
+vnfd-catalog:
     vnfd:
     -   connection-point:
         -   name: mgmt0
@@ -17,7 +17,6 @@ vnfd:vnfd-catalog:
             name: VL12
             short-name: VL12
             type: ELAN
-            vendor: ETSI
             internal-connection-point:
             -   id-ref: 'iface11'
             -   id-ref: 'iface21'

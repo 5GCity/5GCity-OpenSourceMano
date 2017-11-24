@@ -1,19 +1,19 @@
-nsd:nsd-catalog:
-    nsd:nsd:
-    -   nsd:constituent-vnfd:
-        -   nsd:member-vnf-index: '1'
-            nsd:start-by-default: 'true'
-            nsd:vnfd-id-ref: ubuntu_1iface_cloudinit_newfile_vnfd
-        nsd:id: ubuntu_cloudinit
-        nsd:name: ubuntu_cloudinit
-        nsd:short-name: ubuntu_cloudinit
-        nsd:vld:
-        -   nsd:id: mgmt
-            nsd:mgmt-network: 'false'
-            nsd:name: mgmt
-            nsd:short-name: mgmt
+nsd-catalog:
+    nsd:
+    -   constituent-vnfd:
+        -   member-vnf-index: '1'
+            start-by-default: 'true'
+            vnfd-id-ref: ubuntu_1iface_cloudinit_newfile_vnfd
+        id: ubuntu_cloudinit
+        name: ubuntu_cloudinit
+        short-name: ubuntu_cloudinit
+        vld:
+        -   id: mgmt
+            mgmt-network: 'false'
+            name: mgmt
+            short-name: mgmt
             mgmt-network: 'true'
-            nsd:vnfd-connection-point-ref:
-            -   nsd:member-vnf-index-ref: '1'
-                nsd:vnfd-connection-point-ref: eth0
-                nsd:vnfd-id-ref: ubuntu_1iface_cloudinit_newfile_vnfd
+            vnfd-connection-point-ref:
+            -   member-vnf-index-ref: '1'
+                vnfd-connection-point-ref: eth0
+                vnfd-id-ref: ubuntu_1iface_cloudinit_newfile_vnfd

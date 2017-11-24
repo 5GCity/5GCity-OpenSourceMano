@@ -1,4 +1,4 @@
-nsd:nsd-catalog:
+nsd-catalog:
     nsd:
     -   id: ubuntu_cirros_multidisk_nsd
         name: ubuntu_cirros_multidisk_nsd

@@ -1,4 +1,4 @@
-vnfd:vnfd-catalog:
+vnfd-catalog:
     vnfd:
     -   id: ubuntu_epa_virtio_vnf
         name: ubuntu_epa_virtio_vnf

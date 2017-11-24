@@ -1,4 +1,4 @@
-vnfd:vnfd-catalog:
+vnfd-catalog:
     vnfd:
     -   id: ubuntu_cirros_multidisk_vnfd
         name: ubuntu_cirros_multidisk_vnfd

@@ -1,4 +1,4 @@
-vnfd:vnfd-catalog:
+vnfd-catalog:
     vnfd:
     -   id: ubuntu_xenial_vnfd
         name: ubuntu_xenial_vnf

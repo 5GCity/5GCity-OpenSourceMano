@@ -1,4 +1,4 @@
-vnfd:vnfd-catalog:
+vnfd-catalog:
     vnfd:
     -   connection-point:
         -   name: mgmt0
@@ -19,7 +19,6 @@ vnfd:vnfd-catalog:
             name: VL34
             short-name: VL34
             type: ELAN
-            vendor: ETSI
             internal-connection-point:
             -   id-ref: 'iface31'
             -   id-ref: 'iface41'

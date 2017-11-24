@@ -1,4 +1,4 @@
-nsd:nsd-catalog:
+nsd-catalog:
     nsd:
     -   id: cirros_2vnf_nsd
         name: cirros_2vnf_ns
@@ -30,7 +30,6 @@ nsd:nsd-catalog:
                 mgmt-network: 'true'
                 # vim-network-name: <update>
                 # provider-network:
-                #     overlay-type: VLAN
                 #     segmentation_id: <update>
                 vnfd-connection-point-ref:
                 # Specify the constituent VNFs

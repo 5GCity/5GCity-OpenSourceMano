@@ -1,4 +1,4 @@
-vnfd:vnfd-catalog:
+vnfd-catalog:
     vnfd:
     -   id: cirros_vnfd
         name: cirros_vnf
@@ -29,7 +29,7 @@ vnfd:vnfd-catalog:
                 storage-gb: 2
 
             # Image/checksum or image including the full path
-            image:     cirros034
+            image: 'cirros034'
             #checksum: 
 
             interface:

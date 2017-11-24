@@ -1,4 +1,4 @@
-nsd:nsd-catalog:
+nsd-catalog:
     nsd:
     -   id: VyOS
         name: VyOS
@@ -14,8 +14,6 @@ nsd:nsd-catalog:
             short-name: data
             type: ELAN
             vim-network-name: net-corp
-            provider-network:
-                overlay-type: VLAN
             vnfd-connection-point-ref:
             -   member-vnf-index-ref: '1'
                 vnfd-connection-point-ref: eth1
@@ -26,8 +24,6 @@ nsd:nsd-catalog:
             mgmt-network: 'true'
             type: ELAN
             vim-network-name: net-mgmtOS
-            provider-network:
-                overlay-type: VLAN
             vnfd-connection-point-ref:
             -   member-vnf-index-ref: '1'
                 vnfd-connection-point-ref: eth0

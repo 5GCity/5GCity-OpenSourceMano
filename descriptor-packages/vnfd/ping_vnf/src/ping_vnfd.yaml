@@ -15,7 +15,7 @@
 #
 #
 
-vnfd:vnfd-catalog:
+vnfd-catalog:
     vnfd:
      -  id: rift_ping_vnf
         name: ping_vnf

@@ -1,4 +1,4 @@
-nsd:nsd-catalog:
+nsd-catalog:
     nsd:
     -   id: cirros_noportsecurity_2vnf_nsd
         name: cirros_noportsecurity_2vnf_ns
@@ -30,16 +30,15 @@ nsd:nsd-catalog:
                 mgmt-network: 'true'
                 # vim-network-name: <update>
                 # provider-network:
-                #     overlay-type: VLAN
                 #     segmentation_id: <update>
                 vnfd-connection-point-ref:
                 # Specify the constituent VNFs
                 # member-vnf-index-ref - entry from constituent vnf
                 # vnfd-id-ref - VNFD id
                 # vnfd-connection-point-ref - connection point name in the VNFD
-                -   nsd:member-vnf-index-ref: 1
-                    nsd:vnfd-id-ref: cirros_noportsecurity_vnfd
-                    nsd:vnfd-connection-point-ref: eth0
-                -   nsd:member-vnf-index-ref: 2
-                    nsd:vnfd-id-ref: cirros_noportsecurity_vnfd
-                    nsd:vnfd-connection-point-ref: eth0
+                -   member-vnf-index-ref: 1
+                    vnfd-id-ref: cirros_noportsecurity_vnfd
+                    vnfd-connection-point-ref: eth0
+                -   member-vnf-index-ref: 2
+                    vnfd-id-ref: cirros_noportsecurity_vnfd
+                    vnfd-connection-point-ref: eth0

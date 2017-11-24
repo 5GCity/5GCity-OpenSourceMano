@@ -1,4 +1,4 @@
-vnfd:vnfd-catalog:
+vnfd-catalog:
     vnfd:
     -   id: ubuntu_1iface_cloudinit_newfile_vnfd
         name: ubuntu_1iface_cloudinit_newfile_vnf

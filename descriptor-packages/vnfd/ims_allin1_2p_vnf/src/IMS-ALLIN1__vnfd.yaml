@@ -1,4 +1,4 @@
-vnfd:vnfd-catalog:
+vnfd-catalog:
     vnfd:
     -   id: IMS-ALLIN1_2p
         name: IMS-ALLIN1_2p
@@ -8,7 +8,7 @@ vnfd:vnfd-catalog:
         mgmt-interface:
             cp: eth1
         vnf-configuration:
-            service-primitive:
+            config-primitive:
             -   name: config
                 parameter:
                 -   name: home_domain
@@ -16,7 +16,7 @@ vnfd:vnfd-catalog:
                     mandatory: 'true'
                     default-value: ims.com
                 -   name: password
-                    data-type: string
+                    data-type: STRING
                     mandatory: 'true'
                     default-value: cw-aio
             -   name: create-update-user
