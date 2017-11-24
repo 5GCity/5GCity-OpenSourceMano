@@ -113,6 +113,8 @@ class Ns(object):
 
             nsr['ssh-authorized-key'] = ssh_keys_format
 
+        ns_config = {}
+
         if config: 
             ns_config = yaml.load(config)
 
