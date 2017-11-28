@@ -67,19 +67,20 @@ echo "Exporting images as targz"
 TEMPDIR="$(mktemp -d -q --tmpdir "osmlxd.XXXXXX")"
 trap 'rm -rf "$TEMPDIR"' EXIT
 RELEASE_DIR="${TEMPDIR}/${RELEASE}"
+mkdir -p ${RELEASE_DIR}
 
 [ -n "$GEN_RO" ] && lxc image export ${OSM_RO_IMAGE} $RELEASE_DIR/${OSM_RO_IMAGE}
 [ -n "$GEN_VCA" ] && lxc image export ${OSM_VCA_IMAGE} $RELEASE_DIR/${OSM_VCA_IMAGE}
 [ -n "$GEN_SOUI" ] && lxc image export ${OSM_SOUI_IMAGE} $RELEASE_DIR/${OSM_SOUI_IMAGE}
 #[ -n "$GEN_MON" ] && lxc image export ${OSM_MON_IMAGE} $RELEASE_DIR/${OSM_MON_IMAGE}
-[ -n "$GEN_RO" ] && chmod +r $RELEASE_DIR/${OSM_RO_IMAGE}
-[ -n "$GEN_VCA" ] && chmod +r $RELEASE_DIR/${OSM_VCA_IMAGE}
-[ -n "$GEN_SOUI" ] && chmod +r $RELEASE_DIR/${OSM_SOUI_IMAGE}
-#[ -n "$GEN_MON" ] && chmod +r $RELEASE_DIR/${OSM_MON_IMAGE}
+[ -n "$GEN_RO" ] && chmod +r $RELEASE_DIR/${OSM_RO_IMAGE}.tar.gz
+[ -n "$GEN_VCA" ] && chmod +r $RELEASE_DIR/${OSM_VCA_IMAGE}.tar.gz
+[ -n "$GEN_SOUI" ] && chmod +r $RELEASE_DIR/${OSM_SOUI_IMAGE}.tar.gz
+#[ -n "$GEN_MON" ] && chmod +r $RELEASE_DIR/${OSM_MON_IMAGE}.tar.gz
 
 echo "Pushing images to ETSI FTP server"
 RSYNC_USER_HOST=osmusers@osm-download.etsi.org
-RSYNC_OPTIONS="--delete --password-file rsync.pass"
+RSYNC_OPTIONS="--delete --progress"
 cd $TEMPDIR && rsync -avR $RSYNC_OPTIONS $RELEASE rsync://$RSYNC_USER_HOST/repos/osm/lxd
 
 

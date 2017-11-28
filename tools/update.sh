@@ -9,7 +9,7 @@ if [ $# -ge 2 ]; then
     BRANCH=$2
 fi
 
-modules="juju-charms devops descriptor-packages openvim RO SO UI osmclient"
+modules="juju-charms devops descriptor-packages openvim RO SO UI osmclient IM N2VC MON vim-emu"
 list=""
 for i in $modules; do
     if [ "$1" == "$i" -o "$1" == "all" ]; then
