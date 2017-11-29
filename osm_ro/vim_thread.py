@@ -599,11 +599,11 @@ class vim_thread(threading.Thread):
                     if to_supersede["action"] == "FIND" and to_supersede.get("vim_id"):
                         task["vim_id"] = to_supersede["vim_id"]
                     if to_supersede["action"] == "CREATE" and to_supersede["extra"].get("created", True) and \
-                            (to_supersede.get("vim_id") or to_supersede["extra"].get("sdn_vim_id")):
+                            (to_supersede.get("vim_id") or to_supersede["extra"].get("sdn_net_id")):
                         need_delete_action = True
                         task["vim_id"] = to_supersede["vim_id"]
-                        if to_supersede["extra"].get("sdn_vim_id"):
-                            task["extra"]["sdn_vim_id"] = to_supersede["extra"]["sdn_vim_id"]
+                        if to_supersede["extra"].get("sdn_net_id"):
+                            task["extra"]["sdn_net_id"] = to_supersede["extra"]["sdn_net_id"]
                         if to_supersede["extra"].get("interfaces"):
                             task["extra"]["interfaces"] = to_supersede["extra"]["interfaces"]
                         if to_supersede["extra"].get("created_items"):
@@ -800,9 +800,9 @@ class vim_thread(threading.Thread):
         """
         vim_nets = self.vim.get_network_list(filter_param)
         if not vim_nets:
-            raise VimThreadExceptionNotFound("Network not found with this criteria: '{}'".format(filter))
+            raise VimThreadExceptionNotFound("Network not found with this criteria: '{}'".format(filter_param))
         elif len(vim_nets) > 1:
-            raise VimThreadException("More than one network found with this criteria: '{}'".format(filter))
+            raise VimThreadException("More than one network found with this criteria: '{}'".format(filter_param))
         vim_net_id = vim_nets[0]["id"]
 
         # Discover if this network is managed by a sdn controller
@@ -821,7 +821,7 @@ class vim_thread(threading.Thread):
         task["error_msg"] = None
         task["vim_id"] = vim_net_id
         instance_element_update = {"vim_net_id": vim_net_id, "created": False, "status": "BUILD",
-                                   "error_msg": None}
+                                   "error_msg": None, "sdn_net_id": sdn_net_id}
         return instance_element_update
 
     def get_net(self, task):

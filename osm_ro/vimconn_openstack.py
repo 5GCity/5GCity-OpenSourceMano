@@ -75,8 +75,8 @@ netStatus2manoFormat={'ACTIVE':'ACTIVE','PAUSED':'PAUSED','INACTIVE':'INACTIVE',
 supportedClassificationTypes = ['legacy_flow_classifier']
 
 #global var to have a timeout creating and deleting volumes
-volume_timeout = 60
-server_timeout = 300
+volume_timeout = 600
+server_timeout = 600
 
 class vimconnector(vimconn.vimconnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None,
@@ -495,8 +495,8 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             if self.api_version3 and "tenant_id" in filter_dict:
                 filter_dict['project_id'] = filter_dict.pop('tenant_id') #TODO check
-            net_dict=self.neutron.list_networks(**filter_dict)
-            net_list=net_dict["networks"]
+            net_dict = self.neutron.list_networks(**filter_dict)
+            net_list = net_dict["networks"]
             self.__net_os2mano(net_list)
             return net_list
         except (neExceptions.ConnectionFailed, ksExceptions.ClientException, neExceptions.NeutronException, ConnectionError) as e:
@@ -1033,7 +1033,7 @@ class vimconnector(vimconn.vimconnector):
                 if net.get("mac_address"):
                     port_dict["mac_address"]=net["mac_address"]
                 new_port = self.neutron.create_port({"port": port_dict })
-                created_items[("port", str(new_port["port"]["id"]))] = True
+                created_items["port:" + str(new_port["port"]["id"])] = True
                 net["mac_adress"] = new_port["port"]["mac_address"]
                 net["vim_id"] = new_port["port"]["id"]
                 # if try to use a network without subnetwork, it will return a emtpy list
@@ -1088,7 +1088,7 @@ class vimconnector(vimconn.vimconnector):
                     else:
                         volume = self.cinder.volumes.create(size=disk['size'], name=name + '_vd' +
                                     chr(base_disk_index))
-                    created_items[("volume", str(volume.id))] = True
+                    created_items["volume:" + str(volume.id)] = True
                     block_device_mapping['_vd' +  chr(base_disk_index)] = volume.id
                     base_disk_index += 1
 
@@ -1283,10 +1283,10 @@ class vimconnector(vimconn.vimconnector):
                 if not v:  # skip already deleted
                     continue
                 try:
-                    if k[0] == "port":
-                        self.neutron.delete_port(k[1])
+                    if k.startswith("port:"):
+                        self.neutron.delete_port(k.strip("port:"))
                 except Exception as e:
-                    self.logger.error("Error deleting port: " + type(e).__name__ + ": "+  str(e))
+                    self.logger.error("Error deleting port: {}: {}".format(type(e).__name__, e))
 
             # #commented because detaching the volumes makes the servers.delete not work properly ?!?
             # #dettach volumes attached
@@ -1308,13 +1308,14 @@ class vimconnector(vimconn.vimconnector):
                     if not v:  # skip already deleted
                         continue
                     try:
-                        if k[0] == "volume":
-                            if self.cinder.volumes.get(k[1]).status != 'available':
+                        if k.startswith("volume:"):
+                            volume_id = k.strip("volume:")
+                            if self.cinder.volumes.get(volume_id).status != 'available':
                                 keep_waiting = True
                             else:
-                                self.cinder.volumes.delete(k[1])
+                                self.cinder.volumes.delete(volume_id)
                     except Exception as e:
-                        self.logger.error("Error deleting volume: " + type(e).__name__ + ": " + str(e))
+                        self.logger.error("Error deleting volume: {}: {}".format(type(e).__name__, e))
                 if keep_waiting:
                     time.sleep(1)
                     elapsed_time += 1

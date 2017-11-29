@@ -4341,29 +4341,35 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
 
             #If the datacenter has a SDN controller defined and the network is of dataplane type, then create the sdn network
             if get_sdn_controller_id(mydb, datacenter) != None and (net_type == 'data' or net_type == 'ptp'):
+                #obtain datacenter_tenant_id
+                datacenter_tenant_id = mydb.get_rows(SELECT=('uuid',),
+                                                     FROM='datacenter_tenants',
+                                                     WHERE={'datacenter_id': datacenter})[0]['uuid']
                 try:
                     sdn_network = {}
                     sdn_network['vlan'] = net_vlan
                     sdn_network['type'] = net_type
                     sdn_network['name'] = net_name
+                    sdn_network['region'] = datacenter_tenant_id
                     ovim_content = ovim.new_network(sdn_network)
                 except ovimException as e:
-                    self.logger.error("ovimException creating SDN network={} ".format(
+                    logger.error("ovimException creating SDN network={} ".format(
                         sdn_network) + str(e), exc_info=True)
                     raise NfvoException("ovimException creating SDN network={} ".format(sdn_network) + str(e),
                                         HTTP_Internal_Server_Error)
 
                 # Save entry in in dabase mano_db in table instance_nets to stablish a dictionary  vim_net_id <->sdn_net_id
                 # use instance_scenario_id=None to distinguish from real instaces of nets
-                correspondence = {'instance_scenario_id': None, 'sdn_net_id': ovim_content, 'vim_net_id': content}
-                #obtain datacenter_tenant_id
-                correspondence['datacenter_tenant_id'] = mydb.get_rows(SELECT=('uuid',), FROM='datacenter_tenants', WHERE={'datacenter_id': datacenter})[0]['uuid']
-
+                correspondence = {'instance_scenario_id': None,
+                                  'sdn_net_id': ovim_content,
+                                  'vim_net_id': content,
+                                  'datacenter_tenant_id': datacenter_tenant_id
+                                  }
                 try:
                     mydb.new_row('instance_nets', correspondence, add_uuid=True)
                 except db_base_Exception as e:
-                    raise NfvoException("Error saving correspondence for VIM/SDN dataplane networks{}: ".format(correspondence) +
-                                        str(e), HTTP_Internal_Server_Error)
+                    raise NfvoException("Error saving correspondence for VIM/SDN dataplane networks{}: {}".format(
+                        correspondence, e), HTTP_Internal_Server_Error)
         elif item=="tenants":
             tenant = descriptor["tenant"]
             content = myvim.new_tenant(tenant["name"], tenant.get("description"))
