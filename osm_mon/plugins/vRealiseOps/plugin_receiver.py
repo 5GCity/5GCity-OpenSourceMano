@@ -39,6 +39,7 @@ import traceback
 import os
 from xml.etree import ElementTree as XmlElementTree
 
+schema_version = "1.0"
 req_config_params = ('vrops_site', 'vrops_user', 'vrops_password',
                     'vcloud-site','admin_username','admin_password',
                     'vcenter_ip','vcenter_port','vcenter_user','vcenter_password',
@@ -165,7 +166,7 @@ class PluginReceiver():
         """
         topic = 'alarm_response'
         msg_key = 'create_alarm_response'
-        response_msg = {"schema_version":1.0,
+        response_msg = {"schema_version":schema_version,
                          "schema_type":"create_alarm_response",
                          "alarm_create_response":
                             {"correlation_id":config_alarm_info["alarm_create_request"]["correlation_id"],
@@ -190,11 +191,12 @@ class PluginReceiver():
         """
         topic = 'alarm_response'
         msg_key = 'update_alarm_response'
-        response_msg = {"schema_version":1.0,
+        response_msg = {"schema_version":schema_version,
                          "schema_type":"update_alarm_response",
                          "alarm_update_response":
                             {"correlation_id":update_alarm_info["alarm_update_request"]["correlation_id"],
-                             "alarm_uuid":alarm_uuid,
+                             "alarm_uuid":update_alarm_info["alarm_update_request"]["alarm_uuid"] \
+                             if update_alarm_info["alarm_update_request"].get('alarm_uuid') is not None else None,
                              "status": True if alarm_uuid else False
                             }
                        }
@@ -215,11 +217,11 @@ class PluginReceiver():
         """
         topic = 'alarm_response'
         msg_key = 'delete_alarm_response'
-        response_msg = {"schema_version":1.0,
+        response_msg = {"schema_version":schema_version,
                          "schema_type":"delete_alarm_response",
                          "alarm_deletion_response":
                             {"correlation_id":delete_alarm_info["alarm_delete_request"]["correlation_id"],
-                             "alarm_uuid":alarm_uuid,
+                             "alarm_uuid":delete_alarm_info["alarm_delete_request"]["alarm_uuid"],
                              "status": True if alarm_uuid else False
                             }
                        }
@@ -252,12 +254,12 @@ class PluginReceiver():
         """
         topic = 'metric_response'
         msg_key = 'create_metric_response'
-        response_msg = {"schema_version":1.0,
+        response_msg = {"schema_version":schema_version,
                          "schema_type":"create_metric_response",
                          "correlation_id":metric_info['correlation_id'],
                          "metric_create_response":
                             {
-                             "metric_uuid":0,
+                             "metric_uuid":'0',
                              "resource_uuid":metric_info['metric_create']['resource_uuid'],
                              "status":metric_status
                             }
@@ -272,12 +274,12 @@ class PluginReceiver():
         """
         topic = 'metric_response'
         msg_key = 'update_metric_response'
-        response_msg = {"schema_version":1.0,
+        response_msg = {"schema_version":schema_version,
                         "schema_type":"metric_update_response",
                         "correlation_id":metric_info['correlation_id'],
                         "metric_update_response":
                             {
-                             "metric_uuid":0,
+                             "metric_uuid":'0',
                              "resource_uuid":metric_info['metric_create']['resource_uuid'],
                              "status":metric_status
                             }
@@ -292,13 +294,18 @@ class PluginReceiver():
         """
         topic = 'metric_response'
         msg_key = 'delete_metric_response'
-        response_msg = {"schema_version":1.0,
+        if metric_info.has_key('tenant_uuid') and metric_info['tenant_uuid'] is not None:
+            tenant_uuid = metric_info['tenant_uuid']
+        else:
+            tenant_uuid = None
+
+        response_msg = {"schema_version":schema_version,
                         "schema_type":"delete_metric_response",
                         "correlation_id":metric_info['correlation_id'],
                         "metric_name":metric_info['metric_name'],
-                        "metric_uuid":0,
+                        "metric_uuid":'0',
                         "resource_uuid":metric_info['resource_uuid'],
-                        "tenant_uuid":metric_info['tenant_uuid'],
+                        "tenant_uuid":tenant_uuid,
                         "status":False
                        }
         self.logger.info("Publishing response:\nTopic={}\nKey={}\nValue={}"\
@@ -319,10 +326,9 @@ class PluginReceiver():
         """
         topic = 'alarm_response'
         msg_key = 'list_alarm_response'
-        response_msg = {"schema_version":1.0,
+        response_msg = {"schema_version":schema_version,
                         "schema_type":"list_alarm_response",
                         "correlation_id":list_alarm_input['alarm_list_request']['correlation_id'],
-                        #"resource_uuid":list_alarm_input['alarm_list_request']['resource_uuid'],
                         "list_alarm_resp":triggered_alarm_list
                        }
         self.logger.info("Publishing response:\nTopic={}\nKey={}\nValue={}"\
@@ -376,7 +382,7 @@ class PluginReceiver():
         """
         topic = 'access_credentials'
         msg_key = 'vim_access_credentials_response'
-        response_msg = {"schema_version":1.0,
+        response_msg = {"schema_version":schema_version,
                         "schema_type":"vim_access_credentials_response",
                         "correlation_id":access_info_req['access_config']['correlation_id'],
                         "status":access_update_status
