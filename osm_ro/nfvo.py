@@ -1048,7 +1048,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                     if cp.get("id-ref") == iface.get("internal-connection-point-ref"):
                                         db_interface["net_id"] = net_id2uuid[vld.get("id")]
                                         for cp_descriptor in vnfd_descriptor["connection-point"]:
-                                            if cp_descriptor["name"] == db_interface["external_name"]:
+                                            if cp_descriptor["name"] == db_interface["internal_name"]:
                                                 break
                                         if str(cp_descriptor.get("port-security-enabled")).lower() == "false":
                                             db_interface["port_security"] = 0
@@ -1057,10 +1057,10 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                         break
                         except KeyError:
                             raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'vdu[{vdu}]':"
-                                                "'interface[{iface}]':'vdu-internal-connection-point-ref':'{cp}' is not"
+                                                "'interface[{iface}]':'internal-connection-point-ref':'{cp}' is not"
                                                 " referenced by any internal-vld".format(
                                                     vnf=vnfd_id, vdu=vdu_id, iface=iface["name"],
-                                                    cp=iface.get("vdu-internal-connection-point-ref")),
+                                                    cp=iface.get("internal-connection-point-ref")),
                                                 HTTP_Bad_Request)
                     if iface.get("position") is not None:
                         db_interface["created_at"] = int(iface.get("position")) - 1000
