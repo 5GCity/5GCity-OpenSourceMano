@@ -50,14 +50,14 @@ class KafkaProducer(object):
             broker = "localhost:9092"
 
         '''
-        If the broker URI is not set in the env, by default,
+        If the broker URI is not set in the env by default,
         localhost container is taken as the host because an instance of
         is already running.
         '''
 
         self.producer = kaf(
             key_serializer=str.encode,
-            value_serializer=lambda v: json.dumps(v).encode('ascii'),
+            value_serializer=lambda v: json.dumps(v).str.encode,
             bootstrap_servers=broker, api_version=(0, 10))
 
     def publish(self, key, value, topic=None):
