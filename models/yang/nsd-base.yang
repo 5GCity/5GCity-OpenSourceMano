@@ -175,6 +175,15 @@ module nsd-base
             "Type of the connection point.";
         type manotypes:connection-point-type;
       }
+
+      leaf floating-ip-required {
+        description
+            "Boolean parameter to indicate whether the CP must be exposed.
+             A public IP address will be allocated to this CP if exposed is true.
+             The default is false meaning a floating IP address is not required.
+             It must be explicitly asked for a floating IP address to be allocated.";
+        type boolean;
+      }
     }
 
     list scaling-group-descriptor {
