@@ -89,7 +89,7 @@ the plugins support.
 
       ::
 
-          lxc exec MON - python /root/MON/osm_mon/core/message_bus/common_consumer.py
+          lxc exec MON - python /root/MON/osm_mon/core/message_bus/common_consumer
 
 * To enable Aodh alarm notifications to be sent to SO:
 

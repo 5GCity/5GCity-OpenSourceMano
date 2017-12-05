@@ -42,7 +42,7 @@ logging.basicConfig(filename='aodh_notify.log',
                     level=logging.INFO)
 log = logging.getLogger(__name__)
 
-sys.path.insert(0, os.path.abspath('../'))
+sys.path.append("/root/MON")
 
 from osm_mon.core.message_bus.producer import KafkaProducer
 

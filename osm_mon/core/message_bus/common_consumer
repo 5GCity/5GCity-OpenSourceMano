@@ -24,7 +24,7 @@ import logging
 import sys
 import os
 
-sys.path.insert(0, os.path.abspath('../'))
+sys.path.append("/root/MON")
 
 logging.basicConfig(filename='MON_plugins.log',
                     format='%(asctime)s %(message)s',
