@@ -31,6 +31,7 @@ clean_deb:
 clean:
 	rm -rf build
 	rm -rf .build
+	find . -name '*.pyc' -delete
 
 prepare:
 	#apt-get --yes install python-stdeb python-pip libmysqlclient-dev debhelper
