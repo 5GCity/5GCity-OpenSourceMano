@@ -23,6 +23,7 @@ usage(){
     echo -e "     -u:  UI/SO (rift) IP address"
     echo -e "     -r:  RO (openmano) IP address"
     echo -e "     -v:  VCA (juju) IP address"
+    echo -e "     -m: MON IP address"
     echo -e "     -h:  show this help"
 }
 
@@ -44,6 +45,7 @@ OSM_JENKINS="$OSM_DEVOPS/jenkins"
 UI_IP=$DEFAULT_IP
 RO_IP=$DEFAULT_IP
 VCA_IP=$DEFAULT_IP
+MON_IP=$DEFAULT_IP
 
 #read input options
 while getopts ":u:r:v:h-:" o; do
@@ -86,8 +88,13 @@ done
 echo
 echo "*** Configuring iptables rules ***"
 
+<<<<<<< HEAD
 awk -v RO_IP="$RO_IP" -v VCA_IP="$VCA_IP" -v UI_IP="$UI_IP" -v openmano_ip="$RO_CONTAINER_IP" -v rift_ip="$SO_CONTAINER_IP" -v juju_ip="$VCA_CONTAINER_IP" '
 BEGIN {innat=0; innatpre=0; osmpre=0; donepre=0; innatpost=0; osmpost=0; donepost=0; innatoutput=0; osmoutput=0; doneoutput=0;}
+=======
+awk -v RO_IP="$RO_IP" -v VCA_IP="$VCA_IP" -v UI_IP="$UI_IP" -v openmano_ip="$RO_CONTAINER_IP" -v MON_IP="$MON_IP" -v rift_ip="$SO_CONTAINER_IP" -v juju_ip="$VCA_CONTAINER_IP" '
+BEGIN {innat=0; innatpre=0; osmpre=0; donepre=0; innatpost=0; osmpost=0; donepost=0}
+>>>>>>> MON Installation Changes Updated.
 /^\*nat/ {
     innat=1;
     print;

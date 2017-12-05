@@ -33,7 +33,7 @@ for i in $list; do
     rm -rf $REPO_FOLDER
 done
 
-list="descriptor-packages openvim RO SO UI"
+list="descriptor-packages openvim RO MON SO UI"
 for i in $list; do
     REPO_FOLDER="$TEMPDIR/$i"
     echo

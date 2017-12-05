@@ -48,11 +48,13 @@ function uninstall(){
     if [ $RC_CLONE ] || [ -n "$TEST_INSTALLER" ]; then
         $OSM_DEVOPS/jenkins/host/clean_container RO
         $OSM_DEVOPS/jenkins/host/clean_container VCA
+        $OSM_DEVOPS/jenkins/host/clean_container MON
         $OSM_DEVOPS/jenkins/host/clean_container SO
         #$OSM_DEVOPS/jenkins/host/clean_container UI
     else
         lxc stop RO && lxc delete RO
         lxc stop VCA && lxc delete VCA
+        lxc stop MON && lxc delete MON
         lxc stop SO-ub && lxc delete SO-ub
     fi
     echo -e "\nDeleting imported lxd images if they exist"
@@ -147,6 +149,34 @@ function update(){
         # lxc exec SO-ub -- ...
     fi
     echo
+    echo -e "Updating MON Container"
+    CONTAINER="MON"
+    MDG="MON"
+    INSTALL_FOLDER="/root/MON"
+    echo -e "     Fetching the repo"
+    lxc exec $CONTAINER -- git -C $INSTALL_FOLDER fetch --all
+    BRANCH=""
+    BRANCH=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER status -sb | head -n1 | sed -n 's/^## \(.*\).*/\1/p'|awk '{print $1}' |sed 's/\(.*\)\.\.\..*/\1/'`
+    [ -z "$BRANCH" ] && FATAL "Could not find the current branch in use in the '$MDG'"
+    CURRENT=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER status |head -n1`
+    CURRENT_COMMIT_ID=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER rev-parse HEAD`
+    echo "         FROM: $CURRENT ($CURRENT_COMMIT_ID)"
+    # COMMIT_ID either was  previously set with -b option, or is an empty string
+    CHECKOUT_ID=$COMMIT_ID
+    [ -z "$CHECKOUT_ID" ] && [ "$BRANCH" == "HEAD" ] && CHECKOUT_ID="tags/$LATEST_STABLE_DEVOPS"
+    [ -z "$CHECKOUT_ID" ] && [ "$BRANCH" != "HEAD" ] && CHECKOUT_ID="$BRANCH"
+    if [[ $CHECKOUT_ID == "tags/"* ]]; then
+        REMOTE_COMMIT_ID=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER rev-list -n 1 $CHECKOUT_ID`
+    else
+        REMOTE_COMMIT_ID=`lxc exec $CONTAINER -- git -C $INSTALL_FOLDER rev-parse origin/$CHECKOUT_ID`
+    fi
+    echo "         TO: $CHECKOUT_ID ($REMOTE_COMMIT_ID)"
+    if [ "$CURRENT_COMMIT_ID" == "$REMOTE_COMMIT_ID" ]; then
+        echo "         Nothing to be done."
+    else
+        echo "         Update required."
+    fi
+    echo
 }
 
 function so_is_up() {
@@ -186,6 +216,15 @@ function vca_is_up() {
     FATAL "OSM Failed to startup. VCA failed to startup"
 }
 
+function mon_is_up() {
+    if [[ `curl http://$RO_IP:9090/openmano/ | grep "works" | wc -l` -eq 1 ]]; then
+            echo "MON is up and running"
+            return 0
+    fi
+
+    FATAL "OSM Failed to startup. MON failed to startup"
+}
+
 function ro_is_up() {
     if [ -n "$1" ]; then
         RO_IP=$1
@@ -218,8 +257,12 @@ function configure_RO(){
     ro_is_up
 
     lxc exec RO -- openmano tenant-delete -f osm >/dev/null
+<<<<<<< HEAD
     lxc exec RO -- openmano tenant-create osm > /dev/null
     lxc exec RO -- sed -i '/export OPENMANO_TENANT=osm/d' .bashrc 
+=======
+    lxc exec RO -- sed -i '/export OPENMANO_TENANT=osm/d' .bashrc
+>>>>>>> MON Installation Changes Updated.
     lxc exec RO -- sed -i '$ i export OPENMANO_TENANT=osm' .bashrc
     lxc exec RO -- sh -c 'echo "export OPENMANO_TENANT=osm" >> .bashrc'
 }
@@ -234,6 +277,9 @@ function configure_SOUI(){
     . $OSM_DEVOPS/installers/export_ips
     JUJU_CONTROLLER_IP=`lxc exec VCA -- lxc list -c 4 |grep eth0 |awk '{print $2}'`
     RO_TENANT_ID=`lxc exec RO -- openmano tenant-list osm |awk '{print $1}'`
+
+    echo -e " Configuring MON"
+    #Information to be added about SO socket for logging
 
     echo -e "       Configuring SO"
     sudo route add -host $JUJU_CONTROLLER_IP gw $VCA_CONTAINER_IP
@@ -304,7 +350,7 @@ function configure_SOUI(){
 
     lxc exec SO-ub -- tee /etc/network/interfaces.d/60-rift.cfg <<EOF
 auto lo:1
-iface lo:1 inet static 
+iface lo:1 inet static
         address  $DEFAULT_IP
         netmask 255.255.255.255
 EOF
@@ -413,6 +459,8 @@ function install_from_lxdimages(){
     ro_is_up && track RO
     launch_container_from_lxd VCA osm-vca
     vca_is_up && track VCA
+    launch_container_from_lxd MON osm-mon
+    mon_is_up && track MON
     launch_container_from_lxd SO osm-soui
     #so_is_up && track SOUI
     track SOUI
@@ -634,7 +682,7 @@ OSM_JENKINS="$TEMPDIR/jenkins"
 
 #Installation starts here
 echo -e "\nInstalling OSM from refspec: $COMMIT_ID"
-if [ -n "$INSTALL_FROM_SOURCE" ] && [ -z "$ASSUME_YES" ]; then 
+if [ -n "$INSTALL_FROM_SOURCE" ] && [ -z "$ASSUME_YES" ]; then
     ! ask_user "The installation will take about 75-90 minutes. Continue (Y/n)? " y && echo "Cancelled!" && exit 1
 fi
 
@@ -656,6 +704,8 @@ if [ -n "$INSTALL_FROM_SOURCE" ]; then #install from source
     ro_is_up && track RO
     $OSM_DEVOPS/jenkins/host/start_build VCA || FATAL "VCA container build failed"
     vca_is_up && track VCA
+    $OSM_DEVOPS/jenkins/host/start_build MON || FATAL "MON install failed"
+    mon_is_up && track MON
     $OSM_DEVOPS/jenkins/host/start_build SO checkout $COMMIT_ID || FATAL "SO container build failed (refspec: '$COMMIT_ID')"
     $OSM_DEVOPS/jenkins/host/start_build UI checkout $COMMIT_ID || FATAL "UI container build failed (refspec: '$COMMIT_ID')"
     #so_is_up && track SOUI
@@ -669,6 +719,8 @@ else #install from binaries
     ro_is_up && track RO
     $OSM_DEVOPS/jenkins/host/start_build VCA || FATAL "VCA install failed"
     vca_is_up && track VCA
+    $OSM_DEVOPS/jenkins/host/install MON || FATAL "MON build failed"
+    mon_is_up && track MON
     $OSM_DEVOPS/jenkins/host/install SO $REPOSITORY $RELEASE $REPOSITORY_KEY $REPOSITORY_BASE || FATAL "SO install failed"
     $OSM_DEVOPS/jenkins/host/install UI $REPOSITORY $RELEASE $REPOSITORY_KEY $REPOSITORY_BASE || FATAL "UI install failed"
     #so_is_up && track SOUI

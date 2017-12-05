@@ -11,7 +11,7 @@ TAG="$1"
 TEMPDIR="$(mktemp -q -d --tmpdir "tagosm.XXXXXX")"
 trap 'rm -rf "$TEMPDIR"' EXIT
 
-list="juju-charms devops descriptor-packages openvim RO SO UI"
+list="juju-charms devops descriptor-packages openvim RO MON SO UI"
 for i in $list; do
     REPO_FOLDER="$TEMPDIR/$i"
     echo

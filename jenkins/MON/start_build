@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Copyright 2017 Intel Research and Development Ireland Limited
 # *************************************************************
 
@@ -27,7 +29,7 @@ OSM_JENKINS=$(dirname $HERE)
 . $OSM_JENKINS/common/all_funcs
 
 # SET YOU MDG repository name here
-export OSM_MDG=RO
+export OSM_MDG=MON
 OSM_load_config
 OSM_git_checkout "$@"
 python -m py_compile kafkad
@@ -37,9 +39,9 @@ service kafka start
 
 #Start VMWare install script
 INFO "Installing vROPs Web Service"
-. plugins/vRealiseOps/vROPs_Webservice/install.sh
-INFO "Startinv vrops Web Service"
-python plugins/vRealiseOps/vROPs_Webservice/vrops_webservice
+. osm_mon/plugins/vRealiseOps/vROPs_Webservice/install.sh
+INFO "Starting vrops Web Service"
+python osm_mon/plugins/vRealiseOps/vROPs_Webservice/vrops_webservice
 
 RC=$?
 INFO "done, RC=$RC"
