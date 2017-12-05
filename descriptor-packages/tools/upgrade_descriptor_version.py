@@ -205,7 +205,8 @@ if __name__=="__main__":
                             internal_interface.pop("vdu-internal-connection-point-ref")
                         interface_list.append(internal_interface)
                     error_position.pop()
-
+                    if interface_list:
+                        vdu["interface"] = interface_list
                 error_position.pop()
             error_position = []
         elif "nsd:nsd-catalog" in data or "nsd-catalog" in data:
