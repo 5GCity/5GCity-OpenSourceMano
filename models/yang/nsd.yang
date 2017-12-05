@@ -35,6 +35,10 @@ module nsd
     prefix "manotypes";
   }
 
+  import ietf-inet-types {
+    prefix "inet";
+  }
+
   revision 2017-02-28 {
     description
       "Update model to support projects.";
@@ -100,6 +104,15 @@ module nsd
           }
         }
 
+        leaf vnfd-connection-point-ref {
+          description "A reference to a connection point name";
+          type leafref {
+            path "/vnfd:vnfd-catalog/vnfd:vnfd" +
+                 "[vnfd:id = current()/../vnfd-id-ref]/" +
+                 "vnfd:connection-point/vnfd:name";
+          }
+        }
+
         leaf vnfd-id-ref {
           description
               "A reference to a VNFD";
@@ -110,14 +123,11 @@ module nsd
           }
         }
 
-        leaf vnfd-connection-point-ref {
-          description "A reference to a connection point name";
-          type leafref {
-            path "/vnfd:vnfd-catalog/vnfd:vnfd" +
-                 "[vnfd:id = current()/../vnfd-id-ref]/" +
-                 "vnfd:connection-point/vnfd:name";
-          }
+        leaf ip-address {
+          description "IP address of the connection point";
+          type inet:ip-address;
         }
+
       }
     }
   }

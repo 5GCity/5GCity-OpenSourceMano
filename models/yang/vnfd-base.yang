@@ -303,6 +303,10 @@ module vnfd-base
               path "../../../vdu/internal-connection-point/id";
             }
           }
+          leaf ip-address {
+            description "IP address of the internal connection point";
+            type inet:ip-address;
+          }
         }
 
         uses manotypes:provider-network;
