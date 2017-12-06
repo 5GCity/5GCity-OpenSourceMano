@@ -131,8 +131,16 @@ class MonPlugin():
         if not metric_key_params:
             self.logger.warn("Metric not supported: {}".format(config_dict['metric_name']))
             return None
-        #2) create symptom definition
+
+        #1.2) Check if alarm definition already exists
         vrops_alarm_name = def_a_params['vrops_alarm']+ '-' + config_dict['resource_uuid']
+        alert_def_list = self.get_alarm_defination_by_name(vrops_alarm_name)
+        if alert_def_list:
+            self.logger.warn("Alarm already exists: {}. Try updating by update_alarm_request"\
+                            .format(vrops_alarm_name))
+            return None
+
+        #2) create symptom definition
         symptom_params ={'cancel_cycles': (def_a_params['cancel_period']/300)*def_a_params['cancel_cycles'],
                         'wait_cycles': (def_a_params['period']/300)*def_a_params['evaluation'],
                         'resource_kind_key': def_a_params['resource_kind'],
@@ -152,7 +160,7 @@ class MonPlugin():
         #To Do - Get type & subtypes for all 5 alarms
         alarm_params = {'name':vrops_alarm_name,
                         'description':config_dict['description']\
-                        if config_dict['description'] is not None else config_dict['alarm_name'],
+                        if config_dict.has_key('description') and config_dict['description'] is not None else config_dict['alarm_name'],
                         'adapterKindKey':def_a_params['adapter_kind'],
                         'resourceKindKey':def_a_params['resource_kind'],
                         'waitCycles':1, 'cancelCycles':1,
@@ -725,20 +733,20 @@ class MonPlugin():
             'metric_name': Normalized name of metric (string)
             'resource_uuid': Resource UUID (string)
             'tenant_id': tenent id name in which the resource is present in string format
-            'metrics_data': Dictionary containing time_series & metric_series data.
+            'metrics_data': Dictionary containing time_series & metrics_series data.
                 'time_series': List of individual time stamp values in msec
-                'metric_series': List of individual metrics data values
+                'metrics_series': List of individual metrics data values
         Raises an exception upon error or when network is not found
         """
         return_data = {}
-        return_data['schema_version'] = 1.0
+        return_data['schema_version'] = "1.0"
         return_data['schema_type'] = 'read_metric_data_response'
         return_data['metric_name'] = metric['metric_name']
         #To do - No metric_uuid in vROPs, thus returning '0'
         return_data['metric_uuid'] = '0'
         return_data['correlation_id'] = metric['correlation_id']
         return_data['resource_uuid'] = metric['resource_uuid']
-        return_data['metrics_data'] = {'time_series':[], 'metric_series':[]}
+        return_data['metrics_data'] = {'time_series':[], 'metrics_series':[]}
         #To do - Need confirmation about uuid & id
         if 'tenant_uuid' in metric and metric['tenant_uuid'] is not None:
             return_data['tenant_uuid'] = metric['tenant_uuid']
@@ -810,7 +818,7 @@ class MonPlugin():
                                 if stat_keys == 'timestamps':
                                     metrics_data['time_series'] = stat_list_v[0]['timestamps']
                                 if stat_keys == 'data':
-                                    metrics_data['metric_series'] = stat_list_v[0]['data']
+                                    metrics_data['metrics_series'] = stat_list_v[0]['data']
 
         return_data['metrics_data'] = metrics_data
 
@@ -819,6 +827,9 @@ class MonPlugin():
     def update_alarm_configuration(self, new_alarm_config):
         """Update alarm configuration (i.e. Symptom & alarm) as per request
         """
+        if new_alarm_config.get('alarm_uuid') is None:
+            self.logger.warn("alarm_uuid is required to update an Alarm")
+            return None
         #1) Get Alarm details from it's uuid & find the symptom defination
         alarm_details_json, alarm_details = self.get_alarm_defination_details(new_alarm_config['alarm_uuid'])
         if alarm_details_json is None:
@@ -879,11 +890,49 @@ class MonPlugin():
                 alarm_details['type'] = json_data['type']
                 alarm_details['sub_type'] = json_data['subType']
                 alarm_details['symptom_definition_id'] = json_data['states'][0]['base-symptom-set']['symptomDefinitionIds'][0]
-        except exception as exp:
+        except Exception as exp:
             self.logger.warn("Exception while retriving alarm defination details: {}".format(exp))
             return None, None
 
         return json_data, alarm_details
+
+
+    def get_alarm_defination_by_name(self, alarm_name):
+        """Get alarm details based on alarm name
+        """
+        status = False
+        alert_match_list = []
+
+        if alarm_name is None:
+            self.logger.warn("get_alarm_defination_by_name: Alarm name not provided")
+            return alert_match_list
+
+        json_data = {}
+        api_url = '/suite-api/api/alertdefinitions'
+        headers = {'Accept': 'application/json'}
+
+        resp = requests.get(self.vrops_site + api_url,
+                            auth=(self.vrops_user, self.vrops_password),
+                            verify = False, headers = headers)
+
+        if resp.status_code is not 200:
+            self.logger.warn("get_alarm_defination_by_name: Error in response: {}\nResponse code:{}"\
+                    "\nResponse Content: {}".format(alarm_name, resp.status_code, resp.content))
+            return alert_match_list
+
+        try:
+            json_data = json.loads(resp.content)
+            if json_data['alertDefinitions'] is not None:
+                alerts_list = json_data['alertDefinitions']
+                alert_match_list = filter(lambda alert: alert['name'] == alarm_name, alerts_list)
+                status = False if not alert_match_list else True
+                #self.logger.debug("Found alert_match_list: {}for larm_name: {},\nstatus: {}".format(alert_match_list, alarm_name,status))
+
+            return alert_match_list
+
+        except Exception as exp:
+            self.logger.warn("Exception while searching alarm defination: {}".format(exp))
+            return alert_match_list
 
 
     def update_symptom_defination(self, symptom_uuid, new_alarm_config):
@@ -1130,7 +1179,8 @@ class MonPlugin():
         #TO Do - Need to add filtering of alarms based on Severity & alarm name
 
         triggered_alarms_list = []
-        if list_alarm_input['resource_uuid'] is None:
+        if list_alarm_input.get('resource_uuid') is None:
+            self.logger.warn("Resource UUID is required to get triggered alarms list")
             return triggered_alarms_list
 
         #1)Find vROPs resource ID using RO resource UUID

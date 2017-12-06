@@ -193,7 +193,7 @@ def notify_alarm(alarmID):
         logger.info("Alarm details: {}".format(alarm_data))
 
         #Publish Alarm details
-        kafkaMsgProducer = KafkaProducer()
+        kafkaMsgProducer = KafkaProducer("alarm_response")
         kafkaMsgProducer.publish(topic='alarm_response', key='notify_alarm', value=alarm_data)
 
         #return 201 on Success
