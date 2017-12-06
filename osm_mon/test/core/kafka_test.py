@@ -30,13 +30,12 @@ import threading
 import pytest
 from kafka import KafkaConsumer, KafkaProducer
 
-def test_end_to_end(kafka_broker):
-    connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
-    producer = KafkaProducer(bootstrap_servers=connect_str,
+def test_end_to_end():
+    producer = KafkaProducer(bootstrap_servers='localhost:9092',
                              retries=5,
                              max_block_ms=10000,
                              value_serializer=str.encode)
-    consumer = KafkaConsumer(bootstrap_servers=connect_str,
+    consumer = KafkaConsumer(bootstrap_servers='localhost:9092',
                              group_id=None,
                              consumer_timeout_ms=10000,
                              auto_offset_reset='earliest',
