@@ -57,7 +57,7 @@ class KafkaProducer(object):
 
         self.producer = kaf(
             key_serializer=str.encode,
-            value_serializer=lambda v: json.dumps(v).str.encode,
+            value_serializer=str.encode,
             bootstrap_servers=broker, api_version=(0, 10))
 
     def publish(self, key, value, topic=None):
