@@ -42,6 +42,8 @@ from osm_mon.plugins.OpenStack.Gnocchi import metrics
 from osm_mon.plugins.CloudWatch.plugin_alarm import plugin_alarms
 from osm_mon.plugins.CloudWatch.plugin_metric import plugin_metrics
 
+from osm_mon.plugins.vRealiseOps import plugin_receiver
+
 # Initialize servers
 server = {'server': 'localhost:9092'}
 
@@ -57,6 +59,9 @@ openstack_alarms = alarming.Alarming()
 # Create CloudWatch alarm and metric instances
 cloudwatch_alarms = plugin_alarms()
 cloudwatch_metrics = plugin_metrics()
+
+#Create vROps plugin_receiver class instance
+vrops_rcvr = plugin_receiver.PluginReceiver()
 
 def get_vim_type(message):
     """Get the vim type that is required by the message."""
@@ -77,7 +82,7 @@ try:
         if message.topic == "metric_request":
             # Check the vim desired by the message
             vim_type = get_vim_type(message)
-            
+
             if vim_type == "openstack":
                 log.info("This message is for the OpenStack plugin.")
                 openstack_metrics.metric_calls(
@@ -87,10 +92,11 @@ try:
                 cloudwatch_metrics.metric_calls(message)
                 log.info("This message is for the CloudWatch plugin.")
 
-            elif vim_type == "vrops":
-                log.info("This message is for the vROPs plugin.")
+            elif vim_type == "vmware":
+                log.info("This metric_request message is for the vROPs plugin.")
+                vrops_rcvr.consume(message)
 
-            else:   
+            else:
                 log.debug("vim_type is misconfigured or unsupported; %s",
                           vim_type)
 
@@ -105,8 +111,9 @@ try:
                 cloudwatch_alarms.alarm_calls(message)
                 log.info("This message is for the CloudWatch plugin.")
 
-            elif vim_type == "vrops":
-                log.info("This message is for the vROPs plugin.")
+            elif vim_type == "vmware":
+                log.info("This alarm_request message is for the vROPs plugin.")
+                vrops_rcvr.consume(message)
 
             else:
                 log.debug("vim_type is misconfigured or unsupported; %s",
@@ -123,8 +130,9 @@ try:
                 #TODO Access credentials later
                 log.info("This message is for the CloudWatch plugin.")
 
-            elif vim_type == "vrops":
-                log.info("This message is for the vROPs plugin.")
+            elif vim_type == "vmware":
+                log.info("This access_credentials message is for the vROPs plugin.")
+                vrops_rcvr.consume(message)
 
             else:
                 log.debug("vim_type is misconfigured or unsupported; %s",
