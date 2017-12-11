@@ -191,7 +191,7 @@ module mano-types
       }
     }
   }
-  
+
  grouping image-properties {
     leaf image {
       description
@@ -271,6 +271,11 @@ module mano-types
           leaf charm {
             description "Juju charm to use with the VNF or VDU.";
             type string;
+          }
+          leaf proxy {
+            description "Is this a proxy charm?";
+            type boolean;
+            default true;
           }
           uses manotypes:vca-relationships;
         }
