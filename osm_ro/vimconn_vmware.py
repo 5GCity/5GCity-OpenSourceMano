@@ -801,7 +801,7 @@ class vimconnector(vimconn.vimconnector):
         new_flavor=flavor_data
         ram = flavor_data.get(FLAVOR_RAM_KEY, 1024)
         cpu = flavor_data.get(FLAVOR_VCPUS_KEY, 1)
-        disk = flavor_data.get(FLAVOR_DISK_KEY, 1)
+        disk = flavor_data.get(FLAVOR_DISK_KEY, 0)
 
         if not isinstance(ram, int):
             raise vimconn.vimconnException("Non-integer value for ram")

@@ -714,7 +714,7 @@ class vimconnector(vimconn.vimconnector):
                 new_flavor=self.nova.flavors.create(name,
                                 ram,
                                 vcpus,
-                                flavor_data.get('disk',1),
+                                flavor_data.get('disk',0),
                                 is_public=flavor_data.get('is_public', True)
                             )
                 #add metadata

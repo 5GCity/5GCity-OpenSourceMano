@@ -621,7 +621,7 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
 
 
 def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_vim=False, return_on_error = None):
-    temp_flavor_dict= {'disk':flavor_dict.get('disk',1),
+    temp_flavor_dict= {'disk':flavor_dict.get('disk',0),
             'ram':flavor_dict.get('ram'),
             'vcpus':flavor_dict.get('vcpus'),
         }
@@ -1071,7 +1071,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     "name": get_str(vdu, "name", 250) + "-flv",
                     "vcpus": int(vdu["vm-flavor"].get("vcpu-count", 1)),
                     "ram": int(vdu["vm-flavor"].get("memory-mb", 1)),
-                    "disk": int(vdu["vm-flavor"].get("storage-gb", 1)),
+                    "disk": int(vdu["vm-flavor"].get("storage-gb", 0)),
                 }
                 # TODO revise the case of several numa-node-policy node
                 extended = {}
@@ -1120,7 +1120,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     extended_text = yaml.safe_dump(extended, default_flow_style=True, width=256)
                     db_flavor["extended"] = extended_text
                 # look if flavor exist
-                temp_flavor_dict = {'disk': db_flavor.get('disk', 1),
+                temp_flavor_dict = {'disk': db_flavor.get('disk', 0),
                                     'ram': db_flavor.get('ram'),
                                     'vcpus': db_flavor.get('vcpus'),
                                     'extended': db_flavor.get('extended')
@@ -1262,7 +1262,7 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
             myflavorDict["description"] = VNFCitem["description"]
             myflavorDict["ram"] = vnfc.get("ram", 0)
             myflavorDict["vcpus"] = vnfc.get("vcpus", 0)
-            myflavorDict["disk"] = vnfc.get("disk", 1)
+            myflavorDict["disk"] = vnfc.get("disk", 0)
             myflavorDict["extended"] = {}
 
             devices = vnfc.get("devices")
@@ -1398,7 +1398,7 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
             myflavorDict["description"] = VNFCitem["description"]
             myflavorDict["ram"] = vnfc.get("ram", 0)
             myflavorDict["vcpus"] = vnfc.get("vcpus", 0)
-            myflavorDict["disk"] = vnfc.get("disk", 1)
+            myflavorDict["disk"] = vnfc.get("disk", 0)
             myflavorDict["extended"] = {}
 
             devices = vnfc.get("devices")
