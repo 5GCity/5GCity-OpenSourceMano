@@ -31,7 +31,7 @@ import urllib
 packages = ['default-jre', 'python-all']
 for package in packages:
     subprocess.call(['apt-get', 'install', '--yes', package])
-urllib.urlretrieve("http://www-eu.apache.org/dist/kafka/0.11.0.1/kafka_2.11-0.11.0.1.tgz", filename="kafka.tgz")
+urllib.urlretrieve("http://www-eu.apache.org/dist/kafka/0.11.0.2/kafka_2.11-0.11.0.2.tgz", filename="kafka.tgz")
 os.popen("mkdir /opt/kafka && tar -xf /root/kafka.tgz -C /opt/kafka --strip-components 1")
 os.popen("sed -i 's|zookeeper.connect=localhost:2181|zookeeper.connect=SO-ub.lxd:2181 |g' /opt/kafka/config/server.properties")
 os.popen("/opt/kafka/bin/kafka-server-start.sh kafka/config/server.properties &")
