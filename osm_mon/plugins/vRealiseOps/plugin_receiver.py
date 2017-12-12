@@ -67,90 +67,81 @@ class PluginReceiver():
         """Constructor of PluginReceiver
         """
 
-        topics = ['alarm_request', 'metric_request', 'access_credentials']
 
         self.logger = logging.getLogger('PluginReceiver')
         self.logger.setLevel(logging.DEBUG)
+        set_logger()
 
-        #To Do - Add broker uri
-        broker_uri = None
-        #self.mon_plugin = MonPlugin()
-        self.consumer = vROP_KafkaConsumer(topics, broker_uri)
         #Core producer
         self.producer_alarms = KafkaProducer('alarm_response')
         self.producer_metrics = KafkaProducer('metric_response')
         self.producer_access_credentials = KafkaProducer('vim_access_credentials_response')
 
 
-    def consume(self):
+    def consume(self, message):
         """Consume the message, act on it & respond
         """
         try:
-            for message in self.consumer.vrops_consumer:
-                vim_type = None
-                self.logger.info("Message received:\nTopic={}:{}:{}:\nKey={}\nValue={}"\
-                    .format(message.topic, message.partition, message.offset, message.key, message.value))
-                message_values = json.loads(message.value)
-                if message_values.has_key('vim_type') and message_values['vim_type'] is not None:
-                    vim_type = message_values['vim_type'].lower()
-                if vim_type == 'vmware':
-                    self.logger.info("Action required for: {}".format(message.topic))
-                    if message.topic == 'alarm_request':
-                        if message.key == "create_alarm_request":
-                            config_alarm_info = json.loads(message.value)
-                            alarm_uuid = self.create_alarm(config_alarm_info['alarm_create_request'])
-                            self.logger.info("Alarm created with alarm uuid: {}".format(alarm_uuid))
-                            #Publish message using producer
-                            self.publish_create_alarm_status(alarm_uuid, config_alarm_info)
-                        elif message.key == "update_alarm_request":
-                            update_alarm_info = json.loads(message.value)
-                            alarm_uuid = self.update_alarm(update_alarm_info['alarm_update_request'])
-                            self.logger.info("Alarm defination updated : alarm uuid: {}".format(alarm_uuid))
-                            #Publish message using producer
-                            self.publish_update_alarm_status(alarm_uuid, update_alarm_info)
-                        elif message.key == "delete_alarm_request":
-                            delete_alarm_info = json.loads(message.value)
-                            alarm_uuid = self.delete_alarm(delete_alarm_info['alarm_delete_request'])
-                            self.logger.info("Alarm defination deleted : alarm uuid: {}".format(alarm_uuid))
-                            #Publish message using producer
-                            self.publish_delete_alarm_status(alarm_uuid, delete_alarm_info)
-                        elif message.key == "list_alarm_request":
-                            request_input = json.loads(message.value)
-                            triggered_alarm_list = self.list_alarms(request_input['alarm_list_request'])
-                            #Publish message using producer
-                            self.publish_list_alarm_response(triggered_alarm_list, request_input)
-                    elif message.topic == 'metric_request':
-                        if message.key == "read_metric_data_request":
-                            metric_request_info = json.loads(message.value)
-                            mon_plugin_obj = MonPlugin()
-                            metrics_data = mon_plugin_obj.get_metrics_data(metric_request_info)
-                            self.logger.info("Collected Metrics Data: {}".format(metrics_data))
-                            #Publish message using producer
-                            self.publish_metrics_data_status(metrics_data)
-                        elif message.key == "create_metric_request":
-                            metric_info = json.loads(message.value)
-                            metric_status = self.verify_metric(metric_info['metric_create'])
-                            #Publish message using producer
-                            self.publish_create_metric_response(metric_info, metric_status)
-                        elif message.key == "update_metric_request":
-                            metric_info = json.loads(message.value)
-                            metric_status = self.verify_metric(metric_info['metric_create'])
-                            #Publish message using producer
-                            self.publish_update_metric_response(metric_info, metric_status)
-                        elif message.key == "delete_metric_request":
-                            metric_info = json.loads(message.value)
-                            #Deleting Metric Data is not allowed. Publish status as False
-                            self.logger.warn("Deleting Metric is not allowed: {}".format(metric_info['metric_name']))
-                            #Publish message using producer
-                            self.publish_delete_metric_response(metric_info)
-                    elif message.topic == 'access_credentials':
-                        if message.key == "vim_access_credentials":
-                            access_info = json.loads(message.value)
-                            access_update_status = self.update_access_credentials(access_info['access_config'])
-                            self.publish_access_update_response(access_update_status, access_info)
+            self.logger.info("Message received:\nTopic={}:{}:{}:\nKey={}\nValue={}"\
+                .format(message.topic, message.partition, message.offset, message.key, message.value))
+            message_values = json.loads(message.value)
+            self.logger.info("Action required for: {}".format(message.topic))
+            if message.topic == 'alarm_request':
+                if message.key == "create_alarm_request":
+                    config_alarm_info = json.loads(message.value)
+                    alarm_uuid = self.create_alarm(config_alarm_info['alarm_create_request'])
+                    self.logger.info("Alarm created with alarm uuid: {}".format(alarm_uuid))
+                    #Publish message using producer
+                    self.publish_create_alarm_status(alarm_uuid, config_alarm_info)
+                elif message.key == "update_alarm_request":
+                    update_alarm_info = json.loads(message.value)
+                    alarm_uuid = self.update_alarm(update_alarm_info['alarm_update_request'])
+                    self.logger.info("Alarm defination updated : alarm uuid: {}".format(alarm_uuid))
+                    #Publish message using producer
+                    self.publish_update_alarm_status(alarm_uuid, update_alarm_info)
+                elif message.key == "delete_alarm_request":
+                    delete_alarm_info = json.loads(message.value)
+                    alarm_uuid = self.delete_alarm(delete_alarm_info['alarm_delete_request'])
+                    self.logger.info("Alarm defination deleted : alarm uuid: {}".format(alarm_uuid))
+                    #Publish message using producer
+                    self.publish_delete_alarm_status(alarm_uuid, delete_alarm_info)
+                elif message.key == "list_alarm_request":
+                    request_input = json.loads(message.value)
+                    triggered_alarm_list = self.list_alarms(request_input['alarm_list_request'])
+                    #Publish message using producer
+                    self.publish_list_alarm_response(triggered_alarm_list, request_input)
+            elif message.topic == 'metric_request':
+                if message.key == "read_metric_data_request":
+                    metric_request_info = json.loads(message.value)
+                    mon_plugin_obj = MonPlugin()
+                    metrics_data = mon_plugin_obj.get_metrics_data(metric_request_info)
+                    self.logger.info("Collected Metrics Data: {}".format(metrics_data))
+                    #Publish message using producer
+                    self.publish_metrics_data_status(metrics_data)
+                elif message.key == "create_metric_request":
+                    metric_info = json.loads(message.value)
+                    metric_status = self.verify_metric(metric_info['metric_create'])
+                    #Publish message using producer
+                    self.publish_create_metric_response(metric_info, metric_status)
+                elif message.key == "update_metric_request":
+                    metric_info = json.loads(message.value)
+                    metric_status = self.verify_metric(metric_info['metric_create'])
+                    #Publish message using producer
+                    self.publish_update_metric_response(metric_info, metric_status)
+                elif message.key == "delete_metric_request":
+                    metric_info = json.loads(message.value)
+                    #Deleting Metric Data is not allowed. Publish status as False
+                    self.logger.warn("Deleting Metric is not allowed: {}".format(metric_info['metric_name']))
+                    #Publish message using producer
+                    self.publish_delete_metric_response(metric_info)
+            elif message.topic == 'access_credentials':
+                if message.key == "vim_access_credentials":
+                    access_info = json.loads(message.value)
+                    access_update_status = self.update_access_credentials(access_info['access_config'])
+                    self.publish_access_update_response(access_update_status, access_info)
 
         except:
-            self.logger.error("Exception in receiver: {}".format(traceback.format_exc()))
+            self.logger.error("Exception in vROPs plugin receiver: {}".format(traceback.format_exc()))
 
 
     def create_alarm(self, config_alarm_info):
@@ -392,6 +383,7 @@ class PluginReceiver():
         #Core Add producer
         self.producer_access_credentials.publish(key=msg_key, value=json.dumps(response_msg), topic=topic)
 
+"""
 def main():
     #log.basicConfig(filename='mon_vrops_log.log',level=log.DEBUG)
     set_logger()
@@ -400,4 +392,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
+"""
