@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
+#!/bin/sh
 # Copyright 2017 Intel Research and Development Ireland Limited
 # *************************************************************
 
