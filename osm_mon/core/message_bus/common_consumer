@@ -25,7 +25,6 @@ import sys
 import os
 
 sys.path.append("/root/MON")
-sys.path.append("../../plugins/CloudWatch")
 
 logging.basicConfig(filename='MON_plugins.log',
                     format='%(asctime)s %(message)s',
@@ -40,8 +39,8 @@ from osm_mon.plugins.OpenStack.Aodh import alarming
 from osm_mon.plugins.OpenStack.common import Common
 from osm_mon.plugins.OpenStack.Gnocchi import metrics
 
-from plugin_alarm import plugin_alarms
-from plugin_metric import plugin_metrics
+from osm_mon.plugins.CloudWatch.plugin_alarm import plugin_alarms
+from osm_mon.plugins.CloudWatch.plugin_metric import plugin_metrics
 
 # Initialize servers
 server = {'server': 'localhost:9092'}

@@ -89,13 +89,13 @@ the plugins support.
 
       ::
 
-          lxc exec MON - python /root/MON/osm_mon/core/message_bus/common_consumer
+          lxc exec MON -- nohup python /root/MON/osm_mon/core/message_bus/common_consumer &
 
 * To enable Aodh alarm notifications to be sent to SO:
 
       ::
 
-          lxc exec MON - python /root/MON/osm_mon/plugins/OpenStack/Aodh/notifier.py
+          lxc exec MON - nohup python /root/MON/osm_mon/plugins/OpenStack/Aodh/notifier.py &
 
 CloudWatch
 ~~~~~~~~~~
@@ -116,3 +116,9 @@ Verification
     ::
 
         lxc exec MON -- service kafka status
+
+* To check the logs of the plugins:
+
+    ::
+
+        lxc exec MON -- tail -f /root/MON_plugins.log

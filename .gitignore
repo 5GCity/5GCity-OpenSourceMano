@@ -42,6 +42,7 @@ develop-eggs
 .installed.cfg
 lib
 lib64
+nohup.out
 
 # Installer logs
 pip-log.txt
@@ -73,4 +74,4 @@ ChangeLog
 .*.swp
 .*sw?
 .settings/
-.__pycache__/
+__pycache__/

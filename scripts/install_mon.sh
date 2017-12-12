@@ -36,5 +36,5 @@ lxc exec MON -- apt-get --yes install git python python-pip libmysqlclient-dev
 lxc exec MON -- git clone https://osm.etsi.org/gerrit/osm/MON.git
 lxc exec MON -- pip install -r /root/MON/requirements.txt
 lxc exec MON -- python /root/MON/kafkad
-lxc exec MON -- . /root/MON/scripts/kafka.sh
-lxc exec MON -- . /root/MON/osm_mon/plugins/vRealiseOps/vROPs_Webservice/install.sh
+lxc exec MON -- /bin/bash /root/MON/scripts/kafka.sh
+lxc exec MON -- /bin/bash /root/MON/osm_mon/plugins/vRealiseOps/vROPs_Webservice/install.sh
