@@ -464,6 +464,17 @@ module vnfd-base
             default "EXTERNAL";
           }
 
+          leaf mac-address {
+            description
+                "MAC address of the interface.
+                Some VNFs require a specific MAC address to be configured
+                in the interface. While this is not recommended at all in
+                NFV environments, this parameter exists to allow those
+                scenarios.
+                This parameter will be likely deprecated in the future.";
+            type string;
+          }
+
           choice connection-point-type {
             case internal {
               leaf internal-connection-point-ref {
