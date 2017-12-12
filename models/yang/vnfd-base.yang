@@ -346,6 +346,19 @@ module vnfd-base
           at the network service level to construct network services.";
 
         uses common-connection-point;
+
+        leaf internal-vld-ref {
+          description
+            "Reference to an internal VLD of the VNF. This field is
+            optional. It allows exposing an internal VLD through a
+            connection point. When building a NS, this VNF CP might be
+            connected to a NS VLD, then both VLDs (the i-VLD of the VNF and the
+            VLD of the NS) will become the same network and the IP profile will
+            be the one configured at NS level.";
+          type leafref {
+            path "../../internal-vld/id";
+          }
+        }
       }
 
       list vdu {
