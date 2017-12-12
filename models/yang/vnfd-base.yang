@@ -391,6 +391,25 @@ module vnfd-base
 
         uses manotypes:image-properties;
 
+        list alternative-images {
+          key "vim-type";
+          description
+            "List of alternative images per VIM type.
+            Different images can be used for specific types of VIMs instead
+            of the default image. This allows deployments in sites where the
+            image identifier in the VIM is given by the VIM provider and
+            cannot be modified.
+            If an alternative image is specified for a VIM type, it will prevail
+            over the default image";
+
+          leaf vim-type {
+            description "VIM type: openvim, openstack, vmware, aws, etc.";
+            type string;
+          }
+
+          uses manotypes:image-properties;
+        }
+
         container vdu-configuration {
           uses manotypes:vca-configuration;
         }

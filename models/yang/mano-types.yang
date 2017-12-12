@@ -202,6 +202,7 @@ module mano-types
              the same name as entered here.
             ";
       type string;
+      mandatory "true";
     }
 
     leaf image-checksum {
