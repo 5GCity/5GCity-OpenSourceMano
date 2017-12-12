@@ -6,6 +6,7 @@ dist
 *egg-info
 *.gz
 osm_im
+osm_im_trees
 pyangbind
 pyang
 dists
