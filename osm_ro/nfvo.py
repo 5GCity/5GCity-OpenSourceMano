@@ -1585,26 +1585,33 @@ def delete_vnf(mydb,tenant_id,vnf_id,datacenter=None,vim_tenant=None):
                 continue
             #flavor not used, must be deleted
             #delelte at VIM
-            c = mydb.get_rows(FROM='datacenters_flavors', WHERE={'flavor_id':flavor})
+            c = mydb.get_rows(FROM='datacenters_flavors', WHERE={'flavor_id': flavor})
             for flavor_vim in c:
-                if flavor_vim["datacenter_vim_id"] not in vims:   # TODO change to datacenter_tenant_id
+                if not flavor_vim['created']:  # skip this flavor because not created by openmano
                     continue
-                if flavor_vim['created']=='false': #skip this flavor because not created by openmano
+                # look for vim
+                myvim = None
+                for vim in vims.values():
+                    if vim["config"]["datacenter_tenant_id"] == flavor_vim["datacenter_vim_id"]:
+                        myvim = vim
+                        break
+                if not myvim:
                     continue
-                myvim=vims[ flavor_vim["datacenter_id"] ]
                 try:
                     myvim.delete_flavor(flavor_vim["vim_id"])
-                except vimconn.vimconnNotFoundException as e:
-                    logger.warn("VIM flavor %s not exist at datacenter %s", flavor_vim["vim_id"], flavor_vim["datacenter_id"] )
+                except vimconn.vimconnNotFoundException:
+                    logger.warn("VIM flavor %s not exist at datacenter %s", flavor_vim["vim_id"],
+                                flavor_vim["datacenter_vim_id"] )
                 except vimconn.vimconnException as e:
                     logger.error("Not possible to delete VIM flavor %s from datacenter %s: %s %s",
-                            flavor_vim["vim_id"], flavor_vim["datacenter_id"], type(e).__name__, str(e))
-                    undeletedItems.append("flavor {} from VIM {}".format(flavor_vim["vim_id"], flavor_vim["datacenter_id"] ))
-            #delete flavor from Database, using table flavors and with cascade foreign key also at datacenters_flavors
+                            flavor_vim["vim_id"], flavor_vim["datacenter_vim_id"], type(e).__name__, str(e))
+                    undeletedItems.append("flavor {} from VIM {}".format(flavor_vim["vim_id"],
+                                                                         flavor_vim["datacenter_vim_id"]))
+            # delete flavor from Database, using table flavors and with cascade foreign key also at datacenters_flavors
             mydb.delete_row_by_id('flavors', flavor)
         except db_base_Exception as e:
             logger.error("delete_vnf_error. Not possible to get flavor details and delete '%s'. %s", flavor, str(e))
-            undeletedItems.append("flavor %s" % flavor)
+            undeletedItems.append("flavor {}".format(flavor))
 
 
     for image in imageList:
