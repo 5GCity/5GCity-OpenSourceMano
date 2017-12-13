@@ -84,6 +84,17 @@ please refer to the following documentation:
 These documents will also describe what alarming and monitoring functionality
 the plugins support.
 
+The following steps will allow you to use the plugins:
+
+* Pass your openstack deployment credentials to the MON container:
+
+      ::
+
+          lxc exec MON -- export OS_AUTH_URL=<AUTH_URL>
+          lxc exec MON -- export OS_PASSWORD=<PASSWORD>
+          lxc exec MON -- export OS_TENANT_NAME=<TENANT_NAME>
+          lxc exec MON -- export OS_USERNAME=<USER_NAME>
+
 * The Gnocchi and Aodh plugins work from a common KafkaConsumer that checks for
   the appropriate topics and keys. To run this consumer:
 
