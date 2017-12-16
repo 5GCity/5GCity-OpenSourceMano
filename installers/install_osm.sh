@@ -447,7 +447,7 @@ RELEASE="-R ReleaseTHREE"
 INSTALL_FROM_LXDIMAGES=""
 LXD_REPOSITORY_BASE="https://osm-download.etsi.org/repository/osm/lxd"
 NOCONFIGURE=""
-
+RELEASE_DAILY=""
 SESSION_ID=`date +%s`
 
 while getopts ":hy-:b:r:k:u:R:l:" o; do
@@ -486,6 +486,7 @@ while getopts ":hy-:b:r:k:u:R:l:" o; do
             [ "${OPTARG}" == "lxdimages" ] && INSTALL_FROM_LXDIMAGES="y" && continue
             [ "${OPTARG}" == "noconfigure" ] && NOCONFIGURE="y" && continue
             [ "${OPTARG}" == "showopts" ] && SHOWOPTS="y" && continue
+            [ "${OPTARG}" == "daily" ] && RELEASE_DAILY="y" && continue
             echo -e "Invalid option: '--$OPTARG'\n" >&2
             usage && exit 1
             ;;
@@ -506,6 +507,8 @@ if [ -n "$SHOWOPTS" ]; then
     dump_vars
     exit 0
 fi
+
+[ -n "$RELEASE_DAILY" ] && echo -e "\nInstalling from daily build repo" && RELEASE="-R ReleaseTHREE-daily" && REPOSITORY="-r testing" && COMMIT_ID="master"
 
 # if develop, we force master
 [ -z "$COMMIT_ID" ] && [ -n "$DEVELOP" ] && COMMIT_ID="master"
@@ -542,7 +545,13 @@ LATEST_STABLE_DEVOPS=`git -C $TEMPDIR tag -l v[0-9].* | sort -V | tail -n1`
 [ -z "$COMMIT_ID" ] && [ -z "$LATEST_STABLE_DEVOPS" ] && echo "Could not find the current latest stable release" && exit 0
 echo "Latest tag in devops repo: $LATEST_STABLE_DEVOPS"
 [ -z "$COMMIT_ID" ] && [ -n "$LATEST_STABLE_DEVOPS" ] && COMMIT_ID="tags/$LATEST_STABLE_DEVOPS"
-[ -z "$TEST_INSTALLER" ] && git -C $TEMPDIR checkout tags/$LATEST_STABLE_DEVOPS
+
+if [ -n "$RELEASE_DAILY" ]; then
+    echo "Using master/HEAD devops"
+    git -C $TEMPDIR checkout master
+elif [ -z "$TEST_INSTALLER" ]; then
+    git -C $TEMPDIR checkout tags/$LATEST_STABLE_DEVOPS
+fi
 
 OSM_DEVOPS=$TEMPDIR
 OSM_JENKINS="$TEMPDIR/jenkins"
