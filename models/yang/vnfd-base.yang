@@ -62,7 +62,7 @@ module vnfd-base
     }
 
     leaf port-security-enabled {
-      description "Enables the port security for the port";
+      description "Enables the port security for the port.";
       type boolean;
     }
   }
@@ -298,11 +298,12 @@ module vnfd-base
           key "id-ref";
           description "List of internal connection points in this VLD";
           leaf id-ref {
-            description "reference to the internal connection point id";
+            description "Reference to the internal connection point id";
             type leafref {
               path "../../../vdu/internal-connection-point/id";
             }
           }
+
           leaf ip-address {
             description "IP address of the internal connection point";
             type inet:ip-address;
@@ -378,6 +379,16 @@ module vnfd-base
         leaf description {
             description "Description of the VDU.";
             type string;
+        }
+
+        leaf pdu-type {
+          description
+            "Type of PDU. If this field exists, the deployment unit must be
+            understood as a PDU, not as a VDU. This field is used to identify
+            the category of PDU instances to be used at instantiation time. For
+            the instantiation to be successful, there must be available
+            PDU instances of this type in the selected datacenter.";
+          type string;
         }
 
         leaf count {
