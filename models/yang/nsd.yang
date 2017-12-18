@@ -308,6 +308,12 @@ module nsd
 
   container nsd-catalog {
 
+    leaf schema-version {
+      description "Schema version for the NSD. If unspecified, it assumes v3.0";
+      type string;
+      default "v3.0";
+    }
+
     list nsd {
       key id;
 

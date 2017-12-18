@@ -197,6 +197,12 @@ module vnfr
 
   augment "/rw-project:project" {
     container vnfr-catalog {
+      leaf schema-version {
+        description "Schema version for the VNFR. If unspecified, it assumes v3.0";
+        type string;
+        default "v3.0";
+      }
+
       config false;
       list vnfr {
         description

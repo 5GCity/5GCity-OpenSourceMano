@@ -217,6 +217,12 @@ module nsr
         key "id";
         unique "name";
 
+        leaf schema-version {
+          description "Schema version for the NSR. If unspecified, it assumes v3.0";
+          type string;
+          default "v3.0";
+        }
+
         leaf id {
           description "Identifier for the NSR.";
           type yang:uuid;

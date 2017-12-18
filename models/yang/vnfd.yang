@@ -43,6 +43,12 @@ module vnfd
     description
       "Virtual Network Function Descriptor (VNFD).";
 
+    leaf schema-version {
+      description "Schema version for the VNFD. If unspecified, it assumes v3.0";
+      type string;
+      default "v3.0";
+    }
+
     list vnfd {
       key "id";
 
