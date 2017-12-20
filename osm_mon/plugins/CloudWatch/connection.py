@@ -49,12 +49,18 @@ class Connection():
     """Connection Establishement with AWS -- VPC/EC2/CloudWatch"""
 #-----------------------------------------------------------------------------------------------------------------------------
     def setEnvironment(self):  
+    	try:
+            """Credentials for connecting to AWS-CloudWatch""" 
+            #Reads from the environment variables
+            self.AWS_KEY = os.environ.get("AWS_ACCESS_KEY_ID")
+            self.AWS_SECRET = os.environ.get("AWS_SECRET_ACCESS_KEY")
+            self.AWS_REGION = os.environ.get("AWS_EC2_REGION","us-west-2")
 
-        """Credentials for connecting to AWS-CloudWatch""" 
-        self.AWS_KEY = os.environ.get("AWS_ACCESS_KEY_ID")
-        self.AWS_SECRET = os.environ.get("AWS_SECRET_ACCESS_KEY")
-        self.AWS_REGION = os.environ.get("AWS_EC2_REGION","us-west-2")
-        #TOPIC = 'YOUR_TOPIC'
+            #TODO Read from the cloudwatch_credentials.txt file
+            
+            return self.connection_instance()
+        except Exception as e:
+            log.error("AWS Credentials not configured, Try setting the access credentials first %s: ",str(e)) 
 #-----------------------------------------------------------------------------------------------------------------------------
     def connection_instance(self):
             try:
@@ -67,8 +73,7 @@ class Connection():
                 #EC2 Connection
                 self.ec2_conn = boto.ec2.connect_to_region(self.AWS_REGION,
                     aws_access_key_id=self.AWS_KEY,
-                    aws_secret_access_key=self.AWS_SECRET)
-               
+                    aws_secret_access_key=self.AWS_SECRET)               
                 
                 """ TODO : Required to add actions against alarms when needed """
                 #self.sns = connect_to_region(self.AWS_REGION)

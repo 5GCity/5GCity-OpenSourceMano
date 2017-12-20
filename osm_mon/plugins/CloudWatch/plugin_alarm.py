@@ -39,18 +39,9 @@ from producer import KafkaProducer
 class plugin_alarms():
     """Receives Alarm info from MetricAlarm and connects with the consumer/producer"""
     def __init__ (self): 
-        self.conn = Connection()
         self.metricAlarm = MetricAlarm()
         self.metric = Metrics()
-        self.connection()
         self.producer = KafkaProducer('')     
-#---------------------------------------------------------------------------------------------------------------------------      
-    def connection(self):
-        """Connecting instances with CloudWatch"""
-        self.conn.setEnvironment()
-        self.conn = self.conn.connection_instance()
-        self.cloudwatch_conn = self.conn['cloudwatch_connection']
-        self.ec2_conn = self.conn['ec2_connection']
 #---------------------------------------------------------------------------------------------------------------------------   
     def configure_alarm(self,alarm_info):
         alarm_id = self.metricAlarm.config_alarm(self.cloudwatch_conn,alarm_info)
@@ -73,9 +64,12 @@ class plugin_alarms():
         return self.metric.metricsData(self.cloudwatch_conn,metric_name,period,instance_id)
 #--------------------------------------------------------------------------------------------------------------------------- 
 
-    def alarm_calls(self,message):
+    def alarm_calls(self,message,aws_conn):
         """Gets the message from the common consumer"""
-        try: 
+        try:
+            self.cloudwatch_conn = aws_conn['cloudwatch_connection']
+            self.ec2_conn = aws_conn['ec2_connection'] 
+
             log.info("Action required against: %s" % (message.topic))
             alarm_info = json.loads(message.value)
 

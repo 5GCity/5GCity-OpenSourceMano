@@ -41,6 +41,8 @@ from osm_mon.plugins.OpenStack.Gnocchi import metrics
 
 from osm_mon.plugins.CloudWatch.plugin_alarm import plugin_alarms
 from osm_mon.plugins.CloudWatch.plugin_metric import plugin_metrics
+from osm_mon.plugins.CloudWatch.connection import Connection
+from osm_mon.plugins.CloudWatch.access_credentials import AccessCredentials
 
 from osm_mon.plugins.vRealiseOps import plugin_receiver
 
@@ -59,6 +61,8 @@ openstack_alarms = alarming.Alarming()
 # Create CloudWatch alarm and metric instances
 cloudwatch_alarms = plugin_alarms()
 cloudwatch_metrics = plugin_metrics()
+aws_connection = Connection()
+aws_access_credentials = AccessCredentials()
 
 #Create vROps plugin_receiver class instance
 vrops_rcvr = plugin_receiver.PluginReceiver()
@@ -89,8 +93,9 @@ try:
                     message, openstack_auth, auth_token)
 
             elif vim_type == "aws":
-                cloudwatch_metrics.metric_calls(message)
                 log.info("This message is for the CloudWatch plugin.")
+                aws_conn = aws_connection.setEnvironment()
+                cloudwatch_metrics.metric_calls(message,aws_conn)
 
             elif vim_type == "vmware":
                 log.info("This metric_request message is for the vROPs plugin.")
@@ -108,8 +113,9 @@ try:
                 openstack_alarms.alarming(message, openstack_auth, auth_token)
 
             elif vim_type == "aws":
-                cloudwatch_alarms.alarm_calls(message)
                 log.info("This message is for the CloudWatch plugin.")
+                aws_conn = aws_connection.setEnvironment()
+                cloudwatch_alarms.alarm_calls(message, aws_conn)
 
             elif vim_type == "vmware":
                 log.info("This alarm_request message is for the vROPs plugin.")
@@ -127,8 +133,8 @@ try:
                 auth_token = openstack_auth._authenticate(message=message)
 
             elif vim_type == "aws":
-                #TODO Access credentials later
                 log.info("This message is for the CloudWatch plugin.")
+                aws_access_credentials.access_credential_calls(message) 
 
             elif vim_type == "vmware":
                 log.info("This access_credentials message is for the vROPs plugin.")

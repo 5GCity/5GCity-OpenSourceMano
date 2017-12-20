@@ -38,21 +38,8 @@ import logging as log
 class plugin_metrics():
     """Receives Alarm info from MetricAlarm and connects with the consumer/producer """
     def __init__ (self): 
-        self.conn = Connection()
         self.metric = Metrics()
         self.producer = KafkaProducer('')
-        self.connection()
-#---------------------------------------------------------------------------------------------------------------------------      
-    def connection(self):
-        try:
-            """Connecting instances with CloudWatch"""
-            self.conn.setEnvironment()
-            self.conn = self.conn.connection_instance()
-            self.cloudwatch_conn = self.conn['cloudwatch_connection']
-            self.ec2_conn = self.conn['ec2_connection']
-
-        except Exception as e:
-            log.error("Failed to Connect with AWS %s: " + str(e))
 #---------------------------------------------------------------------------------------------------------------------------   
     def create_metric_request(self,metric_info):
         '''Comaptible API using normalized parameters'''
@@ -81,7 +68,7 @@ class plugin_metrics():
         return data_resp
 #--------------------------------------------------------------------------------------------------------------------------- 
 
-    def metric_calls(self,message):
+    def metric_calls(self,message,aws_conn):
         '''Consumer will consume the message from SO,
         1) parse the message and trigger the methods ac
         cording to keys and topics provided in request.
@@ -93,6 +80,9 @@ class plugin_metrics():
         '''
         
         try:
+            self.cloudwatch_conn = aws_conn['cloudwatch_connection']
+            self.ec2_conn = aws_conn['ec2_connection']
+
             metric_info = json.loads(message.value)
             metric_response = dict()
 
