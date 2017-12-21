@@ -212,9 +212,10 @@ function configure_RO(){
     ro_is_up
 
     lxc exec RO -- openmano tenant-delete -f osm >/dev/null
+    lxc exec RO -- openmano tenant-create osm > /dev/null
     lxc exec RO -- sed -i '/export OPENMANO_TENANT=osm/d' .bashrc 
     lxc exec RO -- sed -i '$ i export OPENMANO_TENANT=osm' .bashrc
-    #lxc exec RO -- sh -c 'echo "export OPENMANO_TENANT=osm" >> .bashrc'
+    lxc exec RO -- sh -c 'echo "export OPENMANO_TENANT=osm" >> .bashrc'
 }
 
 function configure_VCA(){
@@ -226,7 +227,7 @@ function configure_VCA(){
 function configure_SOUI(){
     . $OSM_DEVOPS/installers/export_ips
     JUJU_CONTROLLER_IP=`lxc exec VCA -- lxc list -c 4 |grep eth0 |awk '{print $2}'`
-    RO_TENANT_ID=`lxc exec RO -- openmano tenant-create osm |awk '{print $1}'`
+    RO_TENANT_ID=`lxc exec RO -- openmano tenant-list osm |awk '{print $1}'`
 
     echo -e "       Configuring SO"
     sudo route add -host $JUJU_CONTROLLER_IP gw $VCA_CONTAINER_IP
