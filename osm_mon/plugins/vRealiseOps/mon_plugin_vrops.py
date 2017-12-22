@@ -252,45 +252,42 @@ class MonPlugin():
 
         try:
             api_url = '/suite-api/api/symptomdefinitions'
-            headers = {'Content-Type': 'application/xml'}
-            data = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-                        <ops:symptom-definition cancelCycles="{0:s}" waitCycles="{1:s}"
-                            resourceKindKey="{2:s}" adapterKindKey="{3:s}"
-                            xmlns:xs="http://www.w3.org/2001/XMLSchema"
-                            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                            xmlns:ops="http://webservice.vmware.com/vRealizeOpsMgr/1.0/">
-                            <ops:name>{4:s}</ops:name>
-                            <ops:state severity="{5:s}">
-                                <ops:condition xsi:type="ops:htCondition">
-                                    <ops:key>{6:s}</ops:key>
-                                    <ops:operator>{7:s}</ops:operator>
-                                    <ops:value>{8:s}</ops:value>
-                                    <ops:valueType>NUMERIC</ops:valueType>
-                                    <ops:instanced>false</ops:instanced>
-                                    <ops:thresholdType>STATIC</ops:thresholdType>
-                                </ops:condition>
-                            </ops:state>
-                        </ops:symptom-definition>"""\
-                        .format(str(symptom_params['cancel_cycles']),str(symptom_params['wait_cycles']),
-                                symptom_params['resource_kind_key'], symptom_params['adapter_kind_key'],
-                                symptom_params['symptom_name'],symptom_params['severity'],
-                                symptom_params['metric_key'],symptom_params['operation'],
-                                str(symptom_params['threshold_value']))
+            headers = {'Content-Type': 'application/json','Accept': 'application/json'}
+            data = {
+                        "id": None,
+                        "name": symptom_params['symptom_name'],
+                        "adapterKindKey": symptom_params['adapter_kind_key'],
+                        "resourceKindKey": symptom_params['resource_kind_key'],
+                        "waitCycles": symptom_params['wait_cycles'],
+                        "cancelCycles": symptom_params['cancel_cycles'],
+                        "state": {
+                            "severity": symptom_params['severity'],
+                            "condition": {
+                                "type": "CONDITION_HT",
+                                "key": symptom_params['metric_key'],
+                                "operator": symptom_params['operation'],
+                                "value": symptom_params['threshold_value'],
+                                "valueType": "NUMERIC",
+                                "instanced": False,
+                                "thresholdType": "STATIC"
+                            }
+                        }
+                    }
 
             resp = requests.post(self.vrops_site + api_url,
                                  auth=(self.vrops_user, self.vrops_password),
                                  headers=headers,
                                  verify = False,
-                                 data=data)
+                                 data=json.dumps(data))
 
             if resp.status_code != 201:
                 self.logger.warn("Failed to create Symptom definition: {}, response {}"\
                         .format(symptom_params['symptom_name'], resp.content))
                 return None
 
-            symptom_xmlroot = XmlElementTree.fromstring(resp.content)
-            if symptom_xmlroot is not None and 'id' in symptom_xmlroot.attrib:
-                symptom_id = symptom_xmlroot.attrib['id']
+            resp_data = json.loads(resp.content)
+            if resp_data.get('id') is not None:
+                symptom_id = resp_data['id']
 
             return symptom_id
 
@@ -322,57 +319,49 @@ class MonPlugin():
 
         try:
             api_url = '/suite-api/api/alertdefinitions'
-            headers = {'Content-Type': 'application/xml'}
-            data = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-                        <ops:alert-definition xmlns:xs="http://www.w3.org/2001/XMLSchema"
-                            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                            xmlns:ops="http://webservice.vmware.com/vRealizeOpsMgr/1.0/">
-                            <ops:name>{0:s}</ops:name>
-                            <ops:description>{1:s}</ops:description>
-                            <ops:adapterKindKey>{2:s}</ops:adapterKindKey>
-                            <ops:resourceKindKey>{3:s}</ops:resourceKindKey>
-                            <ops:waitCycles>1</ops:waitCycles>
-                            <ops:cancelCycles>1</ops:cancelCycles>
-                            <ops:type>{4:s}</ops:type>
-                            <ops:subType>{5:s}</ops:subType>
-                            <ops:states>
-                                <ops:state severity="{6:s}">
-                                    <ops:symptom-set>
-                                        <ops:symptomDefinitionIds>
-                                            <ops:symptomDefinitionId>{7:s}</ops:symptomDefinitionId>
-                                        </ops:symptomDefinitionIds>
-                                        <ops:relation>SELF</ops:relation>
-                                        <ops:aggregation>ALL</ops:aggregation>
-                                        <ops:symptomSetOperator>AND</ops:symptomSetOperator>
-                                    </ops:symptom-set>
-                                    <ops:impact>
-                                        <ops:impactType>BADGE</ops:impactType>
-                                        <ops:detail>{8:s}</ops:detail>
-                                    </ops:impact>
-                                </ops:state>
-                            </ops:states>
-                        </ops:alert-definition>"""\
-                        .format(alarm_params['name'],alarm_params['description'],
-                                alarm_params['adapterKindKey'],alarm_params['resourceKindKey'],
-                                str(alarm_params['type']),str(alarm_params['subType']),
-                                alarm_params['severity'],alarm_params['symptomDefinitionId'],
-                                alarm_params['impact'])
+            headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+            data = {
+                        "name": alarm_params['name'],
+                        "description": alarm_params['description'],
+                        "adapterKindKey": alarm_params['adapterKindKey'],
+                        "resourceKindKey": alarm_params['resourceKindKey'],
+                        "waitCycles": 1,
+                        "cancelCycles": 1,
+                        "type": alarm_params['type'],
+                        "subType": alarm_params['subType'],
+                        "states": [
+                            {
+                                "severity": alarm_params['severity'],
+                                "base-symptom-set":
+                                    {
+                                        "type": "SYMPTOM_SET",
+                                        "relation": "SELF",
+                                        "aggregation": "ALL",
+                                        "symptomSetOperator": "AND",
+                                        "symptomDefinitionIds": [alarm_params['symptomDefinitionId']]
+                                    },
+                                "impact": {
+                                    "impactType": "BADGE",
+                                    "detail": alarm_params['impact']
+                                }
+                            }
+                        ]
+                    }
 
             resp = requests.post(self.vrops_site + api_url,
                                  auth=(self.vrops_user, self.vrops_password),
                                  headers=headers,
                                  verify = False,
-                                 data=data)
+                                 data=json.dumps(data))
 
             if resp.status_code != 201:
                 self.logger.warn("Failed to create Alarm definition: {}, response {}"\
                         .format(alarm_params['name'], resp.content))
                 return None
 
-            alarm_xmlroot = XmlElementTree.fromstring(resp.content)
-            for child in alarm_xmlroot:
-                if child.tag.split("}")[1] == 'id':
-                    alarm_uuid = child.text
+            resp_data = json.loads(resp.content)
+            if resp_data.get('id') is not None:
+                alarm_uuid = resp_data['id']
 
             return alarm_uuid
 
@@ -403,26 +392,35 @@ class MonPlugin():
             cert = load_certificate(FILETYPE_PEM, cert_file_string)
             certificate = cert.digest("sha1")
             api_url = '/suite-api/api/alertplugins'
-            headers = {'Content-Type': 'application/xml'}
-            data =   """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-                        <ops:notification-plugin version="0" xmlns:xs="http://www.w3.org/2001/XMLSchema"
-                            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                            xmlns:ops="http://webservice.vmware.com/vRealizeOpsMgr/1.0/">
-                            <ops:pluginTypeId>RestPlugin</ops:pluginTypeId>
-                            <ops:name>{0:s}</ops:name>
-                            <ops:configValues>
-                                <ops:configValue name="Url">{1:s}</ops:configValue>
-                                <ops:configValue name="Content-type">application/json</ops:configValue>
-                                <ops:configValue name="Certificate">{2:s}</ops:configValue>
-                                <ops:configValue name="ConnectionCount">20</ops:configValue>
-                            </ops:configValues>
-                        </ops:notification-plugin>""".format(plugin_name, webhook_url, certificate)
+            headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+            data = {
+                        "pluginTypeId": "RestPlugin",
+                        "name": plugin_name,
+                        "configValues": [
+                            {
+                                "name": "Url",
+                                "value": webhook_url
+                            },
+                            {
+                                "name": "Content-type",
+                                "value": "application/json"
+                            },
+                            {
+                                "name": "Certificate",
+                                "value": certificate
+                            },
+                            {
+                                "name": "ConnectionCount",
+                                "value": "20"
+                            }
+                        ]
+                    }
 
             resp = requests.post(self.vrops_site + api_url,
                                  auth=(self.vrops_user, self.vrops_password),
                                  headers=headers,
                                  verify = False,
-                                 data=data)
+                                 data=json.dumps(data))
 
             if resp.status_code is not 201:
                 self.logger.warn("Failed to create REST Plugin: {} for url: {}, \nresponse code: {},"\
@@ -430,11 +428,9 @@ class MonPlugin():
                             resp.status_code, resp.content))
                 return None
 
-            plugin_xmlroot = XmlElementTree.fromstring(resp.content)
-            if plugin_xmlroot is not None:
-                for child in plugin_xmlroot:
-                    if child.tag.split("}")[1] == 'pluginId':
-                        plugin_id = plugin_xmlroot.find('{http://webservice.vmware.com/vRealizeOpsMgr/1.0/}pluginId').text
+            resp_data = json.loads(resp.content)
+            if resp_data.get('pluginId') is not None:
+                plugin_id = resp_data['pluginId']
 
             if plugin_id is None:
                 self.logger.warn("Failed to get REST Plugin ID for {}, url: {}".format(plugin_name, webhook_url))
@@ -456,8 +452,7 @@ class MonPlugin():
         plugin_id = None
         #Find the REST Plugin id details for - MON_module_REST_Plugin
         api_url = '/suite-api/api/alertplugins'
-        headers = {'Accept': 'application/xml'}
-        namespace = {'params':"http://webservice.vmware.com/vRealizeOpsMgr/1.0/"}
+        headers = {'Accept': 'application/json'}
 
         resp = requests.get(self.vrops_site + api_url,
                             auth=(self.vrops_user, self.vrops_password),
@@ -469,15 +464,14 @@ class MonPlugin():
             return None
 
         # Look for specific plugin & parse pluginId for 'MON_module_REST_Plugin'
-        xmlroot_resp = XmlElementTree.fromstring(resp.content)
-        for notify_plugin in xmlroot_resp.findall('params:notification-plugin',namespace):
-            if notify_plugin.find('params:name',namespace) is not None and\
-                notify_plugin.find('params:pluginId',namespace) is not None:
-                if notify_plugin.find('params:name',namespace).text == plugin_name:
-                    plugin_id = notify_plugin.find('params:pluginId',namespace).text
+        plugins_list = json.loads(resp.content)
+        if plugins_list.get('notificationPluginInstances') is not None:
+            for notify_plugin in plugins_list['notificationPluginInstances']:
+                if notify_plugin.get('name') is not None and notify_plugin['name'] == plugin_name:
+                    plugin_id = notify_plugin.get('pluginId')
 
         if plugin_id is None:
-            self.logger.warn("REST plugin {} not found".format('MON_module_REST_Plugin'))
+            self.logger.warn("REST plugin {} not found".format(plugin_name))
             return None
         else:
             self.logger.info("Found REST Plugin: {}".format(plugin_name))
@@ -538,27 +532,24 @@ class MonPlugin():
 
         #2) Create Alarm notification rule
         api_url = '/suite-api/api/notifications/rules'
-        headers = {'Content-Type': 'application/xml'}
-        data = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-                    <ops:notification-rule xmlns:xs="http://www.w3.org/2001/XMLSchema"
-                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                        xmlns:ops="http://webservice.vmware.com/vRealizeOpsMgr/1.0/">
-                        <ops:name>{0:s}</ops:name>
-                        <ops:pluginId>{1:s}</ops:pluginId>
-                        <ops:resourceFilter resourceId="{2:s}">
-                            <ops:matchResourceIdOnly>true</ops:matchResourceIdOnly>
-                        </ops:resourceFilter>
-                        <ops:alertDefinitionIdFilters>
-                            <ops:values>{3:s}</ops:values>
-                        </ops:alertDefinitionIdFilters>
-                    </ops:notification-rule>"""\
-                    .format(notification_name, plugin_id, resource_id, alarm_id)
+        headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+        data = {
+                    "name" : notification_name,
+                    "pluginId" : plugin_id,
+                    "resourceFilter": {
+                        "matchResourceIdOnly": True,
+                        "resourceId": resource_id
+                        },
+                    "alertDefinitionIdFilters" : {
+                    "values" : [ alarm_id ]
+                    }
+                }
 
         resp = requests.post(self.vrops_site + api_url,
                              auth=(self.vrops_user, self.vrops_password),
                              headers=headers,
                              verify = False,
-                             data=data)
+                             data=json.dumps(data))
 
         if resp.status_code is not 201:
             self.logger.warn("Failed to create Alarm notification rule {} for {} alarm."\
@@ -567,9 +558,9 @@ class MonPlugin():
             return None
 
         #parse notification id from response
-        xmlroot_resp = XmlElementTree.fromstring(resp.content)
-        if xmlroot_resp is not None and 'id' in xmlroot_resp.attrib:
-            notification_id = xmlroot_resp.attrib.get('id')
+        resp_data = json.loads(resp.content)
+        if resp_data.get('id') is not None:
+            notification_id = resp_data['id']
 
         self.logger.info("Created Alarm notification rule {} for {} alarm.".format(notification_name, alarm_name))
         return notification_id
@@ -687,37 +678,42 @@ class MonPlugin():
         if vm_moref_id is None:
             return None
 
-        api_url = '/suite-api/api/resources'
-        headers = {'Accept': 'application/xml'}
-        namespace = {'params':"http://webservice.vmware.com/vRealizeOpsMgr/1.0/"}
+        api_url = '/suite-api/api/resources?resourceKind=VirtualMachine'
+        headers = {'Accept': 'application/json'}
 
         resp = requests.get(self.vrops_site + api_url,
                             auth=(self.vrops_user, self.vrops_password),
                             verify = False, headers = headers)
 
         if resp.status_code is not 200:
-            self.logger.warn("Failed to get resource details from vROPs for {}\nResponse code:{}\nResponse Content: {}"\
-                    .format(vm_moref_id, resp.status_code, resp.content))
+            self.logger.warn("Failed to get resource details from vROPs for {}"\
+                             "\nResponse code:{}\nResponse Content: {}"\
+                             .format(vm_moref_id, resp.status_code, resp.content))
             return None
 
+        vm_resource_id = None
         try:
-            xmlroot_respond = XmlElementTree.fromstring(resp.content)
-            for resource in xmlroot_respond.findall('params:resource',namespace):
-                if resource is not None:
-                    resource_key = resource.find('params:resourceKey',namespace)
-                    if resource_key is not None:
-                        if resource_key.find('params:adapterKindKey',namespace).text == 'VMWARE' and \
-                        resource_key.find('params:resourceKindKey',namespace).text == 'VirtualMachine':
-                            for child in resource_key:
-                                if child.tag.split('}')[1]=='resourceIdentifiers':
-                                    resourceIdentifiers = child
-                                    for r_id in resourceIdentifiers:
-                                        if r_id.find('params:value',namespace).text == vm_moref_id:
-                                            self.logger.info("Found Resource ID : {} in vROPs for {}"\
-                                                    .format(resource.attrib['identifier'], vm_moref_id))
-                                            return resource.attrib['identifier']
+            resp_data = json.loads(resp.content)
+            if resp_data.get('resourceList') is not None:
+                resource_list = resp_data.get('resourceList')
+                for resource in resource_list:
+                    if resource.get('resourceKey') is not None:
+                        resource_details = resource['resourceKey']
+                        if resource_details.get('resourceIdentifiers') is not None:
+                            resource_identifiers = resource_details['resourceIdentifiers']
+                            for resource_identifier in resource_identifiers:
+                                if resource_identifier['identifierType']['name']=='VMEntityObjectID':
+                                    if resource_identifier.get('value') is not None and \
+                                        resource_identifier['value']==vm_moref_id:
+                                        vm_resource_id = resource['identifier']
+                                        self.logger.info("Found VM resource ID: {} for vm_moref_id: {}"\
+                                                         .format(vm_resource_id, vm_moref_id))
+
         except Exception as exp:
-            self.logger.warn("Error in parsing {}\n{}".format(exp, traceback.format_exc()))
+            self.logger.warn("get_vm_resource_id: Error in parsing {}\n{}"\
+                             .format(exp, traceback.format_exc()))
+
+        return vm_resource_id
 
 
     def get_metrics_data(self, metric={}):
@@ -770,12 +766,12 @@ class MonPlugin():
         #2.a) Find vm_moref_id from vApp uuid in vCD
         vm_moref_id = self.get_vm_moref_id(metric['resource_uuid'])
         if vm_moref_id is None:
-            self.logger.warn("Failed to find vm morefid for vApp in vCD: {}".format(config_dict['resource_uuid']))
+            self.logger.warn("Failed to find vm morefid for vApp in vCD: {}".format(metric['resource_uuid']))
             return return_data
         #2.b) Based on vm_moref_id, find VM's corresponding resource_id in vROPs to set notification
         resource_id = self.get_vm_resource_id(vm_moref_id)
         if resource_id is None:
-            self.logger.warn("Failed to find resource in vROPs: {}".format(config_dict['resource_uuid']))
+            self.logger.warn("Failed to find resource in vROPs: {}".format(metric['resource_uuid']))
             return return_data
 
         #3) Calculate begin & end time for period & period unit
@@ -1029,13 +1025,13 @@ class MonPlugin():
                              data=data)
 
         if resp.status_code != 200:
-            self.logger.warn("Failed to create Symptom definition: {}, response code {}, response content: {}"\
-                    .format(symptom_uuid, resp.status_code, resp.content))
+            self.logger.warn("Failed to update Alarm definition: {}, response code {}, response content: {}"\
+                    .format(alarm_details_json['id'], resp.status_code, resp.content))
             return None
         else:
             parsed_alarm_details = json.loads(resp.content)
             alarm_def_uuid = parsed_alarm_details['id'].split('-', 1)[1]
-            self.logger.info("Successfully updated Alarm defination: {}".format(alarm_def_uuid))
+            self.logger.info("Successfully updated Alarm definition: {}".format(alarm_def_uuid))
             return alarm_def_uuid
 
     def delete_alarm_configuration(self, delete_alarm_req_dict):
@@ -1044,17 +1040,17 @@ class MonPlugin():
         if delete_alarm_req_dict['alarm_uuid'] is None:
             self.logger.info("delete_alarm_configuration: Alarm UUID not provided")
             return None
-        #1)Get alarm & symptom defination details
+        #1)Get alarm & symptom definition details
         alarm_details_json, alarm_details = self.get_alarm_defination_details(delete_alarm_req_dict['alarm_uuid'])
         if alarm_details is None or alarm_details_json is None:
             return None
 
-        #2) Delete alarm notfication
+        #2) Delete alarm notification
         rule_id = self.delete_notification_rule(alarm_details['alarm_name'])
         if rule_id is None:
             return None
 
-        #3) Delete alarm configuraion
+        #3) Delete alarm configuration
         alarm_id = self.delete_alarm_defination(alarm_details['alarm_id'])
         if alarm_id is None:
             return None
@@ -1099,7 +1095,7 @@ class MonPlugin():
 
         if resp.status_code is not 200:
             self.logger.warn("Failed to get notification rules details for {}"\
-                    .format(delete_alarm_req_dict['alarm_name']))
+                    .format(alarm_name))
             return None
 
         notifications = json.loads(resp.content)
@@ -1220,8 +1216,8 @@ class MonPlugin():
                             verify = False, headers = headers)
 
         if resp.status_code is not 200:
-            self.logger.warn("Failed to get notification rules details for {}"\
-                    .format(delete_alarm_req_dict['alarm_name']))
+            self.logger.warn("Failed to get triggered alarms for {}"\
+                    .format(ro_resource_uuid))
             return None
 
         all_alerts = json.loads(resp.content)
