@@ -399,6 +399,43 @@ function install_from_lxdimages(){
     track SOUI
 }
 
+function install_docker_ce() {
+    # installs and configures Docker CE
+    echo "Installing Docker CE ..."
+    sudo apt-get install apt-transport-https ca-certificates software-properties-common
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+    sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    sudo apt-get -qq update
+    sudo apt-get install docker-ce
+    # user management
+    echo "Adding user to group 'docker'"
+    sudo groupadd docker
+    sudo usermod -aG docker $USER
+    echo "... Docker CE installation done"
+}
+
+function install_vimemu() {
+    # install Docker
+    install_docker_ce
+    # clone vim-emu repository (attention: branch is currently master only)
+    echo "Cloning vim-emu repository ..."
+    git clone https://osm.etsi.org/gerrit/osm/vim-emu.git
+    # build vim-emu docker
+    echo "Building vim-emu Docker container..."
+    docker build -t vim-emu-img -f vim-emu/Dockerfile vim-emu/
+    # start vim-emu container as daemon
+    echo "Starting vim-emu Docker container 'vim-emu' ..."
+    docker run --name vim-emu -t -d --rm --privileged --pid='host' -v /var/run/docker.sock:/var/run/docker.sock vim-emu-img python examples/osm_default_daemon_topology_2_pop.py
+    echo "Waiting for 'vim-emu' container to start ..."
+    sleep 5
+    export VIMEMU_HOSTNAME=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' vim-emu)
+    echo "vim-emu running at $VIMEMU_HOSTNAME ..."
+    echo -e "You might be interested in adding the following env variables to your .bashrc file:"
+    echo "     export VIMEMU_HOSTNAME=${VIMEMU_HOSTNAME}"
+    echo -e "\nTo add the emulated VIM to OSM you should do:"
+    echo "     osm vim-create --name emu-vim1 --user username --password password --auth_url http://$VIM_EMU_IP:6001/v2.0 --tenant tenantName --account_type openstack"
+}
+
 function dump_vars(){
     echo "DEVELOP=$DEVELOP"
     echo "INSTALL_FROM_SOURCE=$INSTALL_FROM_SOURCE"
@@ -407,6 +444,7 @@ function dump_vars(){
     echo "UPDATE=$UPDATE"
     echo "RECONFIGURE=$RECONFIGURE"
     echo "TEST_INSTALLER=$TEST_INSTALLER"
+    echo "INSTALL_VIMEMU=$INSTALL_VIMEMU"
     echo "INSTALL_LXD=$INSTALL_LXD"
     echo "INSTALL_FROM_LXDIMAGES=$INSTALL_FROM_LXDIMAGES"
     echo "LXD_REPOSITORY_BASE=$LXD_REPOSITORY_BASE"
@@ -444,6 +482,7 @@ COMMIT_ID=""
 ASSUME_YES=""
 INSTALL_FROM_SOURCE=""
 RELEASE="-R ReleaseTHREE"
+INSTALL_VIMEMU=""
 INSTALL_FROM_LXDIMAGES=""
 LXD_REPOSITORY_BASE="https://osm-download.etsi.org/repository/osm/lxd"
 NOCONFIGURE=""
@@ -484,6 +523,7 @@ while getopts ":hy-:b:r:k:u:R:l:" o; do
             [ "${OPTARG}" == "test" ] && TEST_INSTALLER="y" && continue
             [ "${OPTARG}" == "lxdinstall" ] && INSTALL_LXD="y" && continue
             [ "${OPTARG}" == "lxdimages" ] && INSTALL_FROM_LXDIMAGES="y" && continue
+            [ "${OPTARG}" == "vimemu" ] && INSTALL_VIMEMU="y" && continue
             [ "${OPTARG}" == "noconfigure" ] && NOCONFIGURE="y" && continue
             [ "${OPTARG}" == "showopts" ] && SHOWOPTS="y" && continue
             [ "${OPTARG}" == "daily" ] && RELEASE_DAILY="y" && continue
@@ -613,6 +653,12 @@ fi
 
 #Install osmclient
 [ -z "$NOCONFIGURE" ] && install_osmclient
+
+#Install vim-emu (optional)
+if [ -n "$INSTALL_VIMEMU" ]; then
+    echo -e "\nInstalling vim-emu ..."
+    install_vimemu
+fi
 
 wget -q -O- https://osm-download.etsi.org/ftp/osm-3.0-three/README2.txt &> /dev/null
 track end
