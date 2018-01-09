@@ -82,8 +82,8 @@ package:
 	tox -e build
 
 pyangbind: pyang
-	git clone https://github.com/robshakir/pyangbind
-	cd pyangbind; python setup.py --command-packages=stdeb.command bdist_deb; cd ..
+	git clone https://github.com/alf-tierno/pyangbind
+	cd pyangbind; git checkout issue151; python setup.py --command-packages=stdeb.command bdist_deb; cd ..
 	mkdir -p deb_dist
 	cp pyangbind/deb_dist/*.deb deb_dist
 
