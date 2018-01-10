@@ -33,7 +33,9 @@ from metric_alarms import MetricAlarm
 from metrics import Metrics
 sys.path.append("../../core/message_bus")
 from producer import KafkaProducer
-import logging as log
+import logging
+
+log = logging.getLogger(__name__)
 
 class plugin_metrics():
     """Receives Alarm info from MetricAlarm and connects with the consumer/producer """
@@ -69,15 +71,7 @@ class plugin_metrics():
 #--------------------------------------------------------------------------------------------------------------------------- 
 
     def metric_calls(self,message,aws_conn):
-        '''Consumer will consume the message from SO,
-        1) parse the message and trigger the methods ac
-        cording to keys and topics provided in request.
-
-        2) The response from plugin is saved in json format.
-
-        3) The producer object then calls the producer response
-        methods to send the response back to message bus
-        '''
+        """Gets the message from the common consumer"""
         
         try:
             self.cloudwatch_conn = aws_conn['cloudwatch_connection']

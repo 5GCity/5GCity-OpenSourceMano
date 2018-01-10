@@ -30,11 +30,12 @@ import re
 import datetime
 import random
 import json
-import logging as log
+import logging
 from random import randint
 from operator import itemgetter
 from connection import Connection
 
+log = logging.getLogger(__name__)
 
 try:
     import boto
