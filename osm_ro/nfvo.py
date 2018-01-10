@@ -392,7 +392,7 @@ def rollback(mydb,  vims, rollback_list):
                     mydb.delete_row(FROM="datacenters_images", WHERE={"datacenter_vim_id": vim["id"], "vim_id":item["uuid"]})
                 elif item["what"]=="flavor":
                     vim.delete_flavor(item["uuid"])
-                    mydb.delete_row(FROM="datacenters_flavors", WHERE={"datacenter_id": vim["id"], "vim_id":item["uuid"]})
+                    mydb.delete_row(FROM="datacenters_flavors", WHERE={"datacenter_vim_id": vim["id"], "vim_id":item["uuid"]})
                 elif item["what"]=="network":
                     vim.delete_network(item["uuid"])
                 elif item["what"]=="vm":
@@ -828,7 +828,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
     try:
         myvnfd = vnfd_catalog.vnfd()
         try:
-            pybindJSONDecoder.load_ietf_json(vnf_descriptor, None, None, obj=myvnfd)
+            pybindJSONDecoder.load_ietf_json(vnf_descriptor, None, None, obj=myvnfd, path_helper=True)
         except Exception as e:
             raise NfvoException("Error. Invalid VNF descriptor format " + str(e), HTTP_Bad_Request)
         db_vnfs = []

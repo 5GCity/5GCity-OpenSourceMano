@@ -48,8 +48,8 @@ import osm_ro
 
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ = "$26-aug-2014 11:09:29$"
-__version__ = "0.5.46-r556"
-version_date = "Dec 2017"
+__version__ = "0.5.47-r557"
+version_date = "Jan 2018"
 database_version = 27      # expected database schema version
 
 
@@ -60,9 +60,10 @@ global logger
 class LoadConfigurationException(Exception):
     pass
 
+
 def load_configuration(configuration_file):
-    default_tokens = {'http_port':9090,
-                      'http_host':'localhost',
+    default_tokens = {'http_port': 9090,
+                      'http_host': 'localhost',
                       'http_console_proxy': True,
                       'http_console_host': None,
                       'log_level': 'DEBUG',

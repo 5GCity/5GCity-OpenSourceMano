@@ -1283,8 +1283,9 @@ class vimconnector(vimconn.vimconnector):
                 if not v:  # skip already deleted
                     continue
                 try:
-                    if k.startswith("port:"):
-                        self.neutron.delete_port(k.strip("port:"))
+                    k_item, _, k_id = k.partition(":")
+                    if k_item == "port":
+                        self.neutron.delete_port(k_id)
                 except Exception as e:
                     self.logger.error("Error deleting port: {}: {}".format(type(e).__name__, e))
 
@@ -1308,12 +1309,12 @@ class vimconnector(vimconn.vimconnector):
                     if not v:  # skip already deleted
                         continue
                     try:
-                        if k.startswith("volume:"):
-                            volume_id = k.strip("volume:")
-                            if self.cinder.volumes.get(volume_id).status != 'available':
+                        k_item, _, k_id = k.partition(":")
+                        if k_item == "volume":
+                            if self.cinder.volumes.get(k_id).status != 'available':
                                 keep_waiting = True
                             else:
-                                self.cinder.volumes.delete(volume_id)
+                                self.cinder.volumes.delete(k_id)
                     except Exception as e:
                         self.logger.error("Error deleting volume: {}: {}".format(type(e).__name__, e))
                 if keep_waiting:
