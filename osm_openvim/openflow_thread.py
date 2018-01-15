@@ -111,7 +111,13 @@ class openflow_thread(threading.Thread):
             self.logger.setLevel(getattr(logging, debug))
         self.queueLock = threading.Lock()
         self.taskQueue = Queue.Queue(2000)
-        
+
+    @staticmethod
+    def _format_error_msg(error_text, max_length=1024):
+        if error_text and len(error_text) >= max_length:
+            return error_text[:max_length//2-3] + " ... " + error_text[-max_length//2+3:]
+        return error_text
+
     def insert_task(self, task, *aditional):
         try:
             self.queueLock.acquire()
@@ -139,10 +145,10 @@ class openflow_thread(threading.Thread):
                     continue
 
                 if task[0] == 'update-net':
-                    r,c = self.update_of_flows(task[1])
+                    r, c = self.update_of_flows(task[1])
                     # update database status
                     if r<0:
-                        UPDATE={'status':'ERROR', 'last_error': str(c)}
+                        UPDATE={'status':'ERROR', 'last_error': self._format_error_msg(str(c), 255)}
                         self.logger.error("processing task 'update-net' %s: %s", str(task[1]), c)
                         self.set_openflow_controller_status(OFC_STATUS_ERROR, "Error updating net {}".format(task[1]))
                     else:
@@ -588,7 +594,7 @@ class openflow_thread(threading.Thread):
 
         ofc = {}
         ofc['status'] = status
-        ofc['last_error'] = error_text
+        ofc['last_error'] = self._format_error_msg(error_text, 255)
         self.db_lock.acquire()
         result, content = self.db.update_rows('ofcs', ofc, WHERE={'uuid': self.of_uuid}, log=False)
         self.db_lock.release()
