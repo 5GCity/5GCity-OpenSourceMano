@@ -3761,7 +3761,7 @@ def new_datacenter(mydb, datacenter_descriptor):
     except (IOError, ImportError):
         # if module_info and module_info[0]:
         #    file.close(module_info[0])
-        raise NfvoException("Incorrect datacenter type '{}'. Plugin '{}'.py not installed".format(datacenter_type, module), HTTP_Bad_Request)
+        raise NfvoException("Incorrect datacenter type '{}'. Plugin '{}.py' not installed".format(datacenter_type, module), HTTP_Bad_Request)
 
     datacenter_id = mydb.new_row("datacenters", datacenter_descriptor, add_uuid=True, confidential_data=True)
     return datacenter_id
