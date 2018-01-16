@@ -59,7 +59,7 @@ class TestClass(object):
         assert not osm.get_api().vim.delete(vim_name)
 
     @pytest.mark.vmware
-    @pytest.mark.smoke
+    #@pytest.mark.smoke
     def test_add_vim_account_vmware(self,osm,vmware,cleanup_test_add_vim_account):
         os_access = {}
         vim_name = 'helloworld-vmware'
@@ -81,7 +81,7 @@ class TestClass(object):
 
         assert not osm.get_api().vim.delete(vim_name)
 
-    @pytest.mark.smoke
+    #@pytest.mark.smoke
     def test_add_multiple_accounts(self,osm,cleanup_test_add_vim_account):
         os_access = {}
         vims = [ {'name': 'testvim1', 'vim-type': 'openstack'}, {'name': 'testvim2','vim-type': 'vmware'} ]
