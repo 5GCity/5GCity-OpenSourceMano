@@ -2791,10 +2791,6 @@ def create_instance(mydb, tenant_id, instance_dict):
 
         # 0.1 parse cloud-config parameters
         cloud_config = unify_cloud_config(instance_dict.get("cloud-config"), scenarioDict.get("cloud-config"))
-        # We add the RO key to cloud_config
-        if tenant[0].get('RO_pub_key'):
-            RO_key = {"key-pairs": [tenant[0]['RO_pub_key']]}
-            cloud_config = unify_cloud_config(cloud_config, RO_key)
 
         # 0.2 merge instance information into scenario
         # Ideally, the operation should be as simple as: update(scenarioDict,instance_dict)
@@ -3021,6 +3017,10 @@ def create_instance(mydb, tenant_id, instance_dict):
         # myvim.new_vminstance(self,vimURI,tenant_id,name,description,image_id,flavor_id,net_dict)
         sce_vnf_list = sorted(scenarioDict['vnfs'], key=lambda k: k['name']) 
         for sce_vnf in sce_vnf_list:
+            ssh_access = None
+            if sce_vnf.get('mgmt_access'):
+                mgmt_access = yaml.load(sce_vnf['mgmt_access'])
+                ssh_access = mgmt_access['config-access']['ssh-access']
             vnf_availability_zones = []
             for vm in sce_vnf['vms']:
                 vm_av = vm.get('availability_zone')
@@ -3170,10 +3170,15 @@ def create_instance(mydb, tenant_id, instance_dict):
                 # print "networks", yaml.safe_dump(myVMDict['networks'], indent=4, default_flow_style=False)
                 # print "interfaces", yaml.safe_dump(vm['interfaces'], indent=4, default_flow_style=False)
                 # print ">>>>>>>>>>>>>>>>>>>>>>>>>>>"
+
+                # We add the RO key to cloud_config if vnf will need ssh access
+                cloud_config_vm = cloud_config
+                if ssh_access and ssh_access['required'] and ssh_access['default-user'] and tenant[0].get('RO_pub_key'):
+                    RO_key = {"key-pairs": [tenant[0]['RO_pub_key']]}
+                    cloud_config_vm = unify_cloud_config(cloud_config_vm, RO_key)
                 if vm.get("boot_data"):
-                    cloud_config_vm = unify_cloud_config(vm["boot_data"], cloud_config)
-                else:
-                    cloud_config_vm = cloud_config
+                    cloud_config_vm = unify_cloud_config(vm["boot_data"], cloud_config_vm)
+
                 if myVMDict.get('availability_zone'):
                     av_index = vnf_availability_zones.index(myVMDict['availability_zone'])
                 else:
