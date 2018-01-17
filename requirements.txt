@@ -12,7 +12,7 @@ python-keystoneclient
 python-glanceclient
 python-neutronclient
 python-cinderclient
-pyvcloud
+pyvcloud==18.2.2
 pyvmomi
 progressbar
 prettytable
