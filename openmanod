@@ -36,7 +36,7 @@ import time
 import sys
 import getopt
 import yaml
-import os.path
+from os import getenv as os_getenv, path as os_path
 from jsonschema import validate as js_v, exceptions as js_e
 import logging
 import logging.handlers as log_handlers
@@ -48,7 +48,7 @@ import osm_ro
 
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ = "$26-aug-2014 11:09:29$"
-__version__ = "0.5.50-r560"
+__version__ = "0.5.51-r561"
 version_date = "Jan 2018"
 database_version = 27      # expected database schema version
 
@@ -127,15 +127,15 @@ def console_port_iterator():
 
 def usage():
     print("Usage: ", sys.argv[0], "[options]")
-    print( "      -v|--version: prints current version")
-    print( "      -c|--config [configuration_file]: loads the configuration file (default: openmanod.cfg)")
-    print( "      -h|--help: shows this help")
-    print( "      -p|--port [port_number]: changes port number and overrides the port number in the configuration file (default: 9090)")
-    print( "      -P|--adminport [port_number]: changes admin port number and overrides the port number in the configuration file (default: 9095)")
-    #print( "      -V|--vnf-repository: changes the path of the vnf-repository and overrides the path in the configuration file")
-    print( "      --log-socket-host HOST: send logs to this host")
-    print( "      --log-socket-port PORT: send logs using this port (default: 9022)")
-    print( "      --log-file FILE: send logs to this file")
+    print("      -v|--version: prints current version")
+    print("      -c|--config [configuration_file]: loads the configuration file (default: openmanod.cfg)")
+    print("      -h|--help: shows this help")
+    print("      -p|--port [port_number]: changes port number and overrides the port number in the configuration file (default: 9090)")
+    print("      -P|--adminport [port_number]: changes admin port number and overrides the port number in the configuration file (default: 9095)")
+    # print( "      -V|--vnf-repository: changes the path of the vnf-repository and overrides the path in the configuration file")
+    print("      --log-socket-host HOST: send logs to this host")
+    print("      --log-socket-port PORT: send logs using this port (default: 9022)")
+    print("      --log-file FILE: send logs to this file")
     return
 
 
@@ -154,6 +154,18 @@ def set_logging_file(log_file):
 
 
 if __name__=="__main__":
+    env_config = {
+        'db_host': 'RO_DB_HOST',
+        'db_name': 'RO_DB_NAME',
+        'db_user': 'RO_DB_USER',
+        'db_passwd': 'RO_DB_PASSWORD',
+        'db_ovim_host': 'RO_DB_OVIM_HOST',
+        'db_ovim_name': 'RO_DB_OVIM_NAME',
+        'db_ovim_user': 'RO_DB_OVIM_USER',
+        'db_ovim_passwd': 'RO_DB_OVIM_PASSWORD',
+        'db_port': 'RO_DB_PORT',
+        'db_port': 'RO_DB_PORT',
+    }
     # Configure logging step 1
     hostname = socket.gethostname()
     # streamformat = "%(levelname)s (%(module)s:%(lineno)d) %(message)s"
@@ -211,7 +223,7 @@ if __name__=="__main__":
         global_config["version"] = __version__
         global_config["version_date"] = version_date
         #print global_config
-        # Override parameters obtained by command line
+        # Override parameters obtained by command line on ENV
         if port:
             global_config['http_port'] = port
         if port_admin:
@@ -220,6 +232,13 @@ if __name__=="__main__":
             global_config['log_socket_host'] = log_socket_host
         if log_socket_port:
             global_config['log_socket_port'] = log_socket_port
+
+        # override with ENV
+        for config_key, env_var in env_config.items():
+            if os_getenv(env_var):
+                global_config[config_key] = os_getenv(env_var)
+
+
 #         if vnf_repository is not None:
 #             global_config['vnf_repository'] = vnf_repository
 #         else:
@@ -286,7 +305,7 @@ if __name__=="__main__":
         mydb = nfvo_db.nfvo_db();
         mydb.connect(global_config['db_host'], global_config['db_user'], global_config['db_passwd'], global_config['db_name'])
         db_path = osm_ro.__path__[0] + "/database_utils"
-        if not os.path.exists(db_path + "/migrate_mano_db.sh"):
+        if not os_path.exists(db_path + "/migrate_mano_db.sh"):
             db_path = osm_ro.__path__[0] + "/../database_utils"
         try:
             r = mydb.get_db_version()
