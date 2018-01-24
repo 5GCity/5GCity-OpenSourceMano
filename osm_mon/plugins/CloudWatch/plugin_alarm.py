@@ -28,13 +28,15 @@ __date__   = "18-September-2017"
 
 import sys
 import json
-import logging as log
+import logging
 from jsmin import jsmin
 from connection import Connection
 from metric_alarms import MetricAlarm
 from metrics import Metrics
 sys.path.append("../../core/message_bus")
 from producer import KafkaProducer
+
+log = logging.getLogger(__name__)
 
 class plugin_alarms():
     """Receives Alarm info from MetricAlarm and connects with the consumer/producer"""

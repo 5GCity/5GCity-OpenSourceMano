@@ -29,7 +29,7 @@ __date__   = "18-Sept-2017"
 import sys
 import datetime
 import json
-import logging as log
+import logging
 
 try:
     import boto
@@ -40,7 +40,7 @@ try:
 except:
     exit("Boto not avialable. Try activating your virtualenv OR `pip install boto`")
 
-
+log = logging.getLogger(__name__)
 
 class Metrics():
 

@@ -31,13 +31,13 @@ import sys
 import json
 import logging
 
-logging.basicConfig(filename='MON_plugins.log',
-                    format='%(asctime)s %(message)s',
-                    datefmt='%m/%d/%Y %I:%M:%S %p', filemode='a',
-                    level=logging.INFO)
 log = logging.getLogger(__name__)
 
 class AccessCredentials():
+
+    def logtest(self):
+        log.info("Access credentials sourced for CloudWatch MON plugin")
+
 
     def access_credential_calls(self,message):  
         try:   
@@ -64,3 +64,4 @@ class AccessCredentials():
 
         except Exception as e:
                 log.error("Access credentials not provided correctly: %s", str(e))
+
