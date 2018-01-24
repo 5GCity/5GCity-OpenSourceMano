@@ -30,6 +30,7 @@ function usage(){
     echo -e "                     ..."
     echo -e "     --lxdimages:    download lxd images from OSM repository instead of creating them from scratch"
     echo -e "     -l <lxd_repo>:  use specified repository url for lxd images"
+    echo -e "     --vimemu:       additionally fetch, build, and deploy the VIM emulator as a docker container"
     echo -e "     --develop:      (deprecated, use '-b master') install OSM from source code using the master branch"
 #    echo -e "     --reconfigure:  reconfigure the modules (DO NOT change NAT rules)"
     echo -e "     --nat:          install only NAT rules"
@@ -430,10 +431,13 @@ function install_vimemu() {
     sleep 5
     export VIMEMU_HOSTNAME=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' vim-emu)
     echo "vim-emu running at $VIMEMU_HOSTNAME ..."
-    echo -e "You might be interested in adding the following env variables to your .bashrc file:"
+    echo -e "You might be interested in adding the following OSM client env variables to your .bashrc file:"
+    echo "     export OSM_HOSTNAME=${OSM_HOSTNAME}"
+    echo "     export OSM_RO_HOSTNAME=${OSM_RO_HOSTNAME}"
+    echo -e "You might be interested in adding the following vim-emu env variables to your .bashrc file:"
     echo "     export VIMEMU_HOSTNAME=${VIMEMU_HOSTNAME}"
     echo -e "\nTo add the emulated VIM to OSM you should do:"
-    echo "     osm vim-create --name emu-vim1 --user username --password password --auth_url http://$VIM_EMU_IP:6001/v2.0 --tenant tenantName --account_type openstack"
+    echo "     osm vim-create --name emu-vim1 --user username --password password --auth_url http://$VIMEMU_HOSTNAME:6001/v2.0 --tenant tenantName --account_type openstack"
 }
 
 function dump_vars(){
