@@ -3019,8 +3019,7 @@ def create_instance(mydb, tenant_id, instance_dict):
         for sce_vnf in sce_vnf_list:
             ssh_access = None
             if sce_vnf.get('mgmt_access'):
-                mgmt_access = yaml.load(sce_vnf['mgmt_access'])
-                ssh_access = mgmt_access['config-access']['ssh-access']
+                ssh_access = sce_vnf['mgmt_access'].get('config-access', {}).get('ssh-access')
             vnf_availability_zones = []
             for vm in sce_vnf['vms']:
                 vm_av = vm.get('availability_zone')

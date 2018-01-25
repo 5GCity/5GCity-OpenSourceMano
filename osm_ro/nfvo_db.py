@@ -936,7 +936,7 @@ class nfvo_db(db_base.db_base):
                     
                     # instance_vnfs
                     cmd = "SELECT iv.uuid as uuid, iv.vnf_id as vnf_id, sv.name as vnf_name, sce_vnf_id, datacenter_id"\
-                                " ,datacenter_tenant_id, v.mgmt_access "\
+                                " ,datacenter_tenant_id, v.mgmt_access, sv.member_vnf_index "\
                             " FROM instance_vnfs as iv left join sce_vnfs as sv "\
                                 "on iv.sce_vnf_id=sv.uuid join vnfs as v on iv.vnf_id=v.uuid" \
                             " WHERE iv.instance_scenario_id='{}'" \
