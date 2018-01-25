@@ -1684,7 +1684,11 @@ class vimconnector(vimconn.vimconnector):
                         if 'type' in net and net['type'] not in type_list:
                             # fetching nic type from vnf
                             if 'model' in net:
-                                nic_type = net['model']
+                                if net['model'].lower() == 'virtio':
+                                    nic_type = 'VMXNET3'
+                                else:
+                                    nic_type = net['model']
+
                                 self.logger.info("new_vminstance(): adding network adapter "\
                                                           "to a network {}".format(nets[0].name))
                                 self.add_network_adapter_to_vms(vapp, nets[0].name,
@@ -4018,39 +4022,31 @@ class vimconnector(vimconn.vimconnector):
                 return if True
         """
         try:
-            vm_moref_id , vm_vcenter_host , vm_vcenter_username, vm_vcenter_port = self.get_vcenter_info_rest(vmuuid)
-            if vm_moref_id and vm_vcenter_host and vm_vcenter_username:
-                context = None
-                if hasattr(ssl, '_create_unverified_context'):
-                    context = ssl._create_unverified_context()
-                    vcenter_conect = SmartConnect(host=vm_vcenter_host, user=vm_vcenter_username,
-                                  pwd=self.passwd, port=int(vm_vcenter_port),
-                                  sslContext=context)
-                    atexit.register(Disconnect, vcenter_conect)
-                    content = vcenter_conect.RetrieveContent()
+            vcenter_conect, content = self.get_vcenter_content()
+            vm_moref_id = self.get_vm_moref_id(vmuuid)
 
-                    host_obj, vm_obj = self.get_vm_obj(content ,vm_moref_id)
-                    if vm_obj:
-                        config_spec = vim.vm.ConfigSpec()
-                        config_spec.extraConfig = []
-                        opt = vim.option.OptionValue()
-                        opt.key = 'numa.nodeAffinity'
-                        opt.value = str(paired_threads_id)
-                        config_spec.extraConfig.append(opt)
-                        task = vm_obj.ReconfigVM_Task(config_spec)
-                        if task:
-                            result = self.wait_for_vcenter_task(task, vcenter_conect)
-                            extra_config = vm_obj.config.extraConfig
-                            flag = False
-                            for opts in extra_config:
-                                if 'numa.nodeAffinity' in opts.key:
-                                    flag = True
-                                    self.logger.info("set_numa_affinity: Sucessfully assign numa affinity "\
-                                                             "value {} for vm {}".format(opt.value, vm_obj))
-                            if flag:
-                                return
-                    else:
-                        self.logger.error("set_numa_affinity: Failed to assign numa affinity")
+            host_obj, vm_obj = self.get_vm_obj(content ,vm_moref_id)
+            if vm_obj:
+                config_spec = vim.vm.ConfigSpec()
+                config_spec.extraConfig = []
+                opt = vim.option.OptionValue()
+                opt.key = 'numa.nodeAffinity'
+                opt.value = str(paired_threads_id)
+                config_spec.extraConfig.append(opt)
+                task = vm_obj.ReconfigVM_Task(config_spec)
+                if task:
+                    result = self.wait_for_vcenter_task(task, vcenter_conect)
+                    extra_config = vm_obj.config.extraConfig
+                    flag = False
+                    for opts in extra_config:
+                        if 'numa.nodeAffinity' in opts.key:
+                            flag = True
+                            self.logger.info("set_numa_affinity: Sucessfully assign numa affinity "\
+                                                     "value {} for vm {}".format(opt.value, vm_obj))
+                        if flag:
+                            return
+            else:
+                self.logger.error("set_numa_affinity: Failed to assign numa affinity")
         except Exception as exp:
             self.logger.error("set_numa_affinity : exception occurred while setting numa affinity "\
                                                        "for VM {} : {}".format(vm_obj, vm_moref_id))
