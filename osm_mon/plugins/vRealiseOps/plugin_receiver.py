@@ -27,16 +27,16 @@ responds using producer for vROPs
 """
 
 import sys
-from mon_plugin_vrops import MonPlugin
-from kafka_consumer_vrops import vROP_KafkaConsumer
-#Core producer
-sys.path.append("../../core/message_bus")
-from producer import KafkaProducer
-#from core.message_bus.producer import KafkaProducer
+import os
 import json
 import logging
 import traceback
-import os
+from mon_plugin_vrops import MonPlugin
+from kafka_consumer_vrops import vROP_KafkaConsumer
+#Core producer
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..'))
+from osm_mon.core.message_bus.producer import KafkaProducer
+#from core.message_bus.producer import KafkaProducer
 from xml.etree import ElementTree as XmlElementTree
 
 schema_version = "1.0"
