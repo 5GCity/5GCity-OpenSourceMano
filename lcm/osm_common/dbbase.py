@@ -3,8 +3,10 @@
 class DbException(Exception):
 
     def __init__(self, message, http_code=404):
+        # TODO change to http.HTTPStatus instead of int that allows .value and .name
         self.http_code = http_code
         Exception.__init__(self, message)
+
 
 class dbbase(object):
 
@@ -31,5 +33,3 @@ class dbbase(object):
 
     def del_one(self, table, filter={}, fail_on_empty=True):
         pass
-
-
