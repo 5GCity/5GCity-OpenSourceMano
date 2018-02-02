@@ -29,6 +29,11 @@ OS_USERNAME ?=
 OS_PASSWORD_NAME ?=
 OS_PROJECT_NAME ?=
 VIM_CONFIG ?=
+VCD_AUTH_URL ?=
+VCD_USERNAME ?=
+VCD_PASSWORD ?=
+VCD_TENANT_NAME ?=
+VCD_ORGANIZATION ?=
 
 TOPDIR=$(shell readlink -f .|sed -e 's/systest.*//')
 
@@ -59,8 +64,24 @@ endif
 
 ifdef VIM_CONFIG
     OPTION_VIM_CONFIG=--vim-config "$(VIM_CONFIG)"
-else
 endif
+
+ifdef VCD_AUTH_URL
+    OPTION_VCD_AUTH_URL=--vcd-url $(VCD_AUTH_URL)
+endif
+ifdef VCD_USERNAME
+    OPTION_VCD_USERNAME=--vcd-username $(VCD_USERNAME)
+endif
+ifdef VCD_PASSWORD
+    OPTION_VCD_PASSWORD=--vcd-password $(VCD_PASSWORD)
+endif
+ifdef VCD_TENANT_NAME
+    OPTION_VCD_TENANT_NAME=--vcd-tenant-name $(VCD_TENANT_NAME)
+endif
+ifdef VCD_ORGANIZATION
+    OPTION_VCD_ORGANIZATION=--vcd-org $(VCD_ORGANIZATION)
+endif
+
 
 DESCRIPTOR_DIR ?= $(TOPDIR)/descriptor-packages
 
@@ -94,7 +115,14 @@ check_openstack_env:
 	$(call check_env_var,OS_PASSWORD)
 	$(call check_env_var,OS_PROJECT_NAME)
 
-.PHONY: check_openstack_env check_OSM_HOSTNAME
+check_vcd_env:
+	$(call check_env_var,VCD_AUTH_URL)
+	$(call check_env_var,VCD_USERNAME)
+	$(call check_env_var,VCD_PASSWORD)
+	$(call check_env_var,VCD_TENANT_NAME)
+	$(call check_env_var,VCD_ORGANIZATION)
+
+.PHONY: check_openstack_env check_vcd_env check_OSM_HOSTNAME
 
 report_dir:
 	@mkdir -p reports
@@ -108,6 +136,10 @@ _run_test: report_dir
         $(OPTION_OS_PASSWORD) \
         $(OPTION_VIM_CONFIG) \
         $(OPTION_OS_PROJECT_NAME) \
+        $(OPTION_VCD_AUTH_URL) \
+        $(OPTION_VCD_USERNAME) \
+        $(OPTION_VCD_PASSWORD) \
+        $(OPTION_VCD_TENANT_NAME) \
         $(OPTION_TEST_VNFD_DESCRIPTORS) \
         $(OPTION_TEST_NSD_DESCRIPTORS) \
         $(OPTION_DESCRIPTOR_BUILD_DIR) \
@@ -135,17 +167,23 @@ images/cache/Fedora-x86_64-20-20131211.1-sda-pong.qcow2:
 
 # images are prefixed with 'osm/' to separate osm uploaded images from VIM installed images
 OSM_IMAGE_PREFIX ?=
+sys_path ?= $(TOPDIR)systest
 
 ifdef OS_AUTH_URL
 images/%.qcow2 images/%.img:
 	$(Q)openstack image show $(OSM_IMAGE_PREFIX)$(shell basename $@) || \
           sh -c "make images/cache/$(shell basename $@) && openstack image create --file images/cache/$(shell basename $@) $(OSM_IMAGE_PREFIX)$(shell basename $@)"
+endif
+ifdef VCD_AUTH_URL
+images/%.img:
+	ovf_converter images/cache/$(OSM_IMAGE_PREFIX)$(shell basename $@) -n cirros
+	python $(TOPDIR)tools/vmware_ovf_upload.py $(VCD_AUTH_URL) $(VCD_USERNAME) $(VCD_PASSWORD) $(VCD_ORGANIZATION) $(sys_path)/images/cache/cirros.ovf
 else
 images/%.img:
 	echo "No method selected to upload image to VIM"
 endif
 
-cirros: check_OSM_HOSTNAME check_openstack_env \
+cirros: check_OSM_HOSTNAME check_openstack_env check_vcd_env \
         $(DESCRIPTOR_DIR)/vnfd/cirros_vnf/build/cirros_vnf.tar.gz \
         $(DESCRIPTOR_DIR)/nsd/cirros_ns/build/cirros_ns.tar.gz \
         images/cirros-0.3.5-x86_64-disk.img
@@ -155,7 +193,7 @@ cirros: check_OSM_HOSTNAME check_openstack_env \
         JUNITXML=pytest-$@.xml \
         PYTEST_OPTIONS="$(PYTEST_OPTIONS) -m vnf" _run_test
 
-ns_scale: check_OSM_HOSTNAME check_openstack_env \
+ns_scale: check_OSM_HOSTNAME check_openstack_env check_vcd_env \
         $(DESCRIPTOR_DIR)/vnfd/cirros_vnf/build/cirros_vnf.tar.gz \
         $(DESCRIPTOR_DIR)/nsd/cirros_ns/build/cirros_ns.tar.gz \
         images/cirros-0.3.5-x86_64-disk.img

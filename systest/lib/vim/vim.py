@@ -18,7 +18,7 @@ from osmclient.common.exceptions import ClientException
 
 
 class Vim():
-    def __init__(self,osm,openstack):
+    def __init__(self,osm,openstack,vmware):
         self.vim_name='pytest'
         try:
             osm.get_api().vim.get(self.vim_name)

@@ -22,6 +22,6 @@ def vim_add_options(parser):
     pass
 
 @pytest.fixture
-def vim(request,osm,openstack):
+def vim(request,osm,openstack,vmware):
     from lib.vim import vim 
-    return vim.Vim(osm,openstack)
+    return vim.Vim(osm,openstack,vmware)

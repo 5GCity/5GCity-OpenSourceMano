@@ -78,7 +78,7 @@ class TestClass(object):
         # another way to check if the nsd is really ready via API?
         time.sleep(5)
 
-    def vnf_test(self,osm, openstack, vim, vnfd_file_list, nsd_file_list, ns_scale=False):
+    def vnf_test(self,osm, openstack, vim, vmware, vnfd_file_list, nsd_file_list, ns_scale=False):
         for file in nsd_file_list:
             nsd_desc = osm.get_api().package.get_key_val_from_pkg(file)
 
@@ -89,7 +89,7 @@ class TestClass(object):
             assert utils.wait_for_value(lambda: osm.get_api().ns.get_field(ns_name,'operational-status'),result='vnf-init-phase')
 
             # make sure ns is running
-            assert utils.wait_for_value(lambda: osm.get_api().ns.get_field(ns_name,'operational-status'),result='running',wait_time=120)
+            assert utils.wait_for_value(lambda: osm.get_api().ns.get_field(ns_name,'operational-status'),result='running',wait_time=300)
 
             if ns_scale:
                 # for each descriptor, scale it
@@ -101,7 +101,7 @@ class TestClass(object):
                     assert utils.wait_for_value(lambda: osm.get_api().ns.get_field(ns_name,'operational-status'),result='scaling-out',wait_time=120)
 
                     # wait for ns to be in running-state
-                    assert utils.wait_for_value(lambda: osm.get_api().ns.get_field(ns_name,'operational-status'),result='running',wait_time=120)
+                    assert utils.wait_for_value(lambda: osm.get_api().ns.get_field(ns_name,'operational-status'),result='running',wait_time=300)
 
             time.sleep(10)
 
@@ -115,18 +115,20 @@ class TestClass(object):
 
     @pytest.mark.openstack
     @pytest.mark.vnf
-    def test_vnf(self,osm, vim, openstack, cleanup_test_vnf):
+    @pytest.mark.vmware
+    def test_vnf(self,osm, vim, openstack, vmware, cleanup_test_vnf):
         vnfd_file_list = osm.vnfd_descriptors_list
         nsd_file_list = osm.nsd_descriptors_list
 
         self.vnf_upload_packages(osm, vnfd_file_list, nsd_file_list )
-        self.vnf_test(osm,openstack, vim, vnfd_file_list, nsd_file_list)
+        self.vnf_test(osm,openstack, vim, vmware, vnfd_file_list, nsd_file_list)
 
     @pytest.mark.openstack
     @pytest.mark.ns_scale
-    def test_scale_vnf(self,osm, vim, openstack, cleanup_test_vnf):
+    @pytest.mark.vmware
+    def test_scale_vnf(self,osm, vim, openstack, vmware, cleanup_test_vnf):
         vnfd_file_list = osm.vnfd_descriptors_list
         nsd_file_list = osm.nsd_descriptors_list
 
         self.vnf_upload_packages(osm, vnfd_file_list, nsd_file_list )
-        self.vnf_test(osm,openstack, vim, vnfd_file_list, nsd_file_list, ns_scale=True)
+        self.vnf_test(osm,openstack, vim, vmware, vnfd_file_list, nsd_file_list, ns_scale=True)

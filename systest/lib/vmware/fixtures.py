@@ -30,7 +30,7 @@ def vmware_add_options(parser):
     parser.addoption("--vcd-username", default="", help="VMware vCloud username")
     parser.addoption("--vcd-password", default="", help="VMware vCloud password")
     parser.addoption("--vcd-tenant-name", default="", help="VMware vCloud tenant name")
-    parser.addoption("--config", default="", help="VMware vCloud config paramters")
+    parser.addoption("--vcd-org", default="", help="VMware vCloud Organization name")
 
 @pytest.fixture
 def vmware(request):
@@ -40,7 +40,8 @@ def vmware(request):
     access['vim-username'] = request.config.getoption("--vcd-username")
     access['vim-password'] = request.config.getoption("--vcd-password")
     access['vim-tenant-name'] = request.config.getoption("--vcd-tenant-name")
-    access['config'] = request.config.getoption("--config")
+    access['vcd-org'] = request.config.getoption("--vcd-org")
+    access['config'] = request.config.getoption("--vim-config")
     access['vim-type'] = 'vmware'
     access['description'] = 'pytest system test'
 
