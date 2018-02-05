@@ -14,6 +14,7 @@ from fsbase import FsException
 from msgbase import MsgException
 from os import environ
 import logging
+from vca import DeployApplication, RemoveApplication
 
 #streamformat = "%(asctime)s %(name)s %(levelname)s: %(message)s"
 streamformat = "%(name)s %(levelname)s: %(message)s"
@@ -38,7 +39,6 @@ class Lcm:
         self.logger = logging.getLogger('lcm')
         # load configuration
         config = self.read_config_file(config_file)
-        self.config = config
         self.config = config
         self.ro_url = "http://{}:{}/openmano".format(config["RO"]["host"], config["RO"]["port"])
         self.ro_tenant = config["RO"]["tenant"]
@@ -185,14 +185,27 @@ class Lcm:
                 if vnfd.get("vnf-configuration") and vnfd["vnf-configuration"].get("juju"):
                     db_nsr["config-status"] = "configuring"
                     proxy_charm = vnfd["vnf-configuration"]["juju"]["charm"]
-                    config_primitive = vnfd["vnf-configuration"].get("config-primitive")
-                    # get parameters for juju charm
+
+                    # Note: The charm needs to exist on disk at the location
+                    # specified by charm_path.
                     base_folder = vnfd["_admin"]["storage"]
-                    path = "{}{}/{}/charms".format(base_folder["path"], base_folder["folder"], base_folder["file"],
-                                                   proxy_charm)
-                    mgmt_ip = nsr_lcm['nsr_ip'][vnfd_index]
-                    # TODO launch VCA charm
-                    # task = asyncio.ensure_future(DeployCharm(self.loop, path, mgmt_ip, config_primitive))
+                    charm_path = "{}{}/{}/charms/{}".format(
+                        base_folder["path"],
+                        base_folder["folder"],
+                        base_folder["file"],
+                        proxy_charm
+                    )
+                    task = asyncio.ensure_future(
+                        DeployApplication(
+                            self.config['VCA'],
+                            self.db,
+                            db_nsr,
+                            vnfd,
+                            vnfd_index,
+                            charm_path,
+                        )
+                    )
+
             db_nsr["detailed-status"] = "Done"
             db_nsr["operational-status"] = "running"
             self.db.replace("nsrs", nsr_id, db_nsr)
@@ -217,9 +230,28 @@ class Lcm:
         db_nsr["config-status"] = "terminate"
         db_nsr["detailed-status"] = "Deleting charms"
         self.db.replace("nsrs", nsr_id, db_nsr)
-        # TODO destroy VCA charm
 
+        try:
+            self.logger.debug("Deleting charms")
+            nsd = db_nsr["nsd"]
+            for c_vnf in nsd["constituent-vnfd"]:
+                vnfd_id = c_vnf["vnfd-id-ref"]
+                vnfd_index = str(c_vnf["member-vnf-index"])
+                vnfd = self.db.get_one("vnfds", {"id": vnfd_id})
+                if vnfd.get("vnf-configuration") and vnfd["vnf-configuration"].get("juju"):
+                    asyncio.ensure_future(
+                        RemoveApplication(
+                            self.config['VCA'],
+                            self.db,
+                            db_nsr,
+                            vnfd,
+                            vnfd_index,
+                        )
+                    )
+        except Exception as e:
+            self.logger.debug("Failed while deleting charms: {}".format(e))
         # remove from RO
+
         RO = ROclient.ROClient(self.loop, endpoint_url=self.ro_url, tenant=self.ro_tenant,
                                datacenter=db_nsr["datacenter"])
         # Delete ns
@@ -282,7 +314,6 @@ class Lcm:
                     self.logger.error("delete_ns task nsr_id={} RO vnfd={} delete error: {}".format(
                         nsr_id, RO_vnfd_id, e))
             self.db.replace("nsrs", nsr_id, db_nsr)
-
 
         # TODO delete from database or mark as deleted???
         db_nsr["operational-status"] = "terminated"
@@ -389,7 +420,6 @@ class Lcm:
             self.logger.critical("At config file '{}': {}".format(config_file, e))
 
 
-
 if __name__ == '__main__':
 
     config_file = "lcm.cfg"
@@ -433,6 +463,3 @@ if __name__ == '__main__':
     # lcm.db.create("ns_request", ns_request)
 
     lcm.start()
-
-
-
