@@ -272,7 +272,7 @@ class ROClient:
         """
         ns_ip={}
         for vnf in ns_descriptor["vnfs"]:
-            ns_ip[vnf["member_vnf_index"]] = vnf["ip_address"]
+            ns_ip[str(vnf["member_vnf_index"])] = vnf["ip_address"]
             #uuid  sce_vnf_id
             # vnf[mgmt_access]: '{interface_id: cf3cbf00-385c-49b4-9a3f-b400b7b15dc6, vm_id: d0dd22a9-91ef-46f1-8e8f-8cf4b2d5b2d7}'
             # vnf[vms]
@@ -295,6 +295,8 @@ class ROClient:
                                             filter_dict=filter_by)
         if isinstance(content, dict):
             if len(content) == 1:
+                for _, v in content.items():
+                    return v
                 return content.values()[0]
             else:
                 raise ROClientException("Output not a list neither dict with len equal 1", http_code=500)

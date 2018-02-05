@@ -58,8 +58,10 @@ class msgLocal(MsgBase):
         except Exception as e:  # TODO refine
             raise MsgException(str(e))
 
-    async def aioread(self, loop, topic):
+    async def aioread(self, topic, loop=None):
         try:
+            if not loop:
+                loop = asyncio.get_event_loop()
             if topic not in self.files:
                 self.files[topic] = open(self.path + topic, "r+")
                 # ignore previous content
