@@ -1,13 +1,16 @@
+import logging
+import asyncio
+import yaml
 from aiokafka import AIOKafkaConsumer
 from aiokafka import AIOKafkaProducer
 from aiokafka.errors import KafkaError
 from msgbase import MsgBase, MsgException
-import asyncio
-import yaml
 #import json
 
+
 class MsgKafka(MsgBase):
-    def __init__(self):
+    def __init__(self, logger_name='msg'):
+        self.logger = logging.getLogger(logger_name)
         self.host = None
         self.port = None
         self.consumer = None
@@ -17,6 +20,8 @@ class MsgKafka(MsgBase):
 
     def connect(self, config):
         try:
+            if "logger_name" in config:
+                self.logger = logging.getLogger(config["logger_name"])
             self.host = config["host"]
             self.port = config["port"]
             self.topic_lst = []

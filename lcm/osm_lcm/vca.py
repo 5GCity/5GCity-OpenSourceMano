@@ -17,7 +17,7 @@ class VCAMonitor(ModelObserver):
         """React to changes in the Juju model."""
         status = None
         db_nsr = self.context['db_nsr']
-        vnf_id = self.context['vnf_id']
+        vnf_index = self.context['vnf_index']
 
         nsr_lcm = db_nsr["_admin"]["deploy"]
         nsr_id = nsr_lcm["id"]
@@ -39,15 +39,15 @@ class VCAMonitor(ModelObserver):
                     status = "DELETING"
 
         if status:
-            nsr_lcm["VCA"][vnf_id]['operational-status'] = status
+            nsr_lcm["VCA"][vnf_index]['operational-status'] = status
 
             # TODO: Clean this up, and make it work with deletes (if we need
             # TODO: to update the database post-delete)
             # Figure out if we're finished configuring
             count = len(nsr_lcm["VCA"])
             active = 0
-            for vnf_id in nsr_lcm["VCA"]:
-                if nsr_lcm["VCA"][vnf_id]['operational-status'] == "ACTIVE":
+            for vnf_index in nsr_lcm["VCA"]:
+                if nsr_lcm["VCA"][vnf_index]['operational-status'] == "ACTIVE":
                     active += 1
             if active == count:
                 db_nsr["config-status"] = "done"
@@ -78,7 +78,6 @@ class VCAMonitor(ModelObserver):
 def GetJujuApi(config):
     # Quiet logging from the websocket library. If you want to see
     # everything sent over the wire, set this to DEBUG.
-    logging.basicConfig(level=logging.DEBUG)
 
     ws_logger = logging.getLogger('websockets.protocol')
     ws_logger.setLevel(logging.INFO)
@@ -121,7 +120,7 @@ def get_initial_config(initial_config_primitive, mgmt_ip):
 
 
 async def DeployApplication(vcaconfig, db, db_nsr, vnfd,
-                            vnfd_index, charm_path):
+                            vnf_index, charm_path):
     """
     Deploy a charm.
 
@@ -136,7 +135,7 @@ async def DeployApplication(vcaconfig, db, db_nsr, vnfd,
     DeployApplication(...)
     """
     nsr_lcm = db_nsr["_admin"]["deploy"]
-    nsr_id = nsr_lcm["id"]
+    nsr_id = db_nsr["_id"]
     vnf_id = vnfd['id']
 
     if "proxy" in vnfd["vnf-configuration"]["juju"]:
@@ -147,8 +146,8 @@ async def DeployApplication(vcaconfig, db, db_nsr, vnfd,
 
     application = get_vnf_unique_name(
         db_nsr["name"].lower().strip(),
-        vnfd['id'],
-        vnfd_index,
+        vnf_id,
+        vnf_index,
     )
 
     api = GetJujuApi(vcaconfig)
@@ -159,16 +158,16 @@ async def DeployApplication(vcaconfig, db, db_nsr, vnfd,
 
         # Set the INIT state; further operational status updates
         # will be made by the VCAMonitor
-        nsr_lcm["VCA"][vnf_id] = {}
-        nsr_lcm["VCA"][vnf_id]['operational-status'] = 'INIT'
-        nsr_lcm["VCA"][vnf_id]['application'] = application
+        nsr_lcm["VCA"][vnf_index] = {}
+        nsr_lcm["VCA"][vnf_index]['operational-status'] = 'INIT'
+        nsr_lcm["VCA"][vnf_index]['application'] = application
 
         db.replace("nsrs", nsr_id, db_nsr)
 
         model = await api.get_model()
         context = {
             'application': application,
-            'vnf_id': vnf_id,
+            'vnf_index': vnf_index,
             'db_nsr': db_nsr,
             'db': db,
         }
@@ -186,7 +185,7 @@ async def DeployApplication(vcaconfig, db, db_nsr, vnfd,
             vnfd["vnf-configuration"].get(
                 "initial-config-primitive"
             ),
-            nsr_lcm['nsr_ip'][vnfd_index]
+            nsr_lcm['nsr_ip'][vnf_index]
         )
 
         await api.apply_config(cfg, application)
@@ -194,7 +193,7 @@ async def DeployApplication(vcaconfig, db, db_nsr, vnfd,
     await api.logout()
 
 
-async def RemoveApplication(vcaconfig, db, db_nsr, vnfd, vnfd_index):
+async def RemoveApplication(vcaconfig, db, db_nsr, vnf_index):
     """
     Remove an application from the Juju Controller
 
@@ -208,9 +207,9 @@ async def RemoveApplication(vcaconfig, db, db_nsr, vnfd, vnfd_index):
     RemoveApplication(loop, "ping_vnf")
     RemoveApplication(loop, "pong_vnf")
     """
+    nsr_id = db_nsr["_id"]
     nsr_lcm = db_nsr["_admin"]["deploy"]
-    vnf_id = vnfd['id']
-    application = nsr_lcm["VCA"][vnf_id]['application']
+    application = nsr_lcm["VCA"][vnf_index]['application']
 
     api = GetJujuApi(vcaconfig)
 
@@ -219,7 +218,7 @@ async def RemoveApplication(vcaconfig, db, db_nsr, vnfd, vnfd_index):
         model = await api.get_model()
         context = {
             'application': application,
-            'vnf_id': vnf_id,
+            'vnf_index': vnf_index,
             'db_nsr': db_nsr,
             'db': db,
         }
@@ -230,4 +229,6 @@ async def RemoveApplication(vcaconfig, db, db_nsr, vnfd, vnfd_index):
 
         print("VCA: Removing application {}".format(application))
         await api.remove_application(application)
+        nsr_lcm["VCA"][vnf_index]['application'] = None
+        db.replace("nsrs", nsr_id, db_nsr)
     await api.logout()

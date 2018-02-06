@@ -1,13 +1,17 @@
 import os
+import logging
 import tarfile
 from http import HTTPStatus
 from shutil import rmtree
 from fsbase import FsBase, FsException
 
+__author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
+
 
 class FsLocal(FsBase):
 
-    def __init__(self):
+    def __init__(self, logger_name='fs'):
+        self.logger = logging.getLogger(logger_name)
         self.path = None
 
     def get_params(self):
@@ -15,6 +19,8 @@ class FsLocal(FsBase):
 
     def fs_connect(self, config):
         try:
+            if "logger_name" in config:
+                self.logger = logging.getLogger(config["logger_name"])
             self.path = config["path"]
             if not self.path.endswith("/"):
                 self.path += "/"
@@ -38,7 +44,7 @@ class FsLocal(FsBase):
         try:
             os.mkdir(self.path + folder)
         except Exception as e:
-            raise FsException(str(e), http_code=HTTPStatus.INTERNAL_SERVER_ERROR.value)
+            raise FsException(str(e), http_code=HTTPStatus.INTERNAL_SERVER_ERROR)
 
     def file_exists(self, storage):
         """
@@ -105,4 +111,4 @@ class FsLocal(FsBase):
         if os.path.exists(f):
             rmtree(f)
         elif not ignore_non_exist:
-            raise FsException("File {} does not exist".format(storage), http_code=HTTPStatus.BAD_REQUEST.value)
+            raise FsException("File {} does not exist".format(storage), http_code=HTTPStatus.BAD_REQUEST)

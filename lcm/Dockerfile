@@ -8,15 +8,15 @@ ADD . /app
 
 RUN apt-get update && apt-get install -y git  python3 \
     python3-pip python3-pymongo python3-yaml python3-aiohttp \
-    && pip3 install aiokafka \
+    && pip3 install aiokafka juju \
     && mkdir -p /app/storage/kafka && mkdir -p /app/log 
 
 
 
 LABEL Maintainer="alfonso.tiernosepulveda@telefonica.com" \
       Description="This implements a north bound interface for OSM" \
-      Version="1.0"
-      # Author="Alfonso Tierno"
+      Version="1.0" \
+      Author="Alfonso Tierno"
 
 # Used for local storage
 VOLUME /app/storage

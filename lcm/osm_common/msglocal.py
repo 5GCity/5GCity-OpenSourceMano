@@ -1,18 +1,24 @@
+import logging
 import os
 import yaml
 import asyncio
 from msgbase import MsgBase, MsgException
 
+__author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 
-class msgLocal(MsgBase):
 
-    def __init__(self):
+class MsgLocal(MsgBase):
+
+    def __init__(self, logger_name='msg'):
+        self.logger = logging.getLogger(logger_name)
         self.path = None
         # create a different file for each topic
         self.files = {}
 
     def connect(self, config):
         try:
+            if "logger_name" in config:
+                self.logger = logging.getLogger(config["logger_name"])
             self.path = config["path"]
             if not self.path.endswith("/"):
                 self.path += "/"
@@ -48,9 +54,16 @@ class msgLocal(MsgBase):
 
     def read(self, topic):
         try:
+            msg = ""
             if topic not in self.files:
-                self.files[topic] = open(self.path + topic, "r+")
-            msg = self.files[topic].read()
+                self.files[topic] = open(self.path + topic, "a+")
+                # ignore previous content
+                for line in self.files[topic]:
+                    if not line.endswith("\n"):
+                        msg = line
+            msg += self.files[topic].readline()
+            if not msg.endswith("\n"):
+                return None
             msg_dict = yaml.load(msg)
             assert len(msg_dict) == 1
             for k, v in msg_dict.items():
@@ -60,16 +73,18 @@ class msgLocal(MsgBase):
 
     async def aioread(self, topic, loop=None):
         try:
+            msg = ""
             if not loop:
                 loop = asyncio.get_event_loop()
             if topic not in self.files:
-                self.files[topic] = open(self.path + topic, "r+")
+                self.files[topic] = open(self.path + topic, "a+")
                 # ignore previous content
-                while self.files[topic].read():
-                    pass
+                for line in self.files[topic]:
+                    if not line.endswith("\n"):
+                        msg = line
             while True:
-                msg = self.files[topic].read()
-                if msg:
+                msg += self.files[topic].readline()
+                if msg.endswith("\n"):
                     break
                 await asyncio.sleep(2, loop=loop)
             msg_dict = yaml.load(msg)

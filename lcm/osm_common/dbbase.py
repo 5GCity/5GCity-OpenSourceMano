@@ -1,14 +1,17 @@
+from http import HTTPStatus
+
+__author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 
 
 class DbException(Exception):
 
-    def __init__(self, message, http_code=404):
+    def __init__(self, message, http_code=HTTPStatus.NOT_FOUND):
         # TODO change to http.HTTPStatus instead of int that allows .value and .name
         self.http_code = http_code
-        Exception.__init__(self, message)
+        Exception.__init__(self, "database exception " + message)
 
 
-class dbbase(object):
+class DbBase(object):
 
     def __init__(self):
         pass

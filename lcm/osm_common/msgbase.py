@@ -1,6 +1,8 @@
 
 from http import HTTPStatus
 
+__author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
+
 
 class MsgException(Exception):
     """
@@ -14,7 +16,7 @@ class MsgException(Exception):
         :param http_code: <http.HTTPStatus> type. It contains ".value" (http error code) and ".name" (http error name
         """
         self.http_code = http_code
-        Exception.__init__(self, message)
+        Exception.__init__(self, "messaging exception " + message)
 
 
 class MsgBase(object):

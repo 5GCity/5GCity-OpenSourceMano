@@ -9,17 +9,15 @@ import dbmongo
 import fslocal
 import msglocal
 import msgkafka
+import logging
+import functools
 from dbbase import DbException
 from fsbase import FsException
 from msgbase import MsgException
 from os import environ
-import logging
 from vca import DeployApplication, RemoveApplication
-
-#streamformat = "%(asctime)s %(name)s %(levelname)s: %(message)s"
-streamformat = "%(name)s %(levelname)s: %(message)s"
-logging.basicConfig(format=streamformat, level=logging.DEBUG)
-
+from copy import deepcopy
+from http import HTTPStatus
 
 class LcmException(Exception):
     pass
@@ -40,16 +38,52 @@ class Lcm:
         # load configuration
         config = self.read_config_file(config_file)
         self.config = config
-        self.ro_url = "http://{}:{}/openmano".format(config["RO"]["host"], config["RO"]["port"])
-        self.ro_tenant = config["RO"]["tenant"]
+        self.ro_config={
+            "endpoint_url": "http://{}:{}/openmano".format(config["RO"]["host"], config["RO"]["port"]),
+            "tenant":  config.get("tenant", "osm"),
+            "logger_name": "lcm.ROclient",
+            "loglevel": "ERROR",
+        }
         self.vca = config["VCA"]  # TODO VCA
         self.loop = None
+
+        # logging
+        log_format_simple = "%(asctime)s %(levelname)s %(name)s %(filename)s:%(lineno)s %(message)s"
+        log_formatter_simple = logging.Formatter(log_format_simple, datefmt='%Y-%m-%dT%H:%M:%S')
+        config["database"]["logger_name"] = "lcm.db"
+        config["storage"]["logger_name"] = "lcm.fs"
+        config["message"]["logger_name"] = "lcm.msg"
+        if "logfile" in config["global"]:
+            file_handler = logging.handlers.RotatingFileHandler(config["global"]["logfile"],
+                                                                maxBytes=100e6, backupCount=9, delay=0)
+            file_handler.setFormatter(log_formatter_simple)
+            self.logger.addHandler(file_handler)
+        else:
+            str_handler = logging.StreamHandler()
+            str_handler.setFormatter(log_formatter_simple)
+            self.logger.addHandler(str_handler)
+
+        if config["global"].get("loglevel"):
+            self.logger.setLevel(config["global"]["loglevel"])
+
+        # logging other modules
+        for k1, logname in {"message": "lcm.msg", "database": "lcm.db", "storage": "lcm.fs"}.items():
+            config[k1]["logger_name"] = logname
+            logger_module = logging.getLogger(logname)
+            if "logfile" in config[k1]:
+                file_handler = logging.handlers.RotatingFileHandler(config[k1]["logfile"],
+                                                                    maxBytes=100e6, backupCount=9, delay=0)
+                file_handler.setFormatter(log_formatter_simple)
+                logger_module.addHandler(file_handler)
+            if "loglevel" in config[k1]:
+                logger_module.setLevel(config[k1]["loglevel"])
+
         try:
             if config["database"]["driver"] == "mongo":
-                self.db = dbmongo.dbmongo()
+                self.db = dbmongo.DbMongo()
                 self.db.db_connect(config["database"])
             elif config["database"]["driver"] == "memory":
-                self.db = dbmemory.dbmemory()
+                self.db = dbmemory.DbMemory()
                 self.db.db_connect(config["database"])
             else:
                 raise LcmException("Invalid configuration param '{}' at '[database]':'driver'".format(
@@ -63,7 +97,7 @@ class Lcm:
                     config["storage"]["driver"]))
 
             if config["message"]["driver"] == "local":
-                self.msg = msglocal.msgLocal()
+                self.msg = msglocal.MsgLocal()
                 self.msg.connect(config["message"])
             elif config["message"]["driver"] == "kafka":
                 self.msg = msgkafka.MsgKafka()
@@ -75,92 +109,156 @@ class Lcm:
             self.logger.critical(str(e), exc_info=True)
             raise LcmException(str(e))
 
-    # def update_nsr_db(self, nsr_id, nsr_desc):
-    #    self.db.replace("nsrs", nsr_id, nsr_desc)
-
-    async def create_ns(self, nsr_id):
-        self.logger.debug("create_ns task nsr_id={} Enter".format(nsr_id))
-        db_nsr = self.db.get_one("nsrs", {"_id": nsr_id})
-        nsr_lcm = {
-            "id": nsr_id,
-            "RO": {"vnfd_id": {}, "nsd_id": None, "nsr_id": None, "nsr_status": "SCHEDULED"},
-            "nsr_ip": {},
-            "VCA": {}, # "TODO"
-        }
-        db_nsr["_admin"]["deploy"] = nsr_lcm
-        db_nsr["detailed-status"] = "creating"
-        db_nsr["operational-status"] = "init"
-
-        deloyment_timeout = 120
+    def update_nsr_db(self, nsr_id, nsr_desc):
         try:
-            nsd = db_nsr["nsd"]
-            RO = ROclient.ROClient(self.loop, endpoint_url=self.ro_url, tenant=self.ro_tenant,
-                                   datacenter=db_nsr["datacenter"])
+            self.db.replace("nsrs", nsr_id, nsr_desc)
+        except DbException as e:
+            self.logger.error("Updating nsr_id={}: {}".format(nsr_id, e))
 
-            # get vnfds, instantiate at RO
+    def vca_deploy_callback(self, db_nsr, vnf_index, status, task):
+        # TODO study using this callback when VCA.DeployApplication success from VCAMonitor
+        # By the moment this callback is used only to capture exception conditions from VCA DeployApplication
+        nsr_id = db_nsr["_id"]
+        self.logger.debug("Task create_ns={} vca_deploy_callback Enter".format(nsr_id))
+        try:
+            if task.cancelled():
+                return
+            if task.done():
+                exc = task.exception()
+                if exc:
+                    nsr_lcm = db_nsr["_admin"]["deploy"]
+                    nsr_lcm["VCA"][vnf_index]['operational-status'] = "failed"
+                    db_nsr["detailed-status"] = "fail configuring vnf_index={} {}".format(vnf_index, exc)
+                    db_nsr["config-status"] = "failed"
+                    self.update_nsr_db(nsr_id, db_nsr)
+            else:
+                # TODO may be used to be called when VCA monitor status changes
+                pass
+        # except DbException as e:
+        #     self.logger.error("Task create_ns={} vca_deploy_callback Exception {}".format(nsr_id, e))
+        except Exception as e:
+            self.logger.critical("Task create_ns={} vca_deploy_callback Exception {}".format(nsr_id, e), exc_info=True)
+
+    async def create_ns(self, nsr_id, order_id):
+        logging_text = "Task create_ns={} ".format(nsr_id)
+        self.logger.debug(logging_text + "Enter")
+        # get all needed from database
+        db_nsr = None
+        exc = None
+        step = "Getting nsr from db"
+        try:
+            db_nsr = self.db.get_one("nsrs", {"_id": nsr_id})
+            nsd = db_nsr["nsd"]
+            needed_vnfd = {}
             for c_vnf in nsd["constituent-vnfd"]:
                 vnfd_id = c_vnf["vnfd-id-ref"]
-                self.logger.debug("create_ns task nsr_id={} RO vnfd={} creating".format(nsr_id, vnfd_id))
-                db_nsr["detailed-status"] = "Creating vnfd {} at RO".format(vnfd_id)
-                vnfd = self.db.get_one("vnfds", {"id": vnfd_id})
-                vnfd.pop("_admin", None)
-                vnfd.pop("_id", None)
+                if vnfd_id not in needed_vnfd:
+                    step = "Getting vnfd={} from db".format(vnfd_id)
+                    needed_vnfd[vnfd_id] = self.db.get_one("vnfds", {"id": vnfd_id})
+
+            nsr_lcm = {
+                "id": nsr_id,
+                "RO": {"vnfd_id": {}, "nsd_id": None, "nsr_id": None, "nsr_status": "SCHEDULED"},
+                "nsr_ip": {},
+                "VCA": {},
+            }
+            db_nsr["_admin"]["deploy"] = nsr_lcm
+            db_nsr["detailed-status"] = "creating"
+            db_nsr["operational-status"] = "init"
+
+            deloyment_timeout = 120
+
+            RO = ROclient.ROClient(self.loop, datacenter=db_nsr["datacenter"], **self.ro_config)
+
+            # get vnfds, instantiate at RO
+            for vnfd_id, vnfd in needed_vnfd.items():
+                step = db_nsr["detailed-status"] = "Creating vnfd={} at RO".format(vnfd_id)
+                self.logger.debug(logging_text + step)
+                vnfd_id_RO = nsr_id + "." + vnfd_id[:200]
 
                 # look if present
-                vnfd_list = await RO.get_list("vnfd", filter_by={"osm_id": vnfd_id})
+                vnfd_list = await RO.get_list("vnfd", filter_by={"osm_id": vnfd_id_RO})
                 if vnfd_list:
                     nsr_lcm["RO"]["vnfd_id"][vnfd_id] = vnfd_list[0]["uuid"]
-                    self.logger.debug("create_ns task nsr_id={} RO vnfd={} exist. Using RO_id={}".format(
-                        nsr_id, vnfd_id, vnfd_list[0]["uuid"]))
+                    self.logger.debug(logging_text + "RO vnfd={} exist. Using RO_id={}".format(
+                        vnfd_id, vnfd_list[0]["uuid"]))
                 else:
-                    desc = await RO.create("vnfd", descriptor=vnfd)
+                    vnfd_RO = deepcopy(vnfd)
+                    vnfd_RO.pop("_id", None)
+                    vnfd_RO.pop("_admin", None)
+                    vnfd_RO["id"] = vnfd_id_RO
+                    desc = await RO.create("vnfd", descriptor=vnfd_RO)
                     nsr_lcm["RO"]["vnfd_id"][vnfd_id] = desc["uuid"]
-                self.db.replace("nsrs", nsr_id, db_nsr)
-
-                # db_new("vnfr", vnfr)
-                # db_update("ns_request", nsr_id, ns_request)
+                self.update_nsr_db(nsr_id, db_nsr)
 
             # create nsd at RO
-            nsd_id = db_nsr["nsd"]["id"]
-            self.logger.debug("create_ns task nsr_id={} RO nsd={} creating".format(nsr_id, nsd_id))
-            db_nsr["detailed-status"] = "Creating nsd {} at RO".format(nsd_id)
-            nsd = self.db.get_one("nsds", {"id": nsd_id})
-            nsd.pop("_admin", None)
-            nsd.pop("_id", None)
+            nsd_id = nsd["id"]
+            step = db_nsr["detailed-status"] = "Creating nsd={} at RO".format(nsd_id)
+            self.logger.debug(logging_text + step)
 
-            nsd_list = await RO.get_list("nsd", filter_by={"osm_id": nsd_id})
+            nsd_id_RO = nsd_id + "." + nsd_id[:200]
+            nsd_list = await RO.get_list("nsd", filter_by={"osm_id": nsd_id_RO})
             if nsd_list:
                 nsr_lcm["RO"]["nsd_id"] = nsd_list[0]["uuid"]
-                self.logger.debug("create_ns task nsr_id={} RO nsd={} exist. Using RO_id={}".format(
-                    nsr_id, nsd_id, nsd_list[0]["uuid"]))
+                self.logger.debug(logging_text + "RO nsd={} exist. Using RO_id={}".format(
+                    nsd_id, nsd_list[0]["uuid"]))
             else:
-                desc = await RO.create("nsd", descriptor=nsd)
+                nsd_RO = deepcopy(nsd)
+                nsd_RO["id"] = nsd_id_RO
+                nsd_RO.pop("_id", None)
+                nsd_RO.pop("_admin", None)
+                for c_vnf in nsd_RO["constituent-vnfd"]:
+                    vnfd_id = c_vnf["vnfd-id-ref"]
+                    c_vnf["vnfd-id-ref"] = nsr_id + "." + vnfd_id[:200]
+                desc = await RO.create("nsd", descriptor=nsd_RO)
                 nsr_lcm["RO"]["nsd_id"] = desc["uuid"]
-            self.db.replace("nsrs", nsr_id, db_nsr)
+            self.update_nsr_db(nsr_id, db_nsr)
 
             # Crate ns at RO
-            self.logger.debug("create_ns task nsr_id={} RO ns creating".format(nsr_id))
-            db_nsr["detailed-status"] = "Creating ns at RO"
-            desc = await RO.create("ns", name=db_nsr["name"], datacenter=db_nsr["datacenter"],
-                                   scenario=nsr_lcm["RO"]["nsd_id"])
-            RO_nsr_id = desc["uuid"]
-            nsr_lcm["RO"]["nsr_id"] = RO_nsr_id
-            nsr_lcm["RO"]["nsr_status"] = "BUILD"
-            self.db.replace("nsrs", nsr_id, db_nsr)
+            # if present use it unless in error status
+            RO_nsr_id = nsr_lcm["RO"].get("nsr_id")
+            if RO_nsr_id:
+                try:
+                    step = db_nsr["detailed-status"] = "Looking for existing ns at RO"
+                    self.logger.debug(logging_text + step + " RO_ns_id={}".format(RO_nsr_id))
+                    desc = await RO.show("ns", RO_nsr_id)
+                except ROclient.ROClientException as e:
+                    if e.http_code != HTTPStatus.NOT_FOUND:
+                        raise
+                    RO_nsr_id = nsr_lcm["RO"]["nsr_id"] = None
+                if RO_nsr_id:
+                    ns_status, ns_status_info = RO.check_ns_status(desc)
+                    nsr_lcm["RO"]["nsr_status"] = ns_status
+                    if ns_status == "ERROR":
+                        step = db_nsr["detailed-status"] = "Deleting ns at RO"
+                        self.logger.debug(logging_text + step + " RO_ns_id={}".format(RO_nsr_id))
+                        await RO.delete("ns", RO_nsr_id)
+                        RO_nsr_id = nsr_lcm["RO"]["nsr_id"] = None
+
+            if not RO_nsr_id:
+                step = db_nsr["detailed-status"] = "Creating ns at RO"
+                self.logger.debug(logging_text + step)
+
+                desc = await RO.create("ns", name=db_nsr["name"], datacenter=db_nsr["datacenter"],
+                                       scenario=nsr_lcm["RO"]["nsd_id"])
+                RO_nsr_id = nsr_lcm["RO"]["nsr_id"] = desc["uuid"]
+                nsr_lcm["RO"]["nsr_status"] = "BUILD"
+            self.update_nsr_db(nsr_id, db_nsr)
 
             # wait until NS is ready
-            self.logger.debug("create_ns task nsr_id={} RO ns_id={} waiting to be ready".format(nsr_id, RO_nsr_id))
+            step = ns_status_detailed = "Waiting ns ready at RO"
+            db_nsr["detailed-status"] = ns_status_detailed
+            self.logger.debug(logging_text + step + " RO_ns_id={}".format(RO_nsr_id))
             deloyment_timeout = 600
             while deloyment_timeout > 0:
-                ns_status_detailed = "Waiting ns ready at RO"
-                db_nsr["detailed-status"] = ns_status_detailed
                 desc = await RO.show("ns", RO_nsr_id)
                 ns_status, ns_status_info = RO.check_ns_status(desc)
                 nsr_lcm["RO"]["nsr_status"] = ns_status
                 if ns_status == "ERROR":
                     raise ROclient.ROClientException(ns_status_info)
                 elif ns_status == "BUILD":
-                    db_nsr["detailed-status"] = ns_status_detailed + "; nsr_id: '{}', {}".format(nsr_id, ns_status_info)
+                    db_nsr["detailed-status"] = ns_status_detailed + "; {}".format(ns_status_info)
+                    self.update_nsr_db(nsr_id, db_nsr)
                 elif ns_status == "ACTIVE":
                     nsr_lcm["nsr_ip"] = RO.get_ns_vnf_ip(desc)
                     break
@@ -170,20 +268,20 @@ class Lcm:
                 await asyncio.sleep(5, loop=self.loop)
                 deloyment_timeout -= 5
             if deloyment_timeout <= 0:
-                raise ROclient.ROClientException("Timeot wating ns to be ready")
+                raise ROclient.ROClientException("Timeout waiting ns to be ready")
             db_nsr["detailed-status"] = "Configuring vnfr"
-            self.db.replace("nsrs", nsr_id, db_nsr)
+            self.update_nsr_db(nsr_id, db_nsr)
 
-            #for nsd in nsr_lcm["descriptors"]["nsd"]:
-
-            self.logger.debug("create_ns task nsr_id={} VCA look for".format(nsr_id))
+            vnfd_to_config = 0
+            step = "Looking for needed vnfd to configure"
+            self.logger.debug(logging_text + step)
             for c_vnf in nsd["constituent-vnfd"]:
                 vnfd_id = c_vnf["vnfd-id-ref"]
-                vnfd_index = str(c_vnf["member-vnf-index"])
-                vnfd = self.db.get_one("vnfds", {"id": vnfd_id})
-                db_nsr["config-status"] = "config_not_needed"
+                vnf_index = str(c_vnf["member-vnf-index"])
+                vnfd = needed_vnfd[vnfd_id]
                 if vnfd.get("vnf-configuration") and vnfd["vnf-configuration"].get("juju"):
-                    db_nsr["config-status"] = "configuring"
+                    nsr_lcm["VCA"][vnf_index] = {}
+                    vnfd_to_config += 1
                     proxy_charm = vnfd["vnf-configuration"]["juju"]["charm"]
 
                     # Note: The charm needs to exist on disk at the location
@@ -201,124 +299,139 @@ class Lcm:
                             self.db,
                             db_nsr,
                             vnfd,
-                            vnfd_index,
+                            vnf_index,
                             charm_path,
                         )
                     )
-
-            db_nsr["detailed-status"] = "Done"
+                    task.add_done_callback(functools.partial(self.vca_deploy_callback, db_nsr, vnf_index, None))
+                    self.lcm_tasks[nsr_id][order_id]["create_charm:" + vnf_index] = task
+            db_nsr["config-status"] = "configuring" if vnfd_to_config else "configured"
+            db_nsr["detailed-status"] = "Configuring 1/{}".format(vnfd_to_config) if vnfd_to_config else "done"
             db_nsr["operational-status"] = "running"
-            self.db.replace("nsrs", nsr_id, db_nsr)
+            self.update_nsr_db(nsr_id, db_nsr)
 
             self.logger.debug("create_ns task nsr_id={} Exit Ok".format(nsr_id))
             return nsr_lcm
 
-        except (ROclient.ROClientException, Exception) as e:
-            db_nsr["operational-status"] = "failed"
-            db_nsr["detailed-status"] += ": ERROR {}".format(e)
-            self.db.replace("nsrs", nsr_id, db_nsr)
-            self.logger.debug(
-                "create_ns nsr_id={} Exit Exception on '{}': {}".format(nsr_id, db_nsr["detailed-status"], e),
-                exc_info=True)
-
-    async def delete_ns(self, nsr_id):
-        self.logger.debug("delete_ns task nsr_id={}, Delete_ns task nsr_id={} Enter".format(nsr_id, nsr_id))
-        db_nsr = self.db.get_one("nsrs", {"_id": nsr_id})
-        nsr_lcm = db_nsr["_admin"]["deploy"]
-
-        db_nsr["operational-status"] = "terminate"
-        db_nsr["config-status"] = "terminate"
-        db_nsr["detailed-status"] = "Deleting charms"
-        self.db.replace("nsrs", nsr_id, db_nsr)
-
-        try:
-            self.logger.debug("Deleting charms")
-            nsd = db_nsr["nsd"]
-            for c_vnf in nsd["constituent-vnfd"]:
-                vnfd_id = c_vnf["vnfd-id-ref"]
-                vnfd_index = str(c_vnf["member-vnf-index"])
-                vnfd = self.db.get_one("vnfds", {"id": vnfd_id})
-                if vnfd.get("vnf-configuration") and vnfd["vnf-configuration"].get("juju"):
-                    asyncio.ensure_future(
-                        RemoveApplication(
-                            self.config['VCA'],
-                            self.db,
-                            db_nsr,
-                            vnfd,
-                            vnfd_index,
-                        )
-                    )
+        except (ROclient.ROClientException, DbException) as e:
+            self.logger.error(logging_text + "Exit Exception {}".format(e))
+            exc = e
         except Exception as e:
-            self.logger.debug("Failed while deleting charms: {}".format(e))
-        # remove from RO
+            self.logger.critical(logging_text + "Exit Exception {}".format(e), exc_info=True)
+            exc = e
+        finally:
+            if exc and db_nsr:
+                db_nsr["detailed-status"] = "ERROR {}: {}".format(step , exc)
+                db_nsr["operational-status"] = "failed"
+                self.update_nsr_db(nsr_id, db_nsr)
 
-        RO = ROclient.ROClient(self.loop, endpoint_url=self.ro_url, tenant=self.ro_tenant,
-                               datacenter=db_nsr["datacenter"])
-        # Delete ns
-        RO_nsr_id = nsr_lcm["RO"]["nsr_id"]
-        if RO_nsr_id:
+    async def delete_ns(self, nsr_id, order_id):
+        logging_text = "Task delete_ns={} ".format(nsr_id)
+        self.logger.debug(logging_text + "Enter")
+        db_nsr = None
+        exc = None
+        step = "Getting nsr from db"
+        try:
+            db_nsr = self.db.get_one("nsrs", {"_id": nsr_id})
+            nsd = db_nsr["nsd"]
+            nsr_lcm = db_nsr["_admin"]["deploy"]
+
+            db_nsr["operational-status"] = "terminate"
+            db_nsr["config-status"] = "terminate"
+            db_nsr["detailed-status"] = "Deleting charms"
+            self.update_nsr_db(nsr_id, db_nsr)
+
             try:
-                db_nsr["detailed-status"] = "Deleting ns at RO"
-                desc = await RO.delete("ns", RO_nsr_id)
-                self.logger.debug("delete_ns task nsr_id={} RO ns={} deleted".format(nsr_id, RO_nsr_id))
-                nsr_lcm["RO"]["nsr_id"] = None
-                nsr_lcm["RO"]["nsr_status"] = "DELETED"
-            except ROclient.ROClientException as e:
-                if e.http_code == 404:  # not found
+                step = db_nsr["detailed-status"] = "Deleting charms"
+                self.logger.debug(logging_text + step)
+                for vnf_index, deploy_info in nsr_lcm["VCA"].items():
+                    if deploy_info and deploy_info.get("appliation"):
+                        task = asyncio.ensure_future(
+                            RemoveApplication(
+                                self.config['VCA'],
+                                self.db,
+                                db_nsr,
+                                vnf_index,
+                            )
+                        )
+                        self.lcm_tasks[nsr_id][order_id]["delete_charm:" + vnf_index] = task
+            except Exception as e:
+                self.logger.debug(logging_text + "Failed while deleting charms: {}".format(e))
+            # remove from RO
+
+            RO = ROclient.ROClient(self.loop, datacenter=db_nsr["datacenter"], **self.ro_config)
+            # Delete ns
+            RO_nsr_id = nsr_lcm["RO"]["nsr_id"]
+            if RO_nsr_id:
+                try:
+                    step = db_nsr["detailed-status"] = "Deleting ns at RO"
+                    self.logger.debug(logging_text + step)
+                    desc = await RO.delete("ns", RO_nsr_id)
                     nsr_lcm["RO"]["nsr_id"] = None
                     nsr_lcm["RO"]["nsr_status"] = "DELETED"
-                    self.logger.debug("delete_ns task nsr_id={} RO ns={} already deleted".format(nsr_id, RO_nsr_id))
-                elif e.http_code == 409:   #conflict
-                    self.logger.debug("delete_ns task nsr_id={} RO ns={} delete conflict: {}".format(nsr_id, RO_nsr_id,
-                                                                                                     e))
-                else:
-                    self.logger.error("delete_ns task nsr_id={} RO ns={} delete error: {}".format(nsr_id, RO_nsr_id, e))
-            self.db.replace("nsrs", nsr_id, db_nsr)
+                except ROclient.ROClientException as e:
+                    if e.http_code == 404:  # not found
+                        nsr_lcm["RO"]["nsr_id"] = None
+                        nsr_lcm["RO"]["nsr_status"] = "DELETED"
+                        self.logger.debug(logging_text + "RO_ns_id={} already deleted".format(RO_nsr_id))
+                    elif e.http_code == 409:   #conflict
+                        self.logger.debug(logging_text + "RO_ns_id={} delete conflict: {}".format(RO_nsr_id, e))
+                    else:
+                        self.logger.error(logging_text + "RO_ns_id={} delete error: {}".format(RO_nsr_id, e))
+                self.update_nsr_db(nsr_id, db_nsr)
 
-        # Delete nsd
-        RO_nsd_id = nsr_lcm["RO"]["nsd_id"]
-        if RO_nsd_id:
-            try:
-                db_nsr["detailed-status"] = "Deleting nsd at RO"
-                desc = await RO.delete("nsd", RO_nsd_id)
-                self.logger.debug("delete_ns task nsr_id={} RO nsd={} deleted".format(nsr_id, RO_nsd_id))
-                nsr_lcm["RO"]["nsd_id"] = None
-            except ROclient.ROClientException as e:
-                if e.http_code == 404:  # not found
+            # Delete nsd
+            RO_nsd_id = nsr_lcm["RO"]["nsd_id"]
+            if RO_nsd_id:
+                try:
+                    step = db_nsr["detailed-status"] = "Deleting nsd at RO"
+                    desc = await RO.delete("nsd", RO_nsd_id)
+                    self.logger.debug(logging_text + "RO_nsd_id={} deleted".format(RO_nsd_id))
                     nsr_lcm["RO"]["nsd_id"] = None
-                    self.logger.debug("delete_ns task nsr_id={} RO nsd={} already deleted".format(nsr_id, RO_nsd_id))
-                elif e.http_code == 409:   #conflict
-                    self.logger.debug("delete_ns task nsr_id={} RO nsd={} delete conflict: {}".format(nsr_id, RO_nsd_id,
-                                                                                                      e))
-                else:
-                    self.logger.error("delete_ns task nsr_id={} RO nsd={} delete error: {}".format(nsr_id, RO_nsd_id,
-                                                                                                   e))
-            self.db.replace("nsrs", nsr_id, db_nsr)
+                except ROclient.ROClientException as e:
+                    if e.http_code == 404:  # not found
+                        nsr_lcm["RO"]["nsd_id"] = None
+                        self.logger.debug(logging_text + "RO_nsd_id={} already deleted".format(RO_nsd_id))
+                    elif e.http_code == 409:   #conflict
+                        self.logger.debug(logging_text + "RO_nsd_id={} delete conflict: {}".format(RO_nsd_id, e))
+                    else:
+                        self.logger.error(logging_text + "RO_nsd_id={} delete error: {}".format(RO_nsd_id, e))
+                self.update_nsr_db(nsr_id, db_nsr)
 
-        for vnf_id, RO_vnfd_id in nsr_lcm["RO"]["vnfd_id"].items():
-            if not RO_vnfd_id:
-                continue
-            try:
-                db_nsr["detailed-status"] = "Deleting vnfd {} at RO".format(vnf_id)
-                desc = await RO.delete("vnfd", RO_vnfd_id)
-                self.logger.debug("delete_ns task nsr_id={} RO vnfd={} deleted".format(nsr_id, RO_vnfd_id))
-                nsr_lcm["RO"]["vnfd_id"][vnf_id] = None
-            except ROclient.ROClientException as e:
-                if e.http_code == 404:  # not found
+            for vnf_id, RO_vnfd_id in nsr_lcm["RO"]["vnfd_id"].items():
+                if not RO_vnfd_id:
+                    continue
+                try:
+                    step = db_nsr["detailed-status"] = "Deleting vnfd={} at RO".format(vnf_id)
+                    desc = await RO.delete("vnfd", RO_vnfd_id)
+                    self.logger.debug(logging_text + "RO_vnfd_id={} deleted".format(RO_vnfd_id))
                     nsr_lcm["RO"]["vnfd_id"][vnf_id] = None
-                    self.logger.debug("delete_ns task nsr_id={} RO vnfd={} already deleted ".format(nsr_id, RO_vnfd_id))
-                elif e.http_code == 409:   #conflict
-                    self.logger.debug("delete_ns task nsr_id={} RO vnfd={} delete conflict: {}".format(
-                        nsr_id, RO_vnfd_id, e))
-                else:
-                    self.logger.error("delete_ns task nsr_id={} RO vnfd={} delete error: {}".format(
-                        nsr_id, RO_vnfd_id, e))
-            self.db.replace("nsrs", nsr_id, db_nsr)
+                except ROclient.ROClientException as e:
+                    if e.http_code == 404:  # not found
+                        nsr_lcm["RO"]["vnfd_id"][vnf_id] = None
+                        self.logger.debug(logging_text + "RO_vnfd_id={} already deleted ".format(RO_vnfd_id))
+                    elif e.http_code == 409:   #conflict
+                        self.logger.debug(logging_text + "RO_vnfd_id={} delete conflict: {}".format(RO_vnfd_id, e))
+                    else:
+                        self.logger.error(logging_text + "RO_vnfd_id={} delete error: {}".format(RO_vnfd_id, e))
+                self.update_nsr_db(nsr_id, db_nsr)
 
-        # TODO delete from database or mark as deleted???
-        db_nsr["operational-status"] = "terminated"
-        self.db.del_one("nsrs", {"_id": nsr_id})
-        self.logger.debug("delete_ns task nsr_id={} Exit".format(nsr_id))
+            # TODO delete from database or mark as deleted???
+            db_nsr["operational-status"] = "terminated"
+            self.db.del_one("nsrs", {"_id": nsr_id})
+            self.logger.debug(logging_text + "Exit")
+
+        except (ROclient.ROClientException, DbException) as e:
+            self.logger.error(logging_text + "Exit Exception {}".format(e))
+            exc = e
+        except Exception as e:
+            self.logger.critical(logging_text + "Exit Exception {}".format(e), exc_info=True)
+            exc = e
+        finally:
+            if exc and db_nsr:
+                db_nsr["detailed-status"] = "ERROR {}: {}".format(step , exc)
+                db_nsr["operational-status"] = "failed"
+                self.update_nsr_db(nsr_id, db_nsr)
 
     async def test(self, param=None):
         self.logger.debug("Starting/Ending test task: {}".format(param))
@@ -352,6 +465,7 @@ class Lcm:
             elif command.startswith("#"):
                 continue
             elif command == "echo":
+                # just for test
                 print(params)
             elif command == "test":
                 asyncio.Task(self.test(params), loop=self.loop)
@@ -360,7 +474,7 @@ class Lcm:
             elif command == "create":
                 nsr_id = params.strip()
                 self.logger.debug("Deploying NS {}".format(nsr_id))
-                task = asyncio.ensure_future(self.create_ns(nsr_id))
+                task = asyncio.ensure_future(self.create_ns(nsr_id, order_id))
                 if nsr_id not in self.lcm_tasks:
                     self.lcm_tasks[nsr_id] = {}
                 self.lcm_tasks[nsr_id][order_id] = {"create_ns": task}
@@ -368,18 +482,24 @@ class Lcm:
                 nsr_id = params.strip()
                 self.logger.debug("Deleting NS {}".format(nsr_id))
                 self.cancel_tasks(nsr_id)
-                task = asyncio.ensure_future(self.delete_ns(nsr_id))
+                task = asyncio.ensure_future(self.delete_ns(nsr_id, order_id))
                 if nsr_id not in self.lcm_tasks:
                     self.lcm_tasks[nsr_id] = {}
                 self.lcm_tasks[nsr_id][order_id] = {"delete_ns": task}
             elif command == "show":
+                # just for test
                 nsr_id = params.strip()
-                nsr_lcm = self.db.get_one("nsr_lcm", {"id": nsr_id})
-                print("nsr_lcm", nsr_lcm)
-                print("self.lcm_tasks", self.lcm_tasks.get(nsr_id))
+                try:
+                    db_nsr = self.db.get_one("nsrs", {"_id": nsr_id})
+                    print("nsr:\n    _id={}\n    operational-status: {}\n    config-status: {}\n    detailed-status: "
+                          "{}\n    deploy: {}\n    tasks: {}".format(
+                                nsr_id, db_nsr["operational-status"],
+                                db_nsr["config-status"], db_nsr["detailed-status"],
+                                db_nsr["_admin"]["deploy"], self.lcm_tasks.get(nsr_id)))
+                except Exception as e:
+                    print("nsr {} not found: {}".format(nsr_id, e))
             else:
-                self.logger.debug("unknown command '{}'".format(command))
-                print("Usage:\n  echo: <>\n  create: <ns1|ns2>\n  delete: <ns1|ns2>\n  show: <ns1|ns2>")
+                self.logger.critical("unknown command '{}'".format(command))
         self.logger.debug("kafka task Exit")
 
 
@@ -424,42 +544,5 @@ if __name__ == '__main__':
 
     config_file = "lcm.cfg"
     lcm = Lcm(config_file)
-
-    # # FOR TEST
-    # RO_VIM = "OST2_MRT"
-    #
-    # #FILL DATABASE
-    # with open("/home/atierno/OSM/osm/devops/descriptor-packages/vnfd/ping_vnf/src/ping_vnfd.yaml") as f:
-    #     vnfd = yaml.load(f)
-    #     vnfd_clean, _ = ROclient.remove_envelop("vnfd", vnfd)
-    #     vnfd_clean["_admin"] = {"storage": "/home/atierno/OSM/osm/devops/descriptor-packages/vnfd/ping_vnf"}
-    #     lcm.db.create("vnfd", vnfd_clean)
-    # with open("/home/atierno/OSM/osm/devops/descriptor-packages/vnfd/pong_vnf/src/pong_vnfd.yaml") as f:
-    #     vnfd = yaml.load(f)
-    #     vnfd_clean, _ = ROclient.remove_envelop("vnfd", vnfd)
-    #     vnfd_clean["_admin"] = {"storage": "/home/atierno/OSM/osm/devops/descriptor-packages/vnfd/pong_vnf"}
-    #     lcm.db.create("vnfd", vnfd_clean)
-    # with open("/home/atierno/OSM/osm/devops/descriptor-packages/nsd/ping_pong_ns/src/ping_pong_nsd.yaml") as f:
-    #     nsd = yaml.load(f)
-    #     nsd_clean, _ = ROclient.remove_envelop("nsd", nsd)
-    #     nsd_clean["_admin"] = {"storage": "/home/atierno/OSM/osm/devops/descriptor-packages/nsd/ping_pong_ns"}
-    #     lcm.db.create("nsd", nsd_clean)
-    #
-    # ns_request = {
-    #     "id": "ns1",
-    #     "nsr_id": "ns1",
-    #     "name": "pingpongOne",
-    #     "vim": RO_VIM,
-    #     "nsd_id": nsd_clean["id"],  # nsd_ping_pong
-    # }
-    # lcm.db.create("ns_request", ns_request)
-    # ns_request = {
-    #     "id": "ns2",
-    #     "nsr_id": "ns2",
-    #     "name": "pingpongTwo",
-    #     "vim": RO_VIM,
-    #     "nsd_id": nsd_clean["id"],  # nsd_ping_pong
-    # }
-    # lcm.db.create("ns_request", ns_request)
 
     lcm.start()

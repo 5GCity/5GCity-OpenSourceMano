@@ -1,13 +1,21 @@
-from dbbase import DbException, dbbase
+import logging
+from dbbase import DbException, DbBase
 from http import HTTPStatus
 from uuid import uuid4
 from copy import deepcopy
 
+__author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 
-class dbmemory(dbbase):
 
-    def __init__(self):
+class DbMemory(DbBase):
+
+    def __init__(self, logger_name='db'):
+        self.logger = logging.getLogger(logger_name)
         self.db = {}
+
+    def db_connect(self, config):
+        if "logger_name" in config:
+            self.logger = logging.getLogger(config["logger_name"])
 
     @staticmethod
     def _format_filter(filter):
@@ -45,7 +53,7 @@ class dbmemory(dbbase):
                                       HTTPStatus.CONFLICT.value)
                 l = row
             if not l and fail_on_empty:
-                raise DbException("Not found entry with filter='{}'".format(filter), HTTPStatus.NOT_FOUND.value)
+                raise DbException("Not found entry with filter='{}'".format(filter), HTTPStatus.NOT_FOUND)
             return deepcopy(l)
         except Exception as e:  # TODO refine
             raise DbException(str(e))
@@ -70,7 +78,7 @@ class dbmemory(dbbase):
                 break
             else:
                 if fail_on_empty:
-                    raise DbException("Not found entry with filter='{}'".format(filter), HTTPStatus.NOT_FOUND.value)
+                    raise DbException("Not found entry with filter='{}'".format(filter), HTTPStatus.NOT_FOUND)
                 return None
             del self.db[table][i]
             return {"deleted": 1}
@@ -83,7 +91,7 @@ class dbmemory(dbbase):
                 break
             else:
                 if fail_on_empty:
-                    raise DbException("Not found entry with filter='{}'".format(filter), HTTPStatus.NOT_FOUND.value)
+                    raise DbException("Not found entry with filter='{}'".format(filter), HTTPStatus.NOT_FOUND)
                 return None
             self.db[table][i] = deepcopy(indata)
             return {"upadted": 1}

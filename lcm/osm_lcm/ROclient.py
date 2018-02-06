@@ -35,6 +35,7 @@ import logging
 import sys
 from urllib.parse import quote
 from uuid import UUID
+from copy import deepcopy
 
 __author__ = "Alfonso Tierno, Pablo Montes"
 __date__ = "$09-Jan-2018 09:09:48$"
@@ -125,9 +126,10 @@ class ROClient:
         self.tenant = None
         self.datacenter_id_name = kwargs.get("datacenter")
         self.datacenter = None
-        self.logger = logging.getLogger(kwargs.get('logger', 'ROClient'))
-        if kwargs.get("debug"):
-            self.logger.setLevel(logging.DEBUG)
+        logger_name = kwargs.get('logger_name', 'ROClient')
+        self.logger = logging.getLogger(logger_name)
+        if kwargs.get("loglevel"):
+            self.logger.setLevel(kwargs["loglevel"])
         global requests
         requests = kwargs.get("TODO remove")
 
@@ -286,21 +288,24 @@ class ROClient:
         :param filter_by: dictionary with filtering
         :return: a list of dict. It can be empty. Raises ROClientException on Error,
         """
-        if item not in self.client_to_RO:
-            raise ROClientException("Invalid item {}".format(item))
-        if item == 'tenant':
-            all_tenants = None
-        with aiohttp.ClientSession(loop=self.loop) as session:
-            content = await self._list_item(session, self.client_to_RO[item], all_tenants=all_tenants,
-                                            filter_dict=filter_by)
-        if isinstance(content, dict):
-            if len(content) == 1:
-                for _, v in content.items():
-                    return v
-                return content.values()[0]
-            else:
-                raise ROClientException("Output not a list neither dict with len equal 1", http_code=500)
-            return content
+        try:
+            if item not in self.client_to_RO:
+                raise ROClientException("Invalid item {}".format(item))
+            if item == 'tenant':
+                all_tenants = None
+            with aiohttp.ClientSession(loop=self.loop) as session:
+                content = await self._list_item(session, self.client_to_RO[item], all_tenants=all_tenants,
+                                                filter_dict=filter_by)
+            if isinstance(content, dict):
+                if len(content) == 1:
+                    for _, v in content.items():
+                        return v
+                    return content.values()[0]
+                else:
+                    raise ROClientException("Output not a list neither dict with len equal 1", http_code=500)
+                return content
+        except aiohttp.errors.ClientOSError as e:
+            raise ROClientException(e, http_code=504)
 
     async def _get_item_uuid(self, session, item, item_id_name, all_tenants=False):
         if all_tenants:
@@ -510,17 +515,20 @@ class ROClient:
         :param all_tenants: True if not filtering by tenant. Only allowed for admin
         :return: dictionary with the information or raises ROClientException on Error, NotFound, found several
         """
-        if item not in self.client_to_RO:
-            raise ROClientException("Invalid item {}".format(item))
-        if item == 'tenant':
-            all_tenants = None
+        try:
+            if item not in self.client_to_RO:
+                raise ROClientException("Invalid item {}".format(item))
+            if item == 'tenant':
+                all_tenants = None
 
-        with aiohttp.ClientSession(loop=self.loop) as session:
-            content = await self._get_item(session, self.client_to_RO[item], item_id_name, all_tenants=all_tenants)
-        if len(content) == 1:
-            return content.values()[0]
-        else:
-            return content
+            with aiohttp.ClientSession(loop=self.loop) as session:
+                content = await self._get_item(session, self.client_to_RO[item], item_id_name, all_tenants=all_tenants)
+            if len(content) == 1:
+                return content.values()[0]
+            else:
+                return content
+        except aiohttp.errors.ClientOSError as e:
+            raise ROClientException(e, http_code=504)
 
     async def delete(self, item, item_id_name=None, all_tenants=False):
         """
@@ -530,17 +538,20 @@ class ROClient:
         :param all_tenants: True if not filtering by tenant. Only allowed for admin
         :return: dictionary with the information or raises ROClientException on Error, NotFound, found several
         """
-        if item not in self.client_to_RO:
-            raise ROClientException("Invalid item {}".format(item))
-        if item == 'tenant':
-            all_tenants = None
-
-        with aiohttp.ClientSession(loop=self.loop) as session:
-            if item == 'vim':
-                # check that exist
-                item_id = await self._get_item_uuid(session, "datacenters", item_id_name, all_tenants=True)
+        try:
+            if item not in self.client_to_RO:
+                raise ROClientException("Invalid item {}".format(item))
+            if item == 'tenant':
                 all_tenants = None
-            return await self._del_item(session, self.client_to_RO[item], item_id_name, all_tenants=all_tenants)
+
+            with aiohttp.ClientSession(loop=self.loop) as session:
+                if item == 'vim':
+                    # check that exist
+                    item_id = await self._get_item_uuid(session, "datacenters", item_id_name, all_tenants=True)
+                    all_tenants = None
+                return await self._del_item(session, self.client_to_RO[item], item_id_name, all_tenants=all_tenants)
+        except aiohttp.errors.ClientOSError as e:
+            raise ROClientException(e, http_code=504)
 
     async def create(self, item, descriptor=None, descriptor_format=None, **kwargs):
         """
@@ -552,60 +563,67 @@ class ROClient:
                keys can be a dot separated list to specify elements inside dict
         :return: dictionary with the information or raises ROClientException on Error
         """
-        if isinstance(descriptor, str):
-            descriptor = self._parse(descriptor, descriptor_format)
-        elif descriptor:
-            pass
-        else:
-            descriptor = {}
+        try:
+            if isinstance(descriptor, str):
+                descriptor = self._parse(descriptor, descriptor_format)
+            elif descriptor:
+                pass
+            else:
+                descriptor = {}
 
-        if item not in self.client_to_RO:
-            raise ROClientException("Invalid item {}".format(item))
-        desc, enveloped = remove_envelop(item, descriptor)
+            if item not in self.client_to_RO:
+                raise ROClientException("Invalid item {}".format(item))
+            desc, enveloped = remove_envelop(item, descriptor)
 
-        # Override descriptor with kwargs
-        if kwargs:
-            try:
-                for k, v in kwargs.items():
-                    update_content = desc
-                    kitem_old = None
-                    klist = k.split(".")
-                    for kitem in klist:
-                        if kitem_old is not None:
-                            update_content = update_content[kitem_old]
-                        if isinstance(update_content, dict):
-                            kitem_old = kitem
-                        elif isinstance(update_content, list):
-                            kitem_old = int(kitem)
+            # Override descriptor with kwargs
+            if kwargs:
+                desc = deepcopy(desc)  # do not modify original descriptor
+                try:
+                    for k, v in kwargs.items():
+                        update_content = desc
+                        kitem_old = None
+                        klist = k.split(".")
+                        for kitem in klist:
+                            if kitem_old is not None:
+                                update_content = update_content[kitem_old]
+                            if isinstance(update_content, dict):
+                                kitem_old = kitem
+                            elif isinstance(update_content, list):
+                                kitem_old = int(kitem)
+                            else:
+                                raise ROClientException(
+                                    "Invalid query string '{}'. Descriptor is not a list nor dict at '{}'".format(k, kitem))
+                        if v == "__DELETE__":
+                            del update_content[kitem_old]
                         else:
-                            raise ROClientException(
-                                "Invalid query string '{}'. Descriptor is not a list nor dict at '{}'".format(k, kitem))
-                    update_content[kitem_old] = v
-            except KeyError:
-                raise ROClientException(
-                    "Invalid query string '{}'. Descriptor does not contain '{}'".format(k, kitem_old))
-            except ValueError:
-                raise ROClientException("Invalid query string '{}'. Expected integer index list instead of '{}'".format(
-                    k, kitem))
-            except IndexError:
-                raise ROClientException(
-                    "Invalid query string '{}'. Index '{}' out of  range".format(k, kitem_old))
+                            update_content[kitem_old] = v
+                except KeyError:
+                    raise ROClientException(
+                        "Invalid query string '{}'. Descriptor does not contain '{}'".format(k, kitem_old))
+                except ValueError:
+                    raise ROClientException("Invalid query string '{}'. Expected integer index list instead of '{}'".format(
+                        k, kitem))
+                except IndexError:
+                    raise ROClientException(
+                        "Invalid query string '{}'. Index '{}' out of  range".format(k, kitem_old))
 
-        for mandatory in self.mandatory_for_create[item]:
-            if mandatory not in desc:
-                raise ROClientException("'{}' is mandatory parameter for {}".format(mandatory, item))
+            for mandatory in self.mandatory_for_create[item]:
+                if mandatory not in desc:
+                    raise ROClientException("'{}' is mandatory parameter for {}".format(mandatory, item))
 
-        all_tenants = False
-        if item in ('tenant', 'vim'):
-            all_tenants = None
+            all_tenants = False
+            if item in ('tenant', 'vim'):
+                all_tenants = None
 
-        if not enveloped:
-            create_desc = self._create_envelop(item, desc)
-        else:
-            create_desc = descriptor
+            if not enveloped:
+                create_desc = self._create_envelop(item, desc)
+            else:
+                create_desc = descriptor
 
-        with aiohttp.ClientSession(loop=self.loop) as session:
-            return await self._create_item(session, self.client_to_RO[item], create_desc, all_tenants)
+            with aiohttp.ClientSession(loop=self.loop) as session:
+                return await self._create_item(session, self.client_to_RO[item], create_desc, all_tenants)
+        except aiohttp.errors.ClientOSError as e:
+            raise ROClientException(e, http_code=504)
 
     def edit_tenant(self, uuid=None, name=None, descriptor=None, descriptor_format=None, new_name=None, new_description=None):
         """Edit the parameters of a tenant
@@ -618,24 +636,27 @@ class ROClient:
         Return: Raises an exception on error, not found or found several
                 Obtain a dictionary with format {'tenant':{newtenant_info}}
         """
-        # TODO revise
-        if isinstance(descriptor, str):
-            descriptor = self.parse(descriptor, descriptor_format)
-        elif descriptor:
-            pass
-        elif new_name or new_description:
-            descriptor={"tenant": {}}
-        else:
-            raise ROClientException("Missing descriptor")
+        try:
+            # TODO revise
+            if isinstance(descriptor, str):
+                descriptor = self.parse(descriptor, descriptor_format)
+            elif descriptor:
+                pass
+            elif new_name or new_description:
+                descriptor={"tenant": {}}
+            else:
+                raise ROClientException("Missing descriptor")
 
-        if 'tenant' not in descriptor or len(descriptor)!=1:
-            raise ROClientException("Descriptor must contain only one 'tenant' field")
-        if new_name:
-            descriptor['tenant']['name'] = new_name
-        if new_description:
-            descriptor['tenant']['description'] = new_description
+            if 'tenant' not in descriptor or len(descriptor)!=1:
+                raise ROClientException("Descriptor must contain only one 'tenant' field")
+            if new_name:
+                descriptor['tenant']['name'] = new_name
+            if new_description:
+                descriptor['tenant']['description'] = new_description
 
-        return self._edit_item("tenants", descriptor, uuid, name, all_tenants=None)
+            return self._edit_item("tenants", descriptor, uuid, name, all_tenants=None)
+        except aiohttp.errors.ClientOSError as e:
+            raise ROClientException(e, http_code=504)
 
     #DATACENTERS
 
@@ -867,8 +888,8 @@ class ROClient:
 
 if __name__ == '__main__':
     RO_URL = "http://localhost:9090/openmano"
-    RO_TENANT = "2c94f639-cefc-4f3a-a8f9-bbab0471946a"
-    RO_VIM = "3e70deb6-aea1-11e7-af13-080027429aaf"
+    RO_TENANT = "osm"
+    RO_VIM = "myvim"
 
     streamformat = "%(asctime)s %(name)s %(levelname)s: %(message)s"
     logging.basicConfig(format=streamformat)

@@ -1,13 +1,16 @@
 
-class FsException(Exception):
+from http import HTTPStatus
 
-    def __init__(self, message, http_code=404):
+__author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
+
+
+class FsException(Exception):
+    def __init__(self, message, http_code=HTTPStatus.INTERNAL_SERVER_ERROR):
         self.http_code = http_code
-        Exception.__init__(self, message)
+        Exception.__init__(self, "storage exception " + message)
 
 
 class FsBase(object):
-
     def __init__(self):
         pass
 
