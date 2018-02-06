@@ -6,7 +6,7 @@ WORKDIR /app/osm_lcm
 # Copy the current directory contents into the container at /app
 ADD . /app
 
-RUN apt update && apt install -y git  python3 \
+RUN apt-get update && apt-get install -y git  python3 \
     python3-pip python3-pymongo python3-yaml python3-aiohttp \
     && pip3 install aiokafka \
     && mkdir -p /app/storage/kafka && mkdir -p /app/log 
