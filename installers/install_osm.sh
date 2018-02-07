@@ -403,16 +403,19 @@ function install_from_lxdimages(){
 function install_docker_ce() {
     # installs and configures Docker CE
     echo "Installing Docker CE ..."
-    sudo apt-get install apt-transport-https ca-certificates software-properties-common
+    sudo apt-get -qq update
+    sudo apt-get install -y apt-transport-https ca-certificates software-properties-common
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
     sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
     sudo apt-get -qq update
-    sudo apt-get install docker-ce
-    # user management
+    sudo apt-get install -y docker-ce
     echo "Adding user to group 'docker'"
-    sudo groupadd docker
+    sudo groupadd -f docker
     sudo usermod -aG docker $USER
     echo "... Docker CE installation done"
+    sleep 2
+    sudo service docker restart
+    echo "... restarted Docker service"
 }
 
 function install_vimemu() {
@@ -423,13 +426,13 @@ function install_vimemu() {
     git clone https://osm.etsi.org/gerrit/osm/vim-emu.git
     # build vim-emu docker
     echo "Building vim-emu Docker container..."
-    docker build -t vim-emu-img -f vim-emu/Dockerfile vim-emu/
+    sudo docker build -t vim-emu-img -f vim-emu/Dockerfile vim-emu/
     # start vim-emu container as daemon
     echo "Starting vim-emu Docker container 'vim-emu' ..."
-    docker run --name vim-emu -t -d --rm --privileged --pid='host' -v /var/run/docker.sock:/var/run/docker.sock vim-emu-img python examples/osm_default_daemon_topology_2_pop.py
+    sudo docker run --name vim-emu -t -d --rm --privileged --pid='host' -v /var/run/docker.sock:/var/run/docker.sock vim-emu-img python examples/osm_default_daemon_topology_2_pop.py
     echo "Waiting for 'vim-emu' container to start ..."
     sleep 5
-    export VIMEMU_HOSTNAME=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' vim-emu)
+    export VIMEMU_HOSTNAME=$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' vim-emu)
     echo "vim-emu running at $VIMEMU_HOSTNAME ..."
     echo -e "You might be interested in adding the following OSM client env variables to your .bashrc file:"
     echo "     export OSM_HOSTNAME=${OSM_HOSTNAME}"
