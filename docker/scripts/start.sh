@@ -125,4 +125,4 @@ fi
 
 
 echo "4/4 Try to start"
-openmanod -c /etc/osm/openmanod.cfg --log-file=/var/log/osm/openmano.log
+/usr/bin/openmanod -c /etc/osm/openmanod.cfg --log-file=/var/log/osm/openmano.log
