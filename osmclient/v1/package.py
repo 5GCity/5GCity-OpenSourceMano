@@ -18,9 +18,6 @@
 OSM package API handling
 """
 
-import tarfile
-import re
-import yaml
 from osmclient.common.exceptions import ClientException
 from osmclient.common.exceptions import NotFound
 from osmclient.common import utils
@@ -52,47 +49,14 @@ class Package(object):
                                     check_exists(lambda:
                                                  get_method(pkg_type['name'])))
 
-    # method opens up a package and finds the name of the resulting
-    # descriptor (vnfd or nsd name)
     def get_key_val_from_pkg(self, descriptor_file):
-        tar = tarfile.open(descriptor_file)
-        yamlfile = None
-        for member in tar.getmembers():
-            if (re.match('.*.yaml', member.name) and
-               len(member.name.split('/')) == 2):
-                yamlfile = member.name
-                break
-        if yamlfile is None:
-            return None
-
-        dict = yaml.load(tar.extractfile(yamlfile))
-        result = {}
-        for k1, v1 in dict.items():
-            if not k1.endswith('-catalog'):
-                continue
-            for k2, v2 in v1.items():
-                if not k2.endswith('nsd') and not k2.endswith('vnfd'):
-                    continue
-
-                if 'nsd' in k2:
-                    result['type'] = 'nsd'
-                else:
-                    result['type'] = 'vnfd'
-
-                for entry in v2:
-                    for k3, v3 in entry.items():
-                        # strip off preceeding chars before :
-                        key_name = k3.split(':').pop()             
-                        
-                        result[key_name] = v3
-        tar.close()
-        return result
+        utils.get_key_val_from_pkg(descriptor_file)
 
     def wait_for_upload(self, filename):
         """wait(block) for an upload to succeed.
            The filename passed is assumed to be a descriptor tarball.
         """
-        pkg_type = self.get_key_val_from_pkg(filename)
+        pkg_type = utils.get_key_val_from_pkg(filename)
 
         if pkg_type is None:
             raise ClientException("Cannot determine package type")

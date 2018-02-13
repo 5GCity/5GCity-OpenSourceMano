@@ -1,4 +1,3 @@
-# Copyright 2017-2018 Sandvine
 # Copyright 2018 Telefonica
 #
 # All Rights Reserved.
@@ -14,23 +13,3 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-
-"""
-OSM client entry point
-"""
-
-from osmclient.v1 import client as client
-from osmclient.sol005 import client as sol005client
-
-def Client(version=1, host=None, sol005=False, *args, **kwargs):
-    if not sol005:
-        if version == 1:
-            return client.Client(host, *args, **kwargs)
-        else:
-            raise Exception("Unsupported client version")
-    else:
-        if version == 1:
-            return sol005client.Client(host, *args, **kwargs)
-        else:
-            raise Exception("Unsupported client version")
-
