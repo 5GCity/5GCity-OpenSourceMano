@@ -153,7 +153,7 @@ http2db_host={'id':'uuid'}
 http2db_tenant={'id':'uuid'}
 http2db_flavor={'id':'uuid','imageRef':'image_id', 'size': 'image_size'}
 http2db_image={'id':'uuid', 'created':'created_at', 'updated':'modified_at', 'public': 'public'}
-http2db_server={'id':'uuid','hostId':'host_id','flavorRef':'flavor_id','imageRef':'image_id','created':'created_at'}
+http2db_server={'id':'uuid','hostId':'host_id','flavorRef':'flavor_id','osImageType':'os_image_type','imageRef':'image_id','created':'created_at'}  #Unikernels extension
 http2db_network={'id':'uuid','provider:vlan':'vlan', 'provider:physical': 'provider'}
 http2db_ofc = {'id': 'uuid'}
 http2db_port={'id':'uuid', 'network_id':'net_id', 'mac_address':'mac', 'device_owner':'type','device_id':'instance_id','binding:switch_port':'switch_port','binding:vlan':'vlan', 'bandwidth':'Mbps'}
@@ -513,7 +513,7 @@ def http_get_hosts():
 
 def get_hosts():
     select_, where_, limit_ = filter_query_string(bottle.request.query, http2db_host,
-                                                  ('id', 'name', 'description', 'status', 'admin_state_up', 'ip_name'))
+                                                  ('id', 'name', 'description', 'status', 'admin_state_up', 'ip_name', 'hypervisors'))  #Unikernels extension
     
     myself = config_dic['http_threads'][ threading.current_thread().name ]
     result, content = myself.db.get_table(FROM='hosts', SELECT=select_, WHERE=where_, LIMIT=limit_)
@@ -656,7 +656,8 @@ def http_post_hosts():
                                     db=config_dic['db'], db_lock=config_dic['db_lock'],
                                     test=host_test_mode, image_path=config_dic['host_image_path'],
                                     version=config_dic['version'], host_id=content['uuid'],
-                                    develop_mode=host_develop_mode, develop_bridge_iface=host_develop_bridge_iface)
+                                    develop_mode=host_develop_mode, develop_bridge_iface=host_develop_bridge_iface,
+                                    hypervisors=host.get('hypervisors', None))  #Unikernels extension
 
             thread.start()
             config_dic['host_threads'][content['uuid']] = thread

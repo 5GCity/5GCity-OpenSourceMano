@@ -50,7 +50,7 @@ class host_thread(threading.Thread):
     lvirt_module = None
 
     def __init__(self, name, host, user, db, db_lock, test, image_path, host_id, version, develop_mode,
-                 develop_bridge_iface, password=None, keyfile = None, logger_name=None, debug=None):
+                 develop_bridge_iface, password=None, keyfile = None, logger_name=None, debug=None, hypervisors=None):
         """Init a thread to communicate with compute node or ovs_controller.
         :param host_id: host identity
         :param name: name of the thread
@@ -99,6 +99,14 @@ class host_thread(threading.Thread):
         self.pending_terminate_server =[] #list  with pairs (time,server_uuid) time to send a terminate for a server being destroyed
         self.next_update_server_status = 0 #time when must be check servers status
         
+#######        self.hypervisor = "kvm" #hypervisor flag (default: kvm)
+        if hypervisors:
+            self.hypervisors = hypervisors
+        else:
+            self.hypervisors = "kvm"
+
+        self.xen_hyp = True if "xen" in self.hypervisors else False
+
         self.hostinfo = None 
         
         self.queueLock = threading.Lock()
@@ -107,10 +115,16 @@ class host_thread(threading.Thread):
         self.run_command_session = None
         self.error = None
         self.localhost = True if host == 'localhost' else False
-        self.lvirt_conn_uri = "qemu+ssh://{user}@{host}/system?no_tty=1&no_verify=1".format(
-            user=self.user, host=self.host)
+
+        if self.xen_hyp:
+            self.lvirt_conn_uri = "xen+ssh://{user}@{host}/?no_tty=1&no_verify=1".format(
+                user=self.user, host=self.host)
+        else:
+            self.lvirt_conn_uri = "qemu+ssh://{user}@{host}/system?no_tty=1&no_verify=1".format(
+                user=self.user, host=self.host)
         if keyfile:
             self.lvirt_conn_uri += "&keyfile=" + keyfile
+
         self.remote_ip = None
         self.local_ip = None
 
@@ -488,8 +502,13 @@ class host_thread(threading.Thread):
             bus_ide = True if bus=='ide' else False
             
         self.xml_level = 0
+        hypervisor = server.get('hypervisor', 'kvm')
+        os_type_img = server.get('os_image_type', 'other')
 
-        text = "<domain type='kvm'>"
+        if hypervisor[:3] == 'xen':
+            text = "<domain type='xen'>"
+        else:
+            text = "<domain type='kvm'>"
     #get topology
         topo = server_metadata.get('topology', None)
         if topo == None and 'metadata' in dev_list[0]:
@@ -563,12 +582,26 @@ class host_thread(threading.Thread):
             if dev['type']=='cdrom' :
                 boot_cdrom = True
                 break
-        text += self.tab()+ '<os>' + \
-            self.inc_tab() + "<type arch='x86_64' machine='pc'>hvm</type>"
-        if boot_cdrom:
-            text +=  self.tab() + "<boot dev='cdrom'/>" 
-        text +=  self.tab() + "<boot dev='hd'/>" + \
-            self.dec_tab()+'</os>'
+        if hypervisor == 'xenhvm':
+            text += self.tab()+ '<os>' + \
+                self.inc_tab() + "<type arch='x86_64' machine='xenfv'>hvm</type>"
+            text += self.tab() + "<loader type='rom'>/usr/lib/xen/boot/hvmloader</loader>"
+            if boot_cdrom:
+                text +=  self.tab() + "<boot dev='cdrom'/>" 
+            text +=  self.tab() + "<boot dev='hd'/>" + \
+                self.dec_tab()+'</os>'
+        elif hypervisor == 'xen-unik':
+            text += self.tab()+ '<os>' + \
+                self.inc_tab() + "<type arch='x86_64' machine='xenpv'>xen</type>"
+            text +=  self.tab() + "<kernel>" + str(dev_list[0]['source file']) + "</kernel>" + \
+                self.dec_tab()+'</os>'
+        else:
+            text += self.tab()+ '<os>' + \
+                self.inc_tab() + "<type arch='x86_64' machine='pc'>hvm</type>"
+            if boot_cdrom:
+                text +=  self.tab() + "<boot dev='cdrom'/>" 
+            text +=  self.tab() + "<boot dev='hd'/>" + \
+                self.dec_tab()+'</os>'
     #features
         text += self.tab()+'<features>'+\
             self.inc_tab()+'<acpi/>' +\
@@ -587,14 +620,29 @@ class host_thread(threading.Thread):
             self.tab() + "<on_poweroff>preserve</on_poweroff>" + \
             self.tab() + "<on_reboot>restart</on_reboot>" + \
             self.tab() + "<on_crash>restart</on_crash>"
-        text += self.tab() + "<devices>" + \
-            self.inc_tab() + "<emulator>/usr/libexec/qemu-kvm</emulator>" + \
-            self.tab() + "<serial type='pty'>" +\
-            self.inc_tab() + "<target port='0'/>" + \
-            self.dec_tab() + "</serial>" +\
-            self.tab() + "<console type='pty'>" + \
-            self.inc_tab()+ "<target type='serial' port='0'/>" + \
-            self.dec_tab()+'</console>'
+        if hypervisor == 'xenhvm':
+            text += self.tab() + "<devices>" + \
+                self.inc_tab() + "<emulator>/usr/bin/qemu-system-i386</emulator>" + \
+                self.tab() + "<serial type='pty'>" +\
+                self.inc_tab() + "<target port='0'/>" + \
+                self.dec_tab() + "</serial>" +\
+                self.tab() + "<console type='pty'>" + \
+                self.inc_tab()+ "<target type='serial' port='0'/>" + \
+                self.dec_tab()+'</console>' #In some libvirt version may be: <emulator>/usr/lib64/xen/bin/qemu-dm</emulator> (depends on distro)
+        elif hypervisor == 'xen-unik':
+            text += self.tab() + "<devices>" + \
+                self.tab() + "<console type='pty'>" + \
+                self.inc_tab()+ "<target type='xen' port='0'/>" + \
+                self.dec_tab()+'</console>'
+        else:
+            text += self.tab() + "<devices>" + \
+                self.inc_tab() + "<emulator>/usr/libexec/qemu-kvm</emulator>" + \
+                self.tab() + "<serial type='pty'>" +\
+                self.inc_tab() + "<target port='0'/>" + \
+                self.dec_tab() + "</serial>" +\
+                self.tab() + "<console type='pty'>" + \
+                self.inc_tab()+ "<target type='serial' port='0'/>" + \
+                self.dec_tab()+'</console>'
         if windows_os:
             text += self.tab() + "<controller type='usb' index='0'/>" + \
                 self.tab() + "<controller type='ide' index='0'/>" + \
@@ -605,6 +653,15 @@ class host_thread(threading.Thread):
                 self.dec_tab() + "</video>" + \
                 self.tab() + "<memballoon model='virtio'/>" + \
                 self.tab() + "<input type='tablet' bus='usb'/>" #TODO revisar
+        elif hypervisor == 'xen-unik':
+            pass
+        else:
+            text += self.tab() + "<controller type='ide' index='0'/>" + \
+                self.tab() + "<input type='mouse' bus='ps2'/>" + \
+                self.tab() + "<input type='keyboard' bus='ps2'/>" + \
+                self.tab() + "<video>" + \
+                self.inc_tab() + "<model type='cirrus' vram='9216' heads='1'/>" + \
+                self.dec_tab() + "</video>"
 
 #>             self.tab()+'<alias name=\'hostdev0\'/>\n' +\
 #>             self.dec_tab()+'</hostdev>\n' +\
@@ -621,7 +678,7 @@ class host_thread(threading.Thread):
         vd_index = 'a'
         for dev in dev_list:
             bus_ide_dev = bus_ide
-            if dev['type']=='cdrom' or dev['type']=='disk':
+            if (dev['type']=='cdrom' or dev['type']=='disk') and hypervisor != 'xen-unik':
                 if dev['type']=='cdrom':
                     bus_ide_dev = True
                 text += self.tab() + "<disk type='file' device='"+dev['type']+"'>"
@@ -656,6 +713,8 @@ class host_thread(threading.Thread):
                     dev_text = dev_text.replace('__dev__', vd_index)
                     vd_index = chr(ord(vd_index)+1)
                 text += dev_text
+            elif hypervisor == 'xen-unik':
+                pass
             else:
                 return -1, 'Unknown device type ' + dev['type']
 
@@ -696,6 +755,8 @@ class host_thread(threading.Thread):
                 vlan = content[0]['provider'].replace('OVS:', '')
                 text += self.tab() + "<interface type='bridge'>" + \
                         self.inc_tab() + "<source bridge='ovim-" + str(vlan) + "'/>"
+                if hypervisor == 'xenhvm' or hypervisor == 'xen-unik':
+                    text += self.tab() + "<script path='vif-openvswitch'/>"
             else:
                 return -1, 'Unknown Bridge net provider ' + content[0]['provider']
             if model!=None:
@@ -1771,12 +1832,16 @@ class host_thread(threading.Thread):
                 self.logger.error("launch_server ERROR getting server from DB %d %s", result, server_data)
                 return result, server_data
     
+            self.hypervisor = str(server_data['hypervisor'])
+
         #0: get image metadata
             server_metadata = server.get('metadata', {})
             use_incremental = None
              
             if "use_incremental" in server_metadata:
                 use_incremental = False if server_metadata["use_incremental"] == "no" else True
+            if self.xen_hyp == True:
+                use_incremental = False
 
             server_host_files = self.localinfo['server_files'].get( server['uuid'], {})
             if rebuild:
@@ -2387,6 +2452,7 @@ def create_server(server, db, db_lock, only_of_ports):
     elif requirements['vcpus']==0:
         return (-1, "Processor information not set neither at extended field not at vcpus")    
 
+    if 'hypervisor' in server: requirements['hypervisor'] = server['hypervisor']   #Unikernels extension
 
     db_lock.acquire()
     result, content = db.get_numas(requirements, server.get('host_id', None), only_of_ports)
@@ -2624,6 +2690,8 @@ def create_server(server, db, db_lock, only_of_ports):
     
     if 'description' in server: resources['description'] = server['description']
     if 'name' in server: resources['name'] = server['name']
+    if 'hypervisor' in server: resources['hypervisor'] = server['hypervisor']
+    if 'os_image_type' in server: resources['os_image_type'] = server['os_image_type']
     
     resources['extended'] = {}                          #optional
     resources['extended']['numas'] = []

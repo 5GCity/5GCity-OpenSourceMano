@@ -276,6 +276,7 @@ host_data_schema={
         "features": description_schema,
         "ranking": integer0_schema,
         "autodiscover": {"type": "boolean"},    # try to discover host parameters instead of providing in this schema
+        "hypervisors": description_schema,   #Unikernels extension
         "devices": {
             "type": "array", 
             "items": {
@@ -544,6 +545,8 @@ server_new_schema = {
                 "hostId":id_schema,
                 "flavorRef":id_schema,
                 "imageRef":id_schema,
+                "hypervisor":{"type":"string", "enum":["kvm","xen-unik","xenhvm"]}, #Unikernels extension
+                "osImageType":{"type":"string", "enum":["clickos","other"]}, #Unikernels extension
                 "extended": extended_schema,
                 "networks":networks_schema
             },

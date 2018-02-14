@@ -33,7 +33,7 @@ DBPORT="3306"
 DBNAME="vim_db"
 QUIET_MODE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=22
+LAST_DB_VERSION=23
 
 # Detect paths
 MYSQL=$(which mysql)
@@ -190,6 +190,7 @@ fi
 #[ $OPENVIM_VER_NUM -ge 5017 ] && DATABASE_TARGET_VER_NUM=20   #0.5.17  => 20
 #[ $OPENVIM_VER_NUM -ge 5018 ] && DATABASE_TARGET_VER_NUM=21   #0.5.18  => 21
 #[ $OPENVIM_VER_NUM -ge 5021 ] && DATABASE_TARGET_VER_NUM=22   #0.5.21  => 22
+#[ $OPENVIM_VER_NUM -ge 5024 ] && DATABASE_TARGET_VER_NUM=23   #0.5.24  => 23
 # TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -768,6 +769,25 @@ function downgrade_from_22(){
     echo "    Changed type of ram in 'flavors' from MEDIUMINT to SMALLINT"
     sql "ALTER TABLE flavors CHANGE COLUMN ram ram SMALLINT(5) UNSIGNED NULL DEFAULT NULL AFTER disk;"
     sql "DELETE FROM schema_version WHERE version_int = '22';"
+}
+
+function upgrade_to_23(){
+    echo "    Add 'hypervisor' and 'os_type' column to 'instances' table"
+    sql "ALTER TABLE instances ADD COLUMN hypervisor enum('kvm','xen-unik','xenhvm') NOT NULL DEFAULT 'kvm' AFTER flavor_id;"
+    sql "ALTER TABLE instances ADD COLUMN os_image_type VARCHAR(24) NOT NULL DEFAULT 'other' AFTER hypervisor;"
+    echo "    Add 'hypervisors' column to 'hosts' table"
+    sql "ALTER TABLE hosts ADD COLUMN hypervisors VARCHAR(255) NOT NULL DEFAULT 'kvm' AFTER features;"
+    sql "INSERT INTO schema_version (version_int, version, openvim_ver, comments, date) "\
+        "VALUES (23, '0.23', '0.5.24', 'Add hypervisor, os_type to instances and add hypervisors to hosts', '2018-03-20');"
+}
+
+function downgrade_from_23(){
+    echo "    Remove 'hypervisor' and 'os_type' column from 'instances' table"
+    sql "ALTER TABLE instances DROP COLUMN hypervisor;"
+    sql "ALTER TABLE instances DROP COLUMN os_image_type;"
+    echo "    Remove 'hypervisors' column from 'hosts' table"
+    sql "ALTER TABLE hosts DROP COLUMN hypervisors;"
+    sql "DELETE FROM schema_version WHERE version_int = '23';"
 }
 
 # TODO ... put functions here

@@ -43,9 +43,9 @@ import openflow_conn
 
 __author__ = "Alfonso Tierno, Leonardo Mirabal"
 __date__ = "$06-Feb-2017 12:07:15$"
-__version__ = "0.5.24-r540"
+__version__ = "0.5.24-r542"
 version_date = "Mar 2018"
-database_version = 22      #needed database schema version
+database_version = 23      #needed database schema version
 
 HTTP_Bad_Request =          400
 HTTP_Unauthorized =         401
@@ -199,8 +199,8 @@ class ovim():
         host_develop_bridge_iface = self.config.get('development_bridge', None)
 
         # get host list from data base before starting threads
-        r, hosts = self.db.get_table(SELECT=('name', 'ip_name', 'user', 'uuid', 'password', 'keyfile'),
-                                     FROM='hosts', WHERE={'status': 'ok'})
+        r, hosts = self.db.get_table(SELECT=('name', 'ip_name', 'user', 'uuid', 'hypervisors', 'password', 'keyfile'),
+                                     FROM='hosts', WHERE={'status': 'ok'}) #Unikernels extension
         if r < 0:
             raise ovimException("Cannot get hosts from database {}".format(hosts))
 
@@ -215,6 +215,7 @@ class ovim():
                                     version=self.config['version'], host_id=host['uuid'],
                                     develop_mode=host_develop_mode,
                                     develop_bridge_iface=host_develop_bridge_iface,
+                                    hypervisors=host['hypervisors'],  #Unikernels extension
                                     logger_name=self.logger_name + ".host." + host['name'],
                                     debug=self.config.get('log_level_host'))
 
