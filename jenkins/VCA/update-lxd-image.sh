@@ -35,6 +35,9 @@ function cache() {
     # Wait for the container to get an IP address
     lxc exec $container -- bash -c "for i in {1..60}; do sleep 1; ping -c1 10.44.127.1 &> /dev/null && break; done"
 
+    # Wait for cloud-init to finish
+    lxc exec $container -- bash -c "while [ ! -f /var/lib/cloud/instance/boot-finished ]; do sleep 1; done"
+
     lxc exec $container -- apt-get update -y
     lxc exec $container -- apt-get upgrade -y
     lxc exec $container -- apt-get install -y $PACKAGES $2
