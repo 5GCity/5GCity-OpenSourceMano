@@ -850,6 +850,8 @@ class vimconnector(vimconn.vimconnector):
                         net_dict["model"] = net["model"]
                 if net.get("mac_address"):
                     net_dict["mac_address"] = net["mac_address"]
+                if net.get("ip_address"):
+                    net_dict["ip_address"] = net["ip_address"]
                 virtio_net_list.append(net_dict)
             payload_dict={  "name":        name[:64],
                             "description": description,
@@ -952,7 +954,7 @@ class vimconnector(vimconn.vimconnector):
             vm={}
             #print "VIMConnector refresh_tenant_vms and nets: Getting tenant VM instance information from VIM"
             try:
-                url = self.url+'/'+self.tenant+'/servers/'+ vm_id
+                url = self.url + '/' + self.tenant + '/servers/' + vm_id
                 self.logger.info("Getting vm GET %s", url)
                 vim_response = requests.get(url, headers = self.headers_req)
                 self._check_http_request_response(vim_response)
@@ -969,7 +971,7 @@ class vimconnector(vimconn.vimconnector):
                 #get interfaces info
                 try:
                     management_ip = False
-                    url2 = self.url+'/ports?device_id='+ quote(vm_id)
+                    url2 = self.url + '/ports?device_id=' + quote(vm_id)
                     self.logger.info("Getting PORTS GET %s", url2)
                     vim_response2 = requests.get(url2, headers = self.headers_req)
                     self._check_http_request_response(vim_response2)
@@ -978,7 +980,7 @@ class vimconnector(vimconn.vimconnector):
                         vm["interfaces"]=[]
                     for port in client_data.get("ports"):
                         interface={}
-                        interface['vim_info']  = yaml.safe_dump(port)
+                        interface['vim_info'] = yaml.safe_dump(port)
                         interface["mac_address"] = port.get("mac_address")
                         interface["vim_net_id"] = port.get("network_id")
                         interface["vim_interface_id"] = port["id"]

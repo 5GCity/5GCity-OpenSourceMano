@@ -598,14 +598,14 @@ class nfvo_db(db_base.db_base):
                             vnf['mgmt_access'] = yaml.load(mgmt_access_dict[0]['mgmt_access'])
                         else:
                             vnf['mgmt_access'] = None
-                        #sce_interfaces
+                        # sce_interfaces
                         cmd = "SELECT scei.uuid,scei.sce_net_id,scei.interface_id,i.external_name,scei.ip_address"\
                               " FROM sce_interfaces as scei join interfaces as i on scei.interface_id=i.uuid"\
                               " WHERE scei.sce_vnf_id='{}' ORDER BY scei.created_at".format(vnf['uuid'])
                         self.logger.debug(cmd)
                         self.cur.execute(cmd)
                         vnf['interfaces'] = self.cur.fetchall()
-                        #vms
+                        # vms
                         cmd = "SELECT vms.uuid as uuid, flavor_id, image_id, vms.name as name," \
                               " vms.description as description, vms.boot_data as boot_data, count," \
                               " vms.availability_zone as availability_zone" \
@@ -643,9 +643,14 @@ class nfvo_db(db_base.db_base):
                             self.logger.debug(cmd)
                             self.cur.execute(cmd)
                             vm['interfaces'] = self.cur.fetchall()
-                            for index in range(0,len(vm['interfaces'])):
-                                vm['interfaces'][index]['port-security'] = vm['interfaces'][index].pop("port_security")
-                                vm['interfaces'][index]['floating-ip'] = vm['interfaces'][index].pop("floating_ip")
+                            for iface in vm['interfaces']:
+                                iface['port-security'] = iface.pop("port_security")
+                                iface['floating-ip'] = iface.pop("floating_ip")
+                                for sce_interface in vnf["interfaces"]:
+                                    if sce_interface["interface_id"] == iface["uuid"]:
+                                        if sce_interface["ip_address"]:
+                                            iface["ip_address"] = sce_interface["ip_address"]
+                                        break
                         #nets    every net of a vms
                         cmd = "SELECT uuid,name,type,description FROM nets WHERE vnf_id='{}'".format(vnf['vnf_id'])  
                         self.logger.debug(cmd)

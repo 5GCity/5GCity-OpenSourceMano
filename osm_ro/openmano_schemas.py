@@ -101,9 +101,9 @@ config_schema = {
         "http_console_host": nameshort_schema,
         "http_console_ports": {
             "type": "array", 
-            "items": {"OneOf" : [
+            "items": {"OneOf": [
                 port_schema, 
-                {"type":"object", "properties":{"from": port_schema, "to": port_schema}, "required": ["from","to"]} 
+                {"type": "object", "properties": {"from": port_schema, "to": port_schema}, "required": ["from", "to"]}
             ]}
         },
         "log_level": log_level_schema,
@@ -300,22 +300,22 @@ datacenter_associate_schema={
 }
 
 dhcp_schema = {
-    "title":"DHCP schema",
+    "title": "DHCP schema",
     "$schema": "http://json-schema.org/draft-04/schema#",
-    "type":"object",
+    "type": "object",
     "properties":{
         "enabled": {"type": "boolean"},
-        "start-address": ip_schema,
-        "count": integer1_schema
+        "start-address": {"OneOf": [{"type": "null"}, ip_schema]},
+        "count": integer0_schema
     },
     "required": ["enabled", "start-address", "count"],
 }
 
 ip_profile_schema = {
-    "title":"IP profile schema",
+    "title": "IP profile schema",
     "$schema": "http://json-schema.org/draft-04/schema#",
-    "type":"object",
-    "properties":{
+    "type": "object",
+    "properties": {
         "ip-version": {"type": "string", "enum": ["IPv4","IPv6"]},
         "subnet-address": ip_prefix_schema,
         "gateway-address": ip_schema,

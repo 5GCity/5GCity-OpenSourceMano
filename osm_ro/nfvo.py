@@ -838,6 +838,8 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
         db_interfaces = []
         db_images = []
         db_flavors = []
+        db_ip_profiles_index = 0
+        db_ip_profiles = []
         uuid_list = []
         vnfd_uuid_list = []
         vnfd_catalog_descriptor = vnf_descriptor.get("vnfd:vnfd-catalog")
@@ -869,6 +871,27 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                 if vnfd_descriptor["id"] == str(vnfd["id"]):
                     break
 
+            # table ip_profiles (ip-profiles)
+            ip_profile_name2db_table_index = {}
+            for ip_profile in vnfd.get("ip-profiles").itervalues():
+                db_ip_profile = {
+                    "ip_version": str(ip_profile["ip-profile-params"].get("ip-version", "ipv4")),
+                    "subnet_address": str(ip_profile["ip-profile-params"].get("subnet-address")),
+                    "gateway_address": str(ip_profile["ip-profile-params"].get("gateway-address")),
+                    "dhcp_enabled": str(ip_profile["ip-profile-params"]["dhcp-params"].get("enabled", True)),
+                    "dhcp_start_address": str(ip_profile["ip-profile-params"]["dhcp-params"].get("start-address")),
+                    "dhcp_count": str(ip_profile["ip-profile-params"]["dhcp-params"].get("count")),
+                }
+                dns_list = []
+                for dns in ip_profile["ip-profile-params"]["dns-server"].itervalues():
+                    dns_list.append(str(dns.get("address")))
+                db_ip_profile["dns_address"] = ";".join(dns_list)
+                if ip_profile["ip-profile-params"].get('security-group'):
+                    db_ip_profile["security_group"] = ip_profile["ip-profile-params"]['security-group']
+                ip_profile_name2db_table_index[str(ip_profile["name"])] = db_ip_profiles_index
+                db_ip_profiles_index += 1
+                db_ip_profiles.append(db_ip_profile)
+
             # table nets (internal-vld)
             net_id2uuid = {}  # for mapping interface with network
             for vld in vnfd.get("internal-vld").itervalues():
@@ -883,6 +906,22 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                 }
                 net_id2uuid[vld.get("id")] = net_uuid
                 db_nets.append(db_net)
+                # ip-profile, link db_ip_profile with db_sce_net
+                if vld.get("ip-profile-ref"):
+                    ip_profile_name = vld.get("ip-profile-ref")
+                    if ip_profile_name not in ip_profile_name2db_table_index:
+                        raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{}]':'vld[{}]':'ip-profile-ref':"
+                                            "'{}'. Reference to a non-existing 'ip_profiles'".format(
+                                                str(vnfd["id"]), str(vld["id"]), str(vld["ip-profile-ref"])),
+                                            HTTP_Bad_Request)
+                    db_ip_profiles[ip_profile_name2db_table_index[ip_profile_name]]["net_id"] = net_uuid
+                else:  #check no ip-address has been defined
+                    for icp in vld.get("internal-connection-point"):
+                        if icp.get("ip-address"):
+                            raise NfvoException("Error at 'vnfd[{}]':'vld[{}]':'internal-connection-point[{}]' "
+                                            "contains an ip-address but no ip-profile has been defined at VLD".format(
+                                                str(vnfd["id"]), str(vld["id"]), str(icp["id"])),
+                                            HTTP_Bad_Request)
 
             # connection points vaiable declaration
             cp_name2iface_uuid = {}
@@ -893,6 +932,10 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
             vdu_id2uuid = {}
             vdu_id2db_table_index = {}
             for vdu in vnfd.get("vdu").itervalues():
+
+                for vdu_descriptor in vnfd_descriptor["vdu"]:
+                    if vdu_descriptor["id"] == str(vdu["id"]):
+                        break
                 vm_uuid = str(uuid4())
                 uuid_list.append(vm_uuid)
                 vdu_id = get_str(vdu, "id", 255)
@@ -1043,27 +1086,43 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                                 HTTP_Bad_Request)
                     elif iface.get("internal-connection-point-ref"):
                         try:
+                            for icp_descriptor in vdu_descriptor["internal-connection-point"]:
+                                if icp_descriptor["id"] == str(iface.get("internal-connection-point-ref")):
+                                    break
+                            else:
+                                raise KeyError("does not exist at vdu:internal-connection-point")
+                            icp = None
+                            icp_vld = None
                             for vld in vnfd.get("internal-vld").itervalues():
                                 for cp in vld.get("internal-connection-point").itervalues():
                                     if cp.get("id-ref") == iface.get("internal-connection-point-ref"):
-                                        db_interface["net_id"] = net_id2uuid[vld.get("id")]
-                                        for cp_descriptor in vnfd_descriptor["connection-point"]:
-                                            if cp_descriptor["name"] == db_interface["internal_name"]:
-                                                break
-                                        if str(cp_descriptor.get("port-security-enabled")).lower() == "false":
-                                            db_interface["port_security"] = 0
-                                        elif str(cp_descriptor.get("port-security-enabled")).lower() == "true":
-                                            db_interface["port_security"] = 1
-                                        break
-                        except KeyError:
+                                        if icp:
+                                            raise KeyError("is referenced by more than one 'internal-vld'")
+                                        icp = cp
+                                        icp_vld = vld
+                            if not icp:
+                                raise KeyError("is not referenced by any 'internal-vld'")
+
+                            db_interface["net_id"] = net_id2uuid[icp_vld.get("id")]
+                            if str(icp_descriptor.get("port-security-enabled")).lower() == "false":
+                                db_interface["port_security"] = 0
+                            elif str(icp_descriptor.get("port-security-enabled")).lower() == "true":
+                                db_interface["port_security"] = 1
+                            if icp.get("ip-address"):
+                                if not icp_vld.get("ip-profile-ref"):
+                                    raise NfvoException
+                                db_interface["ip_address"] = str(icp.get("ip-address"))
+                        except KeyError as e:
                             raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'vdu[{vdu}]':"
-                                                "'interface[{iface}]':'internal-connection-point-ref':'{cp}' is not"
-                                                " referenced by any internal-vld".format(
+                                                "'interface[{iface}]':'internal-connection-point-ref':'{cp}'"
+                                                " {msg}".format(
                                                     vnf=vnfd_id, vdu=vdu_id, iface=iface["name"],
-                                                    cp=iface.get("internal-connection-point-ref")),
+                                                    cp=iface.get("internal-connection-point-ref"), msg=str(e)),
                                                 HTTP_Bad_Request)
                     if iface.get("position") is not None:
                         db_interface["created_at"] = int(iface.get("position")) - 1000
+                    if iface.get("mac-address"):
+                        db_interface["mac"] = str(iface.get("mac-address"))
                     db_interfaces.append(db_interface)
 
                 # table flavors
@@ -1189,14 +1248,13 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
             if mgmt_access:
                 db_vnf["mgmt_access"] = yaml.safe_dump(mgmt_access, default_flow_style=True, width=256)
 
-
-
             db_vnfs.append(db_vnf)
         db_tables=[
             {"vnfs": db_vnfs},
             {"nets": db_nets},
             {"images": db_images},
             {"flavors": db_flavors},
+            {"ip_profiles": db_ip_profiles},
             {"vms": db_vms},
             {"interfaces": db_interfaces},
         ]
@@ -2255,12 +2313,15 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                         db_sce_net["type"] = "data"
                     sce_interface_uuid = str(uuid4())
                     uuid_list.append(sce_net_uuid)
+                    iface_ip_address = None
+                    if iface.get("ip-address"):
+                        iface_ip_address = str(iface.get("ip-address"))
                     db_sce_interface = {
                         "uuid": sce_interface_uuid,
                         "sce_vnf_id": vnf_index2scevnf_uuid[vnf_index],
                         "sce_net_id": sce_net_uuid,
                         "interface_id": interface_uuid,
-                        # "ip_address": #TODO
+                        "ip_address": iface_ip_address,
                     }
                     db_sce_interfaces.append(db_sce_interface)
                 if not db_sce_net["type"]:
@@ -2929,7 +2990,7 @@ def create_instance(mydb, tenant_id, instance_dict):
         # 0.2 merge instance information into scenario
         # Ideally, the operation should be as simple as: update(scenarioDict,instance_dict)
         # However, this is not possible yet.
-        for net_name, net_instance_desc in instance_dict.get("networks",{}).iteritems():
+        for net_name, net_instance_desc in instance_dict.get("networks", {}).iteritems():
             for scenario_net in scenarioDict['nets']:
                 if net_name == scenario_net["name"]:
                     if 'ip-profile' in net_instance_desc:
@@ -2950,13 +3011,13 @@ def create_instance(mydb, tenant_id, instance_dict):
                             scenario_net['ip_profile'] = ipprofile_db
                         else:
                             update(scenario_net['ip_profile'], ipprofile_db)
-            for interface in net_instance_desc.get('interfaces', () ):
+            for interface in net_instance_desc.get('interfaces', ()):
                 if 'ip_address' in interface:
                     for vnf in scenarioDict['vnfs']:
                         if interface['vnf'] == vnf['name']:
                             for vnf_interface in vnf['interfaces']:
                                 if interface['vnf_interface'] == vnf_interface['external_name']:
-                                    vnf_interface['ip_address']=interface['ip_address']
+                                    vnf_interface['ip_address'] = interface['ip_address']
 
         # logger.debug(">>>>>>>> Merged dictionary")
         # logger.debug("Creating instance scenario-dict MERGED:\n%s",
@@ -3230,50 +3291,53 @@ def create_instance(mydb, tenant_id, instance_dict):
                 db_vm_ifaces = []
                 for iface in vm['interfaces']:
                     netDict = {}
-                    if iface['type']=="data":
+                    if iface['type'] == "data":
                         netDict['type'] = iface['model']
-                    elif "model" in iface and iface["model"]!=None:
-                        netDict['model']=iface['model']
+                    elif "model" in iface and iface["model"] != None:
+                        netDict['model'] = iface['model']
                     # TODO in future, remove this because mac_address will not be set, and the type of PV,VF
                     # is obtained from iterface table model
                     # discover type of interface looking at flavor
-                    for numa in flavor_dict.get('extended',{}).get('numas',[]):
-                        for flavor_iface in numa.get('interfaces',[]):
+                    for numa in flavor_dict.get('extended', {}).get('numas', []):
+                        for flavor_iface in numa.get('interfaces', []):
                             if flavor_iface.get('name') == iface['internal_name']:
                                 if flavor_iface['dedicated'] == 'yes':
-                                    netDict['type']="PF"    #passthrough
+                                    netDict['type'] = "PF"    # passthrough
                                 elif flavor_iface['dedicated'] == 'no':
-                                    netDict['type']="VF"    #siov
+                                    netDict['type'] = "VF"    # siov
                                 elif flavor_iface['dedicated'] == 'yes:sriov':
-                                    netDict['type']="VFnotShared"   #sriov but only one sriov on the PF
+                                    netDict['type'] = "VFnotShared"   # sriov but only one sriov on the PF
                                 netDict["mac_address"] = flavor_iface.get("mac_address")
-                                break;
+                                break
                     netDict["use"]=iface['type']
-                    if netDict["use"]=="data" and not netDict.get("type"):
-                        #print "netDict", netDict
-                        #print "iface", iface
-                        e_text = "Cannot determine the interface type PF or VF of VNF '%s' VM '%s' iface '%s'" %(sce_vnf['name'], vm['name'], iface['internal_name'])
-                        if flavor_dict.get('extended')==None:
+                    if netDict["use"] == "data" and not netDict.get("type"):
+                        # print "netDict", netDict
+                        # print "iface", iface
+                        e_text = "Cannot determine the interface type PF or VF of VNF '{}' VM '{}' iface '{}'".fromat(
+                            sce_vnf['name'], vm['name'], iface['internal_name'])
+                        if flavor_dict.get('extended') == None:
                             raise NfvoException(e_text + "After database migration some information is not available. \
                                     Try to delete and create the scenarios and VNFs again", HTTP_Conflict)
                         else:
                             raise NfvoException(e_text, HTTP_Internal_Server_Error)
-                    if netDict["use"]=="mgmt" or netDict["use"]=="bridge":
+                    if netDict["use"] == "mgmt" or netDict["use"] == "bridge":
                         netDict["type"]="virtual"
-                    if "vpci" in iface and iface["vpci"] is not None:
+                    if iface.get("vpci"):
                         netDict['vpci'] = iface['vpci']
-                    if "mac" in iface and iface["mac"] is not None:
+                    if iface.get("mac"):
                         netDict['mac_address'] = iface['mac']
-                    if "port-security" in iface and iface["port-security"] is not None:
+                    if iface.get("ip_address"):
+                        netDict['ip_address'] = iface['ip_address']
+                    if iface.get("port-security") is not None:
                         netDict['port_security'] = iface['port-security']
-                    if "floating-ip" in iface and iface["floating-ip"] is not None:
+                    if iface.get("floating-ip") is not None:
                         netDict['floating_ip'] = iface['floating-ip']
                     netDict['name'] = iface['internal_name']
                     if iface['net_id'] is None:
                         for vnf_iface in sce_vnf["interfaces"]:
                             # print iface
                             # print vnf_iface
-                            if vnf_iface['interface_id']==iface['uuid']:
+                            if vnf_iface['interface_id'] == iface['uuid']:
                                 netDict['net_id'] = "TASK-{}".format(net2task_id['scenario'][ vnf_iface['sce_net_id'] ][datacenter_id])
                                 instance_net_id = sce_net2instance[ vnf_iface['sce_net_id'] ][datacenter_id]
                                 task_depends_on.append(net2task_id['scenario'][ vnf_iface['sce_net_id'] ][datacenter_id])
@@ -3294,6 +3358,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                         # 'vim_interface_id': ,
                         'type': 'external' if iface['external_name'] is not None else 'internal',
                         'ip_address': iface.get('ip_address'),
+                        'mac_address': iface.get('mac'),
                         'floating_ip': int(iface.get('floating-ip', False)),
                         'port_security': int(iface.get('port-security', True))
                     }
@@ -3327,8 +3392,8 @@ def create_instance(mydb, tenant_id, instance_dict):
                     for net in myVMDict['networks']:
                         if "vim_id" in net:
                             for iface in vm['interfaces']:
-                                if net["name"]==iface["internal_name"]:
-                                    iface["vim_id"]=net["vim_id"]
+                                if net["name"] == iface["internal_name"]:
+                                    iface["vim_id"] = net["vim_id"]
                                     break
                     vm_uuid = str(uuid4())
                     uuid_list.append(vm_uuid)

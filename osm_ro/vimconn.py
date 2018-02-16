@@ -321,15 +321,14 @@ class vimconnector():
                 'bridge': overlay isolated network
                 'data':   underlay E-LAN network for Passthrough and SRIOV interfaces
                 'ptp':    underlay E-LINE network for Passthrough and SRIOV interfaces.
-            'ip_profile': is a dict containing the IP parameters of the network (Currently only IPv4 is implemented)
-                'ip-version': can be one of ["IPv4","IPv6"]
-                'subnet-address': ip_prefix_schema, that is X.X.X.X/Y
-                'gateway-address': (Optional) ip_schema, that is X.X.X.X
-                'dns-address': (Optional) ip_schema,
-                'dhcp': (Optional) dict containing
-                    'enabled': {"type": "boolean"},
-                    'start-address': ip_schema, first IP to grant
-                    'count': number of IPs to grant.
+            'ip_profile': is a dict containing the IP parameters of the network
+                'ip_version': can be "IPv4" or "IPv6" (Currently only IPv4 is implemented)
+                'subnet_address': ip_prefix_schema, that is X.X.X.X/Y
+                'gateway_address': (Optional) ip_schema, that is X.X.X.X
+                'dns_address': (Optional) comma separated list of ip_schema, e.g. X.X.X.X[,X,X,X,X]
+                'dhcp_enabled': True or False
+                'dhcp_start_address': ip_schema, first IP to grant
+                'dhcp_count': number of IPs to grant.
             'shared': if this network can be seen/use by other tenants/organization
             'vlan': in case of a data or ptp net_type, the intended vlan tag to be used for the network
         Returns the network identifier on success or raises and exception on failure
@@ -483,6 +482,7 @@ class vimconnector():
                 'vpci': (optional) virtual vPCI address to assign at the VM. Can be ignored depending on VIM capabilities
                 'model': (optional and only have sense for type==virtual) interface model: virtio, e2000, ...
                 'mac_address': (optional) mac address to assign to this interface
+                'ip_address': (optional) IP address to assign to this interface
                 #TODO: CHECK if an optional 'vlan' parameter is needed for VIMs when type if VF and net_id is not provided,
                     the VLAN tag to be used. In case net_id is provided, the internal network vlan is used for tagging VF
                 'type': (mandatory) can be one of:

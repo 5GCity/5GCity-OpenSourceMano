@@ -353,7 +353,7 @@ class vimconnector(vimconn.vimconnector):
         elif isinstance(exception, nvExceptions.Conflict):
             raise vimconn.vimconnConflictException(type(exception).__name__ + ": " + str(exception))
         elif isinstance(exception, vimconn.vimconnException):
-            raise
+            raise exception
         else:  # ()
             self.logger.error("General Exception " + str(exception), exc_info=True)
             raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))
@@ -443,7 +443,7 @@ class vimconnector(vimconn.vimconnector):
             #create subnetwork, even if there is no profile
             if not ip_profile:
                 ip_profile = {}
-            if 'subnet_address' not in ip_profile:
+            if not ip_profile.get('subnet_address'):
                 #Fake subnet is required
                 subnet_rand = random.randint(0, 255)
                 ip_profile['subnet_address'] = "192.168.{}.0/24".format(subnet_rand)
@@ -455,16 +455,18 @@ class vimconnector(vimconn.vimconnector):
                     "cidr": ip_profile['subnet_address']
                     }
             # Gateway should be set to None if not needed. Otherwise openstack assigns one by default
-            subnet['gateway_ip'] = ip_profile.get('gateway_address')
+            if ip_profile.get('gateway_address'):
+                subnet['gateway_ip'] = ip_profile.get('gateway_address')
             if ip_profile.get('dns_address'):
                 subnet['dns_nameservers'] = ip_profile['dns_address'].split(";")
             if 'dhcp_enabled' in ip_profile:
-                subnet['enable_dhcp'] = False if ip_profile['dhcp_enabled']=="false" else True
-            if 'dhcp_start_address' in ip_profile:
+                subnet['enable_dhcp'] = False if \
+                    ip_profile['dhcp_enabled']=="false" or ip_profile['dhcp_enabled']==False else True
+            if ip_profile.get('dhcp_start_address'):
                 subnet['allocation_pools'] = []
                 subnet['allocation_pools'].append(dict())
                 subnet['allocation_pools'][0]['start'] = ip_profile['dhcp_start_address']
-            if 'dhcp_count' in ip_profile:
+            if ip_profile.get('dhcp_count'):
                 #parts = ip_profile['dhcp_start_address'].split('.')
                 #ip_int = (int(parts[0]) << 24) + (int(parts[1]) << 16) + (int(parts[2]) << 8) + int(parts[3])
                 ip_int = int(netaddr.IPAddress(ip_profile['dhcp_start_address']))
@@ -474,7 +476,7 @@ class vimconnector(vimconn.vimconnector):
             #self.logger.debug(">>>>>>>>>>>>>>>>>> Subnet: %s", str(subnet))
             self.neutron.create_subnet({"subnet": subnet} )
             return new_net["network"]["id"]
-        except (neExceptions.ConnectionFailed, ksExceptions.ClientException, neExceptions.NeutronException, ConnectionError) as e:
+        except Exception as e:
             if new_net:
                 self.neutron.delete_network(new_net['network']['id'])
             self._format_exception(e)
@@ -953,20 +955,20 @@ class vimconnector(vimconn.vimconnector):
                 type: 'virtual', 'PCI-PASSTHROUGH'('PF'), 'SR-IOV'('VF'), 'VFnotShared'
                 vim_id: filled/added by this function
                 floating_ip: True/False (or it can be None)
-                'cloud_config': (optional) dictionary with:
-                'key-pairs': (optional) list of strings with the public key to be inserted to the default user
-                'users': (optional) list of users to be inserted, each item is a dict with:
-                    'name': (mandatory) user name,
-                    'key-pairs': (optional) list of strings with the public key to be inserted to the user
-                'user-data': (optional) string is a text script to be passed directly to cloud-init
-                'config-files': (optional). List of files to be transferred. Each item is a dict with:
-                    'dest': (mandatory) string with the destination absolute path
-                    'encoding': (optional, by default text). Can be one of:
-                        'b64', 'base64', 'gz', 'gz+b64', 'gz+base64', 'gzip+b64', 'gzip+base64'
-                    'content' (mandatory): string with the content of the file
-                    'permissions': (optional) string with file permissions, typically octal notation '0644'
-                    'owner': (optional) file owner, string with the format 'owner:group'
-                'boot-data-drive': boolean to indicate if user-data must be passed using a boot drive (hard disk)
+            'cloud_config': (optional) dictionary with:
+            'key-pairs': (optional) list of strings with the public key to be inserted to the default user
+            'users': (optional) list of users to be inserted, each item is a dict with:
+                'name': (mandatory) user name,
+                'key-pairs': (optional) list of strings with the public key to be inserted to the user
+            'user-data': (optional) string is a text script to be passed directly to cloud-init
+            'config-files': (optional). List of files to be transferred. Each item is a dict with:
+                'dest': (mandatory) string with the destination absolute path
+                'encoding': (optional, by default text). Can be one of:
+                    'b64', 'base64', 'gz', 'gz+b64', 'gz+base64', 'gzip+b64', 'gzip+base64'
+                'content' (mandatory): string with the content of the file
+                'permissions': (optional) string with file permissions, typically octal notation '0644'
+                'owner': (optional) file owner, string with the format 'owner:group'
+            'boot-data-drive': boolean to indicate if user-data must be passed using a boot drive (hard disk)
             'disk_list': (optional) list with additional disks to the VM. Each item is a dict with:
                 'image_id': (optional). VIM id of an existing image. If not provided an empty disk must be mounted
                 'size': (mandatory) string with the size of the disk in GB
@@ -1033,6 +1035,9 @@ class vimconnector(vimconn.vimconnector):
                     port_dict["name"]=name
                 if net.get("mac_address"):
                     port_dict["mac_address"]=net["mac_address"]
+                if net.get("ip_address"):
+                    port_dict["fixed_ips"] = [{'ip_address': net["ip_address"]}]
+                    # TODO add 'subnet_id': <subnet_id>
                 new_port = self.neutron.create_port({"port": port_dict })
                 created_items["port:" + str(new_port["port"]["id"])] = True
                 net["mac_adress"] = new_port["port"]["mac_address"]
