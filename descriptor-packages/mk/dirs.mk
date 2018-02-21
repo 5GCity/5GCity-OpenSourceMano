@@ -14,6 +14,9 @@
 #   limitations under the License.
 #
 
+TOPDIR=$(shell readlink -f .|sed -e 's/\/descriptor-packages\/.*//')
+TOOLS_DIR := $(TOPDIR)/tools
+
 SUBDIRS_CLEAN = $(addsuffix .clean, $(SUBDIRS))
 SUBDIRS_TEST = $(addsuffix .test, $(SUBDIRS))
 
@@ -33,3 +36,6 @@ $(SUBDIRS_TEST): %.test:
 
 $(SUBDIRS):
 	@$(MAKE) --no-print-directory -C $@
+
+test:
+	$(TOOLS_DIR)/launch_tests.sh
