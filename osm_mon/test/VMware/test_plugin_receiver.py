@@ -24,7 +24,7 @@
 """ Mock tests for VMware vROPs plugin recevier """
 
 import sys
-sys.path.append("/root/MON/")
+#sys.path.append("/root/MON/")
 
 import json
 
@@ -36,9 +36,13 @@ import mock
 
 import requests
 
-from osm_mon.plugins.vRealiseOps import plugin_receiver as monPluginRec
+import os
 
 log = logging.getLogger(__name__)
+
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)),"..","..",".."))
+
+from osm_mon.plugins.vRealiseOps import plugin_receiver as monPluginRec
 
 
 class Message(object):
@@ -271,6 +275,7 @@ class TestPluginReceiver(unittest.TestCase):
     @mock.patch.object(monPluginRec.PluginReceiver, 'verify_metric')
     def test_consume_update_metric_request_key(self, m_verify_metric, m_publish_update_metric_response):
         """Test functionality of update metric request key"""
+
         # Mock a message
         msg = Message()
         msg.topic = "metric_request"
@@ -649,7 +654,179 @@ class TestPluginReceiver(unittest.TestCase):
         m_publish.assert_called_with(key='delete_metric_response', value=mock.ANY, topic='metric_response')
 
 
+    @mock.patch.object(monPluginRec.MonPlugin, 'get_triggered_alarms_list')
+    def test_list_alarms(self, m_get_triggered_alarms_list):
+        """ Test functionality of list alarms method"""
+
+        # Mock list alarm input
+        list_alarm_input = {'severity': 'CRITICAL',
+                            'correlation_id': 'e14b203c',
+                            'alarm_name': 'CPU_Utilization_Above_Threshold',
+                            'resource_uuid': 'd14b203c'}
+
+        # set return value to mocked method
+        m_return = m_get_triggered_alarms_list.return_value = [{'status': 'ACTIVE', 'update_date': '2018-01-12T08:34:05',
+                                                                'severity': 'CRITICAL', 'resource_uuid': 'e14b203c',
+                                                                'cancel_date': '0000-00-00T00:00:00','alarm_instance_uuid': 'd9e3bc84',
+                                                                'alarm_uuid': '5714977d', 'vim_type': 'VMware',
+                                                                'start_date': '2018-01-12T08:34:05'},
+                                                               {'status': 'CANCELED', 'update_date': '2017-12-20T09:37:57',
+                                                                'severity': 'CRITICAL', 'resource_uuid': 'e14b203c',
+                                                                'cancel_date': '2018-01-12T06:49:19', 'alarm_instance_uuid': 'd3bbeef6',
+                                                                'alarm_uuid': '7ba1bf3e', 'vim_type': 'VMware',
+                                                                'start_date': '2017-12-20T09:37:57'}]
+
+        # call list alarms method under test
+        return_value = self.plugin_receiver.list_alarms(list_alarm_input)
+
+        # verify mocked method called with correct params
+        m_get_triggered_alarms_list.assert_called_with(list_alarm_input)
+
+        # verify list alarm method returns correct list
+        self.assertEqual(return_value, m_return)
+
+
+    @mock.patch.object(monPluginRec.KafkaProducer, 'publish')
+    def test_publish_list_alarm_response(self, m_publish):
+        """ Test functionality of publish list alarm response method"""
+
+        # Mock list alarm input
+        msg_key = 'list_alarm_response'
+        topic = 'alarm_response'
+        list_alarm_input = {'alarm_list_request': {'severity': 'CRITICAL',
+                            'correlation_id': 'e14b203c',
+                            'alarm_name': 'CPU_Utilization_Above_Threshold',
+                            'resource_uuid': 'd14b203c'},'vim_type' : 'VMware'}
+
+        triggered_alarm_list = [{'status': 'ACTIVE', 'update_date': '2018-01-12T08:34:05', 'severity': 'CRITICAL',
+                                 'resource_uuid': 'e14b203c', 'cancel_date': '0000-00-00T00:00:00','alarm_instance_uuid': 'd9e3bc84',
+                                 'alarm_uuid': '5714977d', 'vim_type': 'VMware', 'start_date': '2018-01-12T08:34:05'}]
+
+        # call publish list alarm response method under test
+        self.plugin_receiver.publish_list_alarm_response(triggered_alarm_list, list_alarm_input)
+
+        # verify mocked method called with correct params
+        m_publish.assert_called_with(key=msg_key,value=mock.ANY, topic=topic)
+
+
+    @mock.patch.object(monPluginRec.KafkaProducer, 'publish')
+    def test_publish_access_update_response(self, m_publish):
+        """ Test functionality of publish access update response method"""
+
+        # Mock required inputs
+        access_update_status = True
+        msg_key = 'vim_access_credentials_response'
+        topic = 'access_credentials'
+        access_info_req = {'access_config': {'vrops_password': 'vmware', 'vcloud-site': 'https://192.169.241.105',
+                           'vrops_user': 'Admin', 'correlation_id': 'e14b203c', 'tenant_id': 'Org2'}, 'vim_type': u'VMware'}
+
+        # call publish access update response method under test
+        self.plugin_receiver.publish_access_update_response(access_update_status, access_info_req)
+
+        # verify mocked method called with correct params
+        m_publish.assert_called_with(key=msg_key ,value=mock.ANY, topic=topic)
+
+
+    @mock.patch.object(monPluginRec.PluginReceiver, 'write_access_config')
+    def test_update_access_credentials_successful(self, m_write_access_config):
+        """ Test functionality of update access credentials-positive case"""
+
+        # Mock access_info
+        access_info = {'vrops_site':'https://192.169.241.13','vrops_user':'admin', 'vrops_password':'vmware',
+                       'vcloud-site':'https://192.169.241.15','admin_username':'admin','admin_password':'vmware',
+                       'vcenter_ip':'192.169.241.13','vcenter_port':'443','vcenter_user':'admin','vcenter_password':'vmware',
+                       'vim_tenant_name':'Org2','orgname':'Org2','tenant_id':'Org2'}
+
+        # Mock return values
+        expected_status = m_write_access_config.return_value = True
+
+        # call publish update acccess credentials method under test
+        actual_status = self.plugin_receiver.update_access_credentials(access_info)
+
+        # check write_access_config called with correct params
+        m_write_access_config.assert_called_with(access_info)
+
+        # verify update access credentials returns correct status
+        self.assertEqual(expected_status, actual_status)
+
+
+    @mock.patch.object(monPluginRec.PluginReceiver, 'write_access_config')
+    def test_update_access_credentials_less_config_params(self, m_write_access_config):
+        """ Test functionality of update access credentials-negative case"""
+
+        # Mock access_info
+        access_info = {'vrops_site':'https://192.169.241.13','vrops_user':'admin', 'vrops_password':'vmware',
+                       'vcloud-site':'https://192.169.241.15','admin_username':'admin','admin_password':'vmware',
+                       'vcenter_ip':'192.169.241.13','vcenter_port':'443','vcenter_user':'admin',
+                       'vim_tenant_name':'Org2','orgname':'Org2','tenant_id':'Org2'}
+
+        # Mock return values
+        expected_status = m_write_access_config.return_value = False
+
+        # call publish update acccess credentials method under test
+        actual_status = self.plugin_receiver.update_access_credentials(access_info)
+
+        # check if mocked method not called
+        m_write_access_config.assert_not_called()
+
+        # verify update access credentials returns correct status
+        self.assertEqual(expected_status, actual_status)
+
+
+    @mock.patch.object(monPluginRec.PluginReceiver, 'write_access_config')
+    def test_update_access_credentials_failed(self, m_write_access_config):
+        """ Test functionality of update access credentials-failed case """
+
+        # Mock access_info
+        access_info = {'vrops_site':'https://192.169.241.13','vrops_user':'admin', 'vrops_password':'vmware',
+                       'vcloud-site':'https://192.169.241.15','admin_username':'admin','admin_password':'vmware',
+                       'vcenter_ip':'192.169.241.13','vcenter_port':'443','vcenter_user':'admin','vcenter_password':'vmware',
+                       'vim_tenant_name':'Org2','orgname':'Org2','tenant_id':'Org2'}
+
+        # Mock return values
+        expected_status = m_write_access_config.return_value = False
+
+        # call publish update acccess credentials method under test
+        actual_status = self.plugin_receiver.update_access_credentials(access_info)
+
+        # check write_access_config called with correct params
+        m_write_access_config.assert_called_with(access_info)
+
+        # verify update access credentials returns correct status
+        self.assertEqual(expected_status, actual_status)
+
+
+    def test_write_access_config_successful(self):
+        """ Test functionality of write access config method-positive case"""
+
+        # Mock access_info
+        access_info = {'vrops_sit':'https://192.169.241.13','vrops_user':'admin', 'vrops_password':'vmware',
+                       'vcloud-site':'https://192.169.241.15','admin_username':'admin','admin_password':'vmware',
+                       'vcenter_ip':'192.169.241.13','vcenter_port':'443','vcenter_user':'admin','vcenter_password':'vmware',
+                       'vim_tenant_name':'Org2','orgname':'Org2','tenant_id':'Org2'}
+
+        # call write acccess config method under test
+        actual_status = self.plugin_receiver.write_access_config(access_info)
+
+        # verify write access config returns correct status
+        self.assertEqual(True, actual_status)
+
+
+    def test_write_access_config_failed(self):
+        """ Test functionality of write access config method-negative case"""
+
+        # Mock access_info
+        access_info = [] # provided incorrect info to generate error
+
+        # call write acccess config method under test
+        actual_status = self.plugin_receiver.write_access_config(access_info)
+
+        # verify write access config returns correct status
+        self.assertEqual(False, actual_status)
+
+
 # For testing purpose
 #if __name__ == '__main__':
 
 #    unittest.main()
+
