@@ -81,7 +81,7 @@ cp $HERE/update-lxd-image.sh /etc/cron.daily
 INFO "Bootstrapping VCA"
 juju bootstrap localhost osm \
 --config default-series=xenial \
---config enable-os-refresh-update=false \
+--config enable-os-refresh-update=true \
 --config enable-os-upgrade=false \
 --config apt-http-proxy=http://10.44.127.1:8000
 
