@@ -28,11 +28,13 @@
   "tenant_uuid": { "type": "string" },
   "correlation_id": { "type": "integer" },
   "vim_type": { "type": "string" },
+  "vim_uuid": { "type": "string" },
   "required": [ "schema_verion",
                 "schema_type",
                 "metric_name",
                 "metric_uuid",
                 "resource_uuid",
                 "correlation_id",
-                "vim_type" ]
+                "vim_type",
+                "vim_uuid" ]
 }

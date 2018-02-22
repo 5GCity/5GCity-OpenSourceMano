@@ -26,6 +26,7 @@
   "vim_type": { "type": "string" },
   "access_config":
   {
+    "vim_uuid": { "type": "string" },
     "openstack_site": { "type" : "string" },
     "user": { "type": "string" },
     "password": { "type": "string" },
@@ -34,6 +35,7 @@
   "required": [ "schema_version",
                 "schema_type",
                 "vim_type",
+                "vim_uuid",
                 "openstack_site",
                 "user",
                 "password",

@@ -28,6 +28,7 @@
   "tenant_uuid": { "type": "string" },
   "correlation_id": { "type": "integer" },
   "vim_type": { "type": "string" },
+  "vim_uuid": { "type": "string" },
   "collection_period": { "type": "integer" },
   "collection_unit": { "type": "string" },
   "required": ["schema_version",
@@ -36,6 +37,7 @@
                "metric_uuid",
                "correlation_id",
                "vim_type",
+               "vim_uuid",
                "collection_period",
                "collection_unit",
                "resource_uuid"]

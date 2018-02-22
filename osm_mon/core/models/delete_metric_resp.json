@@ -27,6 +27,7 @@
   "resource_uuid": { "type": "string" },
   "tenant_uuid": { "type": "string" },
   "correlation_id": { "type": "integer" },
+  "vim_uuid": { "type": "string" },
   "status": { "type": "boolean" },
   "required": [ "schema_version",
                 "schema_type",
@@ -34,5 +35,6 @@
                 "metric_uuid",
                 "resource_uuid",
                 "status",
-                "correlation_id" ]
+                "correlation_id",
+                "vim_uuid" ]
 }

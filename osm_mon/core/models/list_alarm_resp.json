@@ -22,5 +22,7 @@
 {
   "schema_version": { "type": "string" },
   "schema_type": { "type": "string" },
+  "vim_type": { "type": "string" },
+  "vim_uuid": { "type": "string" },
   "list_alarm_resp": { "$ref": "definitions.json#/notify_details" }
 }

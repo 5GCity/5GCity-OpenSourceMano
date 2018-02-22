@@ -25,6 +25,7 @@
   "tenant_uuid": { "type": "string" },
   "correlation_id": { "type": "integer" },
   "vim_type": { "type": "string" },
+  "vim_uuid": { "type": "string" },
   "metric_create":
   {
     "metric_name": { "type": "string" },
@@ -34,6 +35,7 @@
   "required": [ "schema_version",
                 "schema_type",
                 "correlation_id",
+                "vim_type",
                 "vim_type",
                 "resource_uuid"
                 ]

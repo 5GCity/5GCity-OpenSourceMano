@@ -23,6 +23,7 @@
   "schema_version": { "type": "string" },
   "schema_type": { "type": "string" },
   "vim_type": { "type": "string" },
+  "vim_uuid": { "type": "string" },
   "alarm_delete_request":
   {
     "alarm_uuid": { "type": "string" },
@@ -31,6 +32,7 @@
   "required": [ "schema_version",
                 "schema_type",
                 "vim_type",
+                "vim_uuid",
                 "alarm_uuid",
                 "correlation_id"
               ]
