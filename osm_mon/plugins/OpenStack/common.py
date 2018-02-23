@@ -97,7 +97,7 @@ class Common(object):
         try:
             return self._ks.service_catalog.url_for(
                 service_type=service_type,
-                endpoint_type='internalURL',
+                endpoint_type='publicURL',
                 region_name='RegionOne')
         except Exception as exc:
             log.warning("Failed to retreive endpoint for service due to: %s",
