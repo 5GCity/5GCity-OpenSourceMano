@@ -17,4 +17,5 @@ pyvmomi
 progressbar
 prettytable
 boto
-
+untangle
+oca

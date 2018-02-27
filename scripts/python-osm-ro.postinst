@@ -28,6 +28,8 @@ pip install --upgrade progressbar
 pip install --upgrade prettytable
 pip install --upgrade pyvmomi
 pip install --upgrade pyang pyangbind
+pip install untangle
+pip install -e git+https://github.com/python-oca/python-oca#egg=oca
 
 systemctl enable osm-ro.service
 

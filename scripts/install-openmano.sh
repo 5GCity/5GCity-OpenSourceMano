@@ -259,6 +259,10 @@ then
     pip install prettytable || exit 1
     pip install pyvmomi || exit 1
 
+    # required for OpenNebula connector
+    pip install untangle || exit 1
+    pip install -e git+https://github.com/python-oca/python-oca#egg=oca || exit 1
+
     # required for AWS connector
     [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-boto"
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-boto"  #TODO check if at Centos it exists with this name, or PIP should be used
