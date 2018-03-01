@@ -40,7 +40,7 @@ async def test_juju_error_in_results_list(event_loop):
     from juju.client import client
 
     async with base.CleanModel() as model:
-        ann_facade = client.AnnotationsFacade.from_connection(model.connection)
+        ann_facade = client.AnnotationsFacade.from_connection(model.connection())
 
         ann = client.EntityAnnotations(
             entity='badtag',
@@ -58,11 +58,11 @@ async def test_juju_error_in_result(event_loop):
     looking at a single result coming back.
 
     '''
-    from juju.errors import JujuError    
+    from juju.errors import JujuError
     from juju.client import client
 
     async with base.CleanModel() as model:
-        app_facade = client.ApplicationFacade.from_connection(model.connection)
+        app_facade = client.ApplicationFacade.from_connection(model.connection())
 
         with pytest.raises(JujuError):
             return await app_facade.GetCharmURL('foo')

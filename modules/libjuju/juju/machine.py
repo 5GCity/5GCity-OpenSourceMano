@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 
-from dateutil.parser import parse as parse_date
+import pyrfc3339
 
 from . import model, utils
 from .client import client
@@ -66,8 +66,8 @@ class Machine(model.ModelEntity):
             change_log.append(('agent-version', '', agent_version))
 
         # only update (other) delta fields if status data is newer
-        status_since = parse_date(machine['instance-status']['since'])
-        delta_since = parse_date(delta.data['instance-status']['since'])
+        status_since = pyrfc3339.parse(machine['instance-status']['since'])
+        delta_since = pyrfc3339.parse(delta.data['instance-status']['since'])
         if status_since > delta_since:
             for status_key in ('status', 'info', 'since'):
                 delta_key = key_map[status_key]
@@ -169,6 +169,8 @@ class Machine(model.ModelEntity):
             'scp',
             '-i', os.path.expanduser('~/.local/share/juju/ssh/juju_id_rsa'),
             '-o', 'StrictHostKeyChecking=no',
+            '-q',
+            '-B',
             source, destination
         ]
         cmd += scp_opts.split()
@@ -211,7 +213,7 @@ class Machine(model.ModelEntity):
         """Get the time when the `agent_status` was last updated.
 
         """
-        return parse_date(self.safe_data['agent-status']['since'])
+        return pyrfc3339.parse(self.safe_data['agent-status']['since'])
 
     @property
     def agent_version(self):
@@ -244,7 +246,7 @@ class Machine(model.ModelEntity):
         """Get the time when the `status` was last updated.
 
         """
-        return parse_date(self.safe_data['instance-status']['since'])
+        return pyrfc3339.parse(self.safe_data['instance-status']['since'])
 
     @property
     def dns_name(self):
@@ -260,3 +262,10 @@ class Machine(model.ModelEntity):
             if addresses:
                 return addresses[0]['value']
         return None
+
+    @property
+    def series(self):
+        """Returns the series of the current machine
+
+        """
+        return self.safe_data['series']

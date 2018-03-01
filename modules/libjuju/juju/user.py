@@ -1,5 +1,6 @@
 import logging
-from dateutil.parser import parse as parse_date
+
+import pyrfc3339
 
 from . import tag
 
@@ -25,7 +26,7 @@ class User(object):
 
     @property
     def last_connection(self):
-        return parse_date(self._user_info.last_connection)
+        return pyrfc3339.parse(self._user_info.last_connection)
 
     @property
     def access(self):
@@ -58,8 +59,8 @@ class User(object):
 
         :param str acl: Access control ('login', 'add-model', or 'superuser')
         """
-        await self.controller.grant(self.username, acl)
-        self._user_info.access = acl
+        if await self.controller.grant(self.username, acl):
+            self._user_info.access = acl
 
     async def revoke(self):
         """Removes all access rights for this user from the controller.

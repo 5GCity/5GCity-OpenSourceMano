@@ -1,11 +1,16 @@
 import asyncio
+import mock
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+from juju.client.client import ConfigValue, ApplicationFacade
+from juju.model import Model, ModelObserver
+from juju.utils import block_until, run_with_interrupt
+
 import pytest
 
 from .. import base
-from juju.model import Model
-from juju.client.client import ConfigValue
+
 
 MB = 1
 GB = 1024
@@ -18,12 +23,26 @@ async def test_deploy_local_bundle(event_loop):
     from pathlib import Path
     tests_dir = Path(__file__).absolute().parent.parent
     bundle_path = tests_dir / 'bundle'
+    mini_bundle_file_path = bundle_path / 'mini-bundle.yaml'
 
     async with base.CleanModel() as model:
         await model.deploy(str(bundle_path))
+        await model.deploy(str(mini_bundle_file_path))
 
-        for app in ('wordpress', 'mysql'):
+        for app in ('wordpress', 'mysql', 'myapp'):
             assert app in model.applications
+
+
+@base.bootstrapped
+@pytest.mark.asyncio
+async def test_deploy_local_charm(event_loop):
+    from pathlib import Path
+    tests_dir = Path(__file__).absolute().parent.parent
+    charm_path = tests_dir / 'charm'
+
+    async with base.CleanModel() as model:
+        await model.deploy(str(charm_path))
+        assert 'charm' in model.applications
 
 
 @base.bootstrapped
@@ -43,7 +62,7 @@ async def test_deploy_channels_revs(event_loop):
         charm = 'cs:~johnsca/libjuju-test'
         stable = await model.deploy(charm, 'a1')
         edge = await model.deploy(charm, 'a2', channel='edge')
-        rev = await model.deploy(charm+'-2', 'a3')
+        rev = await model.deploy(charm + '-2', 'a3')
 
         assert [a.charm_url for a in (stable, edge, rev)] == [
             'cs:~johnsca/libjuju-test-1',
@@ -111,17 +130,44 @@ async def test_relate(event_loop):
             # subordinates must be deployed without units
             num_units=0,
         )
-        my_relation = await model.add_relation(
-            'ubuntu',
-            'nrpe',
-        )
+
+        relation_added = asyncio.Event()
+        timeout = asyncio.Event()
+
+        class TestObserver(ModelObserver):
+            async def on_relation_add(self, delta, old, new, model):
+                if set(new.key.split()) == {'nrpe:general-info',
+                                            'ubuntu:juju-info'}:
+                    relation_added.set()
+                    event_loop.call_later(2, timeout.set)
+
+        model.add_observer(TestObserver())
+
+        real_app_facade = ApplicationFacade.from_connection(model.connection())
+        mock_app_facade = mock.MagicMock()
+
+        async def mock_AddRelation(*args):
+            # force response delay from AddRelation to test race condition
+            # (see https://github.com/juju/python-libjuju/issues/191)
+            result = await real_app_facade.AddRelation(*args)
+            await relation_added.wait()
+            return result
+
+        mock_app_facade.AddRelation = mock_AddRelation
+
+        with mock.patch.object(ApplicationFacade, 'from_connection',
+                               return_value=mock_app_facade):
+            my_relation = await run_with_interrupt(model.add_relation(
+                'ubuntu',
+                'nrpe',
+            ), timeout, event_loop)
 
         assert isinstance(my_relation, Relation)
 
 
-async def _deploy_in_loop(new_loop, model_name):
-    new_model = Model(new_loop)
-    await new_model.connect_model(model_name)
+async def _deploy_in_loop(new_loop, model_name, jujudata):
+    new_model = Model(new_loop, jujudata=jujudata)
+    await new_model.connect(model_name)
     try:
         await new_model.deploy('cs:xenial/ubuntu')
         assert 'ubuntu' in new_model.applications
@@ -138,7 +184,7 @@ async def test_explicit_loop_threaded(event_loop):
         with ThreadPoolExecutor(1) as executor:
             f = executor.submit(
                 new_loop.run_until_complete,
-                _deploy_in_loop(new_loop, model_name))
+                _deploy_in_loop(new_loop, model_name, model._connector.jujudata))
             f.result()
         await model._wait_for_new('application', 'ubuntu')
         assert 'ubuntu' in model.applications
@@ -155,7 +201,7 @@ async def test_store_resources_charm(event_loop):
             lambda: (
                 len(ghost.units) > 0 and
                 ghost.units[0].workload_status in terminal_statuses)
-            )
+        )
         # ghost will go in to blocked (or error, for older
         # charm revs) if the resource is missing
         assert ghost.units[0].workload_status == 'active'
@@ -174,7 +220,7 @@ async def test_store_resources_bundle(event_loop):
             lambda: (
                 len(ghost.units) > 0 and
                 ghost.units[0].workload_status in terminal_statuses)
-            )
+        )
         # ghost will go in to blocked (or error, for older
         # charm revs) if the resource is missing
         assert ghost.units[0].workload_status == 'active'
@@ -206,9 +252,8 @@ async def test_get_machines(event_loop):
 @pytest.mark.asyncio
 async def test_watcher_reconnect(event_loop):
     async with base.CleanModel() as model:
-        await model.connection.ws.close()
-        await asyncio.sleep(0.1)
-        assert model.connection.is_open
+        await model.connection().ws.close()
+        await block_until(model.is_connected, timeout=3)
 
 
 @base.bootstrapped

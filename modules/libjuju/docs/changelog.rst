@@ -1,5 +1,54 @@
-Change Log
-----------
+Changelog
+---------
+
+0.7.3
+^^^^^
+Tuesday Feb 20 2018
+
+* Full macaroon bakery support (#206)
+* Fix regression with deploying local charm, add test case (#209)
+* Expose a machines series (#208)
+* Automated test runner fixes (#205)
+
+0.7.2
+^^^^^
+Friday Feb 9 2018
+
+* Support deploying bundle YAML file directly (rather than just directory) (#202)
+
+0.7.1
+^^^^^
+Monday Dec 18 2017
+
+* Fix missed renames of model_uuids (#197)
+
+0.7.0
+^^^^^
+Fri Dec 15 2017
+
+* Fix race condition in adding relations (#192)
+* Fix race condition in connection monitor test (#183)
+* Fix example in README (#178)
+* Fix rare hang during Unit.run (#177)
+* Fix licensing quirks (#176)
+* Refactor model handling (#171)
+* Refactor users handling, add get_users (#170)
+* Upload credential to controller when adding model (#168)
+* Support 'applications' key in bundles (#165)
+* Improve handling of thread error handling for loop.run() (#169)
+* Fix encoding when using to_json() (#166)
+* Fix intermittent test failures (#167)
+
+0.6.1
+^^^^^
+Fri Sept 29 2017
+
+* Fix failure when controller supports newer facade version (#145)
+* Fix test failures (#163)
+* Fix SSH key handling when adding a new model (#161)
+* Make Application.upgrade_charm upgrade resources (#158)
+* Expand integration tests to use stable/edge versions of juju (#155)
+* Move docs to ReadTheDocs (https://pythonlibjuju.readthedocs.io/en/latest/)
 
 0.6.1
 ^^^^^

@@ -2,9 +2,12 @@ import asyncio
 import pytest
 import uuid
 
-from .. import base
-from juju.controller import Controller
+from juju.client.connection import Connection
 from juju.errors import JujuAPIError
+
+import pytest
+
+from .. import base
 
 
 @base.bootstrapped
@@ -57,14 +60,18 @@ async def test_change_user_password(event_loop):
         username = 'test-password{}'.format(uuid.uuid4())
         user = await controller.add_user(username)
         await user.set_password('password')
+        # Check that we can connect with the new password.
+        new_connection = None
         try:
-            new_controller = Controller()
-            await new_controller.connect(
-                controller.connection.endpoint, username, 'password')
+            kwargs = controller.connection().connect_params()
+            kwargs['username'] = username
+            kwargs['password'] = 'password'
+            new_connection = await Connection.connect(**kwargs)
         except JujuAPIError:
             raise AssertionError('Unable to connect with new password')
         finally:
-            await new_controller.disconnect()
+            if new_connection:
+                await new_connection.close()
 
 
 @base.bootstrapped
@@ -77,10 +84,10 @@ async def test_grant_revoke(event_loop):
         assert user.access == 'superuser'
         fresh = await controller.get_user(username)  # fetch fresh copy
         assert fresh.access == 'superuser'
-        await user.grant('login')
-        assert user.access == 'login'
+        await user.grant('login')  # already has 'superuser', so no-op
+        assert user.access == 'superuser'
         fresh = await controller.get_user(username)  # fetch fresh copy
-        assert fresh.access == 'login'
+        assert fresh.access == 'superuser'
         await user.revoke()
         assert user.access is ''
         fresh = await controller.get_user(username)  # fetch fresh copy
@@ -120,6 +127,11 @@ async def test_get_model(event_loop):
             await controller.destroy_model(model_name)
 
 
+async def _wait_for_model(controller, model_name):
+    while model_name not in await controller.list_models():
+        await asyncio.sleep(0.5, loop=controller.loop)
+
+
 async def _wait_for_model_gone(controller, model_name):
     while model_name in await controller.list_models():
         await asyncio.sleep(0.5, loop=controller.loop)
@@ -132,6 +144,9 @@ async def test_destroy_model_by_name(event_loop):
         model_name = 'test-{}'.format(uuid.uuid4())
         model = await controller.add_model(model_name)
         await model.disconnect()
+        await asyncio.wait_for(_wait_for_model(controller,
+                                               model_name),
+                               timeout=60)
         await controller.destroy_model(model_name)
         await asyncio.wait_for(_wait_for_model_gone(controller,
                                                     model_name),
@@ -146,6 +161,9 @@ async def test_add_destroy_model_by_uuid(event_loop):
         model = await controller.add_model(model_name)
         model_uuid = model.info.uuid
         await model.disconnect()
+        await asyncio.wait_for(_wait_for_model(controller,
+                                               model_name),
+                               timeout=60)
         await controller.destroy_model(model_uuid)
         await asyncio.wait_for(_wait_for_model_gone(controller,
                                                     model_name),

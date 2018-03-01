@@ -2,20 +2,29 @@ dist: trusty
 sudo: required
 language: python
 python:
-  - "3.5"
+  - "3.6"
+before_script:
+  - sudo addgroup lxd || true
+  - sudo usermod -a -G lxd $USER || true
+  - sudo ln -s /snap/bin/juju /usr/bin/juju
+  - sudo ln -s /snap/bin/lxc /usr/bin/lxc
 before_install:
-  - sudo add-apt-repository ppa:ubuntu-lxc/lxd-stable -y
+  - sudo add-apt-repository -y ppa:jonathonf/python-3.6
+  - sudo add-apt-repository ppa:chris-lea/libsodium -y
   - sudo apt-get update -q
-  - sudo apt-get install lxd snapd -y
-  - sudo usermod -a -G lxd $USER
-  - sudo service lxd start || true
-  - sudo lxd init --auto
+  - sudo apt-get remove -qy lxd lxd-client
+  - sudo apt-get install snapd libsodium-dev -y
+  - sudo snap install lxd || true
+  - sudo snap install juju-wait --classic || true
 install: pip install tox-travis
 env:
-  - SNAP_CMD="sudo snap install juju --classic --stable"
-  - SNAP_CMD="sudo snap install juju --classic --edge"
+  global: >
+    TEST_AGENTS='{"agents":[{"url":"https://api.staging.jujucharms.com/identity","username":"libjuju-ci@yellow"}],"key":{"private":"88OOCxIHQNguRG7zFg2y2Hx5Ob0SeVKKBRnjyehverc=","public":"fDn20+5FGyN2hYO7z0rFUyoHGUnfrleslUNtoYsjNSs="}}'
+  matrix:
+    - JUJU_CHANNEL=stable
+    - JUJU_CHANNEL=edge
 script:
-  - (eval "$SNAP_CMD")
+  - sudo snap install juju --classic --$JUJU_CHANNEL
   - sudo ln -s /snap/bin/juju /usr/bin/juju || true
-  - sudo -E sudo -u $USER -E bash -c "/snap/bin/juju bootstrap localhost test"
+  - sudo -E sudo -u $USER -E /snap/bin/juju bootstrap localhost test --config 'identity-url=https://api.staging.jujucharms.com/identity' --config 'allow-model-access=true'
   - tox -e py35,integration
