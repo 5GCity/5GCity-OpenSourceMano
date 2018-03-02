@@ -64,6 +64,7 @@ module vnfd-base
     leaf port-security-enabled {
       description "Enables the port security for the port";
       type boolean;
+      default true;
     }
   }
 
