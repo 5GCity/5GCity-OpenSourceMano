@@ -52,7 +52,7 @@ module vnfd
     list vnfd {
       key "id";
 
-        uses vnfd-base:vnfd-descriptor;
+      uses vnfd-base:vnfd-descriptor;
     }
   }
 }

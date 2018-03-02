@@ -289,9 +289,9 @@ module vnfr
         }
 
         // Use parameters provided here to configure this VNF
-      container vnf-configuration {
-        uses manotypes:vca-configuration;
-      }
+        container vnf-configuration {
+          uses manotypes:vca-configuration;
+        }
 
         // Mainly used by Mon-params & dashboard url
         container mgmt-interface {
@@ -443,9 +443,9 @@ module vnfr
 
           uses manotypes:supplemental-boot-data;
 
-        container vdu-configuration {
-          uses manotypes:vca-configuration;
-        }
+          container vdu-configuration {
+            uses manotypes:vca-configuration;
+          }
 
           list volumes {
             key "name";
@@ -495,56 +495,56 @@ module vnfr
             uses associated-virtual-cps;
           }
 
-        list interface {
-          description
-              "List of interfaces (internal and external) for the VNF";
-          key name;
-
-          leaf name {
+          list interface {
             description
-                "Name of the interface. Note that this
-                name has only local significance to the VDU.";
-            type string;
-          }
+                "List of interfaces (internal and external) for the VNF";
+            key name;
 
-          leaf position {
-            description
-                "Explicit Position of the interface within the list";
-            type uint32;
-          }
+            leaf name {
+              description
+                  "Name of the interface. Note that this
+                  name has only local significance to the VDU.";
+              type string;
+            }
 
-          leaf type {
-            description
-                "Type of the Interface";
+            leaf position {
+              description
+                  "Explicit Position of the interface within the list";
+              type uint32;
+            }
 
-            type vnfd-base:interface-type;
+            leaf type {
+              description
+                  "Type of the Interface";
 
-            default "EXTERNAL";
-          }
-          choice connection-point-type {
-            case internal {
-              leaf internal-connection-point-ref {
-                description
-                    "Leaf Ref to the particular internal connection point";
-                type leafref {
-                  path "../../internal-connection-point/id";
+              type vnfd-base:interface-type;
+
+              default "EXTERNAL";
+            }
+            choice connection-point-type {
+              case internal {
+                leaf internal-connection-point-ref {
+                  description
+                      "Leaf Ref to the particular internal connection point";
+                  type leafref {
+                    path "../../internal-connection-point/id";
+                  }
+                }
+              }
+              case external {
+                leaf external-connection-point-ref {
+                  description
+                      "Leaf Ref to the particular external connection point";
+                  type leafref {
+                    path "../../../connection-point/name";
+                  }
                 }
               }
             }
-            case external {
-              leaf external-connection-point-ref {
-                description
-                    "Leaf Ref to the particular external connection point";
-                type leafref {
-                  path "../../../connection-point/name";
-                }
-              }
-            }
+            uses virtual-interface;
           }
-          uses virtual-interface;
-        }
 
-         leaf operational-status {
+          leaf operational-status {
             description
               "The operational status of the VDU
                 init                : The VDU has just started.
@@ -558,7 +558,7 @@ module vnfr
                 failed              : The VDU  instantiation failed.
               ";
             type vdu-operational-status;
-         }
+          }
 
           uses placement-group-info;
         }
