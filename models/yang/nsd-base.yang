@@ -31,6 +31,10 @@ module nsd-base
     prefix "manotypes";
   }
 
+  import vnfd {
+    prefix "vnfd";
+  }
+
   revision 2017-02-28 {
     description
       "Initial revision. This YANG file defines
@@ -184,6 +188,62 @@ module nsd-base
              It must be explicitly asked for a floating IP address to be allocated.";
         type boolean;
       }
+
+      choice connection {
+        description "Logical connection of the CP to a VLD or to a VNF CP";
+
+        case vld-ref {
+
+          leaf vld-id-ref {
+            description
+              "ID reference to a VLD in the NS";
+            type leafref {
+              path "../../vld/id";
+            }
+          }
+
+        }
+
+        case vnfd-connection-point-ref {
+
+          leaf member-vnf-index-ref {
+            description "Reference to member-vnf within constituent-vnfd";
+            type leafref {
+              path "../../constituent-vnfd/member-vnf-index";
+            }
+          }
+
+          leaf vnfd-id-ref {
+            description
+              "A reference to a vnfd. This is a leafref to path:
+                  ../../nsd:constituent-vnfd
+                  + [nsd:id = current()/../nsd:id-ref]
+                  + /nsd:vnfd-id-ref";
+            type leafref {
+              path "../../constituent-vnfd" +
+                   "[member-vnf-index = current()/../member-vnf-index-ref]" +
+                   "/vnfd-id-ref";
+            }
+          }
+
+          leaf vnfd-connection-point-ref {
+            description
+              "A reference to a connection point name
+                  in a vnfd. This is a leafref to path:
+                      /vnfd:vnfd-catalog/vnfd:vnfd
+                      + [vnfd:id = current()/../nsd:vnfd-id-ref]
+                      + /vnfd:connection-point/vnfd:name";
+            type leafref {
+              path "/vnfd:vnfd-catalog/vnfd:vnfd" +
+                   "[vnfd:id = current()/../vnfd-id-ref]" +
+                   "/vnfd:connection-point/vnfd:name";
+            }
+          }
+
+        }
+
+      }
+
     }
 
     list scaling-group-descriptor {
