@@ -165,7 +165,7 @@ if __name__=="__main__":
                 if "vnf-configuration" in vnfd and "service-primitive" in vnfd["vnf-configuration"]:
                     vnfd["vnf-configuration"]["config-primitive"] = vnfd["vnf-configuration"].pop("service-primitive")
 
-                #Convert to capital letters vnf-configuration:service-primitive:parameter:data-type
+                # Convert to capital letters vnf-configuration:service-primitive:parameter:data-type
                 if "vnf-configuration" in vnfd and "config-primitive" in vnfd["vnf-configuration"]:
                     error_position.append("vnf-configuration")
                     error_position.append("config-primitive")
@@ -183,6 +183,7 @@ if __name__=="__main__":
                 # Iterate with vdu:interfaces
                 vdu_list = vnfd["vdu"]
                 error_position.append("vdu")
+                vdu2mgmt_cp = {}  # internal dict to indicate management interface for each vdu
                 for vdu in vdu_list:
                     error_position[-1] = "vdu[{}]".format(vdu["id"])
                     # Change external/internal interface
@@ -194,6 +195,10 @@ if __name__=="__main__":
                         external_interface["type"] = "EXTERNAL"
                         external_interface["external-connection-point-ref"] = \
                             external_interface.pop("vnfd-connection-point-ref")
+                        if external_interface.get("virtual-interface", {}).get("type") == "OM-MGMT":
+                            external_interface["virtual-interface"]["type"] = "VIRTIO"
+                            if vdu["id"] not in vdu2mgmt_cp:
+                                vdu2mgmt_cp[vdu["id"]] = external_interface["external-connection-point-ref"]
                         interface_list.append(external_interface)
                     error_position.pop()
                     internal_interface_list = vdu.pop("internal-interface", ())
@@ -205,20 +210,45 @@ if __name__=="__main__":
                             internal_interface.pop("vdu-internal-connection-point-ref")
                         interface_list.append(internal_interface)
                     error_position.pop()
+                    # order interface alphabetically and set position
                     if interface_list:
+                        interface_list = sorted(interface_list,
+                                                key=lambda k: k.get('external-connection-point-ref',
+                                                                    k.get('internal-connection-point-ref')))
+                        index = 1
+                        for i in interface_list:
+                            i["position"] = str(index)
+                            index += 1
+
                         vdu["interface"] = interface_list
                 error_position.pop()
+                # change mgmt-interface
+                if vnfd.get("mgmt-interface"):
+                    error_position.append("mgmt-interface")
+                    vdu_id = vnfd["mgmt-interface"].pop("vdu-id", None)
+                    if vdu_id:
+                        error_position.append("vdu-id")
+                        vnfd["mgmt-interface"]["cp"] = vdu2mgmt_cp[vdu_id]
+                        error_position.pop()
+                    error_position.pop()
             error_position = []
         elif "nsd:nsd-catalog" in data or "nsd-catalog" in data:
             remove_prefix(data, "nsd:")
             error_position.append("nsd-catalog")
             nsd_descriptor = data["nsd-catalog"]
-
             nsd_list = nsd_descriptor["nsd"]
             error_position.append("nsd")
             for nsd in nsd_list:
                 error_position[-1] = "nsd[{}]".format(nsd["id"])
-
+                # set mgmt-network to true
+                error_position.append("vld")
+                vld_list = nsd.get("vld", ())
+                for vld in vld_list:
+                    error_position[-1] = "vld[{}]".format(vld["id"])
+                    if "mgmt" in vld["name"].lower() or "management" in vld["name"].lower():
+                        vld['mgmt-network'] = 'true'
+                        break
+                error_position.pop()
                 # Change initial-config-primitive into initial-service-primitive
                 if "initial-config-primitive" in nsd:
                     nsd['initial-service-primitive'] = nsd.pop("initial-config-primitive")
