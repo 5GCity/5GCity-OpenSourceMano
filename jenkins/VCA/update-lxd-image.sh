@@ -39,7 +39,7 @@ function cache() {
     lxc exec $container -- bash -c "while [ ! -f /var/lib/cloud/instance/boot-finished ]; do sleep 1; done"
 
     lxc exec $container -- apt-get update -y
-    lxc exec $container -- apt-get upgrade -y
+    lxc exec $container -- apt-get upgrade -y -o Dpkg::Options::='--force-confold'
     lxc exec $container -- apt-get install -y $PACKAGES $2
     lxc exec $container -- pip3 install --upgrade pip
     lxc exec $container -- pip3 install --upgrade $PYPI
