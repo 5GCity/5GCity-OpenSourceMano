@@ -38,7 +38,6 @@ import sys
 import time
 import uuid
 import json
-from pyvcloud.vcloudair import VCA
 from argparse import ArgumentParser
 
 __author__ = "Pablo Montes, Alfonso Tierno"
@@ -292,8 +291,7 @@ class test_vimconn_connect(test_base):
         if test_config['vimtype'] == 'vmware':
             vca_object = test_config["vim_conn"].connect()
             logger.debug("{}".format(vca_object))
-            self.assertIsInstance(vca_object, VCA)
-
+            self.assertIsNotNone(vca_object)
 
 class test_vimconn_new_network(test_base):
     network_name = None
@@ -655,9 +653,10 @@ class test_vimconn_get_network(test_base):
                                                             self.__class__.test_index,
                                                 inspect.currentframe().f_code.co_name)
         self.__class__.test_index += 1
+        with self.assertRaises(Exception) as context:
+            test_config["vim_conn"].get_network(Non_exist_id)
 
-        network_info = test_config["vim_conn"].get_network(Non_exist_id)
-        self.assertEqual(network_info, {})
+        self.assertEqual((context.exception).http_code, 404)
 
 class test_vimconn_delete_network(test_base):
     network_name = None
@@ -824,10 +823,10 @@ class test_vimconn_new_image(test_base):
 
         image_path = test_config['image_path']
         if image_path:
-            image_id = test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : image_path })
+            self.__class__.image_id = test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : image_path })
             time.sleep(20)
-            self.assertEqual(type(image_id),str)
-            self.assertIsInstance(uuid.UUID(image_id),uuid.UUID)
+            self.assertEqual(type(self.__class__.image_id),str)
+            self.assertIsInstance(uuid.UUID(self.__class__.image_id),uuid.UUID)
         else:
             self.skipTest("Skipping test as image file not present at RO container")
 

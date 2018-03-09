@@ -254,7 +254,7 @@ then
 
     # required for vmware connector TODO move that to separete opt in install script
     pip install --upgrade pip || exit 1
-    pip install pyvcloud==18.2.2 || exit 1
+    pip install pyvcloud==19.1.1 || exit 1
     pip install progressbar || exit 1
     pip install prettytable || exit 1
     pip install pyvmomi || exit 1
