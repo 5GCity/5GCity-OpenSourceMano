@@ -36,7 +36,7 @@ __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes, xFlow Research, Igor
 __date__  = "$22-sep-2017 23:59:59$"
 
 import vimconn
-import json
+# import json
 import logging
 import netaddr
 import time
@@ -493,9 +493,10 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Getting network from VIM filter: '%s'", str(filter_dict))
         try:
             self._reload_connection()
-            if self.api_version3 and "tenant_id" in filter_dict:
-                filter_dict['project_id'] = filter_dict.pop('tenant_id') #TODO check
-            net_dict = self.neutron.list_networks(**filter_dict)
+            filter_dict_os = filter_dict.copy()
+            if self.api_version3 and "tenant_id" in filter_dict_os:
+                filter_dict_os['project_id'] = filter_dict_os.pop('tenant_id')  #T ODO check
+            net_dict = self.neutron.list_networks(**filter_dict_os)
             net_list = net_dict["networks"]
             self.__net_os2mano(net_list)
             return net_list
@@ -840,9 +841,9 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Getting image list from VIM filter: '%s'", str(filter_dict))
         try:
             self._reload_connection()
-            filter_dict_os=filter_dict.copy()
+            filter_dict_os = filter_dict.copy()
             #First we filter by the available filter fields: name, id. The others are removed.
-            filter_dict_os.pop('checksum',None)
+            filter_dict_os.pop('checksum', None)
             image_list = self.nova.images.findall(**filter_dict_os)
             if len(image_list) == 0:
                 return []
@@ -851,7 +852,7 @@ class vimconnector(vimconn.vimconnector):
             for image in image_list:
                 try:
                     image_class = self.glance.images.get(image.id)
-                    if 'checksum' not in filter_dict or image_class['checksum']==filter_dict.get('checksum'):
+                    if 'checksum' not in filter_dict or image_class['checksum'] == filter_dict.get('checksum'):
                         filtered_list.append(image_class.copy())
                 except gl1Exceptions.HTTPNotFound:
                     pass
@@ -1717,12 +1718,13 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Getting Classifications from VIM filter: '%s'",
                           str(filter_dict))
         try:
+            filter_dict_os = filter_dict.copy()
             self._reload_connection()
-            if self.api_version3 and "tenant_id" in filter_dict:
-                filter_dict['project_id'] = filter_dict.pop('tenant_id')
+            if self.api_version3 and "tenant_id" in filter_dict_os:
+                filter_dict_os['project_id'] = filter_dict_os.pop('tenant_id')
             classification_dict = self.neutron.list_sfc_flow_classifiers(
-                **filter_dict)
-            classification_list = cliassification_dict["flow_classifiers"]
+                **filter_dict_os)
+            classification_list = classification_dict["flow_classifiers"]
             self.__classification_os2mano(classification_list)
             return classification_list
         except (neExceptions.ConnectionFailed, ksExceptions.ClientException,
@@ -1796,9 +1798,10 @@ class vimconnector(vimconn.vimconnector):
                           "VIM filter: '%s'", str(filter_dict))
         try:
             self._reload_connection()
-            if self.api_version3 and "tenant_id" in filter_dict:
-                filter_dict['project_id'] = filter_dict.pop('tenant_id')
-            sfi_dict = self.neutron.list_sfc_port_pairs(**filter_dict)
+            filter_dict_os = filter_dict.copy()
+            if self.api_version3 and "tenant_id" in filter_dict_os:
+                filter_dict_os['project_id'] = filter_dict_os.pop('tenant_id')
+            sfi_dict = self.neutron.list_sfc_port_pairs(**filter_dict_os)
             sfi_list = sfi_dict["port_pairs"]
             self.__sfi_os2mano(sfi_list)
             return sfi_list
@@ -1868,9 +1871,10 @@ class vimconnector(vimconn.vimconnector):
                           str(filter_dict))
         try:
             self._reload_connection()
-            if self.api_version3 and "tenant_id" in filter_dict:
-                filter_dict['project_id'] = filter_dict.pop('tenant_id')
-            sf_dict = self.neutron.list_sfc_port_pair_groups(**filter_dict)
+            filter_dict_os = filter_dict.copy()
+            if self.api_version3 and "tenant_id" in filter_dict_os:
+                filter_dict_os['project_id'] = filter_dict_os.pop('tenant_id')
+            sf_dict = self.neutron.list_sfc_port_pair_groups(**filter_dict_os)
             sf_list = sf_dict["port_pair_groups"]
             self.__sf_os2mano(sf_list)
             return sf_list
@@ -1937,9 +1941,10 @@ class vimconnector(vimconn.vimconnector):
                           "'%s'", str(filter_dict))
         try:
             self._reload_connection()
-            if self.api_version3 and "tenant_id" in filter_dict:
-                filter_dict['project_id'] = filter_dict.pop('tenant_id')
-            sfp_dict = self.neutron.list_sfc_port_chains(**filter_dict)
+            filter_dict_os = filter_dict.copy()
+            if self.api_version3 and "tenant_id" in filter_dict_os:
+                filter_dict_os['project_id'] = filter_dict_os.pop('tenant_id')
+            sfp_dict = self.neutron.list_sfc_port_chains(**filter_dict_os)
             sfp_list = sfp_dict["port_chains"]
             self.__sfp_os2mano(sfp_list)
             return sfp_list

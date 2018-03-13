@@ -1025,25 +1025,25 @@ class nfvo_db(db_base.db_base):
                     self.cur.execute(cmd)
                     instance_dict['sfps'] = self.cur.fetchall()
 
-                    for sfp in instance_dict['sfps']:
-                        #instance_sfs
-                        cmd = "SELECT uuid,vim_sf_id,sce_rsp_hop_id,datacenter_id,"\
-                              "datacenter_tenant_id,status,error_msg,vim_info"\
-                                " FROM instance_sfs" \
-                                " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid']) # TODO: replace instance_scenario_id with instance_sfp_id
-                        self.logger.debug(cmd)
-                        self.cur.execute(cmd)
-                        instance_dict['sfs'] = self.cur.fetchall()
+                    # for sfp in instance_dict['sfps']:
+                    #instance_sfs
+                    cmd = "SELECT uuid,vim_sf_id,sce_rsp_hop_id,datacenter_id,"\
+                          "datacenter_tenant_id,status,error_msg,vim_info"\
+                            " FROM instance_sfs" \
+                            " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid']) # TODO: replace instance_scenario_id with instance_sfp_id
+                    self.logger.debug(cmd)
+                    self.cur.execute(cmd)
+                    instance_dict['sfs'] = self.cur.fetchall()
 
-                        for sf in instance_dict['sfs']:
-                            #instance_sfis
-                            cmd = "SELECT uuid,vim_sfi_id,sce_rsp_hop_id,datacenter_id,"\
-                                  "datacenter_tenant_id,status,error_msg,vim_info"\
-                                    " FROM instance_sfis" \
-                                    " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid']) # TODO: replace instance_scenario_id with instance_sf_id
-                            self.logger.debug(cmd)
-                            self.cur.execute(cmd)
-                            instance_dict['sfis'] = self.cur.fetchall()
+                    #for sf in instance_dict['sfs']:
+                    #instance_sfis
+                    cmd = "SELECT uuid,vim_sfi_id,sce_rsp_hop_id,datacenter_id,"\
+                          "datacenter_tenant_id,status,error_msg,vim_info"\
+                            " FROM instance_sfis" \
+                            " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid']) # TODO: replace instance_scenario_id with instance_sf_id
+                    self.logger.debug(cmd)
+                    self.cur.execute(cmd)
+                    instance_dict['sfis'] = self.cur.fetchall()
 #                            for sfi in instance_dict['sfi']:
 
                     #instance_classifications

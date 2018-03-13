@@ -3687,7 +3687,7 @@ def delete_instance(mydb, tenant_id, instance_id):
 
     # 2.3 deleting VNFFGs
 
-    for sfp in instanceDict['sfps']:
+    for sfp in instanceDict.get('sfps', ()):
         vimthread_affected[sfp["datacenter_tenant_id"]] = None
         datacenter_key = (sfp["datacenter_id"], sfp["datacenter_tenant_id"])
         if datacenter_key not in myvims:
@@ -3724,7 +3724,7 @@ def delete_instance(mydb, tenant_id, instance_id):
         task_index += 1
         db_vim_actions.append(db_vim_action)
 
-    for sf in instanceDict['sfs']:
+    for sf in instanceDict.get('sfs', ()):
         vimthread_affected[sf["datacenter_tenant_id"]] = None
         datacenter_key = (sf["datacenter_id"], sf["datacenter_tenant_id"])
         if datacenter_key not in myvims:
@@ -3761,7 +3761,7 @@ def delete_instance(mydb, tenant_id, instance_id):
         task_index += 1
         db_vim_actions.append(db_vim_action)
 
-    for sfi in instanceDict['sfis']:
+    for sfi in instanceDict.get('sfis', ()):
         vimthread_affected[sfi["datacenter_tenant_id"]] = None
         datacenter_key = (sfi["datacenter_id"], sfi["datacenter_tenant_id"])
         if datacenter_key not in myvims:
