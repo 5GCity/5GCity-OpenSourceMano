@@ -1224,7 +1224,12 @@ module mano-types
 
   grouping monitoring-param-aggregation {
     typedef aggregation-type {
-      description "aggregation-type";
+      description
+          "aggregation-type, indicates the way to aggregate monitoring-params
+          (e.g. how to aggregate CPU utilisation of all VNFs belonging to the
+          same VNF group identified by member-vnf-index; or how to aggregate
+          memory utilisation of all VDUs belonging to the same VDU group
+          identified by vdu id)";
       type enumeration {
         enum AVERAGE;
         enum MINIMUM;

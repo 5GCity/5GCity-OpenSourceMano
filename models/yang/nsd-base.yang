@@ -61,17 +61,6 @@ module nsd-base
     }
   }
 
-  typedef scaling-policy-type {
-    type enumeration {
-      enum manual {
-        value 1;
-      }
-      enum automatic {
-        value 2;
-      }
-    }
-  }
-
   typedef scaling-criteria-operation {
     type enumeration {
       enum AND {
@@ -268,12 +257,6 @@ module nsd-base
           description
               "Name of the scaling policy";
           type string;
-        }
-
-        leaf scaling-type {
-          description
-              "Type of scaling";
-          type scaling-policy-type;
         }
 
         leaf enabled {
