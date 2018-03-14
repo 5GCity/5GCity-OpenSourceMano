@@ -43,8 +43,8 @@ import openflow_conn
 
 __author__ = "Alfonso Tierno, Leonardo Mirabal"
 __date__ = "$06-Feb-2017 12:07:15$"
-__version__ = "0.5.23-r539"
-version_date = "Jan 2018"
+__version__ = "0.5.24-r540"
+version_date = "Mar 2018"
 database_version = 22      #needed database schema version
 
 HTTP_Bad_Request =          400

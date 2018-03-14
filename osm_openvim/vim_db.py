@@ -136,8 +136,10 @@ class vim_db():
                 
         self.logger.error("%s DB Exception %s. Command %s",func, str(e), cmd)
         if type(e[0]) is str:
-            if e[0][-5:] == "'con'": return -HTTP_Internal_Server_Error, "DB Exception, no connection."
-            else: raise
+            if e[0][-5:] == "'con'":
+                return -HTTP_Internal_Server_Error, "DB Exception, no connection."
+            else:
+                return -HTTP_Internal_Server_Error, e.args[1]
         if e.args[0]==2006 or e.args[0]==2013 : #MySQL server has gone away (((or)))    Exception 2013: Lost connection to MySQL server during query
             #reconnect
             self.connect()
@@ -1426,7 +1428,11 @@ class vim_db():
                             del iface["cidr"]
                             del iface["enable_dhcp"]
                             used_dhcp_ips = self._get_dhcp_ip_used_list(iface["net_id"])
-                            iface["ip_address"] = self.get_free_ip_from_range(dhcp_first_ip, dhcp_last_ip,
+                            if iface.get("ip_address"):
+                                if iface["ip_address"] in used_dhcp_ips:
+                                    iface["ip_address"] = None
+                            else:
+                                iface["ip_address"] = self.get_free_ip_from_range(dhcp_first_ip, dhcp_last_ip,
                                                                               dhcp_cidr, used_dhcp_ips)
                             if 'links' in iface:
                                 del iface['links']
