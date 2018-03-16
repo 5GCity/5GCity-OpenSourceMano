@@ -1,0 +1,96 @@
+version: '3'
+volumes:
+  OSMstorage:
+networks:
+  netOSM:
+    #driver: overlay
+    #driver_opts:
+    #  com.docker.network.driver.mtu: "1446"
+services:
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+    networks:
+      - netOSM
+  kafka:
+    image: wurstmeister/kafka
+    ports:
+      - "9092:9092"
+    networks:
+      - netOSM
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ADVERTISED_PORT: 9092
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    #depends_on:
+    #  - zookeeper
+  mongo:
+    image: mongo
+    ports:
+      - "27017:27017"
+    networks:
+      - netOSM
+  nbi:
+    image: osm/nbi
+    networks:
+      - netOSM
+    volumes:
+      - OSMstorage:/app/storage
+    environment:
+      OSMNBI_DATABASE_HOST: mongo
+      OSMNBI_MESSAGE_HOST: kafka
+    ports:
+      - "9999:9999"
+    #depends_on:
+    #  - kafka
+    #  - mongo
+  lcm:
+    image: osm/lcm
+    networks:
+      - netOSM
+    volumes:
+      - OSMstorage:/app/storage
+    environment:
+      OSMLCM_RO_HOST: ro
+      OSMLCM_DATABASE_HOST: mongo
+      OSMLCM_MESSAGE_HOST: kafka
+    env_file:
+      - ./lcm.env
+    #depends_on:
+    #  - kafka
+    #  - mongo
+    #  - ro
+  ro-db:
+    image: mysql
+    networks:
+      - netOSM
+    env_file:
+      - ./ro-db.env
+    ports:
+      - "3306:3306"
+  ro:
+    image: osm/ro
+    networks:
+      - netOSM
+    environment:
+      RO_DB_HOST: ro-db
+    env_file:
+      - ./ro.env
+    #depends_on:
+    #  - ro-db
+    ports:
+      - "9090:9090"
+  mon:
+    image: osm/mon
+    networks:
+      - netOSM
+    environment:
+      BROKER_URI: kafka:9092
+    #depends_on:
+    #  - kafka
+    ports:
+      - "8662:8662"
+
