@@ -15,7 +15,11 @@ from dbbase import DbException
 from fsbase import FsException
 from msgbase import MsgException
 from os import environ
-from vca import DeployApplication, RemoveApplication
+# from vca import DeployApplication, RemoveApplication
+from n2vc.vnf import N2VC
+import os.path
+import time
+
 from copy import deepcopy
 from http import HTTPStatus
 
@@ -44,6 +48,7 @@ class Lcm:
             "logger_name": "lcm.ROclient",
             "loglevel": "ERROR",
         }
+
         self.vca = config["VCA"]  # TODO VCA
         self.loop = None
 
@@ -77,6 +82,19 @@ class Lcm:
                 logger_module.addHandler(file_handler)
             if "loglevel" in config[k1]:
                 logger_module.setLevel(config[k1]["loglevel"])
+
+        self.n2vc = N2VC(
+            log=self.logger,
+            server=config['VCA']['host'],
+            port=config['VCA']['port'],
+            user=config['VCA']['user'],
+            secret=config['VCA']['secret'],
+            # TODO: This should point to the base folder where charms are stored,
+            # if there is a common one (like object storage). Otherwise, leave
+            # it unset and pass it via DeployCharms
+            # artifacts=config['VCA'][''],
+            artifacts=None,
+        )
 
         try:
             if config["database"]["driver"] == "mongo":
@@ -114,6 +132,70 @@ class Lcm:
             self.db.replace("nsrs", nsr_id, nsr_desc)
         except DbException as e:
             self.logger.error("Updating nsr_id={}: {}".format(nsr_id, e))
+
+    def n2vc_callback(self, nsd, vnfd, vnf_member_index, workload_status, *args):
+        """Update the lcm database with the status of the charm.
+
+        Updates the VNF's operational status with the state of the charm:
+        - blocked: The unit needs manual intervention
+        - maintenance: The unit is actively deploying/configuring
+        - waiting: The unit is waiting for another charm to be ready
+        - active: The unit is deployed, configured, and ready
+        - error: The charm has failed and needs attention.
+        - terminated: The charm has been destroyed
+
+        Updates the network service's config-status to reflect the state of all
+        charms.
+        """
+        if workload_status and len(args) == 3:
+            # self.logger.debug("[n2vc_callback] Workload status \"{}\"".format(workload_status))
+            try:
+                (db_nsr, vnf_index, task) = args
+
+                nsr_id = db_nsr["_id"]
+                nsr_lcm = db_nsr["_admin"]["deploy"]
+                nsr_lcm["VCA"][vnf_index]['operational-status'] = workload_status
+
+                if task:
+                    if task.cancelled():
+                        return
+
+                    if task.done():
+                        exc = task.exception()
+                        if exc:
+                            nsr_lcm = db_nsr["_admin"]["deploy"]
+                            nsr_lcm["VCA"][vnf_index]['operational-status'] = "failed"
+                            db_nsr["detailed-status"] = "fail configuring vnf_index={} {}".format(vnf_index, exc)
+                            db_nsr["config-status"] = "failed"
+                            self.update_nsr_db(nsr_id, db_nsr)
+                else:
+                    units = len(nsr_lcm["VCA"])
+                    active = 0
+                    statusmap = {}
+                    for vnf_index in nsr_lcm["VCA"]:
+                        if 'operational-status' in nsr_lcm["VCA"][vnf_index]:
+
+                            if nsr_lcm["VCA"][vnf_index]['operational-status'] not in statusmap:
+                                # Initialize it
+                                statusmap[nsr_lcm["VCA"][vnf_index]['operational-status']] = 0
+
+                            statusmap[nsr_lcm["VCA"][vnf_index]['operational-status']] += 1
+
+                            if nsr_lcm["VCA"][vnf_index]['operational-status'] == "active":
+                                active += 1
+                        else:
+                            self.logger.debug("No operational-status")
+
+                    cs = ""
+                    for status in statusmap:
+                        cs += "{} ({}) ".format(status, statusmap[status])
+                    db_nsr["config-status"] = cs
+                    self.update_nsr_db(nsr_id, db_nsr)
+
+            except Exception as e:
+                # self.logger.critical("Task create_ns={} n2vc_callback Exception {}".format(nsr_id, e), exc_info=True)
+                self.logger.critical("Task create_ns n2vc_callback Exception {}".format(e), exc_info=True)
+            pass
 
     def vca_deploy_callback(self, db_nsr, vnf_index, status, task):
         # TODO study using this callback when VCA.DeployApplication success from VCAMonitor
@@ -293,17 +375,14 @@ class Lcm:
                         base_folder["file"],
                         proxy_charm
                     )
+
+                    self.logger.debug("Passing artifacts path '{}' for {}".format(charm_path, proxy_charm))
                     task = asyncio.ensure_future(
-                        DeployApplication(
-                            self.config['VCA'],
-                            self.db,
-                            db_nsr,
-                            vnfd,
-                            vnf_index,
-                            charm_path,
-                        )
+                        self.n2vc.DeployCharms(nsd, vnfd, vnf_index, charm_path, self.n2vc_callback, db_nsr, vnf_index, None)
                     )
-                    task.add_done_callback(functools.partial(self.vca_deploy_callback, db_nsr, vnf_index, None))
+                    task.add_done_callback(functools.partial(self.n2vc_callback, None, None, None, None, None, db_nsr, vnf_index))
+
+                    # task.add_done_callback(functools.partial(self.vca_deploy_callback, db_nsr, vnf_index, None))
                     self.lcm_tasks[nsr_id][order_id]["create_charm:" + vnf_index] = task
             db_nsr["config-status"] = "configuring" if vnfd_to_config else "configured"
             db_nsr["detailed-status"] = "Configuring 1/{}".format(vnfd_to_config) if vnfd_to_config else "done"
@@ -346,13 +425,9 @@ class Lcm:
                 self.logger.debug(logging_text + step)
                 for vnf_index, deploy_info in nsr_lcm["VCA"].items():
                     if deploy_info and deploy_info.get("appliation"):
+
                         task = asyncio.ensure_future(
-                            RemoveApplication(
-                                self.config['VCA'],
-                                self.db,
-                                db_nsr,
-                                vnf_index,
-                            )
+                            self.n2vc.RemoveCharms(nsd, vnfd, vnf_index, self.n2vc_callback, db_nsr, vnf_index, None)
                         )
                         self.lcm_tasks[nsr_id][order_id]["delete_charm:" + vnf_index] = task
             except Exception as e:
