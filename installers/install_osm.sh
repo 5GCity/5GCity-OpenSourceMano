@@ -54,6 +54,10 @@ function uninstall(){
         lxc stop VCA && lxc delete VCA
         lxc stop SO-ub && lxc delete SO-ub
     fi
+    echo -e "\nDeleting imported lxd images if they exist"
+    lxc image show osm-ro &>/dev/null && lxc image delete osm-ro
+    lxc image show osm-vca &>/dev/null && lxc image delete osm-vca
+    lxc image show osm-soui &>/dev/null && lxc image delete osm-soui
 }
 
 #Configure NAT rules, based on the current IP addresses of containers
@@ -384,11 +388,18 @@ function install_from_lxdimages(){
     LXD_IMAGE_DIR="$(mktemp -d -q --tmpdir "osmimages.XXXXXX")"
     trap 'rm -rf "$LXD_IMAGE_DIR"' EXIT
     wget -O $LXD_IMAGE_DIR/osm-ro.tar.gz $LXD_REPOSITORY_BASE/$LXD_RELEASE/osm-ro.tar.gz
+    echo -e "\nDeleting previous lxd images if they exist"
+    lxc image show osm-ro &>/dev/null && lxc image delete osm-ro
+    lxc image show osm-vca &>/dev/null && lxc image delete osm-vca
+    lxc image show osm-soui &>/dev/null && lxc image delete osm-soui
+    echo -e "\nImporting osm-ro"
     lxc image import $LXD_IMAGE_DIR/osm-ro.tar.gz --alias osm-ro
     rm -f $LXD_IMAGE_DIR/osm-ro.tar.gz
     wget -O $LXD_IMAGE_DIR/osm-vca.tar.gz $LXD_REPOSITORY_BASE/$LXD_RELEASE/osm-vca.tar.gz
+    echo -e "\nImporting osm-vca"
     lxc image import $LXD_IMAGE_DIR/osm-vca.tar.gz --alias osm-vca
     rm -f $LXD_IMAGE_DIR/osm-vca.tar.gz
+    echo -e "\nImporting osm-soui"
     wget -O $LXD_IMAGE_DIR/osm-soui.tar.gz $LXD_REPOSITORY_BASE/$LXD_RELEASE/osm-soui.tar.gz
     lxc image import $LXD_IMAGE_DIR/osm-soui.tar.gz --alias osm-soui
     rm -f $LXD_IMAGE_DIR/osm-soui.tar.gz
