@@ -67,14 +67,15 @@ echo "Exporting images as targz"
 mkdir -p "${RELEASE}"
 #trap 'rm -rf "$RELEASE"' EXIT
 
-[ -n "$GEN_RO" ] && lxc image export "${OSM_RO_IMAGE}" "${RELEASE}"/"${OSM_RO_IMAGE}"
-[ -n "$GEN_VCA" ] && lxc image export "${OSM_VCA_IMAGE}" "${RELEASE}"/"${OSM_VCA_IMAGE}"
-[ -n "$GEN_SOUI" ] && lxc image export "${OSM_SOUI_IMAGE}" "${RELEASE}"/"${OSM_SOUI_IMAGE}"
-#[ -n "$GEN_MON" ] && lxc image export "${OSM_MON_IMAGE}" "${RELEASE}"/"${OSM_MON_IMAGE}"
+[ -n "$GEN_RO" ] && lxc image export "${OSM_RO_IMAGE}" "${RELEASE}"/"${OSM_RO_IMAGE}" || echo "Failed to export RO"
+[ -n "$GEN_VCA" ] && lxc image export "${OSM_VCA_IMAGE}" "${RELEASE}"/"${OSM_VCA_IMAGE}" || echo "Failed to export VCA"
+[ -n "$GEN_SOUI" ] && lxc image export "${OSM_SOUI_IMAGE}" "${RELEASE}"/"${OSM_SOUI_IMAGE}" || echo "Failed to export SOUI"
+#[ -n "$GEN_MON" ] && lxc image export "${OSM_MON_IMAGE}" "${RELEASE}"/"${OSM_MON_IMAGE}" || echo "Failed to export MON"
+chmod 664 "${RELEASE}"/*.tar.gz
 
 echo "Pushing images to ETSI FTP server"
 RSYNC_USER_HOST=osmusers@osm-download.etsi.org
-RSYNC_OPTIONS="--delete --progress"
+RSYNC_OPTIONS="--delete --progress --password-file rsync.pass"
 rsync -avR "$RSYNC_OPTIONS" "$RELEASE" rsync://$RSYNC_USER_HOST/repos/osm/lxd
 
 
