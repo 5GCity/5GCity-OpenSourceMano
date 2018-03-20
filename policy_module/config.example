@@ -1,0 +1,4 @@
+[policy_module]
+kafka_server_host=localhost
+kafka_server_port=9092
+log_dir=

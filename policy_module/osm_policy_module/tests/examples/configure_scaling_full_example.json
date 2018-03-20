@@ -1,0 +1,30 @@
+{
+  "ns_id": "360b400b-86dc-4b8e-a139-b7fc3987cf69",
+  "scaling_group_descriptor": {
+    "name": "test",
+    "scaling_policy": {
+      "scale_in_operation_type": "or",
+      "scale_out_operation_type": "or",
+      "threshold_time": 10,
+      "cooldown_time": 10,
+      "scaling_criteria": [
+        {
+          "scale_in_threshold": 50,
+          "scale_out_threshold": 50,
+          "scale_in_relational_operation": "lt",
+          "scale_out_relational_operation": "gt",
+          "monitoring_param": {
+            "id": "test_param_id",
+            "name": "test_param",
+            "aggregation_type": "avg",
+            "vdu_monitoring_param": {
+              "vim_uuid": "vdu_monitoring_param_id",
+              "resource_id": "vdu_monitoring_param_resource_id",
+              "name": "vdu_monitoring_param_name"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

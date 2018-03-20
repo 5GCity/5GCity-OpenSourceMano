@@ -1,0 +1,113 @@
+{
+  "$schema": "http://json-schema.org/schema#",
+  "type": "object",
+  "properties": {
+    "ns_id": {
+      "type": "string"
+    },
+    "scaling_group_descriptor": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "scaling_policy": {
+          "type": "object",
+          "properties": {
+            "scale_in_operation_type": {
+              "type": "string",
+              "enum": [
+                "and",
+                "or"
+              ]
+            },
+            "scale_out_operation_type": {
+              "type": "string",
+              "enum": [
+                "and",
+                "or"
+              ]
+            },
+            "threshold_time": {
+              "type": "number"
+            },
+            "cooldown_time": {
+              "type": "number"
+            },
+            "scaling_criteria": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "scale_in_threshold": {
+                    "type": "number"
+                  },
+                  "scale_out_threshold": {
+                    "type": "number"
+                  },
+                  "scale_in_relational_operation": {
+                    "type": "string",
+                    "enum": [
+                      "lt",
+                      "gt",
+                      "le",
+                      "ge",
+                      "eq",
+                      "ne"
+                    ]
+                  },
+                  "scale_out_relational_operation": {
+                    "type": "string",
+                    "enum": [
+                      "lt",
+                      "gt",
+                      "le",
+                      "ge",
+                      "eq",
+                      "ne"
+                    ]
+                  },
+                  "monitoring_param": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "aggregation_type": {
+                        "type": "string",
+                        "enum": [
+                          "avg",
+                          "max",
+                          "min",
+                          "last",
+                          "sum"
+                        ]
+                      },
+                      "vdu_monitoring_param": {
+                        "type": "object",
+                        "properties": {
+                          "vim_uuid": {
+                            "type": "string"
+                          },
+                          "resource_id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
