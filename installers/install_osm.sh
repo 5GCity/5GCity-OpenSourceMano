@@ -58,6 +58,7 @@ function uninstall(){
     lxc image show osm-ro &>/dev/null && lxc image delete osm-ro
     lxc image show osm-vca &>/dev/null && lxc image delete osm-vca
     lxc image show osm-soui &>/dev/null && lxc image delete osm-soui
+    return 0
 }
 
 #Configure NAT rules, based on the current IP addresses of containers
