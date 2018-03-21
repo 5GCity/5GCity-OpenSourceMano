@@ -46,17 +46,23 @@ class FsLocal(FsBase):
         except Exception as e:
             raise FsException(str(e), http_code=HTTPStatus.INTERNAL_SERVER_ERROR)
 
-    def file_exists(self, storage):
+    def file_exists(self, storage, mode=None):
         """
         Indicates if "storage" file exist
         :param storage: can be a str or a str list
+        :param mode: can be 'file' exist as a regular file; 'dir' exists as a directory or; 'None' just exists
         :return: True, False
         """
         if isinstance(storage, str):
             f = storage
         else:
             f = "/".join(storage)
-        return os.path.exists(self.path + f)
+        if os.path.exists(self.path + f):
+            if mode == "file" and os.path.isfile(self.path + f):
+                return True
+            if mode == "dir" and os.path.isdir(self.path + f):
+                return True
+        return False
 
     def file_size(self, storage):
         """
@@ -90,11 +96,33 @@ class FsLocal(FsBase):
         :param mode: file mode
         :return: file object
         """
-        if isinstance(storage, str):
-            f = storage
-        else:
-            f = "/".join(storage)
-        return open(self.path + f, mode)
+        try:
+            if isinstance(storage, str):
+                f = storage
+            else:
+                f = "/".join(storage)
+            return open(self.path + f, mode)
+        except FileNotFoundError:
+            raise FsException("File {} does not exist".format(f), http_code=HTTPStatus.NOT_FOUND)
+        except IOError:
+            raise FsException("File {} cannot be opened".format(f), http_code=HTTPStatus.BAD_REQUEST)
+
+    def dir_ls(self, storage):
+        """
+        return folder content
+        :param storage: can be a str or list of str
+        :return: folder content
+        """
+        try:
+            if isinstance(storage, str):
+                f = storage
+            else:
+                f = "/".join(storage)
+            return os.listdir(self.path + f)
+        except NotADirectoryError:
+            raise FsException("File {} does not exist".format(f), http_code=HTTPStatus.NOT_FOUND)
+        except IOError:
+            raise FsException("File {} cannot be opened".format(f), http_code=HTTPStatus.BAD_REQUEST)
 
     def file_delete(self, storage, ignore_non_exist=False):
         """
@@ -111,4 +139,4 @@ class FsLocal(FsBase):
         if os.path.exists(f):
             rmtree(f)
         elif not ignore_non_exist:
-            raise FsException("File {} does not exist".format(storage), http_code=HTTPStatus.BAD_REQUEST)
+            raise FsException("File {} does not exist".format(storage), http_code=HTTPStatus.NOT_FOUND)

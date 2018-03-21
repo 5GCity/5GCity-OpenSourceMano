@@ -1,4 +1,5 @@
 
+import asyncio
 from http import HTTPStatus
 
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
@@ -30,12 +31,17 @@ class MsgBase(object):
     def connect(self, config):
         pass
 
-    def write(self, msg):
-        pass
-
-    def read(self):
-        pass
-
     def disconnect(self):
         pass
 
+    def write(self, topic, key, msg):
+        pass
+
+    def read(self, topic):
+        pass
+
+    async def aiowrite(self, topic, key, msg, loop):
+        pass
+
+    async def aioread(self, topic, loop):
+        pass
