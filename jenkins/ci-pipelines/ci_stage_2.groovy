@@ -59,10 +59,12 @@ def ci_pipeline(mdg,url_prefix,project,branch,refspec,revision,do_stage_3,artifa
         stage('Build') {
             sh(returnStdout:true,  script: 'devops-stages/stage-build.sh').trim()
         }
-        sh "mkdir -p changelog"
-        sh "devops/tools/generatechangelog-pipeline.sh > changelog/changelog-${mdg}.html"
-        sh(returnStdout:true,  script: 'devops-stages/stage-archive.sh').trim()
-        ci_helper.archive(artifactory_server,mdg,branch,'untested')
+        stage('Archive') {
+            sh "mkdir -p changelog"
+            sh "devops/tools/generatechangelog-pipeline.sh > changelog/changelog-${mdg}.html"
+            sh(returnStdout:true,  script: 'devops-stages/stage-archive.sh').trim()
+            ci_helper.archive(artifactory_server,mdg,branch,'untested')
+        }
     }
 
     if ( do_stage_3 ) {
