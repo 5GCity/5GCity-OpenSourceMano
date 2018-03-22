@@ -59,9 +59,6 @@ def ci_pipeline(mdg,url_prefix,project,branch,refspec,revision,do_stage_3,artifa
         stage('Build') {
             sh(returnStdout:true,  script: 'devops-stages/stage-build.sh').trim()
         }
-    }
-
-    stage('Archive') {
         sh "mkdir -p changelog"
         sh "devops/tools/generatechangelog-pipeline.sh > changelog/changelog-${mdg}.html"
         sh(returnStdout:true,  script: 'devops-stages/stage-archive.sh').trim()

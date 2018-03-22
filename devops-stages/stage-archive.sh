@@ -32,7 +32,7 @@ fi
 rm -rf $PKG_DIR
 rm -f *.orig.tar.xz
 rm -f *.deb
-rm $DEB_INSTALL
+rm -f $DEB_INSTALL
 mkdir -p $PKG_DIR
 
 for dir in $PKG_DIRECTORIES; do
