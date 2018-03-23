@@ -48,7 +48,7 @@ import osm_ro
 
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ = "$26-aug-2014 11:09:29$"
-__version__ = "0.5.56-r566"
+__version__ = "0.5.57-r567"
 version_date = "Mar 2018"
 database_version = 28      # expected database schema version
 
@@ -136,6 +136,7 @@ def usage():
     print("      --log-socket-host HOST: send logs to this host")
     print("      --log-socket-port PORT: send logs using this port (default: 9022)")
     print("      --log-file FILE: send logs to this file")
+    print("      --create-tenant NAME: Try to creates this tenant name before starting, ignoring any errors as e.g. conflict")
     return
 
 
@@ -183,8 +184,10 @@ if __name__=="__main__":
     # Read parameters and configuration file
     httpthread = None
     try:
-        #load parameters and configuration
-        opts, args = getopt.getopt(sys.argv[1:], "hvc:V:p:P:", ["config=", "help", "version", "port=", "vnf-repository=", "adminport=", "log-socket-host=", "log-socket-port=", "log-file="])
+        # load parameters and configuration
+        opts, args = getopt.getopt(sys.argv[1:], "hvc:V:p:P:",
+                                   ["config=", "help", "version", "port=", "vnf-repository=", "adminport=",
+                                    "log-socket-host=", "log-socket-port=", "log-file=", "create-tenant="])
         port=None
         port_admin = None
         config_file = 'osm_ro/openmanod.cfg'
@@ -192,6 +195,7 @@ if __name__=="__main__":
         log_file = None
         log_socket_host = None
         log_socket_port = None
+        create_tenant = None
 
         for o, a in opts:
             if o in ("-v", "--version"):
@@ -215,6 +219,8 @@ if __name__=="__main__":
                 log_socket_host = a
             elif o == "--log-file":
                 log_file = a
+            elif o == "--create-tenant":
+                create_tenant = a
             else:
                 assert False, "Unhandled option"
         if log_file:
@@ -320,6 +326,14 @@ if __name__=="__main__":
             exit(-1)
 
         nfvo.global_config=global_config
+        if create_tenant:
+            try:
+                nfvo.new_tenant(mydb, {"name": create_tenant})
+            except Exception as e:
+                if isinstance(e, nfvo.NfvoException) and e.http_code == 409:
+                    pass  # if tenant exist (NfvoException error 409), ignore
+                else:     # otherwise print and error and continue
+                    logger.error("Cannot create tenant '{}': {}".format(create_tenant, e))
         nfvo.start_service(mydb)
 
         httpthread = httpserver.httpserver(mydb, False, global_config['http_host'], global_config['http_port'])

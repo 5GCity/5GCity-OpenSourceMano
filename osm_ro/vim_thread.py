@@ -484,11 +484,11 @@ class vim_thread(threading.Thread):
                         break
                     elif task_dependency["status"] == "FAILED":
                         raise VimThreadException(
-                            "Cannot {} {}, (task {}.{}) because depends on failed {} {}, (task{}.{})".format(
+                            "Cannot {} {}, (task {}.{}) because depends on failed {}.{}, (task{}.{}): {}".format(
                                 task["action"], task["item"],
                                 task["instance_action_id"], task["task_index"],
                                 task_dependency["instance_action_id"], task_dependency["task_index"],
-                                task_dependency["action"], task_dependency["item"]))
+                                task_dependency["action"], task_dependency["item"], task_dependency.get("error_msg")))
                 if dependency_not_completed:
                     # Move this task to the end.
                     task["extra"]["tries"] = task["extra"].get("tries", 0) + 1

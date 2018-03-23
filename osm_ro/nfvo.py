@@ -4243,7 +4243,7 @@ def new_tenant(mydb, tenant_dict):
         tenant_dict['encrypted_RO_priv_key'] = priv_key
         mydb.new_row("nfvo_tenants", tenant_dict, confidential_data=True)
     except db_base_Exception as e:
-        raise NfvoException("Error creating the new tenant: {} ".format(tenant_dict['name']) + str(e), HTTP_Internal_Server_Error)
+        raise NfvoException("Error creating the new tenant: {} ".format(tenant_dict['name']) + str(e), e.http_code)
     return tenant_uuid
 
 def delete_tenant(mydb, tenant):
@@ -4626,7 +4626,7 @@ def get_sdn_net_id(mydb, tenant_id, datacenter, network_id):
         result =  mydb.get_rows(SELECT=('sdn_net_id',), FROM='instance_nets', WHERE=search_dict)
     except db_base_Exception as e:
         raise NfvoException("db_base_Exception obtaining SDN network to associated to vim network {}".format(
-            network_id) + str(e), HTTP_Internal_Server_Error)
+            network_id) + str(e), e.http_code)
 
     sdn_net_counter = 0
     for net in result:
@@ -4683,7 +4683,7 @@ def vim_net_sdn_attach(mydb, tenant_id, datacenter, network_id, descriptor):
             sdn_network_id, network_id) + str(e), HTTP_Internal_Server_Error)
     except db_base_Exception as e:
         raise NfvoException("db_base_Exception attaching SDN network to vim network {}".format(
-            network_id) + str(e), HTTP_Internal_Server_Error)
+            network_id) + str(e), e.http_code)
 
     return 'Port uuid: '+ result
 
@@ -4813,7 +4813,7 @@ def vim_action_delete(mydb, tenant_id, datacenter, item, name):
                     mydb.delete_row(FROM='instance_nets', WHERE={'instance_scenario_id': None, 'sdn_net_id': sdn_network_id, 'vim_net_id': item_id})
                 except db_base_Exception as e:
                     raise NfvoException("Error deleting correspondence for VIM/SDN dataplane networks{}: ".format(correspondence) +
-                                        str(e), HTTP_Internal_Server_Error)
+                                        str(e), e.http_code)
 
                 #Delete the SDN network
                 try:
@@ -4883,7 +4883,7 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
                     mydb.new_row('instance_nets', correspondence, add_uuid=True)
                 except db_base_Exception as e:
                     raise NfvoException("Error saving correspondence for VIM/SDN dataplane networks{}: {}".format(
-                        correspondence, e), HTTP_Internal_Server_Error)
+                        correspondence, e), e.http_code)
         elif item=="tenants":
             tenant = descriptor["tenant"]
             content = myvim.new_tenant(tenant["name"], tenant.get("description"))

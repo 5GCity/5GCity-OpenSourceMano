@@ -1612,8 +1612,7 @@ class vimconnector(vimconn.vimconnector):
             error_text= type(e).__name__ + ": "+  (str(e) if len(e.args)==0 else str(e.args[0]))
         #TODO insert exception vimconn.HTTP_Unauthorized
         #if reaching here is because an exception
-        if self.debug:
-            self.logger.debug("new_user " + error_text)
+        self.logger.debug("new_user " + error_text)
         return error_value, error_text
 
     def delete_user(self, user_id):
@@ -1636,8 +1635,7 @@ class vimconnector(vimconn.vimconnector):
             error_text= type(e).__name__ + ": "+  (str(e) if len(e.args)==0 else str(e.args[0]))
         #TODO insert exception vimconn.HTTP_Unauthorized
         #if reaching here is because an exception
-        if self.debug:
-            print("delete_tenant " + error_text)
+            self.logger.debug("delete_tenant " + error_text)
         return error_value, error_text
 
     def get_hosts_info(self):
@@ -1660,8 +1658,7 @@ class vimconnector(vimconn.vimconnector):
             error_text= type(e).__name__ + ": "+  (str(e) if len(e.args)==0 else str(e.args[0]))
         #TODO insert exception vimconn.HTTP_Unauthorized
         #if reaching here is because an exception
-        if self.debug:
-            print("get_hosts_info " + error_text)
+        self.logger.debug("get_hosts_info " + error_text)
         return error_value, error_text
 
     def get_hosts(self, vim_tenant):
@@ -1689,8 +1686,7 @@ class vimconnector(vimconn.vimconnector):
             error_text= type(e).__name__ + ": "+  (str(e) if len(e.args)==0 else str(e.args[0]))
         #TODO insert exception vimconn.HTTP_Unauthorized
         #if reaching here is because an exception
-        if self.debug:
-            print("get_hosts " + error_text)
+        self.logger.debug("get_hosts " + error_text)
         return error_value, error_text
 
     def new_classification(self, name, ctype, definition):
@@ -1846,9 +1842,9 @@ class vimconnector(vimconn.vimconnector):
         try:
             new_sf = None
             self._reload_connection()
-            correlation = None
-            if sfc_encap:
-                correlation = 'nsh'
+            # correlation = None
+            # if sfc_encap:
+            #     correlation = 'nsh'
             for instance in sfis:
                 sfi = self.get_sfi(instance)
                 if sfi.get('sfc_encap') != sfc_encap:
