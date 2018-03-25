@@ -36,14 +36,14 @@ log = logging.getLogger(__name__)
 
 METRIC_MAPPINGS = {
     "average_memory_utilization": "memory.percent",
-    "disk_read_ops": "disk.disk_ops",
-    "disk_write_ops": "disk.disk_ops",
-    "disk_read_bytes": "disk.disk_octets",
-    "disk_write_bytes": "disk.disk_octets",
+    "disk_read_ops": "disk.read.requests",
+    "disk_write_ops": "disk.write.requests",
+    "digsk_read_bytes": "disk.read.bytes",
+    "disk_write_bytes": "disk.write.bytes",
     "packets_dropped": "interface.if_dropped",
     "packets_received": "interface.if_packets",
     "packets_sent": "interface.if_packets",
-    "cpu_utilization": "cpu.percent",
+    "cpu_utilization": "cpu_util",
 }
 
 PERIOD_MS = {
@@ -212,8 +212,8 @@ class Metrics(object):
             return None, None, False
 
         # Check/Normalize metric name
-        metric_name, norm_name = self.get_metric_name(values)
-        if norm_name is None:
+        norm_name, metric_name = self.get_metric_name(values)
+        if metric_name is None:
             log.warn("This metric is not supported by this plugin.")
             return None, resource_id, False
 
@@ -312,9 +312,13 @@ class Metrics(object):
             resource = None
 
         try:
+            url = "{}/v1/metric?sort=name:asc".format(endpoint)
             result = self._common._perform_request(
                 url, auth_token, req_type="get")
-            metrics = json.loads(result.text)
+            metrics = []
+            metrics_partial = json.loads(result.text)
+            for metric in metrics_partial:
+                metrics.append(metric)
 
             if metrics is not None:
                 # Format the list response
@@ -412,24 +416,28 @@ class Metrics(object):
         # Create required lists
         for row in metric_list:
             # Only list OSM metrics
-            if row['name'] in METRIC_MAPPINGS.keys():
-                metric = {"metric_name": row['name'],
+            name = None
+            if row['name'] in METRIC_MAPPINGS.values():
+                for k,v in METRIC_MAPPINGS.iteritems():
+                    if row['name'] == v:
+                        name = k
+                metric = {"metric_name": name,
                           "metric_uuid": row['id'],
                           "metric_unit": row['unit'],
                           "resource_uuid": row['resource_id']}
                 resp_list.append(str(metric))
             # Generate metric_name specific list
-            if metric_name is not None:
-                if row['name'] == metric_name:
-                    metric = {"metric_name": row['name'],
+            if metric_name is not None and name is not None:
+                if metric_name in METRIC_MAPPINGS.keys() and row['name'] == METRIC_MAPPINGS[metric_name]:
+                    metric = {"metric_name": metric_name,
                               "metric_uuid": row['id'],
                               "metric_unit": row['unit'],
                               "resource_uuid": row['resource_id']}
                     name_list.append(str(metric))
             # Generate resource specific list
-            if resource is not None:
+            if resource is not None and name is not None:
                 if row['resource_id'] == resource:
-                    metric = {"metric_name": row['name'],
+                    metric = {"metric_name": name,
                               "metric_uuid": row['id'],
                               "metric_unit": row['unit'],
                               "resource_uuid": row['resource_id']}
@@ -437,10 +445,12 @@ class Metrics(object):
 
         # Join required lists
         if metric_name is not None and resource is not None:
-            return list(set(res_list).intersection(name_list))
+            intersection_set = set(res_list).intersection(name_list)
+            intersection = list(intersection_set)
+            return intersection
         elif metric_name is not None:
             return name_list
         elif resource is not None:
-            return list(set(res_list).intersection(resp_list))
+            return res_list
         else:
             return resp_list

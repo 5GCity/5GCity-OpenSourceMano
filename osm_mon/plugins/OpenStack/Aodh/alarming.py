@@ -29,6 +29,7 @@ from osm_mon.core.message_bus.producer import KafkaProducer
 
 from osm_mon.plugins.OpenStack.response import OpenStack_Response
 from osm_mon.plugins.OpenStack.settings import Config
+from osm_mon.plugins.OpenStack.Gnocchi.metrics import Metrics
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +44,18 @@ ALARM_NAMES = {
     "packets_out_above_threshold": "packets_sent",
     "cpu_utilization_above_threshold": "cpu_utilization"}
 
+METRIC_MAPPINGS = {
+    "average_memory_utilization": "memory.percent",
+    "disk_read_ops": "disk.disk_ops",
+    "disk_write_ops": "disk.disk_ops",
+    "disk_read_bytes": "disk.read.bytes",
+    "disk_write_bytes": "disk.write.bytes",
+    "packets_dropped": "interface.if_dropped",
+    "packets_received": "interface.if_packets",
+    "packets_sent": "interface.if_packets",
+    "cpu_utilization": "cpu_util",
+}
+
 SEVERITIES = {
     "warning": "low",
     "minor": "low",
@@ -51,7 +64,7 @@ SEVERITIES = {
     "indeterminate": "critical"}
 
 STATISTICS = {
-    "average": "avg",
+    "average": "mean",
     "minimum": "min",
     "maximum": "max",
     "count": "count",
@@ -387,6 +400,7 @@ class Alarming(object):
                       alarm_name, alarm_state=None):
         """Check that the payload is configuration for update/create alarm."""
         try:
+            cfg = Config.instance()
             # Check state and severity
             severity = values['severity'].lower()
             if severity == "indeterminate":
@@ -395,21 +409,25 @@ class Alarming(object):
                 alarm_state = "ok"
 
             statistic = values['statistic'].lower()
+            granularity = values['granularity']
+            resource_type = values['resource_type'].lower()
+
             # Try to configure the payload for the update/create request
             # Can only update: threshold, operation, statistic and
             # the severity of the alarm
             rule = {'threshold': values['threshold_value'],
                     'comparison_operator': values['operation'].lower(),
-                    'metric': metric_name,
+                    'metric': METRIC_MAPPINGS[metric_name],
                     'resource_id': resource_id,
-                    'resource_type': 'generic',
-                    'aggregation_method': STATISTICS[statistic], }
+                    'resource_type': resource_type,
+                    'aggregation_method': STATISTICS[statistic],
+                    'granularity': granularity, }
             payload = json.dumps({'state': alarm_state,
                                   'name': alarm_name,
                                   'severity': SEVERITIES[severity],
                                   'type': 'gnocchi_resources_threshold',
                                   'gnocchi_resources_threshold_rule': rule,
-                                  'alarm_actions': ['http://localhost:8662'], })
+                                  'alarm_actions': [cfg.OS_NOTIFIER_URI], })
             return payload
         except KeyError as exc:
             log.warn("Alarm is not configured correctly: %s", exc)
@@ -431,15 +449,28 @@ class Alarming(object):
         """Check for the alarm metric."""
         try:
             endpoint = self.common.get_endpoint("metric")
-
-            url = "{}/v1/metric/".format(endpoint)
-            metric_list = self.common._perform_request(
+            url = "{}/v1/metric?sort=name:asc".format(endpoint)
+            result = self.common._perform_request(
                 url, auth_token, req_type="get")
+            metric_list = []
+            metrics_partial = json.loads(result.text)
+            for metric in metrics_partial:
+                metric_list.append(metric)
 
-            for metric in json.loads(metric_list.text):
+            while len(json.loads(result.text)) > 0:
+                last_metric_id = metrics_partial[-1]['id']
+                url = "{}/v1/metric?sort=name:asc&marker={}".format(endpoint, last_metric_id)
+                result = self.common._perform_request(
+                    url, auth_token, req_type="get")
+                if len(json.loads(result.text)) > 0:
+                    metrics_partial = json.loads(result.text)
+                    for metric in metrics_partial:
+                        metric_list.append(metric)
+
+            for metric in metric_list:
                 name = metric['name']
                 resource = metric['resource_id']
-                if (name == m_name and resource == r_id):
+                if (name == METRIC_MAPPINGS[m_name] and resource == r_id):
                     metric_id = metric['id']
             log.info("The required metric exists, an alarm will be created.")
             return metric_id

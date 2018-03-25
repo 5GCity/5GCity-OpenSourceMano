@@ -75,3 +75,4 @@ ChangeLog
 .*sw?
 .settings/
 __pycache__/
+.idea

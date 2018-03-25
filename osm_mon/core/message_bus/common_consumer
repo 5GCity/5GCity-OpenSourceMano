@@ -47,7 +47,12 @@ from osm_mon.plugins.CloudWatch.access_credentials import AccessCredentials
 from osm_mon.plugins.vRealiseOps import plugin_receiver
 
 # Initialize servers
-server = {'server': 'localhost:9092'}
+if "BROKER_URI" in os.environ:
+    server = {'server': os.getenv("BROKER_URI")}
+else:
+    server = {'server': 'localhost:9092'}
+
+
 
 # Initialize consumers for alarms and metrics
 common_consumer = KafkaConsumer(bootstrap_servers=server['server'])

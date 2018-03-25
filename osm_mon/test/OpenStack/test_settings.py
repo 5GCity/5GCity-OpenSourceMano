@@ -44,9 +44,10 @@ class TestSettings(unittest.TestCase):
 
     def test_set_os_username(self):
         """Test reading the environment for OpenStack plugin configuration."""
+        os.environ["OS_USERNAME"] = "test"
         self.cfg.read_environ("my_service")
 
-        self.assertEqual(self.cfg.OS_USERNAME, "my_service")
+        self.assertEqual(self.cfg.OS_USERNAME, "test")
 
     @mock.patch.object(os, "environ")
     def test_read_environ(self, environ):

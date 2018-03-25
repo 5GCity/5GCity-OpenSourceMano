@@ -204,18 +204,21 @@ class TestAlarming(unittest.TestCase):
         values = {"severity": "warning",
                   "statistic": "COUNT",
                   "threshold_value": 12,
-                  "operation": "GT"}
+                  "operation": "GT",
+                  "granularity": 300,
+                  "resource_type": "generic"}
         payload = self.alarming.check_payload(
-            values, "my_metric", "r_id", "alarm_name")
+            values, "disk_write_ops", "r_id", "alarm_name")
 
-        self.assertEqual(
+        self.assertDictEqual(
             json.loads(payload), {"name": "alarm_name",
                                   "gnocchi_resources_threshold_rule":
                                   {"resource_id": "r_id",
-                                   "metric": "my_metric",
+                                   "metric": "disk.disk_ops",
                                    "comparison_operator": "gt",
                                    "aggregation_method": "count",
                                    "threshold": 12,
+                                   "granularity": 300,
                                    "resource_type": "generic"},
                                   "severity": "low",
                                   "state": "ok",
@@ -227,18 +230,21 @@ class TestAlarming(unittest.TestCase):
         values = {"severity": "warning",
                   "statistic": "COUNT",
                   "threshold_value": 12,
-                  "operation": "GT"}
+                  "operation": "GT",
+                  "granularity": 300,
+                  "resource_type": "generic"}
         payload = self.alarming.check_payload(
-            values, "my_metric", "r_id", "alarm_name", alarm_state="alarm")
+            values, "disk_write_ops", "r_id", "alarm_name", alarm_state="alarm")
 
         self.assertEqual(
             json.loads(payload), {"name": "alarm_name",
                                   "gnocchi_resources_threshold_rule":
                                   {"resource_id": "r_id",
-                                   "metric": "my_metric",
+                                   "metric": "disk.disk_ops",
                                    "comparison_operator": "gt",
                                    "aggregation_method": "count",
                                    "threshold": 12,
+                                   "granularity": 300,
                                    "resource_type": "generic"},
                                   "severity": "low",
                                   "state": "alarm",
@@ -270,4 +276,4 @@ class TestAlarming(unittest.TestCase):
         self.alarming.check_for_metric(auth_token, "metric_name", "r_id")
 
         perf_req.assert_called_with(
-            "gnocchi_endpoint/v1/metric/", auth_token, req_type="get")
+            "gnocchi_endpoint/v1/metric?sort=name:asc", auth_token, req_type="get")

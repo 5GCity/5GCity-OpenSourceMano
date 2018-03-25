@@ -28,7 +28,7 @@ import logging
 
 import os
 
-import jsmin
+from jsmin import jsmin
 
 from kafka import KafkaProducer as kaf
 
@@ -37,7 +37,8 @@ from kafka.errors import KafkaError
 __author__ = "Prithiv Mohan"
 __date__ = "06/Sep/2017"
 
-json_path = os.path.abspath(os.pardir + "/MON/osm_mon/core/models/")
+current_path = os.path.realpath(__file__)
+json_path = os.path.abspath(os.path.join(current_path, '..', '..', 'models'))
 
 # TODO(): validate all of the request and response messages against the
 # json_schemas
@@ -247,7 +248,7 @@ class KafkaProducer(object):
         # Internal to MON
 
         payload_metric_list_resp = jsmin(
-            open(os.path.join(json_path, 'list_metrics_resp.json')).read())
+            open(os.path.join(json_path, 'list_metric_resp.json')).read())
 
         self.publish(key,
                      value=message,

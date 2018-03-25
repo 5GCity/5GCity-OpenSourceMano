@@ -40,7 +40,7 @@ endpoint = mock.ANY
 auth_token = mock.ANY
 
 # Mock a valid metric list for some tests, and a resultant list
-metric_list = [{"name": "disk_write_ops",
+metric_list = [{"name": "disk.write.requests",
                 "id": "metric_id",
                 "unit": "units",
                 "resource_id": "r_id"}]
@@ -52,7 +52,7 @@ class Response(object):
 
     def __init__(self):
         """Initialise test and status code values."""
-        self.text = json.dumps("mock_response_text")
+        self.text = json.dumps([{"id": "test_id"}])
         self.status_code = "STATUS_CODE"
 
 
@@ -116,7 +116,7 @@ class TestMetricCalls(unittest.TestCase):
         # Test valid configuration and payload for creating a metric
         values = {"resource_uuid": "r_id",
                   "metric_unit": "units"}
-        get_metric_name.return_value = "metric_name", "norm_name"
+        get_metric_name.return_value = "norm_name", "metric_name"
         get_metric.return_value = None
         payload = {"id": "r_id",
                    "metrics": {"metric_name":
@@ -158,8 +158,8 @@ class TestMetricCalls(unittest.TestCase):
         self.metrics.list_metrics(endpoint, auth_token, values)
 
         perf_req.assert_called_with(
-            "<ANY>/v1/metric/", auth_token, req_type="get")
-        resp_list.assert_called_with("mock_response_text")
+            "<ANY>/v1/metric?sort=name:asc", auth_token, req_type="get")
+        resp_list.assert_called_with([{u'id': u'test_id'}])
 
     @mock.patch.object(metric_req.Metrics, "response_list")
     @mock.patch.object(Common, "_perform_request")
@@ -172,9 +172,9 @@ class TestMetricCalls(unittest.TestCase):
         self.metrics.list_metrics(endpoint, auth_token, values)
 
         perf_req.assert_called_with(
-            "<ANY>/v1/metric/", auth_token, req_type="get")
+            "<ANY>/v1/metric?sort=name:asc", auth_token, req_type="get")
         resp_list.assert_called_with(
-            "mock_response_text", resource="resource_id")
+            [{u'id': u'test_id'}], resource="resource_id")
 
     @mock.patch.object(metric_req.Metrics, "response_list")
     @mock.patch.object(Common, "_perform_request")
@@ -187,9 +187,9 @@ class TestMetricCalls(unittest.TestCase):
         self.metrics.list_metrics(endpoint, auth_token, values)
 
         perf_req.assert_called_with(
-            "<ANY>/v1/metric/", auth_token, req_type="get")
+            "<ANY>/v1/metric?sort=name:asc", auth_token, req_type="get")
         resp_list.assert_called_with(
-            "mock_response_text", metric_name="disk_write_bytes")
+            [{u'id': u'test_id'}], metric_name="disk_write_bytes")
 
     @mock.patch.object(metric_req.Metrics, "response_list")
     @mock.patch.object(Common, "_perform_request")
@@ -203,9 +203,9 @@ class TestMetricCalls(unittest.TestCase):
         self.metrics.list_metrics(endpoint, auth_token, values)
 
         perf_req.assert_called_with(
-            "<ANY>/v1/metric/", auth_token, req_type="get")
+            "<ANY>/v1/metric?sort=name:asc", auth_token, req_type="get")
         resp_list.assert_called_with(
-            "mock_response_text", resource="resource_id",
+            [{u'id': u'test_id'}], resource="resource_id",
             metric_name="packets_sent")
 
     @mock.patch.object(Common, "_perform_request")
@@ -224,7 +224,7 @@ class TestMetricCalls(unittest.TestCase):
         metric_name, norm_name = self.metrics.get_metric_name(values)
 
         self.assertEqual(metric_name, "disk_write_ops")
-        self.assertEqual(norm_name, "disk.disk_ops")
+        self.assertEqual(norm_name, "disk.write.requests")
 
         # test with an invalid metric name
         values = {"metric_name": "my_invalid_metric"}
