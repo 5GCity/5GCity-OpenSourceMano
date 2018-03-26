@@ -29,7 +29,7 @@ RUN  apt-get update && \
   DEBIAN_FRONTEND=noninteractive pip install -U pip && \
   DEBIAN_FRONTENT=noninteractive pip install -U requests logutils jsonschema lxml kafka mock && \
   DEBIAN_FRONTEND=noninteractive pip install -U setuptools setuptools-version-command stdeb jsmin && \
-  DEBIAN_FRONTEND=noninteractive pip install -U six pyvcloud bottle cherrypy pyopenssl && \
+  DEBIAN_FRONTEND=noninteractive pip install -U six pyvcloud==18.2.* bottle cherrypy pyopenssl && \
   DEBIAN_FRONTEND=noninteractive apt-get --yes install default-jre libmysqlclient-dev && \
   DEBIAN_FRONTEND=noninteractive apt-get --yes install libmysqlclient-dev libxml2 && \
   DEBIAN_FRONTEND=noninteractive pip install -U MySQL-python \
@@ -39,4 +39,5 @@ RUN  apt-get update && \
                                                 gnocchiclient \
                                                 boto==2.48 \
                                                 python-cloudwatchlogs-logging \
-                                                py-cloudwatch
+                                                py-cloudwatch \
+                                                peewee==3.1.*

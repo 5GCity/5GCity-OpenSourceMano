@@ -100,7 +100,7 @@ The following steps will allow you to use the plugins:
 
       ::
 
-          lxc exec MON -- nohup python /root/MON/osm_mon/core/message_bus/common_consumer &
+          lxc exec MON -- nohup python /root/MON/osm_mon/core/message_bus/common_consumer.py > /root/MON_plugins.log 2>&1 &
 
 * To enable Aodh alarm notifications to be sent to SO:
 

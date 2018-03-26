@@ -21,19 +21,18 @@
 
 import json
 import logging
-import sys
 import os
+import sys
 
-sys.path.append("/root/MON")
-
-logging.basicConfig(filename='MON_plugins.log',
+logging.basicConfig(stream=sys.stdout,
                     format='%(asctime)s %(message)s',
-                    datefmt='%m/%d/%Y %I:%M:%S %p', filemode='a',
+                    datefmt='%m/%d/%Y %I:%M:%S %p',
                     level=logging.INFO)
 log = logging.getLogger(__name__)
 
+sys.path.append(os.path.abspath(os.path.join(os.path.realpath(__file__), '..', '..', '..', '..')))
+
 from kafka import KafkaConsumer
-from kafka.errors import KafkaError
 
 from osm_mon.plugins.OpenStack.Aodh import alarming
 from osm_mon.plugins.OpenStack.common import Common
@@ -46,16 +45,24 @@ from osm_mon.plugins.CloudWatch.access_credentials import AccessCredentials
 
 from osm_mon.plugins.vRealiseOps import plugin_receiver
 
+from osm_mon.core.auth import AuthManager
+from osm_mon.core.database import DatabaseManager
+
 # Initialize servers
 if "BROKER_URI" in os.environ:
     server = {'server': os.getenv("BROKER_URI")}
 else:
     server = {'server': 'localhost:9092'}
 
-
-
 # Initialize consumers for alarms and metrics
-common_consumer = KafkaConsumer(bootstrap_servers=server['server'])
+common_consumer = KafkaConsumer(bootstrap_servers=server['server'],
+                                key_deserializer=bytes.decode,
+                                value_deserializer=bytes.decode,
+                                group_id="mon-consumer")
+
+auth_manager = AuthManager()
+database_manager = DatabaseManager()
+database_manager.create_tables()
 
 # Create OpenStack alarming and metric instances
 auth_token = None
@@ -69,8 +76,9 @@ cloudwatch_metrics = plugin_metrics()
 aws_connection = Connection()
 aws_access_credentials = AccessCredentials()
 
-#Create vROps plugin_receiver class instance
+# Create vROps plugin_receiver class instance
 vrops_rcvr = plugin_receiver.PluginReceiver()
+
 
 def get_vim_type(message):
     """Get the vim type that is required by the message."""
@@ -80,13 +88,16 @@ def get_vim_type(message):
         log.warn("vim_type is not configured correctly; %s", exc)
     return None
 
+
 # Define subscribe the consumer for the plugins
-topics = ['metric_request', 'alarm_request', 'access_credentials']
+topics = ['metric_request', 'alarm_request', 'access_credentials', 'vim_account']
+# TODO: Remove access_credentials
 common_consumer.subscribe(topics)
 
-try:
-    log.info("Listening for alarm_request and metric_request messages")
-    for message in common_consumer:
+log.info("Listening for alarm_request and metric_request messages")
+for message in common_consumer:
+    log.info("Message arrived: %s", message)
+    try:
         # Check the message topic
         if message.topic == "metric_request":
             # Check the vim desired by the message
@@ -100,7 +111,7 @@ try:
             elif vim_type == "aws":
                 log.info("This message is for the CloudWatch plugin.")
                 aws_conn = aws_connection.setEnvironment()
-                cloudwatch_metrics.metric_calls(message,aws_conn)
+                cloudwatch_metrics.metric_calls(message, aws_conn)
 
             elif vim_type == "vmware":
                 log.info("This metric_request message is for the vROPs plugin.")
@@ -130,6 +141,13 @@ try:
                 log.debug("vim_type is misconfigured or unsupported; %s",
                           vim_type)
 
+        elif message.topic == "vim_account":
+            if message.key == "create" or message.key == "edit":
+                auth_manager.store_auth_credentials(message)
+            if message.key == "delete":
+                auth_manager.delete_auth_credentials(message)
+
+        # TODO: Remove in the near future. Modify tests accordingly.
         elif message.topic == "access_credentials":
             # Check the vim desired by the message
             vim_type = get_vim_type(message)
@@ -139,7 +157,7 @@ try:
 
             elif vim_type == "aws":
                 log.info("This message is for the CloudWatch plugin.")
-                aws_access_credentials.access_credential_calls(message) 
+                aws_access_credentials.access_credential_calls(message)
 
             elif vim_type == "vmware":
                 log.info("This access_credentials message is for the vROPs plugin.")
@@ -153,5 +171,5 @@ try:
             log.info("This topic is not relevant to any of the MON plugins.")
 
 
-except KafkaError as exc:
-    log.warn("Exception: %s", exc)
+    except Exception as exc:
+        log.exception("Exception: %s")

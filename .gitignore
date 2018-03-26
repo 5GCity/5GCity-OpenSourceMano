@@ -76,3 +76,4 @@ ChangeLog
 .settings/
 __pycache__/
 .idea
+*.db

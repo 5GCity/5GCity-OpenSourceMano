@@ -50,6 +50,6 @@ setup(name="osm_mon",
       data_files = [('/etc/systemd/system/', ['scripts/kafka.sh']),
                    ],
       scripts=['osm_mon/plugins/vRealiseOps/vROPs_Webservice/vrops_webservice',
-               'kafkad', 'osm_mon/core/message_bus/common_consumer'],
+               'kafkad', 'osm_mon/core/message_bus/common_consumer.py'],
       include_package_data=True,
       )
