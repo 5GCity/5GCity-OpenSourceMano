@@ -22,7 +22,7 @@
 ##
 
 """
-Montoring metrics & creating Alarm definations in vROPs
+Monitoring metrics & creating Alarm definitions in vROPs
 """
 
 import requests
@@ -1109,7 +1109,7 @@ class MonPlugin():
                     return notification_id
 
             self.logger.warn("Notification id to be deleted not found for {}"\
-                            .format(notification_id, alarm_name))
+                            .format(alarm_name))
             return None
 
     def delete_alarm_defination(self, alarm_id):
