@@ -916,7 +916,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                             HTTP_Bad_Request)
                     db_ip_profiles[ip_profile_name2db_table_index[ip_profile_name]]["net_id"] = net_uuid
                 else:  #check no ip-address has been defined
-                    for icp in vld.get("internal-connection-point"):
+                    for icp in vld.get("internal-connection-point").itervalues():
                         if icp.get("ip-address"):
                             raise NfvoException("Error at 'vnfd[{}]':'vld[{}]':'internal-connection-point[{}]' "
                                             "contains an ip-address but no ip-profile has been defined at VLD".format(
