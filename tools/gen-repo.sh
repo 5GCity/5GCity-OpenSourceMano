@@ -15,6 +15,7 @@ function usage() {
     echo -e "  -R  <rsync options>      "
     echo -e "  -P  <public key file>    "
     echo -e "  -c  <changelogfile>      "
+    echo -e "  -m  <MDG repos>          "
     exit 1
 }
 
@@ -38,6 +39,7 @@ function dump_vars() {
     echo "BUILD_NUMBER:   $BUILD_NUMBER"
 }
 
+MDG_REPOS="RO osmclient openvim SO UI IM devops"
 IN_REPO="unstable"
 OUT_REPO="stable"
 GPGKEY=71C0472C
@@ -49,7 +51,7 @@ CURR_DIR=$(pwd)
 PUBLIC_KEY_FILE=~/OSM\ ETSI\ Release\ Key.gpg
 CHANGE_LOG_FILE=
 
-while getopts ":p:i:o:k:j::d:b:r:h:R:P:c:" o; do
+while getopts ":p:i:o:k:j::d:b:r:h:R:P:c:m:" o; do
     case "${o}" in
         p)
             PASSPHRASE_FILE=${OPTARG}
@@ -87,6 +89,9 @@ while getopts ":p:i:o:k:j::d:b:r:h:R:P:c:" o; do
         c)
             CHANGE_LOG_FILE=${OPTARG}
             ;;
+        m)
+            MDG_REPOS=${OPTARG}
+            ;;
         *)
             usage
             exit 1
@@ -119,7 +124,7 @@ cp -R $BUILD_NUMBER/changelog $BASE_DIR/
 
 cd $BASE_DIR
 
-for i in RO osmclient openvim SO UI IM; do
+for i in $MDG_REPOS; do
 
     # gpg sign the packages
     dpkg-sig -g "$GPG_PASSPHRASE" -k $GPGKEY --sign builder pool/$i/*.deb
