@@ -15,7 +15,7 @@
 #    under the License.
 
 PKG_DIRECTORIES="jenkins installers systest juju-charms descriptor-packages tools"
-MDG_NAME=osm-devops
+MDG_NAME=devops
 DEB_INSTALL=debian/$MDG_NAME.install
 export DEBEMAIL="mmarchetti@sandvine.com"
 export DEBFULLNAME="Michael Marchetti"
@@ -24,9 +24,9 @@ PKG_VERSION=$(git describe --tags --abbrev=0)
 PKG_VERSION_PREFIX=$(echo $PKG_VERSION | sed -e 's/v//g')
 PKG_VERSION_POST=$(git rev-list $PKG_VERSION..HEAD | wc -l)
 if [ "$PKG_VERSION_POST" -eq 0 ]; then
-    PKG_DIR="${MDG_NAME}-${PKG_VERSION_PREFIX}"
+    PKG_DIR="osm-${MDG_NAME}-${PKG_VERSION_PREFIX}"
 else
-    PKG_DIR="${MDG_NAME}-$PKG_VERSION_PREFIX.post${PKG_VERSION_POST}"
+    PKG_DIR="osm-${MDG_NAME}-$PKG_VERSION_PREFIX.post${PKG_VERSION_POST}"
 fi
 
 rm -rf $PKG_DIR
@@ -37,7 +37,7 @@ mkdir -p $PKG_DIR
 
 for dir in $PKG_DIRECTORIES; do
     ln -s $PWD/$dir $PKG_DIR/.
-    echo "$dir/* usr/share/$MDG_NAME/$dir" >> $DEB_INSTALL
+    echo "$dir/* usr/share/osm-$MDG_NAME/$dir" >> $DEB_INSTALL
 done
 cp -R debian $PKG_DIR/.
 
