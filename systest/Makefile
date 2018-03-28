@@ -183,7 +183,13 @@ images/%.img:
 	echo "No method selected to upload image to VIM"
 endif
 
-cirros: check_OSM_HOSTNAME check_openstack_env check_vcd_env \
+%.openstack: check_openstack_env
+	$(Q)$(MAKE) $*
+
+%s.vcd: check_vcd_env
+	$(Q)$(MAKE) $*
+
+cirros: check_OSM_HOSTNAME \
         $(DESCRIPTOR_DIR)/vnfd/cirros_vnf/build/cirros_vnf.tar.gz \
         $(DESCRIPTOR_DIR)/nsd/cirros_ns/build/cirros_ns.tar.gz \
         images/cirros-0.3.5-x86_64-disk.img
@@ -193,7 +199,7 @@ cirros: check_OSM_HOSTNAME check_openstack_env check_vcd_env \
         JUNITXML=pytest-$@.xml \
         PYTEST_OPTIONS="$(PYTEST_OPTIONS) -m vnf" _run_test
 
-ns_scale: check_OSM_HOSTNAME check_openstack_env check_vcd_env \
+ns_scale: check_OSM_HOSTNAME \
         $(DESCRIPTOR_DIR)/vnfd/cirros_vnf/build/cirros_vnf.tar.gz \
         $(DESCRIPTOR_DIR)/nsd/cirros_ns/build/cirros_ns.tar.gz \
         images/cirros-0.3.5-x86_64-disk.img
