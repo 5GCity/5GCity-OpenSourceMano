@@ -23,30 +23,27 @@
 #
 """A Webserver to send alarm notifications from Aodh to the SO."""
 import json
-
 import logging
-
-import os
-
 import sys
-
 import time
 
-from BaseHTTPServer import BaseHTTPRequestHandler
-from BaseHTTPServer import HTTPServer
+import os
+from six.moves.BaseHTTPServer import BaseHTTPRequestHandler
+from six.moves.BaseHTTPServer import HTTPServer
 
 # Initialise a logger for alarm notifier
-logging.basicConfig(filename='aodh_notify.log',
+
+logging.basicConfig(stream=sys.stdout,
                     format='%(asctime)s %(message)s',
-                    datefmt='%m/%d/%Y %I:%M:%S %p', filemode='a',
+                    datefmt='%m/%d/%Y %I:%M:%S %p',
                     level=logging.INFO)
 log = logging.getLogger(__name__)
 
-sys.path.append("/root/MON")
+sys.path.append(os.path.abspath(os.path.join(os.path.realpath(__file__), '..', '..', '..', '..', '..')))
 
+from osm_mon.core.database import DatabaseManager
 from osm_mon.core.message_bus.producer import KafkaProducer
 
-from osm_mon.plugins.OpenStack.Aodh.alarming import Alarming
 from osm_mon.plugins.OpenStack.common import Common
 from osm_mon.plugins.OpenStack.response import OpenStack_Response
 from osm_mon.plugins.OpenStack.settings import Config
@@ -80,54 +77,60 @@ class NotifierHandler(BaseHTTPRequestHandler):
         self.notify_alarm(json.loads(post_data))
 
     def notify_alarm(self, values):
-        """Send a notifcation repsonse message to the SO."""
-        # Initialiase configuration and authentication for response message
-        config = Config.instance()
-        config.read_environ("aodh")
-        self._alarming = Alarming()
-        self._common = Common()
-        self._response = OpenStack_Response()
-        self._producer = KafkaProducer('alarm_response')
+        """Send a notification response message to the SO."""
 
-        alarm_id = values['alarm_id']
-        auth_token = self._common._authenticate()
-        endpoint = self._common.get_endpoint("alarming")
+        try:
+            # Initialise configuration and authentication for response message
+            config = Config.instance()
+            config.read_environ()
+            response = OpenStack_Response()
+            producer = KafkaProducer('alarm_response')
 
-        # If authenticated generate and send response message
-        if (auth_token is not None and endpoint is not None):
-            url = "{}/v2/alarms/%s".format(endpoint) % alarm_id
+            database_manager = DatabaseManager()
 
-            # Get the resource_id of the triggered alarm
-            result = self._common._perform_request(
-                url, auth_token, req_type="get")
-            alarm_details = json.loads(result.text)
-            gnocchi_rule = alarm_details['gnocchi_resources_threshold_rule']
-            resource_id = gnocchi_rule['resource_id']
+            alarm_id = values['alarm_id']
+            # Get vim_uuid associated to alarm
+            creds = database_manager.get_credentials_for_alarm_id(alarm_id, 'openstack')
+            auth_token = Common.get_auth_token(creds.uuid)
+            endpoint = Common.get_endpoint("alarming", creds.uuid)
 
-            # Process an alarm notification if resource_id is valid
-            if resource_id is not None:
-                # Get date and time for response message
-                a_date = time.strftime("%d-%m-%Y") + " " + time.strftime("%X")
-                # Try generate and send response
-                try:
-                    resp_message = self._response.generate_response(
-                        'notify_alarm', a_id=alarm_id,
-                        r_id=resource_id,
-                        sev=values['severity'], date=a_date,
-                        state=values['current'], vim_type="OpenStack")
-                    self._producer.notify_alarm(
-                        'notify_alarm', resp_message, 'alarm_response')
-                    log.info("Sent an alarm response to SO: %s", resp_message)
-                except Exception as exc:
-                    log.warn("Couldn't notify SO of the alarm: %s", exc)
+            # If authenticated generate and send response message
+            if auth_token is not None and endpoint is not None:
+                url = "{}/v2/alarms/%s".format(endpoint) % alarm_id
+
+                # Get the resource_id of the triggered alarm
+                result = Common.perform_request(
+                    url, auth_token, req_type="get")
+                alarm_details = json.loads(result.text)
+                gnocchi_rule = alarm_details['gnocchi_resources_threshold_rule']
+                resource_id = gnocchi_rule['resource_id']
+
+                # Process an alarm notification if resource_id is valid
+                if resource_id is not None:
+                    # Get date and time for response message
+                    a_date = time.strftime("%d-%m-%Y") + " " + time.strftime("%X")
+                    # Try generate and send response
+                    try:
+                        resp_message = response.generate_response(
+                            'notify_alarm', a_id=alarm_id,
+                            r_id=resource_id,
+                            sev=values['severity'], date=a_date,
+                            state=values['current'], vim_type="openstack")
+                        producer.notify_alarm(
+                            'notify_alarm', resp_message, 'alarm_response')
+                        log.info("Sent an alarm response to SO: %s", resp_message)
+                    except Exception as exc:
+                        log.exception("Couldn't notify SO of the alarm:")
+                else:
+                    log.warn("No resource_id for alarm; no SO response sent.")
             else:
-                log.warn("No resource_id for alarm; no SO response sent.")
-        else:
-            log.warn("Authentication failure; SO notification not sent.")
+                log.warn("Authentication failure; SO notification not sent.")
+        except:
+            log.exception("Could not notify alarm.")
 
 
 def run(server_class=HTTPServer, handler_class=NotifierHandler, port=8662):
-    """Run the webserver application to retreive alarm notifications."""
+    """Run the webserver application to retrieve alarm notifications."""
     try:
         server_address = ('', port)
         httpd = server_class(server_address, handler_class)
@@ -136,6 +139,7 @@ def run(server_class=HTTPServer, handler_class=NotifierHandler, port=8662):
         httpd.serve_forever()
     except Exception as exc:
         log.warn("Failed to start webserver, %s", exc)
+
 
 if __name__ == "__main__":
     from sys import argv

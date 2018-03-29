@@ -41,7 +41,7 @@ class BaseModel(Model):
 
 
 class VimCredentials(BaseModel):
-    uuid = CharField()
+    uuid = CharField(unique=True)
     name = CharField()
     type = CharField()
     url = CharField()
@@ -51,17 +51,46 @@ class VimCredentials(BaseModel):
     config = TextField()
 
 
+class Alarm(BaseModel):
+    alarm_id = CharField()
+    credentials = ForeignKeyField(VimCredentials, backref='alarms')
+
+
 class DatabaseManager:
     def create_tables(self):
         try:
             db.connect()
-            db.create_tables([VimCredentials])
+            db.create_tables([VimCredentials, Alarm])
             db.close()
         except Exception as e:
             log.exception("Error creating tables: ")
 
     def get_credentials(self, vim_uuid):
-        return VimCredentials.get(VimCredentials.uuid == vim_uuid)
+        return VimCredentials.get_or_none(VimCredentials.uuid == vim_uuid)
 
     def save_credentials(self, vim_credentials):
+        """Saves vim credentials. If a record with same uuid exists, overwrite it."""
+        exists = VimCredentials.get_or_none(VimCredentials.uuid == vim_credentials.uuid)
+        if exists:
+            vim_credentials.id = exists.id
         vim_credentials.save()
+
+    def get_credentials_for_alarm_id(self, alarm_id, vim_type):
+        alarm = Alarm.select() \
+            .where(Alarm.alarm_id == alarm_id) \
+            .join(VimCredentials) \
+            .where(VimCredentials.type == vim_type).get()
+        return alarm.credentials
+
+    def save_alarm(self, alarm_id, vim_uuid):
+        """Saves alarm. If a record with same id and vim_uuid exists, overwrite it."""
+        alarm = Alarm()
+        alarm.alarm_id = alarm_id
+        creds = VimCredentials.get(VimCredentials.uuid == vim_uuid)
+        alarm.credentials = creds
+        exists = Alarm.select(Alarm.alarm_id == alarm.alarm_id) \
+            .join(VimCredentials) \
+            .where(VimCredentials.uuid == vim_uuid)
+        if len(exists):
+            alarm.id = exists[0].id
+        alarm.save()

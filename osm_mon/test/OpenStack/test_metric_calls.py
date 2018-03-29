@@ -56,6 +56,13 @@ class Response(object):
         self.status_code = "STATUS_CODE"
 
 
+def perform_request_side_effect(*args, **kwargs):
+    resp = Response()
+    if 'marker' in args[0]:
+        resp.text = json.dumps([])
+    return resp
+
+
 class TestMetricCalls(unittest.TestCase):
     """Integration test for metric request keys."""
 
@@ -67,7 +74,7 @@ class TestMetricCalls(unittest.TestCase):
 
     @mock.patch.object(metric_req.Metrics, "get_metric_name")
     @mock.patch.object(metric_req.Metrics, "get_metric_id")
-    @mock.patch.object(Common, "_perform_request")
+    @mock.patch.object(Common, "perform_request")
     def test_invalid_config_metric_req(
             self, perf_req, get_metric, get_metric_name):
         """Test the configure metric function, for an invalid metric."""
@@ -77,7 +84,7 @@ class TestMetricCalls(unittest.TestCase):
         m_id, r_id, status = self.metrics.configure_metric(
             endpoint, auth_token, values)
 
-        perf_req.assert_not_called
+        perf_req.assert_not_called()
         self.assertEqual(m_id, None)
         self.assertEqual(r_id, None)
         self.assertEqual(status, False)
@@ -89,7 +96,7 @@ class TestMetricCalls(unittest.TestCase):
         m_id, r_id, status = self.metrics.configure_metric(
             endpoint, auth_token, values)
 
-        perf_req.assert_not_called
+        perf_req.assert_not_called()
         self.assertEqual(m_id, None)
         self.assertEqual(r_id, "r_id")
         self.assertEqual(status, False)
@@ -102,14 +109,14 @@ class TestMetricCalls(unittest.TestCase):
         m_id, r_id, status = self.metrics.configure_metric(
             endpoint, auth_token, values)
 
-        perf_req.assert_not_called
+        perf_req.assert_not_called()
         self.assertEqual(m_id, "metric_id")
         self.assertEqual(r_id, "r_id")
         self.assertEqual(status, False)
 
     @mock.patch.object(metric_req.Metrics, "get_metric_name")
     @mock.patch.object(metric_req.Metrics, "get_metric_id")
-    @mock.patch.object(Common, "_perform_request")
+    @mock.patch.object(Common, "perform_request")
     def test_valid_config_metric_req(
             self, perf_req, get_metric, get_metric_name):
         """Test the configure metric function, for a valid metric."""
@@ -120,9 +127,9 @@ class TestMetricCalls(unittest.TestCase):
         get_metric.return_value = None
         payload = {"id": "r_id",
                    "metrics": {"metric_name":
-                               {"archive_policy_name": "high",
-                                "name": "metric_name",
-                                "unit": "units"}}}
+                                   {"archive_policy_name": "high",
+                                    "name": "metric_name",
+                                    "unit": "units"}}}
 
         self.metrics.configure_metric(endpoint, auth_token, values)
 
@@ -130,7 +137,7 @@ class TestMetricCalls(unittest.TestCase):
             "<ANY>/v1/resource/generic", auth_token, req_type="post",
             payload=json.dumps(payload))
 
-    @mock.patch.object(Common, "_perform_request")
+    @mock.patch.object(Common, "perform_request")
     def test_delete_metric_req(self, perf_req):
         """Test the delete metric function."""
         self.metrics.delete_metric(endpoint, auth_token, "metric_id")
@@ -138,7 +145,7 @@ class TestMetricCalls(unittest.TestCase):
         perf_req.assert_called_with(
             "<ANY>/v1/metric/metric_id", auth_token, req_type="delete")
 
-    @mock.patch.object(Common, "_perform_request")
+    @mock.patch.object(Common, "perform_request")
     def test_delete_metric_invalid_status(self, perf_req):
         """Test invalid response for delete request."""
         perf_req.return_value = "404"
@@ -148,67 +155,64 @@ class TestMetricCalls(unittest.TestCase):
         self.assertEqual(status, False)
 
     @mock.patch.object(metric_req.Metrics, "response_list")
-    @mock.patch.object(Common, "_perform_request")
+    @mock.patch.object(Common, "perform_request")
     def test_complete_list_metric_req(self, perf_req, resp_list):
         """Test the complete list metric function."""
         # Test listing metrics without any configuration options
         values = {}
-        resp = Response()
-        perf_req.return_value = resp
+        perf_req.side_effect = perform_request_side_effect
         self.metrics.list_metrics(endpoint, auth_token, values)
 
-        perf_req.assert_called_with(
+        perf_req.assert_any_call(
             "<ANY>/v1/metric?sort=name:asc", auth_token, req_type="get")
         resp_list.assert_called_with([{u'id': u'test_id'}])
 
     @mock.patch.object(metric_req.Metrics, "response_list")
-    @mock.patch.object(Common, "_perform_request")
+    @mock.patch.object(Common, "perform_request")
     def test_resource_list_metric_req(self, perf_req, resp_list):
         """Test the resource list metric function."""
         # Test listing metrics with a resource id specified
         values = {"resource_uuid": "resource_id"}
-        resp = Response()
-        perf_req.return_value = resp
+        perf_req.side_effect = perform_request_side_effect
         self.metrics.list_metrics(endpoint, auth_token, values)
 
-        perf_req.assert_called_with(
+        perf_req.assert_any_call(
             "<ANY>/v1/metric?sort=name:asc", auth_token, req_type="get")
         resp_list.assert_called_with(
             [{u'id': u'test_id'}], resource="resource_id")
 
     @mock.patch.object(metric_req.Metrics, "response_list")
-    @mock.patch.object(Common, "_perform_request")
+    @mock.patch.object(Common, "perform_request")
     def test_name_list_metric_req(self, perf_req, resp_list):
         """Test the metric_name list metric function."""
         # Test listing metrics with a metric_name specified
         values = {"metric_name": "disk_write_bytes"}
-        resp = Response()
-        perf_req.return_value = resp
+        perf_req.side_effect = perform_request_side_effect
         self.metrics.list_metrics(endpoint, auth_token, values)
 
-        perf_req.assert_called_with(
+        perf_req.assert_any_call(
             "<ANY>/v1/metric?sort=name:asc", auth_token, req_type="get")
         resp_list.assert_called_with(
             [{u'id': u'test_id'}], metric_name="disk_write_bytes")
 
     @mock.patch.object(metric_req.Metrics, "response_list")
-    @mock.patch.object(Common, "_perform_request")
+    @mock.patch.object(Common, "perform_request")
     def test_combined_list_metric_req(self, perf_req, resp_list):
         """Test the combined resource and metric list metric function."""
         # Test listing metrics with a resource id and metric name specified
+
         values = {"resource_uuid": "resource_id",
                   "metric_name": "packets_sent"}
-        resp = Response()
-        perf_req.return_value = resp
+        perf_req.side_effect = perform_request_side_effect
         self.metrics.list_metrics(endpoint, auth_token, values)
 
-        perf_req.assert_called_with(
+        perf_req.assert_any_call(
             "<ANY>/v1/metric?sort=name:asc", auth_token, req_type="get")
         resp_list.assert_called_with(
             [{u'id': u'test_id'}], resource="resource_id",
             metric_name="packets_sent")
 
-    @mock.patch.object(Common, "_perform_request")
+    @mock.patch.object(Common, "perform_request")
     def test_get_metric_id(self, perf_req):
         """Test get_metric_id function."""
         self.metrics.get_metric_id(endpoint, auth_token, "my_metric", "r_id")
@@ -234,7 +238,7 @@ class TestMetricCalls(unittest.TestCase):
         self.assertEqual(metric_name, "my_invalid_metric")
         self.assertEqual(norm_name, None)
 
-    @mock.patch.object(Common, "_perform_request")
+    @mock.patch.object(Common, "perform_request")
     def test_valid_read_data_req(self, perf_req):
         """Test the read metric data function, for a valid call."""
         values = {"metric_uuid": "metric_id",
@@ -243,9 +247,9 @@ class TestMetricCalls(unittest.TestCase):
 
         self.metrics.read_metric_data(endpoint, auth_token, values)
 
-        perf_req.assert_called_once
+        perf_req.assert_called_once()
 
-    @mock.patch.object(Common, "_perform_request")
+    @mock.patch.object(Common, "perform_request")
     def test_invalid_read_data_req(self, perf_req):
         """Test the read metric data function, for an invalid call."""
         # Teo empty lists wil be returned because the values are invalid
@@ -264,7 +268,7 @@ class TestMetricCalls(unittest.TestCase):
 
         # Check for the expected values in the resulting list
         for l in result_list:
-            self.assertIn(l, resp_list[0])
+            self.assertIn(l, resp_list[0].values())
 
     def test_name_response_list(self):
         """Test the response list with metric name configured."""
@@ -283,7 +287,7 @@ class TestMetricCalls(unittest.TestCase):
 
         # Check for the expected values in the resulting list
         for l in result_list:
-            self.assertIn(l, resp_list[0])
+            self.assertIn(l, resp_list[0].values())
 
     def test_resource_response_list(self):
         """Test the response list with resource_id configured."""
@@ -300,12 +304,12 @@ class TestMetricCalls(unittest.TestCase):
 
         # Check for the expected values in the resulting list
         for l in result_list:
-            self.assertIn(l, resp_list[0])
+            self.assertIn(l, resp_list[0].values())
 
     def test_combined_response_list(self):
         """Test the response list function with resource_id and metric_name."""
         # Test for a combined resource and name list
-        # resource and name are on the lisat
+        # resource and name are on the list
         valid_name = "disk_write_ops"
         valid_id = "r_id"
         resp_list = self.metrics.response_list(
@@ -313,7 +317,7 @@ class TestMetricCalls(unittest.TestCase):
 
         # Check for the expected values in the resulting list
         for l in result_list:
-            self.assertIn(l, resp_list[0])
+            self.assertIn(l, resp_list[0].values())
 
         # resource not on list
         invalid_id = "mock_resource"

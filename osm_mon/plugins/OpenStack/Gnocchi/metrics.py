@@ -27,7 +27,10 @@ import logging
 
 import time
 
+import six
+
 from osm_mon.core.message_bus.producer import KafkaProducer
+from osm_mon.plugins.OpenStack.common import Common
 
 from osm_mon.plugins.OpenStack.response import OpenStack_Response
 from osm_mon.plugins.OpenStack.settings import Config
@@ -38,7 +41,7 @@ METRIC_MAPPINGS = {
     "average_memory_utilization": "memory.percent",
     "disk_read_ops": "disk.read.requests",
     "disk_write_ops": "disk.write.requests",
-    "digsk_read_bytes": "disk.read.bytes",
+    "disk_read_bytes": "disk.read.bytes",
     "disk_write_bytes": "disk.write.bytes",
     "packets_dropped": "interface.if_dropped",
     "packets_received": "interface.if_packets",
@@ -62,12 +65,10 @@ class Metrics(object):
         """Initialize the metric actions."""
         # Configure an instance of the OpenStack metric plugin
         config = Config.instance()
-        config.read_environ("gnocchi")
+        config.read_environ()
 
         # Initialise authentication for API requests
-        self.auth_token = None
-        self.endpoint = None
-        self._common = None
+        self._common = Common()
 
         # Use the Response class to generate valid json response messages
         self._response = OpenStack_Response()
@@ -75,32 +76,20 @@ class Metrics(object):
         # Initializer a producer to send responses back to SO
         self._producer = KafkaProducer("metric_response")
 
-    def metric_calls(self, message, common, auth_token):
+    def metric_calls(self, message):
         """Consume info from the message bus to manage metric requests."""
         values = json.loads(message.value)
-        self._common = common
         log.info("OpenStack metric action required.")
 
-        # Generate and auth_token and endpoint for request
-        if auth_token is not None:
-            if self.auth_token != auth_token:
-                log.info("Auth_token for metrics set by access_credentials.")
-                self.auth_token = auth_token
-            else:
-                log.info("Auth_token has not been updated.")
-        else:
-            log.info("Using environment variables to set Gnocchi auth_token.")
-            self.auth_token = self._common._authenticate()
+        auth_token = Common.get_auth_token(values['vim_uuid'])
 
-        if self.endpoint is None:
-            log.info("Generating a new endpoint for Gnocchi.")
-            self.endpoint = self._common.get_endpoint("metric")
+        endpoint = Common.get_endpoint("metric", values['vim_uuid'])
 
         if message.key == "create_metric_request":
             # Configure metric
             metric_details = values['metric_create']
             metric_id, resource_id, status = self.configure_metric(
-                self.endpoint, self.auth_token, metric_details)
+                endpoint, auth_token, metric_details)
 
             # Generate and send a create metric response
             try:
@@ -118,7 +107,7 @@ class Metrics(object):
         elif message.key == "read_metric_data_request":
             # Read all metric data related to a specified metric
             timestamps, metric_data = self.read_metric_data(
-                self.endpoint, self.auth_token, values)
+                endpoint, auth_token, values)
 
             # Generate and send a response message
             try:
@@ -140,7 +129,7 @@ class Metrics(object):
             # delete the specified metric in the request
             metric_id = values['metric_uuid']
             status = self.delete_metric(
-                self.endpoint, self.auth_token, metric_id)
+                endpoint, auth_token, metric_id)
 
             # Generate and send a response message
             try:
@@ -165,7 +154,7 @@ class Metrics(object):
             metric_name = req_details['metric_name']
             resource_id = req_details['resource_uuid']
             metric_id = self.get_metric_id(
-                self.endpoint, self.auth_token, metric_name, resource_id)
+                endpoint, auth_token, metric_name, resource_id)
 
             # Generate and send a response message
             try:
@@ -184,7 +173,7 @@ class Metrics(object):
             list_details = values['metrics_list_request']
 
             metric_list = self.list_metrics(
-                self.endpoint, self.auth_token, list_details)
+                endpoint, auth_token, list_details)
 
             # Generate and send a response message
             try:
@@ -228,7 +217,7 @@ class Metrics(object):
                 res_url = base_url.format(endpoint) % resource_id
                 payload = {metric_name: {'archive_policy_name': 'high',
                                          'unit': values['metric_unit']}}
-                result = self._common._perform_request(
+                result = Common.perform_request(
                     res_url, auth_token, req_type="post",
                     payload=json.dumps(payload))
                 # Get id of newly created metric
@@ -252,7 +241,7 @@ class Metrics(object):
                                                    'metrics': {
                                                        metric_name: metric}})
 
-                    resource = self._common._perform_request(
+                    resource = Common.perform_request(
                         url, auth_token, req_type="post",
                         payload=resource_payload)
 
@@ -276,10 +265,10 @@ class Metrics(object):
 
     def delete_metric(self, endpoint, auth_token, metric_id):
         """Delete metric."""
-        url = "{}/v1/metric/%s".format(endpoint) % (metric_id)
+        url = "{}/v1/metric/%s".format(endpoint) % metric_id
 
         try:
-            result = self._common._perform_request(
+            result = Common.perform_request(
                 url, auth_token, req_type="delete")
             if str(result.status_code) == "404":
                 log.warn("Failed to delete the metric.")
@@ -292,7 +281,6 @@ class Metrics(object):
 
     def list_metrics(self, endpoint, auth_token, values):
         """List all metrics."""
-        url = "{}/v1/metric/".format(endpoint)
 
         # Check for a specified list
         try:
@@ -313,12 +301,22 @@ class Metrics(object):
 
         try:
             url = "{}/v1/metric?sort=name:asc".format(endpoint)
-            result = self._common._perform_request(
+            result = Common.perform_request(
                 url, auth_token, req_type="get")
             metrics = []
             metrics_partial = json.loads(result.text)
             for metric in metrics_partial:
                 metrics.append(metric)
+
+            while len(json.loads(result.text)) > 0:
+                last_metric_id = metrics_partial[-1]['id']
+                url = "{}/v1/metric?sort=name:asc&marker={}".format(endpoint, last_metric_id)
+                result = Common.perform_request(
+                    url, auth_token, req_type="get")
+                if len(json.loads(result.text)) > 0:
+                    metrics_partial = json.loads(result.text)
+                    for metric in metrics_partial:
+                        metrics.append(metric)
 
             if metrics is not None:
                 # Format the list response
@@ -353,7 +351,7 @@ class Metrics(object):
 
         try:
             # Try return the metric id if it exists
-            result = self._common._perform_request(
+            result = Common.perform_request(
                 url, auth_token, req_type="get")
             return json.loads(result.text)['metrics'][metric_name]
         except Exception:
@@ -362,6 +360,7 @@ class Metrics(object):
 
     def get_metric_name(self, values):
         """Check metric name configuration and normalize."""
+        metric_name = None
         try:
             # Normalize metric name
             metric_name = values['metric_name'].lower()
@@ -371,7 +370,7 @@ class Metrics(object):
         return metric_name, None
 
     def read_metric_data(self, endpoint, auth_token, values):
-        """Collectd metric measures over a specified time period."""
+        """Collect metric measures over a specified time period."""
         timestamps = []
         data = []
         try:
@@ -381,6 +380,7 @@ class Metrics(object):
             collection_period = values['collection_period']
 
             # Define the start and end time based on configurations
+            # FIXME: Local timezone may differ from timezone set in Gnocchi, causing discrepancies in measures
             stop_time = time.strftime("%Y-%m-%d") + "T" + time.strftime("%X")
             end_time = int(round(time.time() * 1000))
             if collection_unit == 'YEAR':
@@ -395,7 +395,7 @@ class Metrics(object):
                 "0": metric_id, "1": start_time, "2": stop_time}
 
             # Perform metric data request
-            metric_data = self._common._perform_request(
+            metric_data = Common.perform_request(
                 url, auth_token, req_type="get")
 
             # Generate a list of the requested timestamps and data
@@ -418,14 +418,14 @@ class Metrics(object):
             # Only list OSM metrics
             name = None
             if row['name'] in METRIC_MAPPINGS.values():
-                for k,v in METRIC_MAPPINGS.iteritems():
+                for k,v in six.iteritems(METRIC_MAPPINGS):
                     if row['name'] == v:
                         name = k
                 metric = {"metric_name": name,
                           "metric_uuid": row['id'],
                           "metric_unit": row['unit'],
                           "resource_uuid": row['resource_id']}
-                resp_list.append(str(metric))
+                resp_list.append(metric)
             # Generate metric_name specific list
             if metric_name is not None and name is not None:
                 if metric_name in METRIC_MAPPINGS.keys() and row['name'] == METRIC_MAPPINGS[metric_name]:
@@ -433,7 +433,7 @@ class Metrics(object):
                               "metric_uuid": row['id'],
                               "metric_unit": row['unit'],
                               "resource_uuid": row['resource_id']}
-                    name_list.append(str(metric))
+                    name_list.append(metric)
             # Generate resource specific list
             if resource is not None and name is not None:
                 if row['resource_id'] == resource:
@@ -441,13 +441,12 @@ class Metrics(object):
                               "metric_uuid": row['id'],
                               "metric_unit": row['unit'],
                               "resource_uuid": row['resource_id']}
-                    res_list.append(str(metric))
+                    res_list.append(metric)
 
         # Join required lists
         if metric_name is not None and resource is not None:
-            intersection_set = set(res_list).intersection(name_list)
-            intersection = list(intersection_set)
-            return intersection
+            # Return intersection of res_list and name_list
+            return [i for i in res_list for j in name_list if i['metric_uuid'] == j['metric_uuid']]
         elif metric_name is not None:
             return name_list
         elif resource is not None:

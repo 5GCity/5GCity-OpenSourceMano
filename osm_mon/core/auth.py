@@ -32,23 +32,23 @@ class AuthManager:
     def __init__(self):
         self.database_manager = DatabaseManager()
 
-    def store_auth_credentials(self, message):
-        values = json.loads(message.value)
+    def store_auth_credentials(self, creds_dict):
         credentials = VimCredentials()
-        credentials.uuid = values['_id']
-        credentials.name = values['name']
-        credentials.type = values['vim_type']
-        credentials.url = values['vim_url']
-        credentials.user = values['vim_user']
-        credentials.password = values['vim_password']
-        credentials.tenant_name = values['vim_tenant_name']
-        credentials.config = json.dumps(values['config'])
+        credentials.uuid = creds_dict['_id']
+        credentials.name = creds_dict['name']
+        credentials.type = creds_dict['vim_type']
+        credentials.url = creds_dict['vim_url']
+        credentials.user = creds_dict['vim_user']
+        credentials.password = creds_dict['vim_password']
+        credentials.tenant_name = creds_dict['vim_tenant_name']
+        credentials.config = json.dumps(creds_dict['config'])
         self.database_manager.save_credentials(credentials)
 
     def get_credentials(self, vim_uuid):
         return self.database_manager.get_credentials(vim_uuid)
 
-    def delete_auth_credentials(self, message):
-        # TODO
-        pass
+    def delete_auth_credentials(self, creds_dict):
+        credentials = self.get_credentials(creds_dict['_id'])
+        if credentials:
+            credentials.delete_instance()
 

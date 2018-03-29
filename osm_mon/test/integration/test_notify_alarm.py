@@ -28,8 +28,8 @@ import logging
 import socket
 import unittest
 
-from BaseHTTPServer import BaseHTTPRequestHandler
-from BaseHTTPServer import HTTPServer
+from six.moves.BaseHTTPServer import BaseHTTPRequestHandler
+from six.moves.BaseHTTPServer import HTTPServer
 
 from threading import Thread
 
@@ -87,22 +87,22 @@ class MockNotifierHandler(BaseHTTPRequestHandler):
     def notify_alarm(self, values):
         """Mock the notify_alarm functionality to generate a valid response."""
         config = Config.instance()
-        config.read_environ("aodh")
+        config.read_environ()
         self._alarming = Alarming()
         self._common = Common()
         self._response = OpenStack_Response()
         self._producer = KafkaProducer('alarm_response')
         alarm_id = values['alarm_id']
 
-        auth_token = self._common._authenticate()
-        endpoint = self._common.get_endpoint("alarming")
+        auth_token = Common.get_auth_token('test_id')
+        endpoint = Common.get_endpoint('alarming', 'test_id')
 
         # If authenticated generate and send response message
-        if (auth_token is not None and endpoint is not None):
+        if auth_token is not None and endpoint is not None:
             url = "{}/v2/alarms/%s".format(endpoint) % alarm_id
 
             # Get the resource_id of the triggered alarm and the date
-            result = self._common._perform_request(
+            result = Common.perform_request(
                 url, auth_token, req_type="get")
             alarm_details = json.loads(result.text)
             gnocchi_rule = alarm_details['gnocchi_resources_threshold_rule']
@@ -156,9 +156,9 @@ def test_do_get():
 class AlarmNotificationTest(unittest.TestCase):
     @mock.patch.object(KafkaProducer, "notify_alarm")
     @mock.patch.object(OpenStack_Response, "generate_response")
-    @mock.patch.object(Common, "_perform_request")
+    @mock.patch.object(Common, "perform_request")
     @mock.patch.object(Common, "get_endpoint")
-    @mock.patch.object(Common, "_authenticate")
+    @mock.patch.object(Common, "get_auth_token")
     def test_post_notify_alarm(self, auth, endpoint, perf_req, resp, notify):
         """Integration test for notify_alarm."""
         url = 'http://localhost:{port}/users'.format(port=mock_server_port)
@@ -178,14 +178,14 @@ class AlarmNotificationTest(unittest.TestCase):
         endpoint.return_value = "my_endpoint"
         perf_req.return_value = MockResponse(valid_get_resp)
 
-        # Generate a post reqest for testing
-        requests.post(url, json.dumps(payload))
-
+        # Generate a post request for testing
+        response = requests.post(url, json.dumps(payload))
+        self.assertEqual(response.status_code, 200)
         # A response message is generated with the following details
         resp.assert_called_with(
             "notify_alarm", a_id="my_alarm_id", r_id="my_resource_id",
             sev="critical", date='dd-mm-yyyy 00:00', state="current_state",
             vim_type="OpenStack")
 
-        # Reponse message is sent back to the SO via MON's producer
+        # Response message is sent back to the SO via MON's producer
         notify.assert_called_with("notify_alarm", mock.ANY, "alarm_response")

@@ -49,10 +49,12 @@ class VimAccountTest(unittest.TestCase):
         except KafkaError:
             self.skipTest('Kafka server not present.')
 
-    def test_create_vim_account(self):
+    # TODO: REFACTOR. This test requires common_consumer running. Needs to be changed so it does not.
+    @unittest.skip("Needs refactoring.")
+    def test_create_edit_delete_vim_account(self):
         """Test vim_account creation message from KafkaProducer."""
         # Set-up message, producer and consumer for tests
-        payload = {
+        create_payload = {
             "_id": "test_id",
             "name": "test_name",
             "vim_type": "openstack",
@@ -66,12 +68,48 @@ class VimAccountTest(unittest.TestCase):
                 }
         }
 
-        self.producer.send('vim_account', key=b'create', value=json.dumps(payload))
+        self.producer.send('vim_account', key=b'create', value=json.dumps(create_payload))
 
         self.producer.flush()
 
-        # FIXME: Create a schema for a vim_account_create_response, so we can test it
-        time.sleep(5)
-        creds = self.auth_manager.get_credentials(payload['_id'])
-        self.assertEqual(creds.name, payload['name'])
-        self.assertEqual(json.loads(creds.config), payload['config'])
+        time.sleep(1)
+        creds = self.auth_manager.get_credentials(create_payload['_id'])
+        self.assertIsNotNone(creds)
+        self.assertEqual(creds.name, create_payload['name'])
+        self.assertEqual(json.loads(creds.config), create_payload['config'])
+
+        # Set-up message, producer and consumer for tests
+        edit_payload = {
+            "_id": "test_id",
+            "name": "test_name_edited",
+            "vim_type": "openstack",
+            "vim_url": "auth_url",
+            "vim_user": "user",
+            "vim_password": "password",
+            "vim_tenant_name": "tenant",
+            "config":
+                {
+                    "foo_edited": "bar_edited"
+                }
+        }
+
+        self.producer.send('vim_account', key=b'edit', value=json.dumps(edit_payload))
+
+        self.producer.flush()
+
+        time.sleep(1)
+        creds = self.auth_manager.get_credentials(edit_payload['_id'])
+        self.assertEqual(creds.name, edit_payload['name'])
+        self.assertEqual(json.loads(creds.config), edit_payload['config'])
+
+        delete_payload = {
+            "_id": "test_id"
+        }
+
+        self.producer.send('vim_account', key=b'delete', value=json.dumps(delete_payload))
+
+        self.producer.flush()
+
+        time.sleep(1)
+        creds = self.auth_manager.get_credentials(delete_payload['_id'])
+        self.assertIsNone(creds)

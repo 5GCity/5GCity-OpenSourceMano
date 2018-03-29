@@ -59,11 +59,6 @@ class Config(object):
     """Plugin confguration."""
 
     _configuration = [
-        CfgParam('OS_AUTH_URL', None, six.text_type),
-        CfgParam('OS_IDENTITY_API_VERSION', "3", six.text_type),
-        CfgParam('OS_USERNAME', None, six.text_type),
-        CfgParam('OS_PASSWORD', "password", six.text_type),
-        CfgParam('OS_TENANT_NAME', "service", six.text_type),
         CfgParam('OS_NOTIFIER_URI', "http://localhost:8662", six.text_type),
     ]
 
@@ -75,17 +70,12 @@ class Config(object):
         for cfg in self._configuration:
             setattr(self, cfg.key, cfg.default)
 
-    def read_environ(self, service):
+    def read_environ(self):
         """Check the appropriate environment variables and update defaults."""
         for key in self._config_keys:
             try:
-                if key == "OS_AUTH_URL":
-                    val = str(os.environ[key]) + "/v3"
-                    setattr(self, key, val)
-                else:
-                    val = str(os.environ[key])
-                    setattr(self, key, val)
+                val = str(os.environ[key])
+                setattr(self, key, val)
             except KeyError as exc:
-                log.warn("Falied to configure plugin: %s", exc)
-                log.warn("Try re-authenticating your OpenStack deployment.")
+                log.warn("Failed to configure plugin: %s", exc)
         return

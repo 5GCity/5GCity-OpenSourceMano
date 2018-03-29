@@ -35,7 +35,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.realpath(__file__), '..', '
 from kafka import KafkaConsumer
 
 from osm_mon.plugins.OpenStack.Aodh import alarming
-from osm_mon.plugins.OpenStack.common import Common
 from osm_mon.plugins.OpenStack.Gnocchi import metrics
 
 from osm_mon.plugins.CloudWatch.plugin_alarm import plugin_alarms
@@ -65,8 +64,6 @@ database_manager = DatabaseManager()
 database_manager.create_tables()
 
 # Create OpenStack alarming and metric instances
-auth_token = None
-openstack_auth = Common()
 openstack_metrics = metrics.Metrics()
 openstack_alarms = alarming.Alarming()
 
@@ -98,6 +95,7 @@ log.info("Listening for alarm_request and metric_request messages")
 for message in common_consumer:
     log.info("Message arrived: %s", message)
     try:
+        values = json.loads(message.value)
         # Check the message topic
         if message.topic == "metric_request":
             # Check the vim desired by the message
@@ -105,9 +103,7 @@ for message in common_consumer:
 
             if vim_type == "openstack":
                 log.info("This message is for the OpenStack plugin.")
-                openstack_metrics.metric_calls(
-                    message, openstack_auth, auth_token)
-
+                openstack_metrics.metric_calls(message)
             elif vim_type == "aws":
                 log.info("This message is for the CloudWatch plugin.")
                 aws_conn = aws_connection.setEnvironment()
@@ -126,7 +122,7 @@ for message in common_consumer:
             vim_type = get_vim_type(message)
             if vim_type == "openstack":
                 log.info("This message is for the OpenStack plugin.")
-                openstack_alarms.alarming(message, openstack_auth, auth_token)
+                openstack_alarms.alarming(message)
 
             elif vim_type == "aws":
                 log.info("This message is for the CloudWatch plugin.")
@@ -143,19 +139,16 @@ for message in common_consumer:
 
         elif message.topic == "vim_account":
             if message.key == "create" or message.key == "edit":
-                auth_manager.store_auth_credentials(message)
+                auth_manager.store_auth_credentials(values)
             if message.key == "delete":
-                auth_manager.delete_auth_credentials(message)
+                auth_manager.delete_auth_credentials(values)
 
-        # TODO: Remove in the near future. Modify tests accordingly.
+        # TODO: Remove in the near future when all plugins support vim_uuid. Modify tests accordingly.
         elif message.topic == "access_credentials":
             # Check the vim desired by the message
             vim_type = get_vim_type(message)
-            if vim_type == "openstack":
-                log.info("This message is for the OpenStack plugin.")
-                auth_token = openstack_auth._authenticate(message=message)
 
-            elif vim_type == "aws":
+            if vim_type == "aws":
                 log.info("This message is for the CloudWatch plugin.")
                 aws_access_credentials.access_credential_calls(message)
 

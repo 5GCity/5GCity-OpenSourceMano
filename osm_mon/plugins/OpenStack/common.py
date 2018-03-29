@@ -20,15 +20,13 @@
 # contact: helena.mcgough@intel.com or adrian.hoban@intel.com
 ##
 """Common methods for the OpenStack plugins."""
-import json
 
 import logging
 
+import requests
 from keystoneclient.v3 import client
 
-from osm_mon.plugins.OpenStack.settings import Config
-
-import requests
+from osm_mon.core.auth import AuthManager
 
 __author__ = "Helena McGough"
 
@@ -40,73 +38,36 @@ class Common(object):
 
     def __init__(self):
         """Create the common instance."""
-        self._auth_token = None
-        self._ks = None
-        self.openstack_url = None
-        self.user = None
-        self.password = None
-        self.tenant = None
+        self.auth_manager = AuthManager()
 
-    def _authenticate(self, message=None):
+    @staticmethod
+    def get_auth_token(vim_uuid):
         """Authenticate and/or renew the authentication token."""
-        if self._auth_token is not None:
-            return self._auth_token
+        auth_manager = AuthManager()
+        creds = auth_manager.get_credentials(vim_uuid)
+        ks = client.Client(auth_url=creds.url,
+                           username=creds.user,
+                           password=creds.password,
+                           tenant_name=creds.tenant_name)
+        return ks.auth_token
 
-        if message is not None:
-            values = json.loads(message.value)['access_config']
-            self.openstack_url = values['openstack_site']
-            self.user = values['user']
-            self.password = values['password']
-            self.tenant = values['vim_tenant_name']
-
-            try:
-                # try to authenticate with supplied access_credentials
-                self._ks = client.Client(auth_url=self.openstack_url,
-                                         username=self.user,
-                                         password=self.password,
-                                         tenant_name=self.tenant)
-                self._auth_token = self._ks.auth_token
-                log.info("Authenticating with access_credentials from SO.")
-                return self._auth_token
-            except Exception as exc:
-                log.warn("Authentication failed with access_credentials: %s",
-                         exc)
-
-        else:
-            log.info("Access_credentials were not sent from SO.")
-
-        # If there are no access_credentials or they fail use env variables
-        try:
-            cfg = Config.instance()
-            self._ks = client.Client(auth_url=cfg.OS_AUTH_URL,
-                                     username=cfg.OS_USERNAME,
-                                     password=cfg.OS_PASSWORD,
-                                     tenant_name=cfg.OS_TENANT_NAME)
-            log.info("Authenticating with environment varialbles.")
-            self._auth_token = self._ks.auth_token
-        except Exception as exc:
-
-            log.warn("Authentication failed: %s", exc)
-
-            self._auth_token = None
-
-        return self._auth_token
-
-    def get_endpoint(self, service_type):
+    @staticmethod
+    def get_endpoint(service_type, vim_uuid):
         """Get the endpoint for Gnocchi/Aodh."""
-        try:
-            return self._ks.service_catalog.url_for(
-                service_type=service_type,
-                endpoint_type='publicURL',
-                region_name='regionOne')
-        except Exception as exc:
-            log.warning("Failed to retreive endpoint for service due to: %s",
-                        exc)
-        return None
+        auth_manager = AuthManager()
+        creds = auth_manager.get_credentials(vim_uuid)
+        ks = client.Client(auth_url=creds.url,
+                           username=creds.user,
+                           password=creds.password,
+                           tenant_name=creds.tenant_name)
+        return ks.service_catalog.url_for(
+            service_type=service_type,
+            endpoint_type='publicURL',
+            region_name='RegionOne')
 
-    @classmethod
-    def _perform_request(cls, url, auth_token,
-                         req_type=None, payload=None, params=None):
+    @staticmethod
+    def perform_request(url, auth_token,
+                        req_type=None, payload=None, params=None):
         """Perform the POST/PUT/GET/DELETE request."""
         # request headers
         headers = {'X-Auth-Token': auth_token,

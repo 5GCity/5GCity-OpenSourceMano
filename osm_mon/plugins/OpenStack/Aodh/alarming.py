@@ -22,14 +22,15 @@
 """Carry out alarming requests via Aodh API."""
 
 import json
-
 import logging
 
-from osm_mon.core.message_bus.producer import KafkaProducer
+import six
 
+from osm_mon.core.database import DatabaseManager
+from osm_mon.core.message_bus.producer import KafkaProducer
+from osm_mon.plugins.OpenStack.common import Common
 from osm_mon.plugins.OpenStack.response import OpenStack_Response
 from osm_mon.plugins.OpenStack.settings import Config
-from osm_mon.plugins.OpenStack.Gnocchi.metrics import Metrics
 
 log = logging.getLogger(__name__)
 
@@ -46,8 +47,8 @@ ALARM_NAMES = {
 
 METRIC_MAPPINGS = {
     "average_memory_utilization": "memory.percent",
-    "disk_read_ops": "disk.disk_ops",
-    "disk_write_ops": "disk.disk_ops",
+    "disk_read_ops": "disk.read.requests",
+    "disk_write_ops": "disk.write.requests",
     "disk_read_bytes": "disk.read.bytes",
     "disk_write_bytes": "disk.write.bytes",
     "packets_dropped": "interface.if_dropped",
@@ -78,12 +79,9 @@ class Alarming(object):
         """Create the OpenStack alarming instance."""
         # Initialize configuration and notifications
         config = Config.instance()
-        config.read_environ("aodh")
+        config.read_environ()
 
-        # Initialise authentication for API requests
-        self.auth_token = None
-        self.endpoint = None
-        self.common = None
+        self._database_manager = DatabaseManager()
 
         # Use the Response class to generate valid json response messages
         self._response = OpenStack_Response()
@@ -91,39 +89,30 @@ class Alarming(object):
         # Initializer a producer to send responses back to SO
         self._producer = KafkaProducer("alarm_response")
 
-    def alarming(self, message, common, auth_token):
+    def alarming(self, message):
         """Consume info from the message bus to manage alarms."""
         values = json.loads(message.value)
-        self.common = common
 
         log.info("OpenStack alarm action required.")
+        vim_uuid = values['vim_uuid']
 
-        # Generate and auth_token and endpoint for request
-        if auth_token is not None:
-            if self.auth_token != auth_token:
-                log.info("Auth_token for alarming set by access_credentials.")
-                self.auth_token = auth_token
-            else:
-                log.info("Auth_token has not been updated.")
-        else:
-            log.info("Using environment variables to set auth_token for Aodh.")
-            self.auth_token = self.common._authenticate()
+        auth_token = Common.get_auth_token(vim_uuid)
 
-        if self.endpoint is None:
-            log.info("Generating a new endpoint for Aodh.")
-            self.endpoint = self.common.get_endpoint("alarming")
+        alarm_endpoint = Common.get_endpoint("alarming", vim_uuid)
+        metric_endpoint = Common.get_endpoint("metric", vim_uuid)
 
         if message.key == "create_alarm_request":
             # Configure/Update an alarm
             alarm_details = values['alarm_create_request']
 
             alarm_id, alarm_status = self.configure_alarm(
-                self.endpoint, self.auth_token, alarm_details)
+                alarm_endpoint, metric_endpoint, auth_token, alarm_details)
 
             # Generate a valid response message, send via producer
             try:
                 if alarm_status is True:
                     log.info("Alarm successfully created")
+                    self._database_manager.save_alarm(alarm_id, vim_uuid)
 
                 resp_message = self._response.generate_response(
                     'create_alarm_response', status=alarm_status,
@@ -134,15 +123,15 @@ class Alarming(object):
                     'create_alarm_response', resp_message,
                     'alarm_response')
             except Exception as exc:
-                log.warn("Response creation failed: %s", exc)
+                log.exception("Response creation failed:")
 
         elif message.key == "list_alarm_request":
-            # Check for a specifed: alarm_name, resource_uuid, severity
+            # Check for a specified: alarm_name, resource_uuid, severity
             # and generate the appropriate list
             list_details = values['alarm_list_request']
 
             alarm_list = self.list_alarms(
-                self.endpoint, self.auth_token, list_details)
+                alarm_endpoint, auth_token, list_details)
 
             try:
                 # Generate and send a list response back
@@ -154,14 +143,14 @@ class Alarming(object):
                     'list_alarm_response', resp_message,
                     'alarm_response')
             except Exception as exc:
-                log.warn("Failed to send a valid response back.")
+                log.exception("Failed to send a valid response back.")
 
         elif message.key == "delete_alarm_request":
             request_details = values['alarm_delete_request']
             alarm_id = request_details['alarm_uuid']
 
             resp_status = self.delete_alarm(
-                self.endpoint, self.auth_token, alarm_id)
+                alarm_endpoint, auth_token, alarm_id)
 
             # Generate and send a response message
             try:
@@ -174,14 +163,14 @@ class Alarming(object):
                     'delete_alarm_response', resp_message,
                     'alarm_response')
             except Exception as exc:
-                log.warn("Failed to create delete reponse:%s", exc)
+                log.warn("Failed to create delete response:%s", exc)
 
         elif message.key == "acknowledge_alarm":
             # Acknowledge that an alarm has been dealt with by the SO
             alarm_id = values['ack_details']['alarm_uuid']
 
             response = self.update_alarm_state(
-                self.endpoint, self.auth_token, alarm_id)
+                alarm_endpoint, auth_token, alarm_id)
 
             # Log if an alarm was reset
             if response is True:
@@ -194,7 +183,7 @@ class Alarming(object):
             alarm_details = values['alarm_update_request']
 
             alarm_id, status = self.update_alarm(
-                self.endpoint, self.auth_token, alarm_details)
+                alarm_endpoint, auth_token, alarm_details)
 
             # Generate a response for an update request
             try:
@@ -214,31 +203,28 @@ class Alarming(object):
 
         return
 
-    def configure_alarm(self, endpoint, auth_token, values):
+    def configure_alarm(self, alarm_endpoint, metric_endpoint, auth_token, values):
         """Create requested alarm in Aodh."""
-        url = "{}/v2/alarms/".format(endpoint)
+        url = "{}/v2/alarms/".format(alarm_endpoint)
 
         # Check if the desired alarm is supported
         alarm_name = values['alarm_name'].lower()
         metric_name = values['metric_name'].lower()
         resource_id = values['resource_uuid']
 
-        if alarm_name not in ALARM_NAMES.keys():
-            log.warn("This alarm is not supported, by a valid metric.")
-            return None, False
-        if ALARM_NAMES[alarm_name] != metric_name:
-            log.warn("This is not the correct metric for this alarm.")
+        if metric_name not in METRIC_MAPPINGS.keys():
+            log.warn("This metric is not supported.")
             return None, False
 
         # Check for the required metric
-        metric_id = self.check_for_metric(auth_token, metric_name, resource_id)
+        metric_id = self.check_for_metric(auth_token, metric_endpoint, metric_name, resource_id)
 
         try:
             if metric_id is not None:
                 # Create the alarm if metric is available
                 payload = self.check_payload(values, metric_name, resource_id,
                                              alarm_name)
-                new_alarm = self.common._perform_request(
+                new_alarm = Common.perform_request(
                     url, auth_token, req_type="post", payload=payload)
                 return json.loads(new_alarm.text)['alarm_id'], True
             else:
@@ -251,10 +237,10 @@ class Alarming(object):
 
     def delete_alarm(self, endpoint, auth_token, alarm_id):
         """Delete alarm function."""
-        url = "{}/v2/alarms/%s".format(endpoint) % (alarm_id)
+        url = "{}/v2/alarms/%s".format(endpoint) % alarm_id
 
         try:
-            result = self.common._perform_request(
+            result = Common.perform_request(
                 url, auth_token, req_type="delete")
             if str(result.status_code) == "404":
                 log.info("Alarm doesn't exist: %s", result.status_code)
@@ -273,7 +259,7 @@ class Alarming(object):
         a_list, name_list, sev_list, res_list = [], [], [], []
 
         # TODO(mcgoughh): for now resource_id is a mandatory field
-        # Check for a reqource is
+        # Check for a resource id
         try:
             resource = list_details['resource_uuid']
         except KeyError as exc:
@@ -299,7 +285,7 @@ class Alarming(object):
 
         # Perform the request to get the desired list
         try:
-            result = self.common._perform_request(
+            result = Common.perform_request(
                 url, auth_token, req_type="get")
 
             if result is not None:
@@ -307,7 +293,7 @@ class Alarming(object):
                 for alarm in json.loads(result.text):
                     rule = alarm['gnocchi_resources_threshold_rule']
                     if resource == rule['resource_id']:
-                        res_list.append(str(alarm))
+                        res_list.append(alarm)
                     if not res_list:
                         log.info("No alarms for this resource")
                         return a_list
@@ -318,23 +304,23 @@ class Alarming(object):
                              name, sev)
                     for alarm in json.loads(result.text):
                         if name == alarm['name']:
-                            name_list.append(str(alarm))
+                            name_list.append(alarm)
                     for alarm in json.loads(result.text):
                         if sev == alarm['severity']:
-                            sev_list.append(str(alarm))
+                            sev_list.append(alarm)
                     name_sev_list = list(set(name_list).intersection(sev_list))
                     a_list = list(set(name_sev_list).intersection(res_list))
                 elif name is not None:
                     log.info("Returning a %s list of alarms.", name)
                     for alarm in json.loads(result.text):
                         if name == alarm['name']:
-                            name_list.append(str(alarm))
+                            name_list.append(alarm)
                     a_list = list(set(name_list).intersection(res_list))
                 elif sev is not None:
                     log.info("Returning %s severity alarm list.", sev)
                     for alarm in json.loads(result.text):
                         if sev == alarm['severity']:
-                            sev_list.append(str(alarm))
+                            sev_list.append(alarm)
                     a_list = list(set(sev_list).intersection(res_list))
                 else:
                     log.info("Returning an entire list of alarms.")
@@ -354,7 +340,7 @@ class Alarming(object):
         payload = json.dumps("ok")
 
         try:
-            self.common._perform_request(
+            Common.perform_request(
                 url, auth_token, req_type="put", payload=payload)
             return True
         except Exception as exc:
@@ -368,15 +354,15 @@ class Alarming(object):
 
         # Gets current configurations about the alarm
         try:
-            result = self.common._perform_request(
+            result = Common.perform_request(
                 url, auth_token, req_type="get")
             alarm_name = json.loads(result.text)['name']
             rule = json.loads(result.text)['gnocchi_resources_threshold_rule']
             alarm_state = json.loads(result.text)['state']
             resource_id = rule['resource_id']
-            metric_name = rule['metric']
+            metric_name = [key for key, value in six.iteritems(METRIC_MAPPINGS) if value == rule['metric']][0]
         except Exception as exc:
-            log.warn("Failed to retreive existing alarm info: %s.\
+            log.warn("Failed to retrieve existing alarm info: %s.\
                      Can only update OSM alarms.", exc)
             return None, False
 
@@ -387,7 +373,7 @@ class Alarming(object):
         # Updates the alarm configurations with the valid payload
         if payload is not None:
             try:
-                update_alarm = self.common._perform_request(
+                update_alarm = Common.perform_request(
                     url, auth_token, req_type="put", payload=payload)
 
                 return json.loads(update_alarm.text)['alarm_id'], True
@@ -402,15 +388,25 @@ class Alarming(object):
         try:
             cfg = Config.instance()
             # Check state and severity
-            severity = values['severity'].lower()
+
+            severity = 'critical'
+            if 'severity' in values:
+                severity = values['severity'].lower()
+
             if severity == "indeterminate":
                 alarm_state = "insufficient data"
             if alarm_state is None:
                 alarm_state = "ok"
 
             statistic = values['statistic'].lower()
-            granularity = values['granularity']
-            resource_type = values['resource_type'].lower()
+
+            granularity = '300'
+            if 'granularity' in values:
+                granularity = values['granularity']
+
+            resource_type = 'generic'
+            if 'resource_type' in values:
+                resource_type = values['resource_type'].lower()
 
             # Try to configure the payload for the update/create request
             # Can only update: threshold, operation, statistic and
@@ -438,19 +434,18 @@ class Alarming(object):
         url = "{}/v2/alarms/%s/state".format(endpoint) % alarm_id
 
         try:
-            alarm_state = self.common._perform_request(
+            alarm_state = Common.perform_request(
                 url, auth_token, req_type="get")
             return json.loads(alarm_state.text)
         except Exception as exc:
             log.warn("Failed to get the state of the alarm:%s", exc)
         return None
 
-    def check_for_metric(self, auth_token, m_name, r_id):
+    def check_for_metric(self, auth_token, metric_endpoint, m_name, r_id):
         """Check for the alarm metric."""
         try:
-            endpoint = self.common.get_endpoint("metric")
-            url = "{}/v1/metric?sort=name:asc".format(endpoint)
-            result = self.common._perform_request(
+            url = "{}/v1/metric?sort=name:asc".format(metric_endpoint)
+            result = Common.perform_request(
                 url, auth_token, req_type="get")
             metric_list = []
             metrics_partial = json.loads(result.text)
@@ -459,18 +454,18 @@ class Alarming(object):
 
             while len(json.loads(result.text)) > 0:
                 last_metric_id = metrics_partial[-1]['id']
-                url = "{}/v1/metric?sort=name:asc&marker={}".format(endpoint, last_metric_id)
-                result = self.common._perform_request(
+                url = "{}/v1/metric?sort=name:asc&marker={}".format(metric_endpoint, last_metric_id)
+                result = Common.perform_request(
                     url, auth_token, req_type="get")
                 if len(json.loads(result.text)) > 0:
                     metrics_partial = json.loads(result.text)
                     for metric in metrics_partial:
                         metric_list.append(metric)
-
+            metric_id = None
             for metric in metric_list:
                 name = metric['name']
                 resource = metric['resource_id']
-                if (name == METRIC_MAPPINGS[m_name] and resource == r_id):
+                if name == METRIC_MAPPINGS[m_name] and resource == r_id:
                     metric_id = metric['id']
             log.info("The required metric exists, an alarm will be created.")
             return metric_id
