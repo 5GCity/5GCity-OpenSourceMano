@@ -49,8 +49,8 @@ class VimAccountTest(unittest.TestCase):
         except KafkaError:
             self.skipTest('Kafka server not present.')
 
-    # TODO: REFACTOR. This test requires common_consumer running. Needs to be changed so it does not.
-    @unittest.skip("Needs refactoring.")
+    @unittest.skip("Correct support for functional tests is pending.")
+    # TODO: Refactor
     def test_create_edit_delete_vim_account(self):
         """Test vim_account creation message from KafkaProducer."""
         # Set-up message, producer and consumer for tests
@@ -73,7 +73,7 @@ class VimAccountTest(unittest.TestCase):
         self.producer.flush()
 
         time.sleep(1)
-        creds = self.auth_manager.get_credentials(create_payload['_id'])
+        creds = self.auth_manager.get_credentials('test_id')
         self.assertIsNotNone(creds)
         self.assertEqual(creds.name, create_payload['name'])
         self.assertEqual(json.loads(creds.config), create_payload['config'])
@@ -98,7 +98,7 @@ class VimAccountTest(unittest.TestCase):
         self.producer.flush()
 
         time.sleep(1)
-        creds = self.auth_manager.get_credentials(edit_payload['_id'])
+        creds = self.auth_manager.get_credentials('test_id')
         self.assertEqual(creds.name, edit_payload['name'])
         self.assertEqual(json.loads(creds.config), edit_payload['config'])
 
@@ -111,5 +111,5 @@ class VimAccountTest(unittest.TestCase):
         self.producer.flush()
 
         time.sleep(1)
-        creds = self.auth_manager.get_credentials(delete_payload['_id'])
+        creds = self.auth_manager.get_credentials('test_id')
         self.assertIsNone(creds)

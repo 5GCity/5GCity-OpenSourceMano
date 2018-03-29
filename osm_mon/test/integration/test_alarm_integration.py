@@ -32,6 +32,7 @@ from kafka import KafkaProducer
 from kafka.errors import KafkaError
 
 from osm_mon.core.auth import AuthManager
+from osm_mon.core.database import DatabaseManager
 from osm_mon.core.message_bus.producer import KafkaProducer as prod
 from osm_mon.plugins.OpenStack import response
 from osm_mon.plugins.OpenStack.Aodh import alarming
@@ -46,7 +47,8 @@ class AlarmIntegrationTest(unittest.TestCase):
         try:
             self.producer = KafkaProducer(bootstrap_servers='localhost:9092')
             self.req_consumer = KafkaConsumer(bootstrap_servers='localhost:9092',
-                                              consumer_timeout_ms=5000)
+                                              auto_offset_reset='earliest',
+                                              consumer_timeout_ms=60000)
             self.req_consumer.subscribe(['alarm_request'])
         except KafkaError:
             self.skipTest('Kafka server not present.')
@@ -89,6 +91,7 @@ class AlarmIntegrationTest(unittest.TestCase):
                 return
         self.fail("No message received in consumer")
 
+    @mock.patch.object(DatabaseManager, "save_alarm", mock.Mock())
     @mock.patch.object(Common, "get_auth_token", mock.Mock())
     @mock.patch.object(Common, "get_endpoint", mock.Mock())
     @mock.patch.object(prod, "create_alarm_response")
@@ -193,6 +196,8 @@ class AlarmIntegrationTest(unittest.TestCase):
                 return
         self.fail("No message received in consumer")
 
+    @mock.patch.object(Common, "get_auth_token", mock.Mock())
+    @mock.patch.object(Common, "get_endpoint", mock.Mock())
     @mock.patch.object(alarming.Alarming, "update_alarm_state")
     def test_ack_alarm_req(self, ack_alarm):
         """Test Aodh acknowledge alarm request message from KafkaProducer."""
@@ -204,4 +209,11 @@ class AlarmIntegrationTest(unittest.TestCase):
 
         self.producer.send('alarm_request', key="acknowledge_alarm",
                            value=json.dumps(payload))
-        self.producer.flush()
+
+        for message in self.req_consumer:
+            # Check the vim desired by the message
+            if message.key == "acknowledge_alarm":
+                self.alarms.alarming(message)
+                return
+
+        self.fail("No message received in consumer")

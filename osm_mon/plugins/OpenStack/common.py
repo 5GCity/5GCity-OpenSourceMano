@@ -76,17 +76,17 @@ class Common(object):
         if req_type == "put":
             response = requests.put(
                 url, data=payload, headers=headers,
-                timeout=1)
+                timeout=10)
         elif req_type == "get":
             response = requests.get(
-                url, params=params, headers=headers, timeout=1)
+                url, params=params, headers=headers, timeout=10)
         elif req_type == "delete":
             response = requests.delete(
-                url, headers=headers, timeout=1)
+                url, headers=headers, timeout=10)
         else:
             response = requests.post(
                 url, data=payload, headers=headers,
-                timeout=1)
+                timeout=10)
 
         # Raises exception if there was an error
         try:
