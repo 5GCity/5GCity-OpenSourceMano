@@ -32,8 +32,7 @@ setuptools.setup(
     install_requires=parse_requirements('requirements.txt'),
     entry_points={
         "console_scripts": [
-            "pm-dbsync = osm_policy_module.cmd.dbsync:main",
-            "pm-agent = osm_policy_module.cmd.policy_module_agent:main",
+            "osm-policy-agent = osm_policy_module.cmd.policy_module_agent:main",
         ]
     }
 )

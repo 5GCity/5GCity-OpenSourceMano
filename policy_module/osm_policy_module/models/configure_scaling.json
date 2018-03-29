@@ -52,8 +52,7 @@
                       "gt",
                       "le",
                       "ge",
-                      "eq",
-                      "ne"
+                      "eq"
                     ]
                   },
                   "scale_out_relational_operation": {
@@ -63,8 +62,7 @@
                       "gt",
                       "le",
                       "ge",
-                      "eq",
-                      "ne"
+                      "eq"
                     ]
                   },
                   "monitoring_param": {
@@ -79,10 +77,10 @@
                       "aggregation_type": {
                         "type": "string",
                         "enum": [
-                          "avg",
-                          "max",
-                          "min",
-                          "last",
+                          "average",
+                          "maximum",
+                          "minimum",
+                          "count",
                           "sum"
                         ]
                       },

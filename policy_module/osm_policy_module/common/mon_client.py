@@ -17,31 +17,31 @@ class MonClient:
                                            cfg.get('policy_module', 'kafka_server_port'))
         self.producer = KafkaProducer(bootstrap_servers=self.kafka_server,
                                       key_serializer=str.encode,
-                                      value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+                                      value_serializer=str.encode)
 
     def create_alarm(self, metric_name, resource_uuid, vim_uuid, threshold, statistic, operation):
         cor_id = random.randint(1, 1000000)
         msg = self._create_alarm_payload(cor_id, metric_name, resource_uuid, vim_uuid, threshold, statistic, operation)
-        self.producer.send(topic='alarm_request', key='create_alarm_request', value=msg)
-        self.producer.flush()
-        consumer = KafkaConsumer(bootstrap_servers=self.kafka_server, consumer_timeout_ms=10000)
+        log.info("Sending create_alarm_request %s", msg)
+        future = self.producer.send(topic='alarm_request', key='create_alarm_request', value=json.dumps(msg))
+        future.get(timeout=60)
+        consumer = KafkaConsumer(bootstrap_servers=self.kafka_server,
+                                 key_deserializer=bytes.decode,
+                                 value_deserializer=bytes.decode)
         consumer.subscribe(['alarm_response'])
-        alarm_uuid = None
         for message in consumer:
             if message.key == 'create_alarm_response':
-                content = json.load(message.value)
+                content = json.loads(message.value)
+                log.info("Received create_alarm_response %s", content)
                 if self._is_alarm_response_correlation_id_eq(cor_id, content):
                     alarm_uuid = content['alarm_create_response']['alarm_uuid']
                     # TODO Handle error response
-                    break
-        consumer.close()
-        if not alarm_uuid:
-            raise ValueError(
-                'Timeout: No alarm creation response from MON. Are it\'s IP and port correctly configured?')
-        return alarm_uuid
+                    return alarm_uuid
+
+        raise ValueError('Timeout: No alarm creation response from MON. Is MON up?')
 
     def _create_alarm_payload(self, cor_id, metric_name, resource_uuid, vim_uuid, threshold, statistic, operation):
-        create_alarm_request = {
+        alarm_create_request = {
             'correlation_id': cor_id,
             'alarm_name': str(uuid.uuid4()),
             'metric_name': metric_name,
@@ -52,7 +52,7 @@ class MonClient:
             'statistic': statistic
         }
         msg = {
-            'create_alarm_request': create_alarm_request,
+            'alarm_create_request': alarm_create_request,
             'vim_uuid': vim_uuid
         }
         return msg

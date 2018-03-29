@@ -16,11 +16,11 @@
           "monitoring_param": {
             "id": "test_param_id",
             "name": "test_param",
-            "aggregation_type": "avg",
+            "aggregation_type": "average",
             "vdu_monitoring_param": {
-              "vim_uuid": "vdu_monitoring_param_id",
-              "resource_id": "vdu_monitoring_param_resource_id",
-              "name": "vdu_monitoring_param_name"
+              "vim_uuid": "1",
+              "resource_id": "2d8d5355-acf7-42be-9f34-a10d02f9df39",
+              "name": "cpu_utilization"
             }
           }
         }

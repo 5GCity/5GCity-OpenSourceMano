@@ -8,7 +8,7 @@ from osm_policy_module.core.config import Config
 log = logging.getLogger(__name__)
 cfg = Config.instance()
 
-db = SqliteExtDatabase('mon.db')
+db = SqliteExtDatabase('policy_module.db')
 
 
 class BaseModel(Model):

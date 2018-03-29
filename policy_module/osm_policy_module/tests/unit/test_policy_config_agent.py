@@ -10,7 +10,7 @@ class PolicyAgentTest(unittest.TestCase):
         self.agent = PolicyModuleAgent()
 
     def test_get_alarm_configs(self):
-        with open(os.path.join(os.path.dirname(__file__), './examples/configure_scaling_full_example.json')) as file:
+        with open(os.path.join(os.path.dirname(__file__), '../examples/configure_scaling_full_example.json')) as file:
             example = json.load(file)
             alarm_configs = self.agent._get_alarm_configs(example)
             # TODO Improve assertions
