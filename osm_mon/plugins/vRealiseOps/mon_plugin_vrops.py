@@ -27,7 +27,11 @@ Monitoring metrics & creating Alarm definitions in vROPs
 
 import requests
 import logging
-from pyvcloud.vcloudair import VCA
+
+from pyvcloud.vcd.client import BasicLoginCredentials
+from pyvcloud.vcd.client import Client
+API_VERSION = '5.9'
+
 from xml.etree import ElementTree as XmlElementTree
 import traceback
 import time
@@ -203,7 +207,7 @@ class MonPlugin():
         """
         Read the default config parameters from plugin specific file stored with plugin file.
         Params:
-            metric_alarm_name: Name of the alarm, whose congif params to be read from the config file.
+            metric_alarm_name: Name of the alarm, whose config parameters to be read from the config file.
         """
         a_params = {}
         try:
@@ -597,20 +601,23 @@ class MonPlugin():
         parsed_respond = {}
         vca = None
 
-        vca = self.connect_as_admin()
-
-        if not vca:
-            self.logger.warn("connect() to vCD is failed")
         if vapp_uuid is None:
             return None
 
-        url_list = [vca.host, '/api/vApp/vapp-', vapp_uuid]
+        vca = self.connect_as_admin()
+        if not vca:
+            self.logger.warn("Failed to connect to vCD")
+            return parsed_respond
+
+        url_list = [self.vcloud_site, '/api/vApp/vapp-', vapp_uuid]
         get_vapp_restcall = ''.join(url_list)
 
-        if vca.vcloud_session and vca.vcloud_session.organization:
+        if vca._session:
+            headers = {'Accept':'application/*+xml;version=' + API_VERSION,
+                       'x-vcloud-authorization': vca._session.headers['x-vcloud-authorization']}
             response = requests.get(get_vapp_restcall,
-                                    headers=vca.vcloud_session.get_vcloud_headers(),
-                                    verify=vca.verify)
+                                    headers=headers,
+                                    verify=False)
 
             if response.status_code != 200:
                 self.logger.warn("REST API call {} failed. Return status code {}"\
@@ -653,23 +660,19 @@ class MonPlugin():
                 The return vca object that letter can be used to connect to vcloud direct as admin for provider vdc
         """
 
-        self.logger.info("Logging in to a VCD org as admin.")
+        self.logger.debug("Logging into vCD org as admin.")
 
-        vca_admin = VCA(host=self.vcloud_site,
-                        username=self.admin_username,
-                        service_type='standalone',
-                        version='5.9',
-                        verify=False,
-                        log=False)
-        result = vca_admin.login(password=self.admin_password, org='System')
-        if not result:
-            self.logger.warn("Can't connect to a vCloud director as: {}".format(self.admin_username))
-        result = vca_admin.login(token=vca_admin.token, org='System', org_url=vca_admin.vcloud_session.org_url)
-        if result is True:
-            self.logger.info("Successfully logged to a vcloud direct org: {} as user: {}"\
-                        .format('System', self.admin_username))
+        try:
+            host = self.vcloud_site
+            org = 'System'
+            client_as_admin = Client(host, verify_ssl_certs=False)
+            client_as_admin.set_credentials(BasicLoginCredentials(self.admin_username, org,\
+                                                                  self.admin_password))
+        except Exception as e:
+            self.logger.warn("Can't connect to a vCloud director as: {} with exception {}"\
+                             .format(self.admin_username, e))
 
-        return vca_admin
+        return client_as_admin
 
 
     def get_vm_resource_id(self, vm_moref_id):
