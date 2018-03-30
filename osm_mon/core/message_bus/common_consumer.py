@@ -77,10 +77,12 @@ aws_access_credentials = AccessCredentials()
 vrops_rcvr = plugin_receiver.PluginReceiver()
 
 
-def get_vim_type(message):
+def get_vim_type(msg):
     """Get the vim type that is required by the message."""
     try:
-        return json.loads(message.value)["vim_type"].lower()
+        vim_uuid = json.loads(msg.value)["vim_uuid"].lower()
+        credentials = database_manager.get_credentials(vim_uuid)
+        return credentials.type
     except Exception as exc:
         log.warn("vim_type is not configured correctly; %s", exc)
     return None

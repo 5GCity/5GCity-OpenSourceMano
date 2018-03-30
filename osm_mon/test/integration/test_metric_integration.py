@@ -55,7 +55,7 @@ class MetricIntegrationTest(unittest.TestCase):
             self.producer = KafkaProducer(bootstrap_servers='localhost:9092')
             self.req_consumer = KafkaConsumer(bootstrap_servers='localhost:9092',
                                               auto_offset_reset='earliest',
-                                              consumer_timeout_ms=2000)
+                                              consumer_timeout_ms=60000)
             self.req_consumer.subscribe(['metric_request'])
         except KafkaError:
             self.skipTest('Kafka server not present.')
@@ -116,8 +116,6 @@ class MetricIntegrationTest(unittest.TestCase):
                            value=json.dumps(payload))
 
         for message in self.req_consumer:
-            # Check the vim desired by the message
-            vim_type = json.loads(message.value)["vim_type"].lower()
             if message.key == "delete_metric_request":
                 # Metric has been deleted
                 del_metric.return_value = True
