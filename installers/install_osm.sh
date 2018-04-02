@@ -30,6 +30,7 @@ function usage(){
     echo -e "                     ..."
     echo -e "     --lxdimages:    download lxd images from OSM repository instead of creating them from scratch"
     echo -e "     -l <lxd_repo>:  use specified repository url for lxd images"
+    echo -e "     -p <path>:      use specified repository path for lxd images"
     echo -e "     --vimemu:       additionally fetch, build, and deploy the VIM emulator as a docker container"
     echo -e "     --develop:      (deprecated, use '-b master') install OSM from source code using the master branch"
 #    echo -e "     --reconfigure:  reconfigure the modules (DO NOT change NAT rules)"
@@ -386,22 +387,26 @@ function install_osmclient(){
 
 function install_from_lxdimages(){
     LXD_RELEASE=${RELEASE#"-R "}
-    LXD_IMAGE_DIR="$(mktemp -d -q --tmpdir "osmimages.XXXXXX")"
-    trap 'rm -rf "$LXD_IMAGE_DIR"' EXIT
-    wget -O $LXD_IMAGE_DIR/osm-ro.tar.gz $LXD_REPOSITORY_BASE/$LXD_RELEASE/osm-ro.tar.gz
+    if [ -n "$LXD_REPOSITORY_PATH" ]; then
+        LXD_IMAGE_DIR="$LXD_REPOSITORY_PATH"
+    else
+        LXD_IMAGE_DIR="$(mktemp -d -q --tmpdir "osmimages.XXXXXX")"
+        trap 'rm -rf "$LXD_IMAGE_DIR"' EXIT
+    fi
     echo -e "\nDeleting previous lxd images if they exist"
     lxc image show osm-ro &>/dev/null && lxc image delete osm-ro
     lxc image show osm-vca &>/dev/null && lxc image delete osm-vca
     lxc image show osm-soui &>/dev/null && lxc image delete osm-soui
     echo -e "\nImporting osm-ro"
+    [ -z "$LXD_REPOSITORY_PATH" ] && wget -O $LXD_IMAGE_DIR/osm-ro.tar.gz $LXD_REPOSITORY_BASE/$LXD_RELEASE/osm-ro.tar.gz
     lxc image import $LXD_IMAGE_DIR/osm-ro.tar.gz --alias osm-ro
     rm -f $LXD_IMAGE_DIR/osm-ro.tar.gz
-    wget -O $LXD_IMAGE_DIR/osm-vca.tar.gz $LXD_REPOSITORY_BASE/$LXD_RELEASE/osm-vca.tar.gz
     echo -e "\nImporting osm-vca"
+    [ -z "$LXD_REPOSITORY_PATH" ] && wget -O $LXD_IMAGE_DIR/osm-vca.tar.gz $LXD_REPOSITORY_BASE/$LXD_RELEASE/osm-vca.tar.gz
     lxc image import $LXD_IMAGE_DIR/osm-vca.tar.gz --alias osm-vca
     rm -f $LXD_IMAGE_DIR/osm-vca.tar.gz
     echo -e "\nImporting osm-soui"
-    wget -O $LXD_IMAGE_DIR/osm-soui.tar.gz $LXD_REPOSITORY_BASE/$LXD_RELEASE/osm-soui.tar.gz
+    [ -z "$LXD_REPOSITORY_PATH" ] && wget -O $LXD_IMAGE_DIR/osm-soui.tar.gz $LXD_REPOSITORY_BASE/$LXD_RELEASE/osm-soui.tar.gz
     lxc image import $LXD_IMAGE_DIR/osm-soui.tar.gz --alias osm-soui
     rm -f $LXD_IMAGE_DIR/osm-soui.tar.gz
     launch_container_from_lxd RO osm-ro
@@ -468,6 +473,7 @@ function dump_vars(){
     echo "INSTALL_LXD=$INSTALL_LXD"
     echo "INSTALL_FROM_LXDIMAGES=$INSTALL_FROM_LXDIMAGES"
     echo "LXD_REPOSITORY_BASE=$LXD_REPOSITORY_BASE"
+    echo "LXD_REPOSITORY_PATH=$LXD_REPOSITORY_PATH"
     echo "RELEASE=$RELEASE"
     echo "REPOSITORY=$REPOSITORY"
     echo "REPOSITORY_BASE=$REPOSITORY_BASE"
@@ -505,11 +511,12 @@ RELEASE="-R ReleaseTHREE"
 INSTALL_VIMEMU=""
 INSTALL_FROM_LXDIMAGES=""
 LXD_REPOSITORY_BASE="https://osm-download.etsi.org/repository/osm/lxd"
+LXD_REPOSITORY_PATH=""
 NOCONFIGURE=""
 RELEASE_DAILY=""
 SESSION_ID=`date +%s`
 
-while getopts ":hy-:b:r:k:u:R:l:" o; do
+while getopts ":hy-:b:r:k:u:R:l:p:" o; do
     case "${o}" in
         h)
             usage && exit 0
@@ -531,6 +538,9 @@ while getopts ":hy-:b:r:k:u:R:l:" o; do
             ;;
         l)
             LXD_REPOSITORY_BASE="${OPTARG}"
+            ;;
+        p)
+            LXD_REPOSITORY_PATH="${OPTARG}"
             ;;
         -)
             [ "${OPTARG}" == "help" ] && usage && exit 0
