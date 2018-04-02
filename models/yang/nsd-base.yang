@@ -259,6 +259,12 @@ module nsd-base
           type string;
         }
 
+        leaf scaling-type {
+          description
+              "Type of scaling";
+          type manotypes:scaling-policy-type;
+        }
+
         leaf enabled {
           description
             "Specifies if the scaling policy can be applied";
@@ -271,7 +277,7 @@ module nsd-base
               "Operation to be applied to check between scaling criterias to
                check if the scale in threshold condition has been met.
                Defaults to AND";
-          type scaling-criteria-operation;
+          type manotypes:scaling-criteria-operation;
           default AND;
         }
 
@@ -280,7 +286,7 @@ module nsd-base
               "Operation to be applied to check between scaling criterias to
                check if the scale out threshold condition has been met.
                Defauls to OR";
-          type scaling-criteria-operation;
+          type manotypes:scaling-criteria-operation;
           default OR;
         }
 
@@ -315,10 +321,26 @@ module nsd-base
             type uint64;
           }
 
+          leaf scale-in-relational-operation {
+            description
+              "The relational operator used to compare the monitoring param
+              against the scale-in-threshold.";
+            type manotypes:relational-operation-type;
+            default LE;
+          }
+
           leaf scale-out-threshold {
             description
                 "Value above which scale-out requests are generated";
             type uint64;
+          }
+
+          leaf scale-out-relational-operation {
+            description
+              "The relational operator used to compare the monitoring param
+              against the scale-out-threshold.";
+            type manotypes:relational-operation-type;
+            default GE;
           }
 
           leaf ns-monitoring-param-ref {
@@ -378,7 +400,7 @@ module nsd-base
 
         leaf trigger {
           description "scaling trigger";
-          type scaling-trigger;
+          type manotypes:scaling-trigger;
         }
 
         leaf ns-service-primitive-name-ref {

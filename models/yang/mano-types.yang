@@ -237,6 +237,20 @@ module mano-types
     }
   }
 
+  grouping vca-metrics {
+    description
+        "Information about the VNF or VDU metrics";
+    list metrics {
+      description "List of VCA related metrics";
+      key "name";
+      leaf name {
+        description
+          "Name of the metric, as defined in the Juju charm.";
+        type string;
+      }
+    }
+  } // END - grouping vca-metrics
+
   grouping vca-configuration {
     description
         "Information about the VNF or VDU configuration. Note:
@@ -337,6 +351,9 @@ module mano-types
         }
       }
     }
+
+    uses manotypes:vca-metrics;
+
   } // END - grouping vca-configuration
 
   typedef virtual-link-type {
@@ -619,6 +636,60 @@ module mano-types
       enum PREFER_ADX;
       enum REQUIRE_SMAP;
       enum PREFER_SMAP;
+    }
+  }
+
+  typedef nfvi-metric-type {
+    description "Type of NFVI metric to be monitored";
+    type enumeration {
+      enum cpu_utilization;
+      enum average_memory_utilization;
+      enum disk_read_ops;
+      enum disk_write_ops;
+      enum disk_read_bytes;
+      enum disk_write_bytes;
+      enum packets_sent;
+      enum packets_received;
+      enum packets_dropped;
+    }
+  }
+
+  typedef scaling-trigger {
+    type enumeration {
+      enum pre-scale-in {
+        value 1;
+      }
+      enum post-scale-in {
+        value 2;
+      }
+      enum pre-scale-out {
+        value 3;
+      }
+      enum post-scale-out {
+        value 4;
+      }
+    }
+  }
+
+  typedef scaling-policy-type {
+    type enumeration {
+      enum manual {
+        value 1;
+      }
+      enum automatic {
+        value 2;
+      }
+    }
+  }
+
+  typedef scaling-criteria-operation {
+    type enumeration {
+      enum AND {
+        value 1;
+      }
+      enum OR {
+        value 2;
+      }
     }
   }
 
@@ -1118,7 +1189,7 @@ module mano-types
     }
   }
 
-  grouping monitoring-param {
+  grouping http-endpoints {
     list http-endpoint {
       description
           "List of http endpoints to be used by monitoring params";
@@ -1178,47 +1249,6 @@ module mano-types
           type string;
         }
       }
-    }
-
-    list monitoring-param {
-      description
-          "List of monitoring parameters at the network service level";
-      key id;
-      leaf id {
-        type string;
-      }
-
-      leaf name {
-        type string;
-      }
-
-      leaf http-endpoint-ref {
-        type leafref {
-          path "../../http-endpoint/path";
-        }
-      }
-
-      leaf json-query-method {
-        type json-query-method;
-        default "NAMEKEY";
-      }
-
-      container json-query-params {
-        leaf json-path {
-          description
-            "The jsonpath to use to extract value from JSON structure";
-          type string;
-        }
-        leaf object-path {
-          description
-            "The objectpath to use to extract value from JSON structure";
-          type string;
-        }
-      }
-
-      uses monitoring-param-ui-data;
-      uses monitoring-param-value;
-
     }
   }
 
@@ -1735,11 +1765,12 @@ module mano-types
     }
   }
 
-  typedef alarm-operation-type {
+  typedef relational-operation-type {
     description
-        "The relational operator used to define whether an alarm
-        should be triggered in certain scenarios, such as if the
-        metric statistic goes above or below a specified value.";
+        "The relational operator used to define whether an alarm,
+        scaling event, etc. should be triggered in certain scenarios,
+        such as if the metric statistic goes above or below a specified
+        value.";
     type enumeration {
       enum GE; // greater than or equal
       enum LE; // less than or equal
@@ -1834,7 +1865,7 @@ module mano-types
           "The relational operator used to define whether an alarm should be
            triggered in certain scenarios, such as if the metric statistic
            goes above or below a specified value.";
-      type alarm-operation-type;
+      type relational-operation-type;
     }
 
     leaf value {

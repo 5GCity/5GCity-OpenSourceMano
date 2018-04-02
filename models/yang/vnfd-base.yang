@@ -443,6 +443,30 @@ module vnfd-base
           uses manotypes:vca-configuration;
         }
 
+        list monitoring-param {
+          description
+            "List of VDU-related monitoring parameters at NFVI level";
+          key id;
+          leaf id {
+            description "The unique id of the monitoring param at VDU level";
+            type string;
+          }
+
+          leaf nfvi-metric {
+            description "The associated NFVI metric to be monitored";
+            type manotypes:nfvi-metric-type;
+          }
+
+          leaf interface-name-ref {
+            description
+              "Reference to a VDU interface name. Applicable only when the nfvi-metric
+              refers to an interface and not to the VM";
+            type leafref {
+              path "../../interface/name";
+            }
+          }
+        }
+
         choice cloud-init-input {
           description
             "Indicates how the contents of cloud-init script are provided.
@@ -602,7 +626,274 @@ module vnfd-base
         type string;
       }
 
-      uses manotypes:monitoring-param;
+      uses manotypes:http-endpoints;
+
+      list scaling-group-descriptor {
+        description
+            "scaling group descriptor within the VNF.
+             The scaling group defines a group of VDUs,
+             and the ratio of VDUs in the VNF
+             that is used as target for scaling action";
+
+        key "name";
+
+        leaf name {
+          description "Name of this scaling group.";
+          type string;
+        }
+
+        list scaling-policy {
+
+          key "name";
+
+          leaf name {
+            description
+                "Name of the scaling policy";
+            type string;
+          }
+
+          leaf scaling-type {
+            description
+                "Type of scaling";
+            type manotypes:scaling-policy-type;
+          }
+
+          leaf enabled {
+            description
+              "Specifies if the scaling policy can be applied";
+            type boolean;
+            default true;
+          }
+
+          leaf scale-in-operation-type {
+            description
+                "Operation to be applied to check between scaling criterias to
+                 check if the scale in threshold condition has been met.
+                 Defaults to AND";
+            type manotypes:scaling-criteria-operation;
+            default AND;
+          }
+
+          leaf scale-out-operation-type {
+            description
+                "Operation to be applied to check between scaling criterias to
+                 check if the scale out threshold condition has been met.
+                 Defauls to OR";
+            type manotypes:scaling-criteria-operation;
+            default OR;
+          }
+
+          leaf threshold-time {
+            description
+              "The duration for which the criteria must hold true";
+            type uint32;
+            mandatory true;
+          }
+
+          leaf cooldown-time {
+            description
+              "The duration after a scaling-in/scaling-out action has been
+              triggered, for which there will be no further optional";
+            type uint32;
+            mandatory true;
+          }
+
+          list scaling-criteria {
+            description
+                "list of conditions to be met for generating scaling
+                   requests";
+            key "name";
+
+            leaf name {
+              type string;
+            }
+
+            leaf scale-in-threshold {
+              description
+                  "Value below which scale-in requests are generated";
+              type uint64;
+            }
+
+            leaf scale-in-relational-operation {
+              description
+                "The relational operator used to compare the monitoring param
+                against the scale-in-threshold.";
+              type manotypes:relational-operation-type;
+              default LE;
+            }
+
+            leaf scale-out-threshold {
+              description
+                  "Value above which scale-out requests are generated";
+              type uint64;
+            }
+
+            leaf scale-out-relational-operation {
+              description
+                "The relational operator used to compare the monitoring param
+                against the scale-out-threshold.";
+              type manotypes:relational-operation-type;
+              default GE;
+            }
+
+            leaf vnf-monitoring-param-ref {
+              description
+                 "Reference to the VNF level monitoring parameter
+                  that is aggregated";
+              type leafref {
+                path "../../../../monitoring-param/id";
+              }
+            }
+          }
+        }
+
+        list vdu {
+          description "List of VDUs in this scaling group";
+          key "vdu-id-ref";
+
+          leaf vdu-id-ref {
+            description "Reference to the VDU id";
+            type leafref {
+              path "../../../vdu/id";
+            }
+          }
+
+          leaf count {
+            description
+              "count of this VDU id within this scaling group.
+               The count allows to define the number of instances
+               when a scaling action targets this scaling group";
+            type uint32;
+            default 1;
+          }
+        }
+
+        leaf min-instance-count {
+          description
+            "Minimum instances of the scaling group which are allowed.
+            These instances are created by default when the network service
+            is instantiated.";
+          type uint32;
+          default 0;
+        }
+
+        leaf max-instance-count {
+          description
+            "Maximum instances of this scaling group that are allowed
+             in a single network service. The network service scaling
+             will fail, when the number of service group instances
+             exceed the max-instance-count specified.";
+          type uint32;
+          default 10;
+        }
+
+        list scaling-config-action {
+          description "List of scaling config actions";
+          key "trigger";
+
+          leaf trigger {
+            description "scaling trigger";
+            type manotypes:scaling-trigger;
+          }
+
+          leaf vnf-config-primitive-name-ref {
+            description "Reference to the VNF config primitive";
+            type leafref {
+              path "../../../vnf-configuration/config-primitive/name";
+            }
+          }
+        }
+      }
+
+      list monitoring-param {
+        description
+          "List of monitoring parameters at the network service level";
+        key id;
+        leaf id {
+          type string;
+        }
+
+        leaf name {
+          type string;
+        }
+
+        uses manotypes:monitoring-param-aggregation;
+
+        choice monitoring-type {
+          description
+            "Defines the type of monitoring param to be used:
+              * vdu-monitorin-param:     VDU-related metric (from NFVI)
+              * vnf-metric:              VNF-related metric (from VCA)
+              * vdu-metric:              VDU-related metric (from VCA)
+            ";
+
+          case vdu-monitoring-param {
+            description "VDU-related metric from the infrastructure";
+            leaf vdu-ref {
+              type leafref {
+                path "../../vdu/id";
+              }
+            }
+            leaf vdu-monitoring-param-ref {
+              type leafref {
+                path "../../vdu[id = current()/../vdu-ref]/monitoring-param/id";
+              }
+            }
+          }
+
+          case vnf-metric {
+            description "VNF-related metric (from VCA)";
+            leaf vnf-metric-name-ref {
+              type leafref {
+                path "../../vnf-configuration/metrics/name";
+              }
+            }
+          }
+
+          case vdu-metric {
+            description "VDU-related metric (from VCA)";
+            leaf vdu-id-ref {
+              type leafref {
+                path "../../vdu/id";
+              }
+            }
+            leaf vdu-metric-name-ref {
+              type leafref {
+                path "../../vdu[id = current()/../vdu-id-ref]/vdu-configuration/metrics/name";
+              }
+            }
+          }
+
+        }
+
+        leaf http-endpoint-ref {
+          type leafref {
+            path "../../http-endpoint/path";
+          }
+        }
+
+        leaf json-query-method {
+          type manotypes:json-query-method;
+          default "NAMEKEY";
+        }
+
+        container json-query-params {
+          leaf json-path {
+            description
+              "The jsonpath to use to extract value from JSON structure";
+            type string;
+          }
+          leaf object-path {
+            description
+              "The objectpath to use to extract value from JSON structure";
+            type string;
+          }
+        }
+
+        uses manotypes:monitoring-param-ui-data;
+        uses manotypes:monitoring-param-value;
+
+      }
 
       list placement-groups {
         description "List of placement groups at VNF level";
