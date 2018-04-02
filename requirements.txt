@@ -18,7 +18,6 @@
 
 # For those usages not covered by the Apache License, Version 2.0 please
 # contact: prithiv.mohan@intel.com or adrian.hoban@intel.com
-peewee
 stdeb
 MySQL-python
 kafka
