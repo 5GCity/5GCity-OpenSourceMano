@@ -644,12 +644,12 @@ module mano-types
     }
   } //grouping vm-flavor
 
-	grouping vm-flavor-name {
-  	leaf vm-flavor-name {
-  		description "flavor name to be used while creating vm using cloud account";
-  		type string;
-  	}
-	}
+  grouping vm-flavor-name {
+    leaf vm-flavor-name {
+      description "flavor name to be used while creating vm using cloud account";
+      type string;
+    }
+  }
 
   grouping vswitch-epa {
     container vswitch-epa {
