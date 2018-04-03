@@ -6,11 +6,23 @@ WORKDIR /app/osm_lcm
 # Copy the current directory contents into the container at /app
 ADD . /app
 
-RUN apt-get update && apt-get install -y git  python3 \
+RUN apt-get update && apt-get install -y git python3 \
     python3-pip python3-pymongo python3-yaml python3-aiohttp \
-    && pip3 install aiokafka juju \
-    && mkdir -p /app/storage/kafka && mkdir -p /app/log 
+    python3-stdeb python3-setuptools python3-all python-all \
+    python3-bitarray python3-regex python3-lxml debhelper dh-python tox wget \
+    python3-cffi \
+    && pip3 install -U aiokafka pyang lxml six enum34
 
+RUN git clone https://osm.etsi.org/gerrit/osm/N2VC.git \
+    && cd N2VC \
+    && git fetch https://osm.etsi.org/gerrit/osm/N2VC refs/changes/70/5870/46 \
+    && git checkout FETCH_HEAD \
+    && cd modules/libjuju && python3 setup.py develop && cd ../.. \
+    && pip3 install -U -r requirements.txt \
+    && python3 setup.py develop \
+    && cd ..
+
+RUN mkdir -p /app/storage/kafka && mkdir -p /app/log
 
 
 LABEL Maintainer="alfonso.tiernosepulveda@telefonica.com" \
@@ -50,4 +62,3 @@ ENV OSMLCM_MESSAGE_PORT    9092
 ENV PYTHONPATH             /app/osm_common
 # Run app.py when the container launches
 CMD ["python3", "lcm.py"]
-
