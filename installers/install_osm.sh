@@ -257,12 +257,8 @@ function configure_RO(){
     ro_is_up
 
     lxc exec RO -- openmano tenant-delete -f osm >/dev/null
-<<<<<<< HEAD
     lxc exec RO -- openmano tenant-create osm > /dev/null
-    lxc exec RO -- sed -i '/export OPENMANO_TENANT=osm/d' .bashrc 
-=======
     lxc exec RO -- sed -i '/export OPENMANO_TENANT=osm/d' .bashrc
->>>>>>> MON Installation Changes Updated.
     lxc exec RO -- sed -i '$ i export OPENMANO_TENANT=osm' .bashrc
     lxc exec RO -- sh -c 'echo "export OPENMANO_TENANT=osm" >> .bashrc'
 }
