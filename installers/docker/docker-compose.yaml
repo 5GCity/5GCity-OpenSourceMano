@@ -3,6 +3,7 @@ volumes:
   OSMstorage:
 networks:
   netOSM:
+    external: true
     #driver: overlay
     #driver_opts:
     #  com.docker.network.driver.mtu: "1446"
@@ -93,4 +94,23 @@ services:
     #  - kafka
     ports:
       - "8662:8662"
+  pm:
+    image: osm/pm
+    networks:
+      - netOSM
+    environment:
+      BROKER_URI: kafka:9092
+    #depends_on:
+    #  - kafka
+    #  - mon
+  light-ui:
+    image: osm/light-ui
+    networks:
+      - netOSM
+    environment:
+      OSM_SERVER: nbi
+    #depends_on:
+    #  - nbi
+    ports:
+      - "80:80"
 

@@ -31,6 +31,7 @@ function usage(){
     echo -e "     --lxdimages:    download lxd images from OSM repository instead of creating them from scratch"
     echo -e "     -l <lxd_repo>:  use specified repository url for lxd images"
     echo -e "     -p <path>:      use specified repository path for lxd images"
+    echo -e "     --lightweight:  install lightweight build of OSM"
     echo -e "     --vimemu:       additionally fetch, build, and deploy the VIM emulator as a docker container"
     echo -e "     --develop:      (deprecated, use '-b master') install OSM from source code using the master branch"
 #    echo -e "     --reconfigure:  reconfigure the modules (DO NOT change NAT rules)"
@@ -481,6 +482,73 @@ function install_docker_ce() {
     echo "... restarted Docker service"
 }
 
+function install_juju() {
+    echo "Installing juju"
+    sudo snap install juju --classic
+    sudo dpkg-reconfigure -p medium lxd
+    juju bootstrap localhost osm
+    echo "Finished installation of juju"
+}
+
+function generate_docker_images() {
+    echo "Pulling and generating docker images"
+    newgrp docker << EONG
+    docker pull wurstmeister/kafka
+    docker pull wurstmeister/zookeeper
+    docker pull mongo
+    docker pull mysql
+    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/MON
+    docker build ${LWTEMPDIR}/MON -f ${LWTEMPDIR}/MON/docker/Dockerfile -t osm/mon || ! echo "cannot build MON docker image" >&2
+    docker build ${LWTEMPDIR}/MON/policy_module -f ${LWTEMPDIR}/MON/policy_module/Dockerfile -t osm/pm || ! echo "cannot build PM docker image" >&2
+    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/NBI
+    docker build ${LWTEMPDIR}/NBI -t osm/nbi || ! echo "cannot build NBI docker image" >&2
+    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/RO
+    docker build ${LWTEMPDIR}/RO -f ${LWTEMPDIR}/RO/docker/Dockerfile-local -t osm/ro || ! echo "cannot build RO docker image" >&2
+    docker build ${LWTEMPDIR}/RO/lcm -t osm/lcm || ! echo "cannot build LCM docker image" >&2
+    git -C ${LWTEMPDIR} clone https://github.com/superfluidity/osm-light-ui.git
+    docker build ${LWTEMPDIR}/osm-light-ui -t osm/light-ui -f ${LWTEMPDIR}/osm-light-ui/code/docker/Dockerfile
+EONG
+    echo "Finished generation of docker images"
+}
+
+function deploy_lightweight() {
+    echo "Deploying lightweight build"
+    newgrp docker << EONG
+    docker swarm init
+    docker network create --driver=overlay --attachable netOSM
+    docker stack deploy -c $OSM_DEVOPS/installers/docker/docker-compose.yaml osm
+EONG
+    echo "Finished deployment of lightweight build"
+}
+
+function install_osmclient_sol005() {
+    sudo apt-get update
+    sudo apt-get install -y python-pip libcurl4-gnutls-dev libgnutls-dev
+    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/osmclient
+    sudo -H pip install -U pip
+    sudo -H pip install -U setuptools
+    pushd ${LWTEMPDIR}/osmclient
+    sudo -H python setup.py install
+    popd
+    export OSM_HOSTNAME=localhost
+    export OSM_SOL005=True
+    echo 'export OSM_HOSTNAME=localhost' >> ${HOME}/.bashrc
+    echo 'export OSM_SOL005=True' >> ${HOME}/.bashrc
+}
+
+function install_lightweight() {
+    echo "Installing lightweight build of OSM"
+    LWTEMPDIR="$(mktemp -d -q --tmpdir "installosmlight.XXXXXX")"
+    trap 'rm -rf "$LWTEMPDIR"' EXIT
+    install_juju
+    install_docker_ce
+    generate_docker_images
+    deploy_lightweight
+    #install_osmclient
+    #For the moment, the osmclient is installed from the repo
+    install_osmclient_sol005
+}
+
 function install_vimemu() {
     # install Docker
     install_docker_ce
@@ -519,6 +587,7 @@ function dump_vars(){
     echo "INSTALL_FROM_LXDIMAGES=$INSTALL_FROM_LXDIMAGES"
     echo "LXD_REPOSITORY_BASE=$LXD_REPOSITORY_BASE"
     echo "LXD_REPOSITORY_PATH=$LXD_REPOSITORY_PATH"
+    echo "INSTALL_LIGHTWEIGHT=$INSTALL_LIGHTWEIGHT"
     echo "RELEASE=$RELEASE"
     echo "REPOSITORY=$REPOSITORY"
     echo "REPOSITORY_BASE=$REPOSITORY_BASE"
@@ -557,6 +626,7 @@ INSTALL_VIMEMU=""
 INSTALL_FROM_LXDIMAGES=""
 LXD_REPOSITORY_BASE="https://osm-download.etsi.org/repository/osm/lxd"
 LXD_REPOSITORY_PATH=""
+INSTALL_LIGHTWEIGHT=""
 NOCONFIGURE=""
 RELEASE_DAILY=""
 SESSION_ID=`date +%s`
@@ -602,6 +672,7 @@ while getopts ":hy-:b:r:k:u:R:l:p:D:" o; do
             [ "${OPTARG}" == "test" ] && TEST_INSTALLER="y" && continue
             [ "${OPTARG}" == "lxdinstall" ] && INSTALL_LXD="y" && continue
             [ "${OPTARG}" == "lxdimages" ] && INSTALL_FROM_LXDIMAGES="y" && continue
+            [ "${OPTARG}" == "lightweight" ] && INSTALL_LIGHTWEIGHT="y" && continue
             [ "${OPTARG}" == "vimemu" ] && INSTALL_VIMEMU="y" && continue
             [ "${OPTARG}" == "noconfigure" ] && NOCONFIGURE="y" && continue
             [ "${OPTARG}" == "showopts" ] && SHOWOPTS="y" && continue
@@ -646,14 +717,16 @@ if [ -z "$OSM_DEVOPS" ]; then
     fi
 fi
 
-need_packages="git jq"
-for package in $need_packages; do
-    echo -e "Checking required packages: $package"
-    dpkg -l $package &>/dev/null \
-        || ! echo -e "     $package not installed.\nInstalling $package requires root privileges" \
-        || sudo apt-get install -y $package \
-        || FATAL "failed to install $package"
-done
+need_packages="git jq wget curl tar"
+echo -e "Checking required packages: $need_packages"
+dpkg -l $need_packages &>/dev/null \
+  || ! echo -e "One or several required packages are not installed. Updating apt cache requires root privileges." \
+  || sudo apt-get update \
+  || FATAL "failed to run apt-get update"
+dpkg -l $need_packages &>/dev/null \
+  || ! echo -e "Installing $need_packages requires root privileges." \
+  || sudo apt-get install -y $need_packages \
+  || FATAL "failed to install $need_packages"
 
 if [ -z "$OSM_DEVOPS" ]; then
     if [ -z "$TEST_INSTALLER" ]; then
@@ -686,13 +759,11 @@ OSM_JENKINS="$OSM_DEVOPS/jenkins"
 [ -n "$RECONFIGURE" ] && configure && echo -e "\nDONE" && exit 0
 
 #Installation starts here
+[ -n "$INSTALL_LIGHTWEIGHT" ] && install_lightweight && echo -e "\nDONE" && exit 0
 echo -e "\nInstalling OSM from refspec: $COMMIT_ID"
 if [ -n "$INSTALL_FROM_SOURCE" ] && [ -z "$ASSUME_YES" ]; then
     ! ask_user "The installation will take about 75-90 minutes. Continue (Y/n)? " y && echo "Cancelled!" && exit 1
 fi
-
-echo -e "\nChecking required packages: wget, curl, tar"
-dpkg -l wget curl tar &>/dev/null || ! echo -e "    One or several packages are not installed.\nInstalling required packages\n     Root privileges are required" || sudo apt-get install -y wget curl tar
 
 echo -e "Checking required packages: lxd"
 lxd --version &>/dev/null || FATAL "lxd not present, exiting."
