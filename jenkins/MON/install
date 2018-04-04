@@ -42,7 +42,8 @@ apt-get update
 
 DEBIAN_FRONTEND=noninteractive apt-get install --yes python-all python-pip && pip install --upgrade pip
 DEBIAN_FRONTEND=noninteractive apt-get --yes install default-jre python-stdeb
-DEBIAN_FRONTEND=noninteractive python kafkad
+#FIXME
+#DEBIAN_FRONTEND=noninteractive python kafkad
 RC=$?
 INFO "done, RC=$RC"
 exit $RC
