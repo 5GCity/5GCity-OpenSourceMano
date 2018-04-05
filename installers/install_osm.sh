@@ -39,6 +39,7 @@ function usage(){
 #    echo -e "     --update:       update to the latest stable release or to the latest commit if using a specific branch"
     echo -e "     --showopts:     print chosen options and exit (only for debugging)"
     echo -e "     -y:             do not prompt for confirmation, assumes yes"
+    echo -e "     -D <devops path> use local devops installation path"
     echo -e "     -h / --help:    print this help"
 }
 
@@ -559,8 +560,9 @@ LXD_REPOSITORY_PATH=""
 NOCONFIGURE=""
 RELEASE_DAILY=""
 SESSION_ID=`date +%s`
+OSM_DEVOPS=
 
-while getopts ":hy-:b:r:k:u:R:l:p:" o; do
+while getopts ":hy-:b:r:k:u:R:l:p:D:" o; do
     case "${o}" in
         h)
             usage && exit 0
@@ -585,6 +587,9 @@ while getopts ":hy-:b:r:k:u:R:l:p:" o; do
             ;;
         p)
             LXD_REPOSITORY_PATH="${OPTARG}"
+            ;;
+        D)
+            OSM_DEVOPS="${OPTARG}"
             ;;
         -)
             [ "${OPTARG}" == "help" ] && usage && exit 0
@@ -630,13 +635,15 @@ fi
 # forcing source from master removed. Now only install from source when explicit
 # [ -n "$COMMIT_ID" ] && [ "$COMMIT_ID" == "master" ] && INSTALL_FROM_SOURCE="y"
 
-if [ -n "$TEST_INSTALLER" ]; then
-    echo -e "\nUsing local devops repo for OSM installation"
-    TEMPDIR="$(dirname $(realpath $(dirname $0)))"
-else
-    echo -e "\nCreating temporary dir for OSM installation"
-    TEMPDIR="$(mktemp -d -q --tmpdir "installosm.XXXXXX")"
-    trap 'rm -rf "$TEMPDIR"' EXIT
+if [ -z "$OSM_DEVOPS" ]; then
+    if [ -n "$TEST_INSTALLER" ]; then
+        echo -e "\nUsing local devops repo for OSM installation"
+        TEMPDIR="$(dirname $(realpath $(dirname $0)))"
+    else
+        echo -e "\nCreating temporary dir for OSM installation"
+        TEMPDIR="$(mktemp -d -q --tmpdir "installosm.XXXXXX")"
+        trap 'rm -rf "$TEMPDIR"' EXIT
+    fi
 fi
 
 need_packages="git jq"
@@ -648,27 +655,29 @@ for package in $need_packages; do
         || FATAL "failed to install $package"
 done
 
-if [ -z "$TEST_INSTALLER" ]; then
-    echo -e "\nCloning devops repo temporarily"
-    git clone https://osm.etsi.org/gerrit/osm/devops.git $TEMPDIR
-    RC_CLONE=$?
+if [ -z "$OSM_DEVOPS" ]; then
+    if [ -z "$TEST_INSTALLER" ]; then
+        echo -e "\nCloning devops repo temporarily"
+        git clone https://osm.etsi.org/gerrit/osm/devops.git $TEMPDIR
+        RC_CLONE=$?
+    fi
+
+    echo -e "\nGuessing the current stable release"
+    LATEST_STABLE_DEVOPS=`git -C $TEMPDIR tag -l v[0-9].* | sort -V | tail -n1`
+    [ -z "$COMMIT_ID" ] && [ -z "$LATEST_STABLE_DEVOPS" ] && echo "Could not find the current latest stable release" && exit 0
+    echo "Latest tag in devops repo: $LATEST_STABLE_DEVOPS"
+    [ -z "$COMMIT_ID" ] && [ -n "$LATEST_STABLE_DEVOPS" ] && COMMIT_ID="tags/$LATEST_STABLE_DEVOPS"
+
+    if [ -n "$RELEASE_DAILY" ]; then
+        echo "Using master/HEAD devops"
+        git -C $TEMPDIR checkout master
+    elif [ -z "$TEST_INSTALLER" ]; then
+        git -C $TEMPDIR checkout tags/$LATEST_STABLE_DEVOPS
+    fi
+    OSM_DEVOPS=$TEMPDIR
 fi
 
-echo -e "\nGuessing the current stable release"
-LATEST_STABLE_DEVOPS=`git -C $TEMPDIR tag -l v[0-9].* | sort -V | tail -n1`
-[ -z "$COMMIT_ID" ] && [ -z "$LATEST_STABLE_DEVOPS" ] && echo "Could not find the current latest stable release" && exit 0
-echo "Latest tag in devops repo: $LATEST_STABLE_DEVOPS"
-[ -z "$COMMIT_ID" ] && [ -n "$LATEST_STABLE_DEVOPS" ] && COMMIT_ID="tags/$LATEST_STABLE_DEVOPS"
-
-if [ -n "$RELEASE_DAILY" ]; then
-    echo "Using master/HEAD devops"
-    git -C $TEMPDIR checkout master
-elif [ -z "$TEST_INSTALLER" ]; then
-    git -C $TEMPDIR checkout tags/$LATEST_STABLE_DEVOPS
-fi
-
-OSM_DEVOPS=$TEMPDIR
-OSM_JENKINS="$TEMPDIR/jenkins"
+OSM_JENKINS="$OSM_DEVOPS/jenkins"
 . $OSM_JENKINS/common/all_funcs
 
 [ -n "$UNINSTALL" ] && uninstall && echo -e "\nDONE" && exit 0
