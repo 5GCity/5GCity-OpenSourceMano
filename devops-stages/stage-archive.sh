@@ -16,7 +16,7 @@
 
 PKG_DIRECTORIES="jenkins installers systest juju-charms descriptor-packages tools"
 MDG_NAME=devops
-DEB_INSTALL=debian/$MDG_NAME.install
+DEB_INSTALL=debian/osm-$MDG_NAME.install
 export DEBEMAIL="mmarchetti@sandvine.com"
 export DEBFULLNAME="Michael Marchetti"
 
