@@ -15,8 +15,6 @@ RUN apt-get update && apt-get install -y git python3 \
 
 RUN git clone https://osm.etsi.org/gerrit/osm/N2VC.git \
     && cd N2VC \
-    && git fetch https://osm.etsi.org/gerrit/osm/N2VC refs/changes/70/5870/46 \
-    && git checkout FETCH_HEAD \
     && cd modules/libjuju && python3 setup.py develop && cd ../.. \
     && pip3 install -U -r requirements.txt \
     && python3 setup.py develop \
