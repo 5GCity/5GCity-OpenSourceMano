@@ -698,7 +698,7 @@ echo -e "Checking required packages: lxd"
 lxd --version &>/dev/null || FATAL "lxd not present, exiting."
 [ -n "$INSTALL_LXD" ] && echo -e "\nInstalling and configuring lxd" && install_lxd
 
-wget -q -O- https://osm-download.etsi.org/ftp/osm-3.0-three/README.txt &> /dev/null
+wget -q -O- https://osm-download.etsi.org/ftp/osm-4.0-four/README.txt &> /dev/null
 track start
 
 # use local devops for containers
@@ -747,7 +747,7 @@ if [ -n "$INSTALL_VIMEMU" ]; then
     install_vimemu
 fi
 
-wget -q -O- https://osm-download.etsi.org/ftp/osm-3.0-three/README2.txt &> /dev/null
+wget -q -O- https://osm-download.etsi.org/ftp/osm-4.0-four/README2.txt &> /dev/null
 track end
 echo -e "\nDONE"
 
