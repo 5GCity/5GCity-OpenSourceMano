@@ -101,7 +101,15 @@ class vimconnector(vimconn.vimconnector):
         vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
                                       config)
 
-        self.insecure = self.config.get("insecure", False)
+        if self.config.get("insecure") and self.config.get("ca_cert"):
+            raise vimconn.vimconnException("options insecure and ca_cert are mutually exclusive")
+        self.verify = True
+        if self.config.get("insecure"):
+            self.verify = False
+        if self.config.get("ca_cert"):
+            self.verify = self.config.get("ca_cert")
+        self.verify = self.config.get("insecure", False)
+
         if not url:
             raise TypeError('url param can not be NoneType')
         self.persistent_info = persistent_info
@@ -187,7 +195,7 @@ class vimconnector(vimconn.vimconnector):
                                    password=self.passwd,
                                    tenant_name=self.tenant_name,
                                    tenant_id=self.tenant_id)
-            sess = session.Session(auth=auth, verify=not self.insecure)
+            sess = session.Session(auth=auth, verify=self.verify)
             if self.api_version3:
                 self.keystone = ksClient_v3.Client(session=sess, endpoint_type=self.endpoint_type)
             else:
@@ -1064,7 +1072,7 @@ class vimconnector(vimconn.vimconnector):
 
                 # If port security is disabled when the port has not yet been attached to the VM, then all vm traffic is dropped.
                 # As a workaround we wait until the VM is active and then disable the port-security
-                if net.get("port_security") == False:
+                if net.get("port_security") == False and not self.config.get("no_port_security_extension"):
                     no_secured_ports.append(new_port["port"]["id"])
 
             # if metadata_vpci:
@@ -1139,14 +1147,14 @@ class vimconnector(vimconn.vimconnector):
 
             for port_id in no_secured_ports:
                 try:
-                    self.neutron.update_port(port_id, {"port": {"port_security_enabled": False, "security_groups": None} })
+                    self.neutron.update_port(port_id,
+                                             {"port": {"port_security_enabled": False, "security_groups": None}})
                 except Exception as e:
-                    self.logger.error("It was not possible to disable port security for port {}".format(port_id))
-                    raise
-
+                    raise vimconn.vimconnException("It was not possible to disable port security for port {}".format(
+                        port_id))
             # print "DONE :-)", server
 
-            pool_id = None
+            # pool_id = None
             if external_network:
                 floating_ips = self.neutron.list_floatingips().get("floatingips", ())
             for floating_network in external_network:
@@ -1165,7 +1173,7 @@ class vimconnector(vimconn.vimconnector):
                             if isinstance(floating_network['floating_ip'], str):
                                 pool_id = floating_network['floating_ip']
                             else:
-                                #Find the external network
+                                # Find the external network
                                 external_nets = list()
                                 for net in self.neutron.list_networks()['networks']:
                                     if net['router:external']:
@@ -1183,7 +1191,7 @@ class vimconnector(vimconn.vimconnector):
                                 pool_id = external_nets[0].get('id')
                             param = {'floatingip': {'floating_network_id': pool_id, 'tenant_id': server.tenant_id}}
                             try:
-                                #self.logger.debug("Creating floating IP")
+                                # self.logger.debug("Creating floating IP")
                                 new_floating_ip = self.neutron.create_floatingip(param)
                                 free_floating_ip = new_floating_ip['floatingip']['floating_ip_address']
                             except Exception as e:
@@ -1196,13 +1204,15 @@ class vimconnector(vimconn.vimconnector):
                                 server.add_floating_ip(free_floating_ip, fix_ip)
                                 assigned = True
                             except Exception as e:
+                                # openstack need some time after VM creation to asign an IP. So retry if fails
                                 vm_status = self.nova.servers.get(server.id).status
                                 if vm_status != 'ACTIVE' and vm_status != 'ERROR':
                                     if time.time() - vm_start_time < server_timeout:
                                         time.sleep(5)
                                         continue
-                                raise vimconn.vimconnException(type(e).__name__ + ": Cannot create floating_ip "+  str(e),
-                                                               http_code=vimconn.HTTP_Conflict)
+                                raise vimconn.vimconnException(
+                                    "Cannot create floating_ip: {} {}".format(type(e).__name__, e),
+                                    http_code=vimconn.HTTP_Conflict)
 
                 except Exception as e:
                     if not floating_network['exit_on_floating_ip_error']:
