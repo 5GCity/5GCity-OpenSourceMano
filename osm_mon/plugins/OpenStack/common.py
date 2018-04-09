@@ -62,8 +62,8 @@ class Common(object):
                            tenant_name=creds.tenant_name)
         return ks.service_catalog.url_for(
             service_type=service_type,
-            endpoint_type='publicURL',
-            region_name='RegionOne')
+            endpoint_type=creds.endpoint_type,
+            region_name=creds.region_name)
 
     @staticmethod
     def perform_request(url, auth_token,

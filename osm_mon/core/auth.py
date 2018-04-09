@@ -42,6 +42,14 @@ class AuthManager:
         credentials.password = creds_dict['vim_password']
         credentials.tenant_name = creds_dict['vim_tenant_name']
         credentials.config = json.dumps(creds_dict['config'])
+        if creds_dict.get('OS_REGION_NAME'):
+            credentials.region_name = creds_dict['OS_REGION_NAME']
+        else:
+            credentials.region_name = "RegionOne"
+        if creds_dict.get('OS_ENDPOINT_TYPE'):
+            credentials.endpoint_type = creds_dict['OS_ENDPOINT_TYPE']
+        else:
+            credentials.endpoint_type = "publicURL"
         self.database_manager.save_credentials(credentials)
 
     def get_credentials(self, vim_uuid):
