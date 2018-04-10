@@ -36,6 +36,9 @@ class JujuCharmNotFound(Exception):
 class JujuApplicationExists(Exception):
     """The Application already exists."""
 
+class N2VCPrimitiveExecutionFailed(Exception):
+    """Something failed while attempting to execute a primitive."""
+
 
 # Quiet the debug logging
 logging.getLogger('websockets.protocol').setLevel(logging.INFO)
@@ -67,7 +70,9 @@ class VCAMonitor(ModelObserver):
                 if old and new:
                     old_status = old.workload_status
                     new_status = new.workload_status
+
                     if old_status == new_status:
+
                         """The workload status may fluctuate around certain events,
                         so wait until the status has stabilized before triggering
                         the callback."""
@@ -79,7 +84,23 @@ class VCAMonitor(ModelObserver):
                                 *self.callback_args)
             except Exception as e:
                 self.log.debug("[1] notify_callback exception {}".format(e))
+        elif delta.entity == "action":
+            # TODO: Decide how we want to notify the user of actions
 
+            # uuid = delta.data['id']     # The Action's unique id
+            # msg = delta.data['message'] # The output of the action
+            #
+            # if delta.data['status'] == "pending":
+            #     # The action is queued
+            #     pass
+            # elif delta.data['status'] == "completed""
+            #     # The action was successful
+            #     pass
+            # elif delta.data['status'] == "failed":
+            #     # The action failed.
+            #     pass
+
+            pass
 
 ########
 # TODO
@@ -170,6 +191,7 @@ class N2VC:
                 callback(model_name, application_name, status, *callback_args)
         except Exception as e:
             self.log.error("[0] notify_callback exception {}".format(e))
+            raise e
         return True
 
     # Public methods
@@ -207,7 +229,9 @@ class N2VC:
         :param dict params: A dictionary of runtime parameters
           Examples::
           {
-            'rw_mgmt_ip': '1.2.3.4'
+            'rw_mgmt_ip': '1.2.3.4',
+            # Pass the initial-config-primitives section of the vnf or vdu
+            'initial-config-primitives': {...}
           }
         :param dict machine_spec: A dictionary describing the machine to install to
           Examples::
@@ -241,18 +265,6 @@ class N2VC:
         # service. In the meantime, we will always use the 'default' model.
         model_name = 'default'
         model = await self.get_model(model_name)
-        # if model_name not in self.models:
-        #     self.log.debug("Getting model {}".format(model_name))
-        #     self.models[model_name] = await self.controller.get_model(model_name)
-        # model = await self.CreateNetworkService(ns_name)
-
-        ###################################################
-        # Get the name of the charm and its configuration #
-        ###################################################
-        config_dict = vnfd['vnf-configuration']
-        juju = config_dict['juju']
-        charm = juju['charm']
-        self.log.debug("Charm: {}".format(charm))
 
         ########################################
         # Verify the application doesn't exist #
@@ -268,7 +280,6 @@ class N2VC:
             self.log.debug("Setting monitor<->callback")
             self.monitors[application_name] = VCAMonitor(model_name, application_name, callback, *callback_args)
             model.add_observer(self.monitors[application_name])
-
 
         ########################################################
         # Check for specific machine placement (native charms) #
@@ -294,12 +305,11 @@ class N2VC:
             rw_mgmt_ip = params['rw_mgmt_ip']
 
         initial_config = self._get_config_from_dict(
-            config_dict['initial-config-primitive'],
+            params['initial-config-primitive'],
             {'<rw_mgmt_ip>': rw_mgmt_ip}
         )
 
-        self.log.debug("JujuApi: Deploying charm {} ({}) from {}".format(
-            charm,
+        self.log.debug("JujuApi: Deploying charm ({}) from {}".format(
             application_name,
             charm_path,
             to=to,
@@ -309,12 +319,58 @@ class N2VC:
         # Deploy the charm and apply the initial configuration #
         ########################################################
         app = await model.deploy(
+            # We expect charm_path to be either the path to the charm on disk
+            # or in the format of cs:series/name
             charm_path,
+            # This is the formatted, unique name for this charm
             application_name=application_name,
+            # Proxy charms should use the current LTS. This will need to be
+            # changed for native charms.
             series='xenial',
+            # Apply the initial 'config' primitive during deployment
             config=initial_config,
+            # TBD: Where to deploy the charm to.
             to=None,
         )
+
+        # #######################################
+        # # Execute initial config primitive(s) #
+        # #######################################
+        primitives = {}
+
+        # Build a sequential list of the primitives to execute
+        for primitive in params['initial-config-primitive']:
+            try:
+                if primitive['name'] == 'config':
+                    # This is applied when the Application is deployed
+                    pass
+                else:
+                    # TODO: We need to sort by seq, and queue the actions in order.
+
+                    seq = primitive['seq']
+
+                    primitives[seq] = {
+                        'name': primitive['name'],
+                        'parameters': self._map_primitive_parameters(
+                            primitive['parameter'],
+                            {'<rw_mgmt_ip>': rw_mgmt_ip}
+                        ),
+                    }
+
+                    for primitive in sorted(primitives):
+                        await self.ExecutePrimitive(
+                            model_name,
+                            application_name,
+                            primitives[primitive]['name'],
+                            callback,
+                            callback_args,
+                            **primitives[primitive]['parameters'],
+                        )
+            except N2VCPrimitiveExecutionFailed as e:
+                self.debug.log(
+                    "[N2VC] Exception executing primitive: {}".format(e)
+                )
+                raise
 
     async def ExecutePrimitive(self, model_name, application_name, primitive, callback, *callback_args, **params):
         try:
@@ -336,7 +392,7 @@ class N2VC:
                     if unit:
                         self.log.debug("Executing primitive {}".format(primitive))
                         action = await unit.run_action(primitive, **params)
-                        action = await action.wait()
+                        # action = await action.wait()
                 await model.disconnect()
         except Exception as e:
             self.log.debug("Caught exception while executing primitive: {}".format(e))
@@ -355,6 +411,7 @@ class N2VC:
                 self.notify_callback(model_name, application_name, "removed", callback, *callback_args)
         except Exception as e:
             print("Caught exception: {}".format(e))
+            self.log.debug(e)
             raise e
 
     async def DestroyNetworkService(self, nsd):
@@ -391,10 +448,18 @@ class N2VC:
         return await self.set_config(application=application, config=config)
 
     def _get_config_from_dict(self, config_primitive, values):
-        """Transform the yang config primitive to dict."""
+        """Transform the yang config primitive to dict.
+
+        Expected result:
+
+            config = {
+                'config':
+            }
+        """
         config = {}
         for primitive in config_primitive:
             if primitive['name'] == 'config':
+                # config = self._map_primitive_parameters()
                 for parameter in primitive['parameter']:
                     param = str(parameter['name'])
                     if parameter['value'] == "<rw_mgmt_ip>":
@@ -403,6 +468,16 @@ class N2VC:
                         config[param] = str(parameter['value'])
 
         return config
+
+    def _map_primitive_parameters(self, parameters, values):
+        params = {}
+        for parameter in parameters:
+            param = str(parameter['name'])
+            if parameter['value'] == "<rw_mgmt_ip>":
+                params[param] = str(values[parameter['value']])
+            else:
+                params[param] = str(parameter['value'])
+        return params
 
     def _get_config_from_yang(self, config_primitive, values):
         """Transform the yang config primitive to dict."""
@@ -521,6 +596,11 @@ class N2VC:
             # current_controller no longer exists
             # self.log.debug("Connecting to current controller...")
             # await self.controller.connect_current()
+            # await self.controller.connect(
+            #     endpoint=self.endpoint,
+            #     username=self.user,
+            #     cacert=cacert,
+            # )
             self.log.fatal("VCA credentials not configured.")
 
         self.authenticated = True
