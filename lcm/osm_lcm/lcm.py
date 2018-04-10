@@ -667,73 +667,114 @@ class Lcm:
             db_nsr["detailed-status"] = "Configuring vnfr"
             self.update_db("nsrs", nsr_id, db_nsr)
 
-            vnfd_to_config = 0
+            # The parameters we'll need to deploy a charm
+            number_to_configure = 0
+
+            def deploy():
+                """An inner function to deploy the charm from either vnf or vdu
+                """
+
+                # Login to the VCA.
+                # if number_to_configure == 0:
+                #     self.logger.debug("Logging into N2VC...")
+                #     task = asyncio.ensure_future(self.n2vc.login())
+                #     yield from asyncio.wait_for(task, 30.0)
+                #     self.logger.debug("Logged into N2VC!")
+
+                ## await self.n2vc.login()
+
+                # Note: The charm needs to exist on disk at the location
+                # specified by charm_path.
+                base_folder = vnfd["_admin"]["storage"]
+                storage_params = self.fs.get_params()
+                charm_path = "{}{}/{}/charms/{}".format(
+                    storage_params["path"],
+                    base_folder["folder"],
+                    base_folder["pkg-dir"],
+                    proxy_charm
+                )
+
+                # Setup the runtime parameters for this VNF
+                params['rw_mgmt_ip'] = nsr_lcm['nsr_ip'][vnf_index]
+
+                # ns_name will be ignored in the current version of N2VC
+                # but will be implemented for the next point release.
+                model_name = 'default'
+                application_name = self.n2vc.FormatApplicationName(
+                    nsr_name,
+                    vnf_index,
+                    vnfd['name'],
+                )
+
+                nsr_lcm["VCA"][vnf_index] = {
+                    "model": model_name,
+                    "application": application_name,
+                    "operational-status": "init",
+                    "detailed-status": "",
+                    "vnfd_id": vnfd_id,
+                }
+
+                self.logger.debug("Task create_ns={} Passing artifacts path '{}' for {}".format(nsr_id, charm_path, proxy_charm))
+                task = asyncio.ensure_future(
+                    self.n2vc.DeployCharms(
+                        model_name,          # The network service name
+                        application_name,    # The application name
+                        vnfd,                # The vnf descriptor
+                        charm_path,          # Path to charm
+                        params,              # Runtime params, like mgmt ip
+                        {},                  # for native charms only
+                        self.n2vc_callback,  # Callback for status changes
+                        db_nsr,              # Callback parameter
+                        vnf_index,           # Callback parameter
+                        None,                # Callback parameter (task)
+                    )
+                )
+                task.add_done_callback(functools.partial(self.n2vc_callback, model_name, application_name, None, db_nsr, vnf_index))
+                self.lcm_ns_tasks[nsr_id][order_id]["create_charm:" + vnf_index] = task
+
+            # TODO: Make this call inside deploy()
+            # Login to the VCA. If there are multiple calls to login(),
+            # subsequent calls will be a nop and return immediately.
+            await self.n2vc.login()
+
             step = "Looking for needed vnfd to configure"
             self.logger.debug(logging_text + step)
             for c_vnf in nsd["constituent-vnfd"]:
                 vnfd_id = c_vnf["vnfd-id-ref"]
                 vnf_index = str(c_vnf["member-vnf-index"])
                 vnfd = needed_vnfd[vnfd_id]
-                if vnfd.get("vnf-configuration") and vnfd["vnf-configuration"].get("juju"):
-                    vnfd_to_config += 1
-                    proxy_charm = vnfd["vnf-configuration"]["juju"]["charm"]
 
-                    # Note: The charm needs to exist on disk at the location
-                    # specified by charm_path.
-                    base_folder = vnfd["_admin"]["storage"]
-                    storage_params = self.fs.get_params()
-                    charm_path = "{}{}/{}/charms/{}".format(
-                        storage_params["path"],
-                        base_folder["folder"],
-                        base_folder["pkg-dir"],
-                        proxy_charm
-                    )
+                # Deploy charms for each VDU that supports one.
+                for vdu in vnfd['vdu']:
+                    vdu_config = vdu.get('vdu-configuration')
+                    proxy_charm = None
+                    params = {}
 
-                    # Setup the runtime parameters for this VNF
-                    params = {
-                        'rw_mgmt_ip': nsr_lcm['nsr_ip'][vnf_index],
-                    }
+                    if vdu_config and vdu_config.get("juju"):
+                        proxy_charm = vdu_config["juju"]["charm"]
 
-                    # model_name will be ignored in the current version of N2VC
-                    # but will be implemented for the next point release.
-                    model_name = 'default'
-                    application_name = self.n2vc.FormatApplicationName(
-                        nsr_name,  # 'default',
-                        vnf_index,
-                        vnfd['name'],
-                    )
-                    # TODO N2VC implement this inside n2vc.FormatApplicationName
-                    application_name = application_name[:50]
+                        if 'initial-config-primitive' in vdu_config:
+                            params['initial-config-primitive'] = vdu_config['initial-config-primitive']
 
-                    nsr_lcm["VCA"][vnf_index] = {
-                        "model": model_name,
-                        "application": application_name,
-                        "operational-status": "init",
-                        "detailed-status": "",
-                        "vnfd_id": vnfd_id,
-                    }
+                    else:
+                        # If a VDU doesn't declare it's own charm, check
+                        # if the VNF does and deploy that instead.
 
-                    self.logger.debug("Task create_ns={} Passing artifacts path '{}' for {}".format(nsr_id, charm_path, proxy_charm))
-                    task = asyncio.ensure_future(
-                        self.n2vc.DeployCharms(
-                            model_name,             # The network service name
-                            application_name,    # The application name
-                            vnfd,                # The vnf descriptor
-                            charm_path,          # Path to charm
-                            params,              # Runtime params, like mgmt ip
-                            {},                  # for native charms only
-                            self.n2vc_callback,  # Callback for status changes
-                            db_nsr,              # Callback parameter
-                            vnf_index,           # Callback parameter
-                            None,                # Callback parameter (task)
-                        )
-                    )
-                    task.add_done_callback(functools.partial(self.n2vc_callback, model_name, application_name,
-                                                             None, db_nsr, vnf_index))
+                        # Check if this VNF has a charm configuration
+                        vnf_config = vnfd.get("vnf-configuration")
 
-                    self.lcm_ns_tasks[nsr_id][order_id]["create_charm:" + vnf_index] = task
-            db_nsr["config-status"] = "configuring" if vnfd_to_config else "configured"
-            db_nsr["detailed-status"] = "configuring: init: {}".format(vnfd_to_config) if vnfd_to_config else "done"
+                        if vnf_config and vnf_config.get("juju"):
+                            proxy_charm = vnf_config["juju"]["charm"]
+
+                            if 'initial-config-primitive' in vnf_config:
+                                params['initial-config-primitive'] = vnf_config['initial-config-primitive']
+
+                    if proxy_charm:
+                        deploy()
+                        number_to_configure += 1
+
+            db_nsr["config-status"] = "configuring" if number_to_configure else "configured"
+            db_nsr["detailed-status"] = "configuring: init: {}".format(number_to_configure) if number_to_configure else "done"
             db_nsr["operational-status"] = "running"
             self.update_db("nsrs", nsr_id, db_nsr)
 
