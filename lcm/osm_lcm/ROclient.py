@@ -299,16 +299,17 @@ class ROClient:
     @staticmethod
     def get_ns_vnf_ip(ns_descriptor):
         """
-        Get a dict with the IPs of every vnf.
+        Get a dict with the IPs of every vnf and vdu
         :param ns_descriptor: instance descriptor obtained with self.show("ns", )
-        :return: dict iwth key member_vnf_index, value ip_address
+        :return: dict with {member_vnf_index: ip_address, ... member_vnf_index.vdu_id: ip_address ...}
         """
-        ns_ip={}
+        ns_ip = {"vnf": {}, "vdu": {}}
         for vnf in ns_descriptor["vnfs"]:
-            ns_ip[str(vnf["member_vnf_index"])] = vnf["ip_address"]
-            #uuid  sce_vnf_id
-            # vnf[mgmt_access]: '{interface_id: cf3cbf00-385c-49b4-9a3f-b400b7b15dc6, vm_id: d0dd22a9-91ef-46f1-8e8f-8cf4b2d5b2d7}'
-            # vnf[vms]
+            ns_ip["vnf"][str(vnf["member_vnf_index"])] = vnf["ip_address"]
+            ns_ip["vdu"][str(vnf["member_vnf_index"])] = {}
+            for vm in vnf["vms"]:
+                if vm.get("ip_address"):
+                    ns_ip["vdu"][str(vnf["member_vnf_index"])][vm["vdu_osm_id"]] = vm["ip_address"]
         return ns_ip
 
     async def _get_item_uuid(self, session, item, item_id_name, all_tenants=False):
