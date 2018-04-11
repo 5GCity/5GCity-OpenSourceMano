@@ -60,10 +60,17 @@ class Common(object):
                            username=creds.user,
                            password=creds.password,
                            tenant_name=creds.tenant_name)
+        endpoint_type = 'publicURL'
+        region_name = 'regionOne'
+        if creds.config is not None:
+            if 'endpoint_type' in creds.config:
+                endpoint_type = creds.config['endpoint_type']
+            if 'region_name' in creds.config:
+                region_name = creds.config['region_name']
         return ks.service_catalog.url_for(
             service_type=service_type,
-            endpoint_type=creds.endpoint_type,
-            region_name=creds.region_name)
+            endpoint_type=endpoint_type,
+            region_name=region_name)
 
     @staticmethod
     def perform_request(url, auth_token,

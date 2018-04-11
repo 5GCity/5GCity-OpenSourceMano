@@ -28,6 +28,7 @@ import logging
 import time
 
 import six
+import yaml
 
 from osm_mon.core.message_bus.producer import KafkaProducer
 from osm_mon.plugins.OpenStack.common import Common
@@ -38,7 +39,7 @@ from osm_mon.plugins.OpenStack.settings import Config
 log = logging.getLogger(__name__)
 
 METRIC_MAPPINGS = {
-    "average_memory_utilization": "memory.percent",
+    "average_memory_utilization": "memory.usage",
     "disk_read_ops": "disk.read.requests",
     "disk_write_ops": "disk.write.requests",
     "disk_read_bytes": "disk.read.bytes",
@@ -78,7 +79,10 @@ class Metrics(object):
 
     def metric_calls(self, message):
         """Consume info from the message bus to manage metric requests."""
-        values = json.loads(message.value)
+        try:
+            values = json.loads(message.value)
+        except ValueError:
+            values = yaml.safe_load(message.value)
         log.info("OpenStack metric action required.")
 
         auth_token = Common.get_auth_token(values['vim_uuid'])

@@ -25,11 +25,16 @@ import os
 import sys
 import yaml
 
+import yaml
+import logstash
+
 logging.basicConfig(stream=sys.stdout,
                     format='%(asctime)s %(message)s',
                     datefmt='%m/%d/%Y %I:%M:%S %p',
                     level=logging.INFO)
 log = logging.getLogger(__name__)
+log.addHandler(logstash.TCPLogstashHandler('dockerelk_logstash_1', 5000, version=1))
+
 
 sys.path.append(os.path.abspath(os.path.join(os.path.realpath(__file__), '..', '..', '..', '..')))
 
@@ -78,14 +83,13 @@ aws_access_credentials = AccessCredentials()
 vrops_rcvr = plugin_receiver.PluginReceiver()
 
 
-def get_vim_type(msg):
+def get_vim_type(vim_uuid):
     """Get the vim type that is required by the message."""
     try:
-        vim_uuid = json.loads(msg.value)["vim_uuid"].lower()
         credentials = database_manager.get_credentials(vim_uuid)
         return credentials.type
     except Exception as exc:
-        log.warn("vim_type is not configured correctly; %s", exc)
+        log.exception("Error getting vim_type: ")
     return None
 
 
@@ -100,12 +104,12 @@ for message in common_consumer:
     try:
         try:
             values = json.loads(message.value)
-        except:
+        except ValueError:
             values = yaml.safe_load(message.value)
         # Check the message topic
         if message.topic == "metric_request":
             # Check the vim desired by the message
-            vim_type = get_vim_type(message)
+            vim_type = get_vim_type(values['vim_uuid'])
 
             if vim_type == "openstack":
                 log.info("This message is for the OpenStack plugin.")
@@ -125,7 +129,7 @@ for message in common_consumer:
 
         elif message.topic == "alarm_request":
             # Check the vim desired by the message
-            vim_type = get_vim_type(message)
+            vim_type = get_vim_type(values['vim_uuid'])
             if vim_type == "openstack":
                 log.info("This message is for the OpenStack plugin.")
                 openstack_alarms.alarming(message)
@@ -152,7 +156,7 @@ for message in common_consumer:
         # TODO: Remove in the near future when all plugins support vim_uuid. Modify tests accordingly.
         elif message.topic == "access_credentials":
             # Check the vim desired by the message
-            vim_type = get_vim_type(message)
+            vim_type = get_vim_type(values['vim_uuid'])
 
             if vim_type == "aws":
                 log.info("This message is for the CloudWatch plugin.")

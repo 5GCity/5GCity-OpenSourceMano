@@ -25,6 +25,7 @@ import json
 import logging
 
 import six
+import yaml
 
 from osm_mon.core.database import DatabaseManager
 from osm_mon.core.message_bus.producer import KafkaProducer
@@ -91,7 +92,10 @@ class Alarming(object):
 
     def alarming(self, message):
         """Consume info from the message bus to manage alarms."""
-        values = json.loads(message.value)
+        try:
+            values = json.loads(message.value)
+        except ValueError:
+            values = yaml.safe_load(message.value)
 
         log.info("OpenStack alarm action required.")
         vim_uuid = values['vim_uuid']
