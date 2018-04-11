@@ -49,7 +49,8 @@ class VimCredentials(BaseModel):
     password = CharField()
     tenant_name = CharField()
     config = TextField()
-
+    region_name = CharField()
+    endpoint_type = CharField()
 
 class Alarm(BaseModel):
     alarm_id = CharField()
