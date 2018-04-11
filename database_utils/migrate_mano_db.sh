@@ -33,7 +33,7 @@ DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=28
+LAST_DB_VERSION=29
 
 # Detect paths
 MYSQL=$(which mysql)
@@ -196,6 +196,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5024 ] && DB_VERSION=26  #0.5.24 =>  26
 #[ $OPENMANO_VER_NUM -ge 5025 ] && DB_VERSION=27  #0.5.25 =>  27
 #[ $OPENMANO_VER_NUM -ge 5052 ] && DB_VERSION=28  #0.5.52 =>  28
+#[ $OPENMANO_VER_NUM -ge 5059 ] && DB_VERSION=28  #0.5.59 =>  29
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -1236,6 +1237,23 @@ function downgrade_from_28(){
     echo "      [Altering vim_actions table]"
     sql "ALTER TABLE vim_actions MODIFY COLUMN item ENUM('datacenters_flavors','datacenter_images','instance_nets','instance_vms','instance_interfaces') NOT NULL COMMENT 'table where the item is stored'"
     sql "DELETE FROM schema_version WHERE version_int='28';"
+}
+function upgrade_to_29(){
+    echo "      Change 'member_vnf_index' from int to str at 'sce_vnfs'"
+    sql "ALTER TABLE sce_vnfs CHANGE COLUMN member_vnf_index member_vnf_index VARCHAR(255) NULL DEFAULT NULL AFTER uuid;"
+    echo "      Add osm_id to 'nets's and 'sce_nets'"
+    sql "ALTER TABLE nets ADD COLUMN osm_id VARCHAR(255) NULL AFTER uuid;"
+    sql "ALTER TABLE sce_nets ADD COLUMN osm_id VARCHAR(255) NULL AFTER uuid;"
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
+         "VALUES (29, '0.29', '0.5.59', 'Change member_vnf_index to str accordingly to the model', '2018-04-11');"
+}
+function downgrade_from_29(){
+    echo "      Change back 'member_vnf_index' from str to int at 'sce_vnfs'"
+    sql "ALTER TABLE sce_vnfs CHANGE COLUMN member_vnf_index member_vnf_index SMALLINT NULL DEFAULT NULL AFTER uuid;"
+    echo "      Remove osm_id from 'nets's and 'sce_nets'"
+    sql "ALTER TABLE nets DROP COLUMN osm_id;"
+    sql "ALTER TABLE sce_nets DROP COLUMN osm_id;"
+    sql "DELETE FROM schema_version WHERE version_int='29';"
 }
 function upgrade_to_X(){
     echo "      change 'datacenter_nets'"

@@ -954,7 +954,7 @@ class nfvo_db(db_base.db_base):
                     cmd = "SELECT inst.uuid as uuid, inst.name as name, inst.scenario_id as scenario_id, datacenter_id"\
                                 " ,datacenter_tenant_id, s.name as scenario_name,inst.tenant_id as tenant_id" \
                                 " ,inst.description as description, inst.created_at as created_at" \
-                                " ,inst.cloud_config as cloud_config" \
+                                " ,inst.cloud_config as cloud_config, s.osm_id as nsd_osm_id" \
                             " FROM instance_scenarios as inst left join scenarios as s on inst.scenario_id=s.uuid" \
                             " WHERE " + where_text
                     self.logger.debug(cmd)
@@ -973,7 +973,7 @@ class nfvo_db(db_base.db_base):
                     
                     # instance_vnfs
                     cmd = "SELECT iv.uuid as uuid, iv.vnf_id as vnf_id, sv.name as vnf_name, sce_vnf_id, datacenter_id"\
-                                " ,datacenter_tenant_id, v.mgmt_access, sv.member_vnf_index "\
+                                " ,datacenter_tenant_id, v.mgmt_access, sv.member_vnf_index, v.osm_id as vnfd_osm_id "\
                             " FROM instance_vnfs as iv left join sce_vnfs as sv "\
                                 "on iv.sce_vnf_id=sv.uuid join vnfs as v on iv.vnf_id=v.uuid" \
                             " WHERE iv.instance_scenario_id='{}'" \
@@ -984,7 +984,8 @@ class nfvo_db(db_base.db_base):
                     for vnf in instance_dict['vnfs']:
                         vnf_manage_iface_list=[]
                         #instance vms
-                        cmd = "SELECT iv.uuid as uuid, vim_vm_id, status, error_msg, vim_info, iv.created_at as created_at, name"\
+                        cmd = "SELECT iv.uuid as uuid, vim_vm_id, status, error_msg, vim_info, iv.created_at as "\
+                               "created_at, name, vms.osm_id as vdu_osm_id"\
                                 " FROM instance_vms as iv join vms on iv.vm_id=vms.uuid "\
                                 " WHERE instance_vnf_id='{}' ORDER BY iv.created_at".format(vnf['uuid'])
                         self.logger.debug(cmd)
