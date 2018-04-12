@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import sys
+import yaml
 
 logging.basicConfig(stream=sys.stdout,
                     format='%(asctime)s %(message)s',
@@ -97,7 +98,10 @@ log.info("Listening for alarm_request and metric_request messages")
 for message in common_consumer:
     log.info("Message arrived: %s", message)
     try:
-        values = json.loads(message.value)
+        try:
+            values = json.loads(message.value)
+        except:
+            values = yaml.safe_load(message.value)
         # Check the message topic
         if message.topic == "metric_request":
             # Check the vim desired by the message
