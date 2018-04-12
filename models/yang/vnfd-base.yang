@@ -528,6 +528,14 @@ module vnfd-base
             type uint32;
           }
 
+          leaf mgmt-interface {
+            description
+                "Flag to indicate that this is the mgmt interface
+                to be used for VDU configuration";
+            type boolean;
+            default false;
+          }
+
           leaf type {
             description
                 "Type of the Interface";
