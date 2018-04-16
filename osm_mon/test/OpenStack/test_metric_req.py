@@ -68,14 +68,16 @@ class TestMetricReq(unittest.TestCase):
     @mock.patch.object(Common, "get_auth_token", mock.Mock())
     @mock.patch.object(Common, 'get_endpoint', mock.Mock())
     @mock.patch.object(metric_req.Metrics, "delete_metric")
-    def test_delete_metric_key(self, del_metric):
+    @mock.patch.object(metric_req.Metrics, "get_metric_id")
+    def test_delete_metric_key(self, get_metric_id, del_metric):
         """Test the functionality for a delete metric request."""
         # Mock a message value and key
         message = Message()
         message.key = "delete_metric_request"
-        message.value = json.dumps({"vim_uuid": "test_id", "metric_uuid": "my_metric_id"})
+        message.value = json.dumps({"vim_uuid": "test_id", "metric_name": "disk_write_ops", "resource_uuid": "my_r_id"})
 
         # Call the metric functionality and check delete request
+        get_metric_id.return_value = "my_metric_id"
         self.metrics.metric_calls(message)
         del_metric.assert_called_with(mock.ANY, mock.ANY, "my_metric_id")
 

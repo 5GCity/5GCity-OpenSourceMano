@@ -238,13 +238,16 @@ class TestMetricCalls(unittest.TestCase):
         self.assertEqual(metric_name, "my_invalid_metric")
         self.assertEqual(norm_name, None)
 
+    @mock.patch.object(metric_req.Metrics, "get_metric_id")
     @mock.patch.object(Common, "perform_request")
-    def test_valid_read_data_req(self, perf_req):
+    def test_valid_read_data_req(self, perf_req, get_metric):
         """Test the read metric data function, for a valid call."""
-        values = {"metric_uuid": "metric_id",
+        values = {"metric_name": "disk_write_ops",
+                  "resource_uuid": "resource_id",
                   "collection_unit": "DAY",
                   "collection_period": 1}
 
+        get_metric.return_value = "metric_id"
         self.metrics.read_metric_data(endpoint, auth_token, values)
 
         perf_req.assert_called_once()

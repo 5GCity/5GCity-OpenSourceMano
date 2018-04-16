@@ -111,9 +111,12 @@ class Metrics(object):
 
             # Generate and send a response message
             try:
+
+                metric_id = self.get_metric_id(endpoint, auth_token, METRIC_MAPPINGS[values['metric_name']],
+                                          values['resource_uuid'])
                 resp_message = self._response.generate_response(
                     'read_metric_data_response',
-                    m_id=values['metric_uuid'],
+                    m_id=metric_id,
                     m_name=values['metric_name'],
                     r_id=values['resource_uuid'],
                     cor_id=values['correlation_id'],
@@ -127,7 +130,8 @@ class Metrics(object):
 
         elif message.key == "delete_metric_request":
             # delete the specified metric in the request
-            metric_id = values['metric_uuid']
+            metric_id = self.get_metric_id(endpoint, auth_token, METRIC_MAPPINGS[values['metric_name']],
+                                           values['resource_uuid'])
             status = self.delete_metric(
                 endpoint, auth_token, metric_id)
 
@@ -348,7 +352,6 @@ class Metrics(object):
     def get_metric_id(self, endpoint, auth_token, metric_name, resource_id):
         """Check if the desired metric already exists for the resource."""
         url = "{}/v1/resource/generic/%s".format(endpoint) % resource_id
-
         try:
             # Try return the metric id if it exists
             result = Common.perform_request(
@@ -374,8 +377,9 @@ class Metrics(object):
         timestamps = []
         data = []
         try:
+            #get metric_id
+            metric_id = self.get_metric_id(endpoint, auth_token, METRIC_MAPPINGS[values['metric_name']], values['resource_uuid'])
             # Try and collect measures
-            metric_id = values['metric_uuid']
             collection_unit = values['collection_unit'].upper()
             collection_period = values['collection_period']
 
