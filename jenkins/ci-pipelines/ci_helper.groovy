@@ -79,7 +79,8 @@ def systest_run(container_name, test, source_rc = null) {
     }
     else
     {
-        lxc_run(container_name, "make -C devops/systest OSM_HOSTNAME=${so_ip} OSM_RO_HOSTNAME=${ro_ip} ${test}")
+        result = lxc_run(container_name, "make -C devops/systest OSM_HOSTNAME=${so_ip} OSM_RO_HOSTNAME=${ro_ip} ${test}")
+        echo result
     }
     lxc_get_file(container_name, "/root/devops/systest/reports/pytest-${test}.xml",'.')
 }
