@@ -10,8 +10,8 @@ networks:
 services:
   zookeeper:
     image: wurstmeister/zookeeper
-    ports:
-      - "2181:2181"
+#    ports:
+#      - "2181:2181"
     networks:
       - netOSM
   kafka:
@@ -30,8 +30,8 @@ services:
     #  - zookeeper
   mongo:
     image: mongo
-    ports:
-      - "27017:27017"
+#    ports:
+#      - "27017:27017"
     networks:
       - netOSM
   nbi:
@@ -70,8 +70,8 @@ services:
       - netOSM
     env_file:
       - ./ro-db.env
-    ports:
-      - "3306:3306"
+#    ports:
+#      - "3306:3306"
   ro:
     image: osm/ro
     networks:
@@ -90,6 +90,8 @@ services:
       - netOSM
     environment:
       BROKER_URI: kafka:9092
+    env_file:
+      - ./mon.env
     #depends_on:
     #  - kafka
     ports:

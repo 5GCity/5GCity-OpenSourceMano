@@ -511,12 +511,25 @@ EONG
     echo "Finished generation of docker images"
 }
 
+function generate_docker_env_files() {
+    echo "Generating docker env files"
+    OSMLCM_VCA_HOST=`juju show-controller|grep api-endpoints|awk -F\' '{print $2}'|awk -F\: '{print $1}'`
+    OSMLCM_VCA_SECRET=`grep password /home/ubuntu/.local/share/juju/accounts.yaml |awk '{print $2}'`
+    MYSQL_ROOT_PASSWORD=`date +%s | sha256sum | base64 | head -c 32`
+    echo "OSMLCM_VCA_HOST=${OSMLCM_VCA_HOST}" > ${OSM_DEVOPS}/installers/docker/lcm.env
+    echo "OSMLCM_VCA_SECRET=${OSMLCM_VCA_SECRET}" >> ${OSM_DEVOPS}/installers/docker/lcm.env
+    echo "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}" > ${OSM_DEVOPS}/installers/docker/ro-db.env
+    echo "RO_DB_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}" > ${OSM_DEVOPS}/installers/docker/ro.env
+    echo "OS_NOTIFIER_URI=http://${DEFAULT_IP}:8662" > ${OSM_DEVOPS}/installers/docker/mon.env
+    echo "Finished generation of docker env files"
+}
+
 function deploy_lightweight() {
     echo "Deploying lightweight build"
     newgrp docker << EONG
-    docker swarm init
+    docker swarm init --advertise-addr ${DEFAULT_IP}
     docker network create --driver=overlay --attachable netOSM
-    docker stack deploy -c $OSM_DEVOPS/installers/docker/docker-compose.yaml osm
+    docker stack deploy -c ${OSM_DEVOPS}/installers/docker/docker-compose.yaml osm
 EONG
     echo "Finished deployment of lightweight build"
 }
@@ -539,10 +552,13 @@ function install_osmclient_sol005() {
 function install_lightweight() {
     echo "Installing lightweight build of OSM"
     LWTEMPDIR="$(mktemp -d -q --tmpdir "installosmlight.XXXXXX")"
-    trap 'rm -rf "$LWTEMPDIR"' EXIT
+    trap 'rm -rf "${LWTEMPDIR}"' EXIT
+    DEFAULT_IF=`route -n |awk '$1~/^0.0.0.0/ {print $8}'`
+    DEFAULT_IP=`ip -o -4 a |grep ${DEFAULT_IF}|awk '{split($4,a,"/"); print a[1]}'`
     install_juju
     install_docker_ce
     generate_docker_images
+    generate_docker_env_files
     deploy_lightweight
     #install_osmclient
     #For the moment, the osmclient is installed from the repo
@@ -564,14 +580,14 @@ function install_vimemu() {
     echo "Waiting for 'vim-emu' container to start ..."
     sleep 5
     export VIMEMU_HOSTNAME=$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' vim-emu)
-    echo "vim-emu running at $VIMEMU_HOSTNAME ..."
+    echo "vim-emu running at ${VIMEMU_HOSTNAME} ..."
     echo -e "You might be interested in adding the following OSM client env variables to your .bashrc file:"
     echo "     export OSM_HOSTNAME=${OSM_HOSTNAME}"
     echo "     export OSM_RO_HOSTNAME=${OSM_RO_HOSTNAME}"
     echo -e "You might be interested in adding the following vim-emu env variables to your .bashrc file:"
     echo "     export VIMEMU_HOSTNAME=${VIMEMU_HOSTNAME}"
     echo -e "\nTo add the emulated VIM to OSM you should do:"
-    echo "     osm vim-create --name emu-vim1 --user username --password password --auth_url http://$VIMEMU_HOSTNAME:6001/v2.0 --tenant tenantName --account_type openstack"
+    echo "     osm vim-create --name emu-vim1 --user username --password password --auth_url http://${VIMEMU_HOSTNAME}:6001/v2.0 --tenant tenantName --account_type openstack"
 }
 
 function dump_vars(){
