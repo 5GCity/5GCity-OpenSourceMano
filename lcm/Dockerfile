@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y git python3 \
     python3-stdeb python3-setuptools python3-all python-all \
     python3-bitarray python3-regex python3-lxml debhelper dh-python tox wget \
     python3-cffi \
+    && pip3 install pip==9.0.3 \
     && pip3 install -U aiokafka pyang lxml six enum34
 
 RUN git clone https://osm.etsi.org/gerrit/osm/N2VC.git \
