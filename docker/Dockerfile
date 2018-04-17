@@ -28,8 +28,8 @@ RUN apt-get --yes update \
  && apt-get --yes install git python python-pip sudo libmysqlclient-dev libxext-dev libxrender-dev libxtst-dev \
  && cd /root/ \
  && git clone https://osm.etsi.org/gerrit/osm/MON MON \
- && pip install /root/MON \
- && pip install --upgrade pip \
- && pip install -r /root/MON/requirements.txt
+ && pip install pip==9.0.3 \
+ && pip install -r /root/MON/requirements.txt \
+ && pip install /root/MON
 
 CMD /bin/bash /root/MON/docker/scripts/runInstall.sh

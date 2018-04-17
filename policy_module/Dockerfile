@@ -29,8 +29,8 @@ ADD . /policy_module
 RUN apt-get --yes update \
  && apt-get --yes install software-properties-common python-software-properties \
  && apt-get --yes install git python python-pip sudo libmysqlclient-dev libxext-dev libxrender-dev libxtst-dev \
- && pip install /policy_module \
- && pip install --upgrade pip \
- && pip install -r /policy_module/requirements.txt
+ && pip install pip==9.0.3 \
+ && pip install -r /policy_module/requirements.txt \
+ && pip install /policy_module
 
 CMD bash /policy_module/scripts/gen_config_from_env.sh && osm-policy-agent --config osm_policy_agent.cfg
