@@ -50,7 +50,8 @@ class MonClient:
         future.get(timeout=60)
         consumer = KafkaConsumer(bootstrap_servers=self.kafka_server,
                                  key_deserializer=bytes.decode,
-                                 value_deserializer=bytes.decode)
+                                 value_deserializer=bytes.decode,
+                                 consumer_timeout_ms=10000)
         consumer.subscribe(['alarm_response'])
         for message in consumer:
             if message.key == 'create_alarm_response':
