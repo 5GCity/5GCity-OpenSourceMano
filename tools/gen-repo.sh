@@ -39,7 +39,7 @@ function dump_vars() {
     echo "BUILD_NUMBER:   $BUILD_NUMBER"
 }
 
-MDG_REPOS="RO osmclient openvim SO UI IM devops MON N2VC"
+MDG_REPOS="RO osmclient openvim SO UI IM devops MON N2VC NBI"
 IN_REPO="unstable"
 OUT_REPO="stable"
 GPGKEY=71C0472C
