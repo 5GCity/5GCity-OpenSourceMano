@@ -35,7 +35,7 @@ def check_client_version(obj, what, version='sol005'):
     :return: -
     :raises ClientError: if the specified version does not match the client version
     '''
-    fullclassname = ctx.obj.__module__ + "." + ctx.obj.__class__.__name__
+    fullclassname = obj.__module__ + "." + obj.__class__.__name__
     message = 'the following commands or options are only supported with the option "--sol005": {}'.format(what)
     if version == 'v1':
         message = 'the following commands or options are not supported when using option "--sol005": {}'.format(what)
