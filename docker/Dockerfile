@@ -1,35 +1,45 @@
-# Dockerfile to launch MON module in a docker
-# Kafka bus must be launched in a different container
+# Copyright 2018 Whitestack, LLC
+# *************************************************************
+
+# This file is part of OSM Monitoring module
+# All Rights Reserved to Whitestack, LLC
+
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+
+#         http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+# For those usages not covered by the Apache License, Version 2.0 please
+# contact: bdiaz@whitestack.com or glavado@whitestack.com
+##
 
 FROM ubuntu:16.04
 
 LABEL authors="Guillermo Calvino"
 
+RUN apt-get --yes update \
+ && apt-get --yes install git python python-pip sudo libmysqlclient-dev \
+ && pip install pip==9.0.3
+
+COPY requirements.txt /mon/requirements.txt
+
+RUN pip install -r /mon/requirements.txt
+
+COPY . /mon
+
+RUN pip install /mon
+
 # These ENV must be provided
 # ENV BROKER_URI=kafka:9092
-# ENV OS_AUTH_URL=http://IP-ADDR:PORT/
-# ENV OS_PASSWORD=****
-# ENV OS_TENANT_NAME=****
-# ENV OS_USERNAME=****
-# ENV OS_IDENTITY_API_VERSION=v2 or 3
-
-ENV BROKER_URI=""
-ENV OS_AUTH_URL=""
-ENV OS_PASSWORD=""
-ENV OS_TENANT_NAME=""
-ENV OS_USERNAME=""
-ENV OS_IDENTITY_API_VERSION=""
+# ENV OS_NOTIFIER_URI=<IP_ACCESIBLE_FROM_OPENSTACK>:8662
 
 EXPOSE 8662
 
-RUN apt-get --yes update \
- && apt-get --yes install software-properties-common python-software-properties \
- && apt-get --yes update \
- && apt-get --yes install git python python-pip sudo libmysqlclient-dev libxext-dev libxrender-dev libxtst-dev \
- && cd /root/ \
- && git clone https://osm.etsi.org/gerrit/osm/MON MON \
- && pip install pip==9.0.3 \
- && pip install -r /root/MON/requirements.txt \
- && pip install /root/MON
-
-CMD /bin/bash /root/MON/docker/scripts/runInstall.sh
+CMD /bin/bash mon/docker/scripts/runInstall.sh
