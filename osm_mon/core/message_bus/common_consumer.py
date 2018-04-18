@@ -23,17 +23,14 @@ import json
 import logging
 import os
 import sys
-import yaml
 
 import yaml
-import logstash
 
 logging.basicConfig(stream=sys.stdout,
                     format='%(asctime)s %(message)s',
                     datefmt='%m/%d/%Y %I:%M:%S %p',
                     level=logging.INFO)
 log = logging.getLogger(__name__)
-log.addHandler(logstash.TCPLogstashHandler('dockerelk_logstash_1', 5000, version=1))
 
 
 sys.path.append(os.path.abspath(os.path.join(os.path.realpath(__file__), '..', '..', '..', '..')))
