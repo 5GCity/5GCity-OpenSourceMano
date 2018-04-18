@@ -23,6 +23,7 @@
 ##
 import json
 import logging
+import yaml
 
 from kafka import KafkaConsumer
 from osm_policy_module.core.config import Config
@@ -55,7 +56,10 @@ class PolicyModuleAgent:
             log.info("Message arrived: %s", message)
             try:
                 if message.key == 'configure_scaling':
-                    content = json.loads(message.value)
+                    try:
+                        content = json.loads(message.value)
+                    except:
+                        content = yaml.safe_load(message.value)
                     log.info("Creating scaling record in DB")
                     # TODO: Use transactions: http://docs.peewee-orm.com/en/latest/peewee/transactions.html
                     scaling_record = ScalingRecord.create(
