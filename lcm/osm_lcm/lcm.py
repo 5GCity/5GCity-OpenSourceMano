@@ -744,6 +744,20 @@ class Lcm:
                 vnf_index = str(c_vnf["member-vnf-index"])
                 vnfd = needed_vnfd[vnfd_id]
 
+                # Check if this VNF has a charm configuration
+                vnf_config = vnfd.get("vnf-configuration")
+
+                if vnf_config and vnf_config.get("juju"):
+                    proxy_charm = vnf_config["juju"]["charm"]
+                    params = {}
+
+                    if proxy_charm:
+                        if 'initial-config-primitive' in vnf_config:
+                            params['initial-config-primitive'] = vnf_config['initial-config-primitive']
+
+                        deploy()
+                        number_to_configure += 1
+
                 # Deploy charms for each VDU that supports one.
                 for vdu in vnfd['vdu']:
                     vdu_config = vdu.get('vdu-configuration')
@@ -756,22 +770,9 @@ class Lcm:
                         if 'initial-config-primitive' in vdu_config:
                             params['initial-config-primitive'] = vdu_config['initial-config-primitive']
 
-                    else:
-                        # If a VDU doesn't declare it's own charm, check
-                        # if the VNF does and deploy that instead.
-
-                        # Check if this VNF has a charm configuration
-                        vnf_config = vnfd.get("vnf-configuration")
-
-                        if vnf_config and vnf_config.get("juju"):
-                            proxy_charm = vnf_config["juju"]["charm"]
-
-                            if 'initial-config-primitive' in vnf_config:
-                                params['initial-config-primitive'] = vnf_config['initial-config-primitive']
-
-                    if proxy_charm:
-                        deploy()
-                        number_to_configure += 1
+                        if proxy_charm:
+                            deploy()
+                            number_to_configure += 1
 
             db_nsr["config-status"] = "configuring" if number_to_configure else "configured"
             db_nsr["detailed-status"] = "configuring: init: {}".format(number_to_configure) if number_to_configure else "done"
