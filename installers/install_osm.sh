@@ -421,12 +421,15 @@ function install_osmclient(){
     sudo add-apt-repository -y "deb [arch=amd64] $CLIENT_REPOSITORY_BASE/$CLIENT_RELEASE $CLIENT_REPOSITORY osmclient"
     sudo apt-get update
     sudo apt-get install -y python-osmclient
-    export OSM_HOSTNAME=`lxc list | awk '($2=="SO-ub"){print $6}'`
-    export OSM_RO_HOSTNAME=`lxc list | awk '($2=="RO"){print $6}'`
+    #sed 's,OSM_SOL005=[^$]*,OSM_SOL005=True,' -i ${HOME}/.bashrc
+    #echo 'export OSM_HOSTNAME=localhost' >> ${HOME}/.bashrc
+    #echo 'export OSM_SOL005=True' >> ${HOME}/.bashrc
     echo -e "\nOSM client installed"
     echo -e "You might be interested in adding the following OSM client env variables to your .bashrc file:"
     echo "     export OSM_HOSTNAME=${OSM_HOSTNAME}"
-    echo "     export OSM_RO_HOSTNAME=${OSM_RO_HOSTNAME}"
+    [ -n "$INSTALL_LIGHTWEIGHT" ] && echo "     export OSM_SOL005=True"
+    [ -z "$INSTALL_LIGHTWEIGHT" ] && echo "     export OSM_RO_HOSTNAME=${OSM_RO_HOSTNAME}"
+    return 0
 }
 
 function install_from_lxdimages(){
@@ -543,8 +546,7 @@ function install_osmclient_sol005() {
     pushd ${LWTEMPDIR}/osmclient
     sudo -H python setup.py install
     popd
-    export OSM_HOSTNAME=localhost
-    export OSM_SOL005=True
+    #sed 's,OSM_SOL005=[^$]*,OSM_SOL005=True,' -i ~/.bashrc
     echo 'export OSM_HOSTNAME=localhost' >> ${HOME}/.bashrc
     echo 'export OSM_SOL005=True' >> ${HOME}/.bashrc
 }
@@ -560,9 +562,8 @@ function install_lightweight() {
     generate_docker_images
     generate_docker_env_files
     deploy_lightweight
-    #install_osmclient
-    #For the moment, the osmclient is installed from the repo
-    install_osmclient_sol005
+    install_osmclient
+    return 0
 }
 
 function install_vimemu() {
