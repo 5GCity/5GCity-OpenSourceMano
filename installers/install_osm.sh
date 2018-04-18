@@ -504,7 +504,7 @@ function generate_docker_images() {
     docker build ${LWTEMPDIR}/MON -f ${LWTEMPDIR}/MON/docker/Dockerfile -t osm/mon || ! echo "cannot build MON docker image" >&2
     docker build ${LWTEMPDIR}/MON/policy_module -f ${LWTEMPDIR}/MON/policy_module/Dockerfile -t osm/pm || ! echo "cannot build PM docker image" >&2
     git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/NBI
-    docker build ${LWTEMPDIR}/NBI -t osm/nbi || ! echo "cannot build NBI docker image" >&2
+    docker build ${LWTEMPDIR}/NBI -f ${LWTEMPDIR}/NBI/Dockerfile.local -t osm/nbi || ! echo "cannot build NBI docker image" >&2
     git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/RO
     docker build ${LWTEMPDIR}/RO -f ${LWTEMPDIR}/RO/docker/Dockerfile-local -t osm/ro || ! echo "cannot build RO docker image" >&2
     docker build ${LWTEMPDIR}/RO/lcm -t osm/lcm || ! echo "cannot build LCM docker image" >&2
