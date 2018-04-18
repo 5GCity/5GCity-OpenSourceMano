@@ -34,7 +34,7 @@ class Package(object):
         self._http = http
 
     def get_key_val_from_pkg(self, descriptor_file):
-        utils.get_key_val_from_pkg(descriptor_file)
+        return utils.get_key_val_from_pkg(descriptor_file)
 
     def upload(self, filename):
         pkg_type = utils.get_key_val_from_pkg(filename)

@@ -50,7 +50,7 @@ class Package(object):
                                                  get_method(pkg_type['name'])))
 
     def get_key_val_from_pkg(self, descriptor_file):
-        utils.get_key_val_from_pkg(descriptor_file)
+        return utils.get_key_val_from_pkg(descriptor_file)
 
     def wait_for_upload(self, filename):
         """wait(block) for an upload to succeed.
