@@ -8,7 +8,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        'Click', 'prettytable', 'pyyaml', 'pycurl', 'python-magic'
+        'Click', 'prettytable', 'pyyaml', 'pycurl'
     ],
     setup_requires=['setuptools-version-command'],
     test_suite='nose.collector',
