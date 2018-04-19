@@ -375,7 +375,7 @@ function install_lxd() {
     lxd waitready
     lxc network create lxdbr0 ipv4.address=auto ipv4.nat=true ipv6.address=none ipv6.nat=false
     DEFAULT_INTERFACE=$(route -n | awk '$1~/^0.0.0.0/ {print $8}')
-    DEFAULT_MTU=$( ip addr show $DEFAULT_INTERFACE | perl -ne 'if (/mtu\s(\d+)/) {print $1;}')
+    DEFAULT_MTU=$(ip addr show $DEFAULT_INTERFACE | perl -ne 'if (/mtu\s(\d+)/) {print $1;}')
     lxc profile device set default eth0 mtu $DEFAULT_MTU
     #sudo systemctl stop lxd-bridge
     #sudo systemctl --system daemon-reload
@@ -534,7 +534,7 @@ function deploy_lightweight() {
     echo "Deploying lightweight build"
     newgrp docker << EONG
     docker swarm init --advertise-addr ${DEFAULT_IP}
-    docker network create --driver=overlay --attachable netOSM
+    docker network create --driver=overlay --attachable --opt com.docker.network.driver.mtu=${DEFAULT_MTU} netOSM
     docker stack deploy -c ${OSM_DEVOPS}/installers/docker/docker-compose.yaml osm
 EONG
     echo "Finished deployment of lightweight build"
@@ -560,6 +560,7 @@ function install_lightweight() {
     trap 'rm -rf "${LWTEMPDIR}"' EXIT
     DEFAULT_IF=`route -n |awk '$1~/^0.0.0.0/ {print $8}'`
     DEFAULT_IP=`ip -o -4 a |grep ${DEFAULT_IF}|awk '{split($4,a,"/"); print a[1]}'`
+    DEFAULT_MTU=$(ip addr show ${DEFAULT_IF} | perl -ne 'if (/mtu\s(\d+)/) {print $1;}')
     install_juju
     install_docker_ce
     generate_docker_images
