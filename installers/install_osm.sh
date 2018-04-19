@@ -522,11 +522,11 @@ function generate_docker_env_files() {
     OSMLCM_VCA_HOST=`juju show-controller|grep api-endpoints|awk -F\' '{print $2}'|awk -F\: '{print $1}'`
     OSMLCM_VCA_SECRET=`grep password /home/ubuntu/.local/share/juju/accounts.yaml |awk '{print $2}'`
     MYSQL_ROOT_PASSWORD=`date +%s | sha256sum | base64 | head -c 32`
-    sudo echo "OSMLCM_VCA_HOST=${OSMLCM_VCA_HOST}" > ${OSM_DEVOPS}/installers/docker/lcm.env
-    sudo echo "OSMLCM_VCA_SECRET=${OSMLCM_VCA_SECRET}" >> ${OSM_DEVOPS}/installers/docker/lcm.env
-    sudo echo "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}" > ${OSM_DEVOPS}/installers/docker/ro-db.env
-    sudo echo "RO_DB_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}" > ${OSM_DEVOPS}/installers/docker/ro.env
-    sudo echo "OS_NOTIFIER_URI=http://${DEFAULT_IP}:8662" > ${OSM_DEVOPS}/installers/docker/mon.env
+    echo "OSMLCM_VCA_HOST=${OSMLCM_VCA_HOST}" |sudo tee ${OSM_DEVOPS}/installers/docker/lcm.env
+    echo "OSMLCM_VCA_SECRET=${OSMLCM_VCA_SECRET}" |sudo tee -a ${OSM_DEVOPS}/installers/docker/lcm.env
+    echo "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}" |sudo tee ${OSM_DEVOPS}/installers/docker/ro-db.env
+    echo "RO_DB_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}" |sudo tee ${OSM_DEVOPS}/installers/docker/ro.env
+    echo "OS_NOTIFIER_URI=http://${DEFAULT_IP}:8662" |sudo tee ${OSM_DEVOPS}/installers/docker/mon.env
     echo "Finished generation of docker env files"
 }
 
