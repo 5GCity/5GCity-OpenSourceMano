@@ -293,9 +293,9 @@ class vimconnector(vimconn.vimconnector):
                 network_id_filter = None
             for network in networkList:
                 match = False
-                if network.name == network_name_filter and network.id == network_id_filter:
+                if network.name == network_name_filter and str(network.id) == str(network_id_filter):
                     match = True
-                if network_name_filter is None and network.id == network_id_filter:
+                if network_name_filter is None and str(network.id) == str(network_id_filter):
                     match = True
                 if network_id_filter is None and network.name == network_name_filter:
                     match = True
@@ -429,9 +429,9 @@ class vimconnector(vimconn.vimconnector):
                 image_id_filter = None
             for image in image_pool:
                 match = False
-                if str(image_name_filter) == str(image.name) and image.id == image_id_filter:
+                if str(image_name_filter) == str(image.name) and str(image.id) == str(image_id_filter):
                     match = True
-                if image_name_filter is None and image.id == image_id_filter:
+                if image_name_filter is None and str(image.id) == str(image_id_filter):
                     match = True
                 if image_id_filter is None and str(image_name_filter) == str(image.name):
                     match = True
@@ -506,9 +506,10 @@ class vimconnector(vimconn.vimconnector):
         try:
             client = oca.Client(self.user + ':' + self.passwd, self.url)
             vm_pool = oca.VirtualMachinePool(client)
+            vm_pool.info()
             vm_exist = False
             for i in vm_pool:
-                if i.id == vm_id:
+                if str(i.id) == str(vm_id):
                     vm_exist = True
                     break
             if not vm_exist:
@@ -555,7 +556,7 @@ class vimconnector(vimconn.vimconnector):
                 vm_exist = False
                 vm_element = None
                 for i in vm_pool:
-                    if i.id == vm_id:
+                    if str(i.id) == str(vm_id):
                         vm_exist = True
                         vm_element = i
                         break
@@ -652,3 +653,4 @@ class vimconnector(vimconn.vimconnector):
     #         return console_dict
     #     except vimconn.vimconnException as e:
     #         self.logger.error(e)
+
