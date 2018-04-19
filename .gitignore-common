@@ -1,0 +1,35 @@
+# This is a template with common files to be igonored, after clone make a copy to .gitignore
+# cp .gitignore-common .gitignore
+
+*.pyc
+*.pyo
+
+#auto-ignore
+.gitignore
+
+#logs
+logs 
+
+#pycharm
+.idea
+
+#eclipse
+.project     
+.pydevproject
+.settings
+
+#local stuff files that end in ".local" or folders called "local"
+*.local
+osm_common/local
+osm_common/test/local
+
+#local stuff files that end in ".temp" or folders called "temp"
+*.temp
+osm_common/temp
+osm_common/test/temp
+
+#distribution and package generation
+build
+dist
+*.egg-info
+
