@@ -413,7 +413,7 @@ function launch_container_from_lxd(){
 function install_osmclient(){
     CLIENT_RELEASE=${RELEASE#"-R "}
     CLIENT_REPOSITORY_KEY="OSM%20ETSI%20Release%20Key.gpg"
-    CLIENT_REPOSITORY="stable"
+    CLIENT_REPOSITORY=${REPOSITORY#"-r "}
     [ -z "$REPOSITORY_BASE" ] && REPOSITORY_BASE="-u https://osm-download.etsi.org/repository/osm/debian"
     CLIENT_REPOSITORY_BASE=${REPOSITORY_BASE#"-u "}
     key_location=$CLIENT_REPOSITORY_BASE/$CLIENT_RELEASE/$CLIENT_REPOSITORY_KEY
@@ -639,6 +639,7 @@ COMMIT_ID=""
 ASSUME_YES=""
 INSTALL_FROM_SOURCE=""
 RELEASE="-R ReleaseTHREE"
+REPOSITORY="-r stable"
 INSTALL_VIMEMU=""
 INSTALL_FROM_LXDIMAGES=""
 LXD_REPOSITORY_BASE="https://osm-download.etsi.org/repository/osm/lxd"
