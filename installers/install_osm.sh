@@ -420,6 +420,9 @@ function install_osmclient(){
     curl $key_location | sudo apt-key add -
     sudo add-apt-repository -y "deb [arch=amd64] $CLIENT_REPOSITORY_BASE/$CLIENT_RELEASE $CLIENT_REPOSITORY osmclient"
     sudo apt-get update
+    sudo apt-get install -y python-pip
+    sudo -H pip install pip==9.0.3
+    sudo -H pip install python-magic
     sudo apt-get install -y python-osmclient
     #sed 's,OSM_SOL005=[^$]*,OSM_SOL005=True,' -i ${HOME}/.bashrc
     #echo 'export OSM_HOSTNAME=localhost' >> ${HOME}/.bashrc
@@ -538,20 +541,6 @@ function deploy_lightweight() {
     docker stack deploy -c ${OSM_DEVOPS}/installers/docker/docker-compose.yaml osm
 EONG
     echo "Finished deployment of lightweight build"
-}
-
-function install_osmclient_sol005() {
-    sudo apt-get update
-    sudo apt-get install -y python-pip libcurl4-gnutls-dev libgnutls-dev
-    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/osmclient
-    sudo -H pip install -U pip
-    sudo -H pip install -U setuptools
-    pushd ${LWTEMPDIR}/osmclient
-    sudo -H python setup.py install
-    popd
-    #sed 's,OSM_SOL005=[^$]*,OSM_SOL005=True,' -i ~/.bashrc
-    echo 'export OSM_HOSTNAME=localhost' >> ${HOME}/.bashrc
-    echo 'export OSM_SOL005=True' >> ${HOME}/.bashrc
 }
 
 function install_lightweight() {
