@@ -20,10 +20,11 @@
 # contact: helena.mcgough@intel.com or adrian.hoban@intel.com
 ##
 """Common methods for the OpenStack plugins."""
-
+import json
 import logging
 
 import requests
+import yaml
 from keystoneclient.v3 import client
 
 from osm_mon.core.auth import AuthManager
@@ -61,12 +62,17 @@ class Common(object):
                            password=creds.password,
                            tenant_name=creds.tenant_name)
         endpoint_type = 'publicURL'
-        region_name = 'regionOne'
+        region_name = 'RegionOne'
         if creds.config is not None:
-            if 'endpoint_type' in creds.config:
-                endpoint_type = creds.config['endpoint_type']
-            if 'region_name' in creds.config:
-                region_name = creds.config['region_name']
+            try:
+                config = json.loads(creds.config)
+            except ValueError:
+                config = yaml.safe_load(creds.config)
+            if 'endpoint_type' in config:
+                endpoint_type = config['endpoint_type']
+            if 'region_name' in config:
+                region_name = config['region_name']
+
         return ks.service_catalog.url_for(
             service_type=service_type,
             endpoint_type=endpoint_type,
