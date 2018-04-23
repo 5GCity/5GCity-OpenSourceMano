@@ -104,7 +104,7 @@ def cli(ctx, hostname, so_port, so_project, ro_hostname, ro_port, sol005):
 def ns_list(ctx, filter):
     '''list all NS instances'''
     if filter:
-        check_client_version(ctx.obj, '--filter option')
+        check_client_version(ctx.obj, '--filter')
         resp = ctx.obj.ns.list(filter)
     else:
         resp = ctx.obj.ns.list()
@@ -117,16 +117,20 @@ def ns_list(ctx, filter):
         fullclassname = ctx.obj.__module__ + "." + ctx.obj.__class__.__name__
         if fullclassname == 'osmclient.sol005.client.Client':
             nsr = ns
+            nsr_name = nsr['name']
+            nsr_id = nsr['_id']
         else:
             nsopdata = ctx.obj.ns.get_opdata(ns['id'])
             nsr = nsopdata['nsr:nsr']
+            nsr_name = nsr['name-ref']
+            nsr_id = nsr['ns-instance-config-ref']
         opstatus = nsr['operational-status'] if 'operational-status' in nsr else 'Not found'
         configstatus = nsr['config-status'] if 'config-status' in nsr else 'Not found'
         if configstatus == "config_not_needed":
             configstatus = "configured (no charms)"
         table.add_row(
-            [nsr['name'],
-             nsr['_id'],
+            [nsr_name,
+             nsr_id,
              opstatus,
              configstatus])
     table.align = 'l'
