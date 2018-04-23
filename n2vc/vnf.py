@@ -48,40 +48,64 @@ logging.getLogger('juju.machine').setLevel(logging.WARN)
 
 class VCAMonitor(ModelObserver):
     """Monitor state changes within the Juju Model."""
-    callback = None
-    callback_args = None
     log = None
     ns_name = None
-    application_name = None
+    applications = {}
 
-    def __init__(self, ns_name, application_name, callback, *args):
+    def __init__(self, ns_name):
         self.log = logging.getLogger(__name__)
 
         self.ns_name = ns_name
-        self.application_name = application_name
-        self.callback = callback
-        self.callback_args = args
+
+    def AddApplication(self, application_name, callback, *callback_args):
+        if application_name not in self.applications:
+            self.applications[application_name] = {
+                'callback': callback,
+                'callback_args': callback_args
+            }
+
+    def RemoveApplication(self, application_name):
+        if application_name in self.applications:
+            del self.applications[application_name]
 
     async def on_change(self, delta, old, new, model):
         """React to changes in the Juju model."""
 
         if delta.entity == "unit":
+            # Ignore change events from other applications
+            if delta.data['application'] not in self.applications.keys():
+                return
+
             try:
+
+                application_name = delta.data['application']
+
+                callback = self.applications[application_name]['callback']
+                callback_args = self.applications[application_name]['callback_args']
+
                 if old and new:
                     old_status = old.workload_status
                     new_status = new.workload_status
 
                     if old_status == new_status:
-
                         """The workload status may fluctuate around certain events,
                         so wait until the status has stabilized before triggering
                         the callback."""
-                        if self.callback:
-                            self.callback(
+                        if callback:
+                            callback(
                                 self.ns_name,
-                                self.application_name,
+                                delta.data['application'],
                                 new_status,
-                                *self.callback_args)
+                                *callback_args)
+
+                if old and not new:
+                    # This is a charm being removed
+                    if callback:
+                        callback(
+                            self.ns_name,
+                            delta.data['application'],
+                            "removed",
+                            *callback_args)
             except Exception as e:
                 self.log.debug("[1] notify_callback exception {}".format(e))
         elif delta.entity == "action":
@@ -273,13 +297,15 @@ class N2VC:
         if app:
             raise JujuApplicationExists("Can't deploy application \"{}\" to model \"{}\" because it already exists.".format(application_name, model))
 
-        ############################################################
-        # Create a monitor to watch for application status changes #
-        ############################################################
+        ################################################################
+        # Register this application with the model-level event monitor #
+        ################################################################
         if callback:
-            self.log.debug("Setting monitor<->callback")
-            self.monitors[application_name] = VCAMonitor(model_name, application_name, callback, *callback_args)
-            model.add_observer(self.monitors[application_name])
+            self.monitors[model_name].AddApplication(
+                application_name,
+                callback,
+                *callback_args
+            )
 
         ########################################################
         # Check for specific machine placement (native charms) #
@@ -345,8 +371,6 @@ class N2VC:
                     # This is applied when the Application is deployed
                     pass
                 else:
-                    # TODO: We need to sort by seq, and queue the actions in order.
-
                     seq = primitive['seq']
 
                     primitives[seq] = {
@@ -406,9 +430,16 @@ class N2VC:
             model = await self.get_model(model_name)
             app = await self.get_application(model, application_name)
             if app:
-                self.notify_callback(model_name, application_name, "removing", callback, *callback_args)
+                # Remove this application from event monitoring
+                self.monitors[model_name].RemoveApplication(application_name)
+
+                # self.notify_callback(model_name, application_name, "removing", callback, *callback_args)
+                self.log.debug("Removing the application {}".format(application_name))
                 await app.remove()
+
+                # Notify the callback that this charm has been removed.
                 self.notify_callback(model_name, application_name, "removed", callback, *callback_args)
+
         except Exception as e:
             print("Caught exception: {}".format(e))
             self.log.debug(e)
@@ -568,6 +599,10 @@ class N2VC:
         if model_name not in self.models:
             print("connecting to model {}".format(model_name))
             self.models[model_name] = await self.controller.get_model(model_name)
+
+            # Create an observer for this model
+            self.monitors[model_name] = VCAMonitor(model_name)
+            self.models[model_name].add_observer(self.monitors[model_name])
 
         return self.models[model_name]
 
