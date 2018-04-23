@@ -65,7 +65,7 @@ services:
     #  - mongo
     #  - ro
   ro-db:
-    image: mysql
+    image: mysql:5
     networks:
       - netOSM
     env_file:

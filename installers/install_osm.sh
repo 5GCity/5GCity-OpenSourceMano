@@ -491,6 +491,14 @@ function install_docker_ce() {
     echo "... restarted Docker service"
 }
 
+function install_docker_compose() {
+    # installs and configures docker-compose
+    echo "Installing Docker Compose ..."
+    sudo curl -L https://github.com/docker/compose/releases/download/1.18.0/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+    echo "... Docker Compose installation done"
+}
+
 function install_juju() {
     echo "Installing juju"
     sudo snap install juju --classic
@@ -505,7 +513,7 @@ function generate_docker_images() {
     docker pull wurstmeister/kafka
     docker pull wurstmeister/zookeeper
     docker pull mongo
-    docker pull mysql
+    docker pull mysql:5
     git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/MON
     docker build ${LWTEMPDIR}/MON -f ${LWTEMPDIR}/MON/docker/Dockerfile -t osm/mon || ! echo "cannot build MON docker image" >&2
     docker build ${LWTEMPDIR}/MON/policy_module -f ${LWTEMPDIR}/MON/policy_module/Dockerfile -t osm/pm || ! echo "cannot build PM docker image" >&2
@@ -539,6 +547,7 @@ function deploy_lightweight() {
     docker swarm init --advertise-addr ${DEFAULT_IP}
     docker network create --driver=overlay --attachable --opt com.docker.network.driver.mtu=${DEFAULT_MTU} netOSM
     docker stack deploy -c ${OSM_DEVOPS}/installers/docker/docker-compose.yaml osm
+    #docker-compose -f /usr/share/osm-devops/installers/docker/docker-compose.yaml up -d
 EONG
     echo "Finished deployment of lightweight build"
 }
@@ -552,6 +561,7 @@ function install_lightweight() {
     DEFAULT_MTU=$(ip addr show ${DEFAULT_IF} | perl -ne 'if (/mtu\s(\d+)/) {print $1;}')
     install_juju
     install_docker_ce
+    #install_docker_compose
     generate_docker_images
     generate_docker_env_files
     deploy_lightweight
