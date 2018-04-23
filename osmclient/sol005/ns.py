@@ -96,9 +96,7 @@ class Ns(object):
         ns['nsdId'] = nsd['_id']
         ns['nsName'] = nsr_name
         ns['nsDescription'] = description
-        #ns['vimAccountId'] = datacenter['_id']
-        # TODO: Fix it to use datacenter _id
-        ns['vimAccountId'] = datacenter['name']
+        ns['vimAccountId'] = datacenter['_id']
         #ns['userdata'] = {}
         #ns['userdata']['key1']='value1'
         #ns['userdata']['key2']='value2'
