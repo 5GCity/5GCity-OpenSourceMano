@@ -1084,27 +1084,27 @@ instance_scenario_create_schema_v01 = {
 }
 
 instance_scenario_action_schema = {
-    "title":"instance scenario action information schema",
+    "title": "instance scenario action information schema",
     "$schema": "http://json-schema.org/draft-04/schema#",
-    "type":"object",
-    "properties":{
-        "start":{"type": "null"},
-        "pause":{"type": "null"},
-        "resume":{"type": "null"},
-        "shutoff":{"type": "null"},
-        "shutdown":{"type": "null"},
-        "forceOff":{"type": "null"},
-        "rebuild":{"type": "null"},
-        "reboot":{
-            "type": ["object","null"],
+    "type": "object",
+    "properties": {
+        "start": {"type": "null"},
+        "pause": {"type": "null"},
+        "resume": {"type": "null"},
+        "shutoff": {"type": "null"},
+        "shutdown": {"type": "null"},
+        "forceOff": {"type": "null"},
+        "rebuild": {"type": "null"},
+        "reboot": {
+            "type": ["object", "null"],
         },
         "add_public_key": description_schema,
         "console": {"type": ["string", "null"], "enum": ["novnc", "xvpvnc", "rdp-html5", "spice-html5", None]},
         "create-vdu": {
             "type": "array",
-            "items" :{
+            "items": {
                 "type": "object",
-                "properties":{
+                "properties": {
                     "vdu-id": id_schema,
                     "count": integer1_schema,
                 },
@@ -1114,9 +1114,9 @@ instance_scenario_action_schema = {
         },
         "delete-vdu": {
             "type": "array",
-            "items" :{
+            "items": {
                 "type": "object",
-                "properties":{
+                "properties": {
                     "vdu-id": id_schema,
                     "transaction-id": id_schema,
                 },
@@ -1125,8 +1125,8 @@ instance_scenario_action_schema = {
                 "maxProperties": 1,
             }
         },
-        "vnfs":{"type": "array", "items":{"type":"string"}},
-        "vms":{"type": "array", "items":{"type":"string"}}
+        "vnfs": {"type": "array", "items": {"type": "string"}},
+        "vms": {"type": "array", "items": {"type": "string"}}
     },
     "minProperties": 1,
     #"maxProperties": 1,

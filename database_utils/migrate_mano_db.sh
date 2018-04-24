@@ -33,7 +33,7 @@ DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=29
+LAST_DB_VERSION=30
 
 # Detect paths
 MYSQL=$(which mysql)
@@ -196,7 +196,8 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5024 ] && DB_VERSION=26  #0.5.24 =>  26
 #[ $OPENMANO_VER_NUM -ge 5025 ] && DB_VERSION=27  #0.5.25 =>  27
 #[ $OPENMANO_VER_NUM -ge 5052 ] && DB_VERSION=28  #0.5.52 =>  28
-#[ $OPENMANO_VER_NUM -ge 5059 ] && DB_VERSION=28  #0.5.59 =>  29
+#[ $OPENMANO_VER_NUM -ge 5059 ] && DB_VERSION=29  #0.5.59 =>  29
+#[ $OPENMANO_VER_NUM -ge 5060 ] && DB_VERSION=30  #0.5.60 =>  30
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -1255,6 +1256,18 @@ function downgrade_from_29(){
     sql "ALTER TABLE sce_nets DROP COLUMN osm_id;"
     sql "DELETE FROM schema_version WHERE version_int='29';"
 }
+function upgrade_to_30(){
+    echo "      Add 'image_list' at 'vms' to allocate alternative images"
+    sql "ALTER TABLE vms ADD COLUMN image_list TEXT NULL COMMENT 'Alternative images' AFTER image_id;"
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
+         "VALUES (30, '0.30', '0.5.60', 'Add image_list to vms', '2018-04-24');"
+}
+function downgrade_from_30(){
+    echo "      Remove back 'image_list' from 'vms' to allocate alternative images"
+    sql "ALTER TABLE vms DROP COLUMN image_list;"
+    sql "DELETE FROM schema_version WHERE version_int='30';"
+}
+
 function upgrade_to_X(){
     echo "      change 'datacenter_nets'"
     sql "ALTER TABLE datacenter_nets ADD COLUMN vim_tenant_id VARCHAR(36) NOT NULL AFTER datacenter_id, DROP INDEX name_datacenter_id, ADD UNIQUE INDEX name_datacenter_id (name, datacenter_id, vim_tenant_id);"

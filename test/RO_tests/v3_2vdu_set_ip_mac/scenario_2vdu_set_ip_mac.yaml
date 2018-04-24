@@ -46,6 +46,7 @@ nsd:nsd-catalog:
             name:       mgmt
             short-name: vld1-sname
             type:       ELAN
+            mgmt-network: 'true'
             vnfd-connection-point-ref:
             -   member-vnf-index-ref: 1
                 vnfd-id-ref: test_2vdu

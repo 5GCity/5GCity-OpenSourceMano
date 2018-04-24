@@ -317,6 +317,11 @@ def vnf_create(args):
                             vdu_list[index]['image'] = image_name_
                             if "image-checksum" in vdu_list[index]:
                                 del vdu_list[index]["image-checksum"]
+                            if vdu_list[index].get("alternative-images"):
+                                for a_image in vdu_list[index]["alternative-images"]:
+                                    a_image['image'] = image_name_
+                                    if "image-checksum" in a_image:
+                                        del a_image["image-checksum"]
                         else:  # image name in volumes
                             vdu_list[index]["volumes"][0]["image"] = image_name_
                             if "image-checksum" in vdu_list[index]["volumes"][0]:
@@ -332,6 +337,9 @@ def vnf_create(args):
                     if api_version == "/v3":
                         if vdu_list[index].get("image"):
                             vdu_list[index]['image-checksum'] = image_checksum_
+                            if vdu_list[index].get("alternative-images"):
+                                for a_image in vdu_list[index]["alternative-images"]:
+                                    a_image['image-checksum'] = image_checksum_
                         else:  # image name in volumes
                             vdu_list[index]["volumes"][0]["image-checksum"] = image_checksum_
                     else:

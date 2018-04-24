@@ -253,7 +253,7 @@ then
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && easy_install -U bottle
 
     # required for vmware connector TODO move that to separete opt in install script
-    pip install --upgrade pip || exit 1
+    pip install pip==9.0.3 || exit 1   #  --upgrade pip    install pip 10 that does not work
     pip install pyvcloud==19.1.1 || exit 1
     pip install progressbar || exit 1
     pip install prettytable || exit 1

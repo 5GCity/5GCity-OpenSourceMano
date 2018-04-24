@@ -297,7 +297,7 @@ class db_base():
         If a dict it will generate 'key1="value1" AND key2="value2" AND ...'.
             If value is None, it will produce 'key is null'
             If value is a list or tuple, it will produce 'key="value[0]" OR key="value[1]" OR ...'
-            keys can be suffixed by >,<,<>,>=,<= so that this is used to compare key and value instead of "="
+            keys can be suffixed by >,<,<>,>=,<=,' LIKE ' so that this is used to compare key and value instead of "="
         The special keys "OR", "AND" with a dict value is used to create a nested WHERE
         If a list, each item will be a dictionary that will be concatenated with OR by default
         :param data: dict or list of dicts
@@ -314,7 +314,7 @@ class db_base():
                     cmd.append("(" + self.__create_where(v, use_or=False) + ")")
                     continue
 
-                if k.endswith(">") or k.endswith("<") or k.endswith("="):
+                if k.endswith(">") or k.endswith("<") or k.endswith("=") or k.endswith(" LIKE "):
                     pass
                 else:
                     k += "="

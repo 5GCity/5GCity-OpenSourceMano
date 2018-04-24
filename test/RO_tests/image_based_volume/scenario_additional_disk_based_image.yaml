@@ -15,26 +15,27 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 #
-# For those usages not covered by the Apache License, Version 2.0 please
-# contact with: nfvlabs@tid.es
 ##
 ---
-schema_version:  2
-scenario:
-  name:          vnf_additional_disk_based_image
-  description:   Just deploy vnf_2_disks
-  public:        false      # if available for other tenants
-  vnfs:
-    vnf_2_disks:                     # vnf name in the scenario
-      #identify an already openmano uploaded VNF either by vnf_id (uuid, prefered) or vnf_name
-      #vnf_id:    0c0dcc20-c5d5-11e6-a9fb-fa163e2ae06e                  #prefered id method
-      vnf_name:  vnf_additional_disk_based_image   #can fail if several vnfs matches this name
-      #graph:     {"y":399,"x":332,"ifaces":{"left":[["xe0","d"],["xe1","d"]],"bottom":[["eth0","v"],["eth1","m"]]}}
-  networks:                
-    mgmt:
-      # Connections based on external networks (datacenter nets) must include the external network in the list of nodes
-      type:      bridge
-      external:  true       #this will be connected outside
-      interfaces:
-      -   vnf_2_disks:  mgmt0
-
+nsd:nsd-catalog:
+    nsd:
+    -   id:          test_2vdu_nsd
+        name:        additional_disk_based_image
+        short-name:  2disks
+        description: Just deploy vnf_2_disks
+        vendor:      OSM
+        version:     '1.0'
+        constituent-vnfd:
+        -   member-vnf-index: vnf2disks
+            vnfd-id-ref: additional_disk_based_image
+        vld:
+        # Networks for the VNFs
+        -   id:         vld1
+            name:       mgmt
+            short-name: vld1-sname
+            type:       ELAN
+            mgmt-network: 'true'
+            vnfd-connection-point-ref:
+            -   member-vnf-index-ref: vnf2disks
+                vnfd-id-ref: additional_disk_based_image
+                vnfd-connection-point-ref: mgmt0

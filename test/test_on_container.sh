@@ -85,7 +85,7 @@ lxc_exec git -C RO status
 lxc_exec "cd RO && $TEST_RO_COMMIT"
 
 # TEST INSTALL
-lxc_exec RO/scripts/install-openmano.sh --noclone --force -q --updatedb
+lxc_exec RO/scripts/install-openmano.sh --noclone --force -q --updatedb -b master
 sleep 10
 lxc_exec openmano tenant-create osm
 lxc_exec openmano tenant-list

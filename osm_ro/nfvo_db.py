@@ -606,7 +606,7 @@ class nfvo_db(db_base.db_base):
                         self.cur.execute(cmd)
                         vnf['interfaces'] = self.cur.fetchall()
                         # vms
-                        cmd = "SELECT vms.uuid as uuid, flavor_id, image_id, vms.name as name," \
+                        cmd = "SELECT vms.uuid as uuid, flavor_id, image_id, image_list, vms.name as name," \
                               " vms.description as description, vms.boot_data as boot_data, count," \
                               " vms.availability_zone as availability_zone" \
                               " FROM vnfs join vms on vnfs.uuid=vms.vnf_id" \
@@ -620,6 +620,10 @@ class nfvo_db(db_base.db_base):
                                 vm["boot_data"] = yaml.safe_load(vm["boot_data"])
                             else:
                                 del vm["boot_data"]
+                            if vm["image_list"]:
+                                vm["image_list"] = yaml.safe_load(vm["image_list"])
+                            else:
+                                del vm["image_list"]
                             if datacenter_vim_id!=None:
                                 cmd = "SELECT vim_id FROM datacenters_images WHERE image_id='{}' AND datacenter_vim_id='{}'".format(vm['image_id'],datacenter_vim_id)
                                 self.logger.debug(cmd)
