@@ -63,7 +63,7 @@ module project-nsd
           "Identifier/index for the VNFD. This separate id
            is required to ensure that multiple VNFs can be
            part of single NS";
-        type uint64;
+        type string;
       }
 
       leaf vnfd-id-ref {
@@ -97,7 +97,7 @@ module project-nsd
           "Identifier/index for the VNFD. This separate id
            is required to ensure that multiple VNFs can be
            part of single NS";
-        type uint64;
+        type string;
       }
 
       leaf vnfd-id-ref {

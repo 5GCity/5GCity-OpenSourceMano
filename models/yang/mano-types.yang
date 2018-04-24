@@ -1141,7 +1141,7 @@ module mano-types
         leaf member-vnf-index-ref {
           description
               "Reference to member-vnf within constituent-vnfds";
-          type uint64;
+          type string;
         }
 
         leaf vnfd-id-ref {

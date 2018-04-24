@@ -486,7 +486,7 @@ module nsr
           }
 
           leaf member-vnf-index-ref {
-            type uint64;
+            type string;
           }
           leaf vnfd-id-ref {
             description
@@ -912,7 +912,7 @@ module nsr
               leaf member-vnf-index-ref {
                 description
                    "Reference to member-vnf within constituent-vnfds";
-                type uint64;
+                type string;
               }
 
               leaf vnfd-id-ref {
@@ -1212,7 +1212,7 @@ module nsr
         leaf member-vnf-index-ref {
           description
               "Reference to member-vnf within constituent-vnfds";
-          type uint64;
+          type string;
         }
 
         leaf vnfd-id-ref {
