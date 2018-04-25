@@ -5,7 +5,7 @@ from setuptools import setup
 
 here = os.path.abspath(os.path.dirname(__file__))
 _name = "osm_common"
-VERSION = "4.0.0rc1" 
+VERSION = "4.0.0rc1"
 README = open(os.path.join(here, 'README.rst')).read()
 
 setup(

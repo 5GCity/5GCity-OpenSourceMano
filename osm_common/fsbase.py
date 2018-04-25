@@ -40,4 +40,3 @@ class FsBase(object):
 
     def file_delete(self, storage, ignore_non_exist=False):
         pass
-

@@ -1,7 +1,7 @@
 
 import logging
 from pymongo import MongoClient, errors
-from dbbase import DbException, DbBase
+from osm_common.dbbase import DbException, DbBase
 from http import HTTPStatus
 from time import time, sleep
 
@@ -167,12 +167,12 @@ class DbMongo(DbBase):
         try:
             collection = self.db[table]
             rows = collection.update_one(self._format_filter(filter), {"$set": update_dict})
-            if rows.updated_count == 0:
+            if rows.matched_count == 0:
                 if fail_on_empty:
                     raise DbException("Not found any {} with filter='{}'".format(table[:-1], filter),
                                       HTTPStatus.NOT_FOUND)
                 return None
-            return {"deleted": rows.deleted_count}
+            return {"modified": rows.modified_count}
         except Exception as e:  # TODO refine
             raise DbException(str(e))
 
@@ -186,6 +186,6 @@ class DbMongo(DbBase):
                     raise DbException("Not found any {} with filter='{}'".format(table[:-1], _filter),
                                       HTTPStatus.NOT_FOUND)
                 return None
-            return {"replace": rows.modified_count}
+            return {"replaced": rows.modified_count}
         except Exception as e:  # TODO refine
             raise DbException(str(e))

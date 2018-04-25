@@ -1,5 +1,5 @@
 
-import asyncio
+# import asyncio
 from http import HTTPStatus
 
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"

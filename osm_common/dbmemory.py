@@ -1,5 +1,5 @@
 import logging
-from dbbase import DbException, DbBase
+from osm_common.dbbase import DbException, DbBase
 from http import HTTPStatus
 from uuid import uuid4
 from copy import deepcopy
@@ -114,7 +114,7 @@ class DbMemory(DbBase):
 
 if __name__ == '__main__':
     # some test code
-    db = dbmemory()
+    db = DbMemory()
     db.create("test", {"_id": 1, "data": 1})
     db.create("test", {"_id": 2, "data": 2})
     db.create("test", {"_id": 3, "data": 3})

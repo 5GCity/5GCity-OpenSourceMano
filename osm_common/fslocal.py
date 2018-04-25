@@ -1,9 +1,9 @@
 import os
 import logging
-import tarfile
+# import tarfile
 from http import HTTPStatus
 from shutil import rmtree
-from fsbase import FsBase, FsException
+from osm_common.fsbase import FsBase, FsException
 
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 

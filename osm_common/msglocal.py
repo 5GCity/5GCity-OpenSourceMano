@@ -2,17 +2,18 @@ import logging
 import os
 import yaml
 import asyncio
-from msgbase import MsgBase, MsgException
+from osm_common.msgbase import MsgBase, MsgException
 from time import sleep
 
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 
 """
 This emulated kafka bus by just using a shared file system. Useful for testing or devops.
-One file is used per topic. Only one producer and one consumer is allowed per topic. Both consumer and producer 
+One file is used per topic. Only one producer and one consumer is allowed per topic. Both consumer and producer
 access to the same file. e.g. same volume if running with docker.
 One text line per message is used in yaml format.
 """
+
 
 class MsgLocal(MsgBase):
 
@@ -41,7 +42,7 @@ class MsgLocal(MsgBase):
         for f in self.files.values():
             try:
                 f.close()
-            except Exception as e:  # TODO refine
+            except Exception:  # TODO refine
                 pass
 
     def write(self, topic, key, msg):
@@ -108,4 +109,3 @@ class MsgLocal(MsgBase):
             raise
         except Exception as e:  # TODO refine
             raise MsgException(str(e))
-
