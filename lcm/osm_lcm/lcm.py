@@ -158,7 +158,7 @@ class Lcm:
         exc = None
         try:
             step = "Getting vim from db"
-            db_vim = self.db.get_one("vims", {"_id": vim_id})
+            db_vim = self.db.get_one("vim_accounts", {"_id": vim_id})
             if "_admin" not in db_vim:
                 db_vim["_admin"] = {}
             if "deployed" not in db_vim["_admin"]:
@@ -179,7 +179,7 @@ class Lcm:
             desc = await RO.create("vim", descriptor=vim_RO)
             RO_vim_id = desc["uuid"]
             db_vim["_admin"]["deployed"]["RO"] = RO_vim_id
-            self.update_db("vims", vim_id, db_vim)
+            self.update_db("vim_accounts", vim_id, db_vim)
 
             step = "Attach vim to RO tenant"
             vim_RO = {"vim_tenant_name": vim_content["vim_tenant_name"],
@@ -189,7 +189,7 @@ class Lcm:
             }
             desc = await RO.attach_datacenter(RO_vim_id , descriptor=vim_RO)
             db_vim["_admin"]["operationalState"] = "ENABLED"
-            self.update_db("vims", vim_id, db_vim)
+            self.update_db("vim_accounts", vim_id, db_vim)
 
             self.logger.debug(logging_text + "Exit Ok RO_vim_id".format(RO_vim_id))
             return RO_vim_id
@@ -204,7 +204,7 @@ class Lcm:
             if exc and db_vim:
                 db_vim["_admin"]["operationalState"] = "ERROR"
                 db_vim["_admin"]["detailed-status"] = "ERROR {}: {}".format(step , exc)
-                self.update_db("vims", vim_id, db_vim)
+                self.update_db("vim_accounts", vim_id, db_vim)
 
     async def vim_edit(self, vim_content, order_id):
         vim_id = vim_content["_id"]
@@ -214,7 +214,7 @@ class Lcm:
         exc = None
         step = "Getting vim from db"
         try:
-            db_vim = self.db.get_one("vims", {"_id": vim_id})
+            db_vim = self.db.get_one("vim_accounts", {"_id": vim_id})
             if db_vim.get("_admin") and db_vim["_admin"].get("deployed") and db_vim["_admin"]["deployed"].get("RO"):
                 RO_vim_id = db_vim["_admin"]["deployed"]["RO"]
                 step = "Editing vim at RO"
@@ -241,7 +241,7 @@ class Lcm:
                 if vim_RO:
                     desc = await RO.edit("vim_account", RO_vim_id, descriptor=vim_RO)
                 db_vim["_admin"]["operationalState"] = "ENABLED"
-                self.update_db("vims", vim_id, db_vim)
+                self.update_db("vim_accounts", vim_id, db_vim)
 
             self.logger.debug(logging_text + "Exit Ok RO_vim_id".format(RO_vim_id))
             return RO_vim_id
@@ -256,7 +256,7 @@ class Lcm:
             if exc and db_vim:
                 db_vim["_admin"]["operationalState"] = "ERROR"
                 db_vim["_admin"]["detailed-status"] = "ERROR {}: {}".format(step , exc)
-                self.update_db("vims", vim_id, db_vim)
+                self.update_db("vim_accounts", vim_id, db_vim)
 
     async def vim_delete(self, vim_id, order_id):
         logging_text = "Task vim_delete={} ".format(vim_id)
@@ -265,7 +265,7 @@ class Lcm:
         exc = None
         step = "Getting vim from db"
         try:
-            db_vim = self.db.get_one("vims", {"_id": vim_id})
+            db_vim = self.db.get_one("vim_accounts", {"_id": vim_id})
             if db_vim.get("_admin") and db_vim["_admin"].get("deployed") and db_vim["_admin"]["deployed"].get("RO"):
                 RO_vim_id = db_vim["_admin"]["deployed"]["RO"]
                 RO = ROclient.ROClient(self.loop, **self.ro_config)
@@ -289,7 +289,7 @@ class Lcm:
             else:
                 # nothing to delete
                 self.logger.error(logging_text + "Skipping. There is not RO information at database")
-            self.db.del_one("vims", {"_id": vim_id})
+            self.db.del_one("vim_accounts", {"_id": vim_id})
             self.logger.debug("vim_delete task vim_id={} Exit Ok".format(vim_id))
             return None
 
@@ -303,7 +303,7 @@ class Lcm:
             if exc and db_vim:
                 db_vim["_admin"]["operationalState"] = "ERROR"
                 db_vim["_admin"]["detailed-status"] = "ERROR {}: {}".format(step , exc)
-                self.update_db("vims", vim_id, db_vim)
+                self.update_db("vim_accounts", vim_id, db_vim)
 
     async def sdn_create(self, sdn_content, order_id):
         sdn_id = sdn_content["_id"]
@@ -595,7 +595,7 @@ class Lcm:
             nsd = db_nsr["nsd"]
             nsr_name = db_nsr["name"]   # TODO short-name??
 
-            db_vim = self.db.get_one("vims", {"_id": db_nsr["datacenter"]})
+            db_vim = self.db.get_one("vim_accounts", {"_id": db_nsr["datacenter"]})
             # if db_vim["_admin"]["operationalState"] == "PROCESSING":
             #     #TODO check if VIM is creating and wait
             if db_vim["_admin"]["operationalState"] != "ENABLED":
@@ -887,7 +887,7 @@ class Lcm:
             if db_nsr["_admin"]["nsState"] == "NOT_INSTANTIATED":
                 return
             # TODO ALF remove
-            # db_vim = self.db.get_one("vims", {"_id":  db_nsr["datacenter"]})
+            # db_vim = self.db.get_one("vim_accounts", {"_id":  db_nsr["datacenter"]})
             # #TODO check if VIM is creating and wait
             # RO_vim_id = db_vim["_admin"]["deployed"]["RO"]
 
