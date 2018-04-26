@@ -64,7 +64,7 @@ class DbMemory(DbBase):
             for i, _ in self._find(table, self._format_filter(filter)):
                 id_list.append(i)
             deleted = len(id_list)
-            for i in id_list:
+            for i in reversed(id_list):
                 del self.db[table][i]
             return {"deleted": deleted}
         except DbException:

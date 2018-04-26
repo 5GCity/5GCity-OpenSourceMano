@@ -217,7 +217,7 @@ def test_get_one_generic_exception(db_memory_with_data):
     assert excinfo.value.http_code == http.HTTPStatus.NOT_FOUND
 
 @pytest.mark.parametrize("table, filter, expected_data", [
-#    ("test", {}, []),
+    ("test", {}, []),
     ("test", {"_id": 1}, [{"_id": 2, "data": 2}, {"_id": 3, "data": 3}]), 
     ("test", {"_id": 2}, [{"_id": 1, "data": 1}, {"_id": 3, "data": 3}]), 
     ("test", {"_id": 1, "data": 1}, [{"_id": 2, "data": 2}, {"_id": 3, "data": 3}]),
