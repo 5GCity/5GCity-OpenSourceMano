@@ -21,7 +21,8 @@ class MsgLocal(MsgBase):
         self.logger = logging.getLogger(logger_name)
         self.path = None
         # create a different file for each topic
-        self.files = {}
+        self.files_read = {}
+        self.files_write = {}
         self.buffer = {}
 
     def connect(self, config):
@@ -39,7 +40,12 @@ class MsgLocal(MsgBase):
             raise MsgException(str(e))
 
     def disconnect(self):
-        for f in self.files.values():
+        for f in self.files_read.values():
+            try:
+                f.close()
+            except Exception:  # TODO refine
+                pass
+        for f in self.files_write.values():
             try:
                 f.close()
             except Exception:  # TODO refine
@@ -54,10 +60,10 @@ class MsgLocal(MsgBase):
         :return: None or raises and exception
         """
         try:
-            if topic not in self.files:
-                self.files[topic] = open(self.path + topic, "a+")
-            yaml.safe_dump({key: msg}, self.files[topic], default_flow_style=True, width=20000)
-            self.files[topic].flush()
+            if topic not in self.files_write:
+                self.files_write[topic] = open(self.path + topic, "a+")
+            yaml.safe_dump({key: msg}, self.files_write[topic], default_flow_style=True, width=20000)
+            self.files_write[topic].flush()
         except Exception as e:  # TODO refine
             raise MsgException(str(e))
 
@@ -75,10 +81,10 @@ class MsgLocal(MsgBase):
                 topic_list = (topic, )
             while True:
                 for single_topic in topic_list:
-                    if single_topic not in self.files:
-                        self.files[single_topic] = open(self.path + single_topic, "a+")
+                    if single_topic not in self.files_read:
+                        self.files_read[single_topic] = open(self.path + single_topic, "a+")
                         self.buffer[single_topic] = ""
-                    self.buffer[single_topic] += self.files[single_topic].readline()
+                    self.buffer[single_topic] += self.files_read[single_topic].readline()
                     if not self.buffer[single_topic].endswith("\n"):
                         continue
                     msg_dict = yaml.load(self.buffer[single_topic])
