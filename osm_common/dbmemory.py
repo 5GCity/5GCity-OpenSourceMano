@@ -94,7 +94,7 @@ class DbMemory(DbBase):
                     raise DbException("Not found entry with filter='{}'".format(filter), HTTPStatus.NOT_FOUND)
                 return None
             self.db[table][i] = deepcopy(indata)
-            return {"upadted": 1}
+            return {"updated": 1}
         except Exception as e:  # TODO refine
             raise DbException(str(e))
 
