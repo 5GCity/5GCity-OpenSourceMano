@@ -333,7 +333,7 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
         for vim in vims:
             extra={'datacenter_tenant_id': vim.get('datacenter_tenant_id'),
                    'datacenter_id': vim.get('datacenter_id'),
-                   'vim_type': vim.get('type')}
+                   '_vim_type_internal': vim.get('type')}
             if vim["config"]:
                 extra.update(yaml.load(vim["config"]))
             if vim.get('dt_config'):
@@ -3524,7 +3524,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         image_uuid = vm['image_id']
         if vm.get("image_list"):
             for alternative_image in vm["image_list"]:
-                if alternative_image["vim_type"] == vim["config"]["vim_type"]:
+                if alternative_image["vim_type"] == vim["config"]["_vim_type_internal"]:
                     image_uuid = alternative_image['image_id']
                     break
         image_dict = mydb.get_table_by_uuid_name("images", image_uuid)
