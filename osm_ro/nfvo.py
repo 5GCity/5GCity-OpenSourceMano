@@ -2240,7 +2240,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                 db_sce_vnf = {
                     "uuid": sce_vnf_uuid,
                     "scenario_id": scenario_uuid,
-                    "name": existing_vnf[0]["name"][:200] + "." + get_str(vnf, "member-vnf-index", 5),
+                    "name": get_str(vnf, "member-vnf-index", 255),
                     "vnf_id": existing_vnf[0]["uuid"],
                     "member_vnf_index": str(vnf["member-vnf-index"]),
                     # TODO 'start-by-default': True
