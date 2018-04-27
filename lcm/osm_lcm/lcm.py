@@ -581,6 +581,64 @@ class Lcm:
                 self.logger.critical("[n2vc_callback] vnf_index={} Update database Exception {}".format(
                     vnf_member_index, e), exc_info=True)
 
+    def ns_params_2_RO(self, ns_params):
+        """
+        Creates a RO ns descriptor from OSM ns_instantite params
+        :param ns_params: OSM instantiate params
+        :return: The RO ns descriptor
+        """
+        vim_2_RO = {}
+        def vim_account_2_RO(vim_account):
+            if vim_account in vim_2_RO:
+                return vim_2_RO[vim_account]
+            db_vim = self.db.get_one("vim_accounts", {"_id": vim_account})
+            # if db_vim["_admin"]["operationalState"] == "PROCESSING":
+            #     #TODO check if VIM is creating and wait
+            if db_vim["_admin"]["operationalState"] != "ENABLED":
+                raise LcmException("VIM={} is not available. operationalSstatus={}".format(
+                    vim_account, db_vim["_admin"]["operationalState"]))
+            RO_vim_id = db_vim["_admin"]["deployed"]["RO"]
+            vim_2_RO[vim_account] = RO_vim_id
+            return RO_vim_id
+
+        if not ns_params:
+            return None
+        RO_ns_params = {
+            # "name": ns_params["nsName"],
+            # "description": ns_params.get("nsDescription"),
+            "datacenter": vim_account_2_RO(ns_params["vimAccountId"]),
+            # "scenario": ns_params["nsdId"],
+            "vnfs": {},
+            "networks": {},
+        }
+        if ns_params.get("ssh-authorized-key"):
+            RO_ns_params["cloud-config"] = {"key-pairs": ns_params["ssh-authorized-key"]}
+        if ns_params.get("vnf"):
+            for vnf in ns_params["vnf"]:
+                RO_vnf = {}
+                if "vimAccountId" in vnf:
+                    RO_vnf["datacenter"] = vim_account_2_RO(vnf["vimAccountId"])
+                if RO_vnf:
+                    RO_ns_params["vnfs"][vnf["member-vnf-index"]] = RO_vnf
+        if ns_params.get("vld"):
+            for vld in ns_params["vld"]:
+                RO_vld = {}
+                if "ip-profile" in vld:
+                    RO_vld["ip-profile"] = vld["ip-profile"]
+                if "vim-network-name" in vld:
+                    RO_vld["sites"] = []
+                    if isinstance(vld["vim-network-name"], dict):
+                        for vim_account, vim_net in vld["vim-network-name"].items():
+                            RO_vld["sites"].append({
+                                "netmap-use": vim_net,
+                                "datacenter": vim_account_2_RO(vim_account)
+                            })
+                    else:  #isinstance str
+                        RO_vld["sites"].append({"netmap-use":  vld["vim-network-name"]})
+                if RO_vld:
+                    RO_ns_params["networks"][vld["name"]] = RO_vld
+        return RO_ns_params
+
     async def ns_instantiate(self, nsr_id, nslcmop_id):
         logging_text = "Task ns={} instantiate={} ".format(nsr_id, nslcmop_id)
         self.logger.debug(logging_text + "Enter")
@@ -594,14 +652,6 @@ class Lcm:
             db_nsr = self.db.get_one("nsrs", {"_id": nsr_id})
             nsd = db_nsr["nsd"]
             nsr_name = db_nsr["name"]   # TODO short-name??
-
-            db_vim = self.db.get_one("vim_accounts", {"_id": db_nsr["datacenter"]})
-            # if db_vim["_admin"]["operationalState"] == "PROCESSING":
-            #     #TODO check if VIM is creating and wait
-            if db_vim["_admin"]["operationalState"] != "ENABLED":
-                raise LcmException("VIM={} is not available. operationalSstatus={}".format(
-                    db_nsr["datacenter"], db_vim["_admin"]["operationalState"]))
-            RO_vim_id = db_vim["_admin"]["deployed"]["RO"]
 
             needed_vnfd = {}
             for c_vnf in nsd["constituent-vnfd"]:
@@ -623,7 +673,7 @@ class Lcm:
 
             deloyment_timeout = 120
 
-            RO = ROclient.ROClient(self.loop, datacenter=RO_vim_id, **self.ro_config)
+            RO = ROclient.ROClient(self.loop, **self.ro_config)
 
             # get vnfds, instantiate at RO
             for vnfd_id, vnfd in needed_vnfd.items():
@@ -692,8 +742,9 @@ class Lcm:
             if not RO_nsr_id:
                 step = db_nsr["detailed-status"] = "Creating ns at RO"
                 self.logger.debug(logging_text + step)
-
-                desc = await RO.create("ns", name=db_nsr["name"], datacenter=RO_vim_id,
+                RO_ns_params = self.ns_params_2_RO(db_nsr.get("instantiate_params"))
+                desc = await RO.create("ns", descriptor=RO_ns_params,
+                                       name=db_nsr["name"],
                                        scenario=nsr_lcm["RO"]["nsd_id"])
                 RO_nsr_id = nsr_lcm["RO"]["nsr_id"] = desc["uuid"]
                 db_nsr["_admin"]["nsState"] = "INSTANTIATED"
