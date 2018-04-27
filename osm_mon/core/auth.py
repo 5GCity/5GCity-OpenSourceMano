@@ -40,12 +40,16 @@ class AuthManager:
         credentials.user = creds_dict['vim_user']
         credentials.password = creds_dict['vim_password']
         credentials.tenant_name = creds_dict['vim_tenant_name']
-        if 'config' in creds_dict:
-            credentials.config = json.dumps(creds_dict['config'])
+        if 'config' not in creds_dict:
+            creds_dict['config'] = {}
+        credentials.config = json.dumps(creds_dict['config'])
         self.database_manager.save_credentials(credentials)
 
     def get_credentials(self, vim_uuid):
-        return self.database_manager.get_credentials(vim_uuid)
+        creds = self.database_manager.get_credentials(vim_uuid)
+        if creds.config is None:
+            creds.config = {}
+        return creds
 
     def delete_auth_credentials(self, creds_dict):
         credentials = self.get_credentials(creds_dict['_id'])

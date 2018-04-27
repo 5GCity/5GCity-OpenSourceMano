@@ -27,9 +27,9 @@ import unittest
 
 import mock
 
+from osm_mon.core.settings import Config
 from osm_mon.plugins.OpenStack.Aodh import alarming as alarm_req
 from osm_mon.plugins.OpenStack.common import Common
-from osm_mon.plugins.OpenStack.settings import Config
 
 log = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class TestAlarming(unittest.TestCase):
         values = {"alarm_name": "my_alarm",
                   "metric_name": "my_metric",
                   "resource_uuid": "my_r_id"}
-        self.alarming.configure_alarm(alarm_endpoint, metric_endpoint, auth_token, values)
+        self.alarming.configure_alarm(alarm_endpoint, metric_endpoint, auth_token, values, {})
         perf_req.assert_not_called()
         perf_req.reset_mock()
 
@@ -78,7 +78,7 @@ class TestAlarming(unittest.TestCase):
 
         check_metric.return_value = None
 
-        self.alarming.configure_alarm(alarm_endpoint, metric_endpoint, auth_token, values)
+        self.alarming.configure_alarm(alarm_endpoint, metric_endpoint, auth_token, values, {})
         perf_req.assert_not_called()
 
     @mock.patch.object(alarm_req.Alarming, "check_payload")
@@ -95,7 +95,7 @@ class TestAlarming(unittest.TestCase):
         check_metric.return_value = "my_metric_id"
         check_pay.return_value = "my_payload"
 
-        self.alarming.configure_alarm(alarm_endpoint, metric_endpoint, auth_token, values)
+        self.alarming.configure_alarm(alarm_endpoint, metric_endpoint, auth_token, values, {})
         perf_req.assert_called_with(
             "alarm_endpoint/v2/alarms/", auth_token,
             req_type="post", payload="my_payload")
@@ -152,7 +152,7 @@ class TestAlarming(unittest.TestCase):
         """Test update alarm with invalid get response."""
         values = {"alarm_uuid": "my_alarm_id"}
 
-        self.alarming.update_alarm(alarm_endpoint, auth_token, values)
+        self.alarming.update_alarm(alarm_endpoint, auth_token, values, {})
 
         perf_req.assert_called_with(mock.ANY, auth_token, req_type="get")
         check_pay.assert_not_called()
@@ -170,7 +170,7 @@ class TestAlarming(unittest.TestCase):
         check_pay.return_value = None
         values = {"alarm_uuid": "my_alarm_id"}
 
-        self.alarming.update_alarm(alarm_endpoint, auth_token, values)
+        self.alarming.update_alarm(alarm_endpoint, auth_token, values, {})
 
         perf_req.assert_called_with(mock.ANY, auth_token, req_type="get")
         self.assertEqual(perf_req.call_count, 1)
@@ -187,7 +187,7 @@ class TestAlarming(unittest.TestCase):
         perf_req.return_value = resp
         values = {"alarm_uuid": "my_alarm_id"}
 
-        self.alarming.update_alarm(alarm_endpoint, auth_token, values)
+        self.alarming.update_alarm(alarm_endpoint, auth_token, values, {})
 
         check_pay.assert_called_with(values, "disk_write_ops", "my_resource_id",
                                      "my_alarm", alarm_state="alarm")

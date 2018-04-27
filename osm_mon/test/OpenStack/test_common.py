@@ -22,21 +22,17 @@
 """Tests for all common OpenStack methods."""
 
 import json
-
 import logging
-
 import unittest
 
-from keystoneclient.v3 import client
-
 import mock
+import requests
+from keystoneclient.v3 import client
 
 from osm_mon.core.auth import AuthManager
 from osm_mon.core.database import VimCredentials
+from osm_mon.core.settings import Config
 from osm_mon.plugins.OpenStack.common import Common
-from osm_mon.plugins.OpenStack.settings import Config
-
-import requests
 
 __author__ = "Helena McGough"
 

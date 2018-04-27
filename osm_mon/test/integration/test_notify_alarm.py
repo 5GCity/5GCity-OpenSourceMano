@@ -22,27 +22,21 @@
 """Tests for all common OpenStack methods."""
 
 import json
-
 import logging
-
 import socket
 import unittest
+from threading import Thread
 
+import mock
+import requests
 from six.moves.BaseHTTPServer import BaseHTTPRequestHandler
 from six.moves.BaseHTTPServer import HTTPServer
 
-from threading import Thread
-
 from osm_mon.core.message_bus.producer import KafkaProducer
-
-import mock
-
+from osm_mon.core.settings import Config
 from osm_mon.plugins.OpenStack.Aodh.alarming import Alarming
 from osm_mon.plugins.OpenStack.common import Common
 from osm_mon.plugins.OpenStack.response import OpenStack_Response
-from osm_mon.plugins.OpenStack.settings import Config
-
-import requests
 
 log = logging.getLogger(__name__)
 

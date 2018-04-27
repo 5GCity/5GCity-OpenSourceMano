@@ -29,10 +29,15 @@ import unittest
 
 import mock
 
+from osm_mon.core.auth import AuthManager
+from osm_mon.core.database import VimCredentials
 from osm_mon.plugins.OpenStack.Aodh import alarming as alarm_req
 from osm_mon.plugins.OpenStack.common import Common
 
 log = logging.getLogger(__name__)
+
+mock_creds = VimCredentials()
+mock_creds.config = '{}'
 
 
 class Message(object):
@@ -54,12 +59,15 @@ class TestAlarmKeys(unittest.TestCase):
         self.alarming = alarm_req.Alarming()
         self.alarming.common = Common()
 
+    @mock.patch.object(AuthManager, 'get_credentials')
     @mock.patch.object(Common, 'get_endpoint')
     @mock.patch.object(Common, 'get_auth_token')
-    def test_alarming_authentication(self, get_token, get_endpoint):
+    def test_alarming_authentication(self, get_token, get_endpoint, get_creds):
         """Test getting an auth_token and endpoint for alarm requests."""
         # if auth_token is None environment variables are used to authenticate
         message = Message()
+
+        get_creds.return_value = mock_creds
 
         self.alarming.alarming(message)
 
@@ -68,8 +76,9 @@ class TestAlarmKeys(unittest.TestCase):
 
     @mock.patch.object(Common, 'get_endpoint', mock.Mock())
     @mock.patch.object(Common, 'get_auth_token', mock.Mock())
+    @mock.patch.object(AuthManager, 'get_credentials')
     @mock.patch.object(alarm_req.Alarming, 'delete_alarm')
-    def test_delete_alarm_key(self, del_alarm):
+    def test_delete_alarm_key(self, del_alarm, get_creds):
         """Test the functionality for a create alarm request."""
         # Mock a message value and key
         message = Message()
@@ -78,19 +87,24 @@ class TestAlarmKeys(unittest.TestCase):
                                     'alarm_delete_request':
                                         {'alarm_uuid': 'my_alarm_id'}})
 
+        get_creds.return_value = mock_creds
+
         # Call the alarming functionality and check delete request
         self.alarming.alarming(message)
         del_alarm.assert_called_with(mock.ANY, mock.ANY, 'my_alarm_id')
 
     @mock.patch.object(Common, 'get_endpoint', mock.Mock())
     @mock.patch.object(Common, 'get_auth_token', mock.Mock())
+    @mock.patch.object(AuthManager, 'get_credentials')
     @mock.patch.object(alarm_req.Alarming, 'list_alarms')
-    def test_list_alarm_key(self, list_alarm):
+    def test_list_alarm_key(self, list_alarm, get_creds):
         """Test the functionality for a list alarm request."""
         # Mock a message with list alarm key and value
         message = Message()
         message.key = 'list_alarm_request'
         message.value = json.dumps({'vim_uuid': 'test_id', 'alarm_list_request': 'my_alarm_details'})
+
+        get_creds.return_value = mock_creds
 
         # Call the alarming functionality and check list functionality
         self.alarming.alarming(message)
@@ -98,8 +112,9 @@ class TestAlarmKeys(unittest.TestCase):
 
     @mock.patch.object(Common, 'get_auth_token', mock.Mock())
     @mock.patch.object(Common, 'get_endpoint', mock.Mock())
+    @mock.patch.object(AuthManager, 'get_credentials')
     @mock.patch.object(alarm_req.Alarming, 'update_alarm_state')
-    def test_ack_alarm_key(self, ack_alarm):
+    def test_ack_alarm_key(self, ack_alarm, get_creds):
         """Test the functionality for an acknowledge alarm request."""
         # Mock a message with acknowledge alarm key and value
         message = Message()
@@ -108,21 +123,26 @@ class TestAlarmKeys(unittest.TestCase):
                                     'ack_details':
                                         {'alarm_uuid': 'my_alarm_id'}})
 
+        get_creds.return_value = mock_creds
+
         # Call alarming functionality and check acknowledge functionality
         self.alarming.alarming(message)
         ack_alarm.assert_called_with(mock.ANY, mock.ANY, 'my_alarm_id')
 
     @mock.patch.object(Common, 'get_auth_token', mock.Mock())
     @mock.patch.object(Common, 'get_endpoint', mock.Mock())
+    @mock.patch.object(AuthManager, 'get_credentials')
     @mock.patch.object(alarm_req.Alarming, 'configure_alarm')
-    def test_config_alarm_key(self, config_alarm):
+    def test_config_alarm_key(self, config_alarm, get_creds):
         """Test the functionality for a create alarm request."""
         # Mock a message with config alarm key and value
         message = Message()
         message.key = 'create_alarm_request'
         message.value = json.dumps({'vim_uuid': 'test_id', 'alarm_create_request': 'alarm_details'})
 
+        get_creds.return_value = mock_creds
+
         # Call alarming functionality and check config alarm call
         config_alarm.return_value = 'my_alarm_id', True
         self.alarming.alarming(message)
-        config_alarm.assert_called_with(mock.ANY, mock.ANY, mock.ANY, 'alarm_details')
+        config_alarm.assert_called_with(mock.ANY, mock.ANY, mock.ANY, 'alarm_details', {})

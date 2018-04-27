@@ -27,7 +27,7 @@ import logging
 from peewee import *
 from playhouse.sqlite_ext import SqliteExtDatabase
 
-from osm_mon.plugins.OpenStack.settings import Config
+from osm_mon.core.settings import Config
 
 log = logging.getLogger(__name__)
 cfg = Config.instance()
@@ -48,7 +48,7 @@ class VimCredentials(BaseModel):
     user = CharField()
     password = CharField()
     tenant_name = CharField()
-    config = TextField(null=True)
+    config = TextField(default='{}')
 
 
 class Alarm(BaseModel):

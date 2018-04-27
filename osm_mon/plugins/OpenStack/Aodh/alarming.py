@@ -27,11 +27,12 @@ import logging
 import six
 import yaml
 
+from osm_mon.core.auth import AuthManager
 from osm_mon.core.database import DatabaseManager
 from osm_mon.core.message_bus.producer import KafkaProducer
+from osm_mon.core.settings import Config
 from osm_mon.plugins.OpenStack.common import Common
 from osm_mon.plugins.OpenStack.response import OpenStack_Response
-from osm_mon.plugins.OpenStack.settings import Config
 
 log = logging.getLogger(__name__)
 
@@ -83,12 +84,47 @@ class Alarming(object):
         config.read_environ()
 
         self._database_manager = DatabaseManager()
+        self._auth_manager = AuthManager()
 
         # Use the Response class to generate valid json response messages
         self._response = OpenStack_Response()
 
         # Initializer a producer to send responses back to SO
         self._producer = KafkaProducer("alarm_response")
+
+    def configure_alarm(self, alarm_endpoint, metric_endpoint, auth_token, values, vim_config):
+        """Create requested alarm in Aodh."""
+        url = "{}/v2/alarms/".format(alarm_endpoint)
+
+        # Check if the desired alarm is supported
+        alarm_name = values['alarm_name'].lower()
+        metric_name = values['metric_name'].lower()
+        resource_id = values['resource_uuid']
+
+        if metric_name not in METRIC_MAPPINGS.keys():
+            log.warn("This metric is not supported.")
+            return None, False
+
+        # Check for the required metric
+        metric_id = self.check_for_metric(auth_token, metric_endpoint, metric_name, resource_id)
+
+        try:
+            if metric_id is not None:
+                # Create the alarm if metric is available
+                if 'granularity' in vim_config and 'granularity' not in values:
+                    values['granularity'] = vim_config['granularity']
+                payload = self.check_payload(values, metric_name, resource_id,
+                                             alarm_name)
+                new_alarm = Common.perform_request(
+                    url, auth_token, req_type="post", payload=payload)
+                return json.loads(new_alarm.text)['alarm_id'], True
+            else:
+                log.warn("The required Gnocchi metric does not exist.")
+                return None, False
+
+        except Exception as exc:
+            log.warn("Failed to create the alarm: %s", exc)
+        return None, False
 
     def alarming(self, message):
         """Consume info from the message bus to manage alarms."""
@@ -105,12 +141,15 @@ class Alarming(object):
         alarm_endpoint = Common.get_endpoint("alarming", vim_uuid)
         metric_endpoint = Common.get_endpoint("metric", vim_uuid)
 
+        vim_account = self._auth_manager.get_credentials(vim_uuid)
+        vim_config = json.loads(vim_account.config)
+
         if message.key == "create_alarm_request":
             # Configure/Update an alarm
             alarm_details = values['alarm_create_request']
 
             alarm_id, alarm_status = self.configure_alarm(
-                alarm_endpoint, metric_endpoint, auth_token, alarm_details)
+                alarm_endpoint, metric_endpoint, auth_token, alarm_details, vim_config)
 
             # Generate a valid response message, send via producer
             try:
@@ -126,7 +165,7 @@ class Alarming(object):
                 self._producer.create_alarm_response(
                     'create_alarm_response', resp_message,
                     'alarm_response')
-            except Exception as exc:
+            except Exception:
                 log.exception("Response creation failed:")
 
         elif message.key == "list_alarm_request":
@@ -146,7 +185,7 @@ class Alarming(object):
                 self._producer.list_alarm_response(
                     'list_alarm_response', resp_message,
                     'alarm_response')
-            except Exception as exc:
+            except Exception:
                 log.exception("Failed to send a valid response back.")
 
         elif message.key == "delete_alarm_request":
@@ -166,8 +205,8 @@ class Alarming(object):
                 self._producer.delete_alarm_response(
                     'delete_alarm_response', resp_message,
                     'alarm_response')
-            except Exception as exc:
-                log.warn("Failed to create delete response:%s", exc)
+            except Exception:
+                log.exception("Failed to create delete response: ")
 
         elif message.key == "acknowledge_alarm":
             # Acknowledge that an alarm has been dealt with by the SO
@@ -187,7 +226,7 @@ class Alarming(object):
             alarm_details = values['alarm_update_request']
 
             alarm_id, status = self.update_alarm(
-                alarm_endpoint, auth_token, alarm_details)
+                alarm_endpoint, auth_token, alarm_details, vim_config)
 
             # Generate a response for an update request
             try:
@@ -199,45 +238,13 @@ class Alarming(object):
                 self._producer.update_alarm_response(
                     'update_alarm_response', resp_message,
                     'alarm_response')
-            except Exception as exc:
-                log.warn("Failed to send an update response:%s", exc)
+            except Exception:
+                log.exception("Failed to send an update response: ")
 
         else:
             log.debug("Unknown key, no action will be performed")
 
         return
-
-    def configure_alarm(self, alarm_endpoint, metric_endpoint, auth_token, values):
-        """Create requested alarm in Aodh."""
-        url = "{}/v2/alarms/".format(alarm_endpoint)
-
-        # Check if the desired alarm is supported
-        alarm_name = values['alarm_name'].lower()
-        metric_name = values['metric_name'].lower()
-        resource_id = values['resource_uuid']
-
-        if metric_name not in METRIC_MAPPINGS.keys():
-            log.warn("This metric is not supported.")
-            return None, False
-
-        # Check for the required metric
-        metric_id = self.check_for_metric(auth_token, metric_endpoint, metric_name, resource_id)
-
-        try:
-            if metric_id is not None:
-                # Create the alarm if metric is available
-                payload = self.check_payload(values, metric_name, resource_id,
-                                             alarm_name)
-                new_alarm = Common.perform_request(
-                    url, auth_token, req_type="post", payload=payload)
-                return json.loads(new_alarm.text)['alarm_id'], True
-            else:
-                log.warn("The required Gnocchi metric does not exist.")
-                return None, False
-
-        except Exception as exc:
-            log.warn("Failed to create the alarm: %s", exc)
-        return None, False
 
     def delete_alarm(self, endpoint, auth_token, alarm_id):
         """Delete alarm function."""
@@ -253,8 +260,8 @@ class Alarming(object):
             else:
                 return True
 
-        except Exception as exc:
-            log.warn("Failed to delete alarm: %s because %s.", alarm_id, exc)
+        except Exception:
+            log.exception("Failed to delete alarm %s :", alarm_id)
         return False
 
     def list_alarms(self, endpoint, auth_token, list_details):
@@ -347,11 +354,11 @@ class Alarming(object):
             Common.perform_request(
                 url, auth_token, req_type="put", payload=payload)
             return True
-        except Exception as exc:
-            log.warn("Unable to update alarm state: %s", exc)
+        except Exception:
+            log.exception("Unable to update alarm state: ")
         return False
 
-    def update_alarm(self, endpoint, auth_token, values):
+    def update_alarm(self, endpoint, auth_token, values, vim_config):
         """Get alarm name for an alarm configuration update."""
         # Get already existing alarm details
         url = "{}/v2/alarms/%s".format(endpoint) % values['alarm_uuid']
@@ -371,6 +378,8 @@ class Alarming(object):
             return None, False
 
         # Generates and check payload configuration for alarm update
+        if 'granularity' in vim_config and 'granularity' not in values:
+            values['granularity'] = vim_config['granularity']
         payload = self.check_payload(values, metric_name, resource_id,
                                      alarm_name, alarm_state=alarm_state)
 
@@ -404,7 +413,7 @@ class Alarming(object):
 
             statistic = values['statistic'].lower()
 
-            granularity = '300'
+            granularity = cfg.OS_DEFAULT_GRANULARITY
             if 'granularity' in values:
                 granularity = values['granularity']
 

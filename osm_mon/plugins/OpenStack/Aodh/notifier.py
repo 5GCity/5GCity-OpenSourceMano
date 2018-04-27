@@ -24,10 +24,10 @@
 """A Webserver to send alarm notifications from Aodh to the SO."""
 import json
 import logging
+import os
 import sys
 import time
 
-import os
 from six.moves.BaseHTTPServer import BaseHTTPRequestHandler
 from six.moves.BaseHTTPServer import HTTPServer
 
@@ -46,7 +46,7 @@ from osm_mon.core.message_bus.producer import KafkaProducer
 
 from osm_mon.plugins.OpenStack.common import Common
 from osm_mon.plugins.OpenStack.response import OpenStack_Response
-from osm_mon.plugins.OpenStack.settings import Config
+from osm_mon.core.settings import Config
 
 
 class NotifierHandler(BaseHTTPRequestHandler):

@@ -22,14 +22,10 @@
 """Tests for settings for OpenStack plugins configurations."""
 
 import logging
-
 import os
-
 import unittest
 
-import mock
-
-from osm_mon.plugins.OpenStack.settings import Config
+from osm_mon.core.settings import Config
 
 log = logging.getLogger(__name__)
 

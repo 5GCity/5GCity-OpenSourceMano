@@ -22,19 +22,16 @@
 """Tests for all common OpenStack methods."""
 
 import json
-
 import unittest
-
 from BaseHTTPServer import BaseHTTPRequestHandler
 
 import mock
 
 from osm_mon.core.message_bus.producer import KafkaProducer
-
+from osm_mon.core.settings import Config
 from osm_mon.plugins.OpenStack.Aodh.alarming import Alarming
 from osm_mon.plugins.OpenStack.common import Common
 from osm_mon.plugins.OpenStack.response import OpenStack_Response
-from osm_mon.plugins.OpenStack.settings import Config
 
 # Mock data from post request
 post_data = json.dumps({"severity": "critical",

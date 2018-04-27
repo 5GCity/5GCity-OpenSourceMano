@@ -24,17 +24,15 @@
 import datetime
 import json
 import logging
-
 import time
 
 import six
 import yaml
 
 from osm_mon.core.message_bus.producer import KafkaProducer
+from osm_mon.core.settings import Config
 from osm_mon.plugins.OpenStack.common import Common
-
 from osm_mon.plugins.OpenStack.response import OpenStack_Response
-from osm_mon.plugins.OpenStack.settings import Config
 
 log = logging.getLogger(__name__)
 

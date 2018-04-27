@@ -19,7 +19,7 @@
 # For those usages not covered by the Apache License, Version 2.0 please
 # contact: helena.mcgough@intel.com or adrian.hoban@intel.com
 ##
-"""Configurations for the OpenStack plugins."""
+"""Global configuration managed by environment variables."""
 
 import logging
 import os
@@ -56,10 +56,12 @@ class CfgParam(namedtuple('CfgParam', ['key', 'default', 'data_type'])):
 
 @Singleton
 class Config(object):
-    """Plugin confguration."""
+    """Configuration object."""
 
     _configuration = [
+        CfgParam('BROKER_URI', "localhost:9092", six.text_type),
         CfgParam('OS_NOTIFIER_URI', "http://localhost:8662", six.text_type),
+        CfgParam('OS_DEFAULT_GRANULARITY', "300", six.text_type),
     ]
 
     _config_dict = {cfg.key: cfg for cfg in _configuration}
