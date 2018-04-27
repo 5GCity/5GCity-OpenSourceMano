@@ -48,16 +48,15 @@ class Http(http.Http):
         http_code = curl_cmd.getinfo(pycurl.HTTP_CODE)
         #print 'HTTP_CODE: {}'.format(http_code)
         curl_cmd.close()
-        if http_code == 204:
-            return None
-        elif http_code == 404:
-            if data.getvalue():
-                return json.loads(data.getvalue().decode())
-            else:
-                return "NOT FOUND"
+        # TODO 202 accepted should be returned somehow
         if data.getvalue():
             return json.loads(data.getvalue().decode())
-        return "Failed"
+        elif http_code == 404:
+            return "NOT FOUND"
+        elif http_code >= 300:
+            return "Failed"
+        else:
+            return
 
     def send_cmd(self, endpoint='', postfields_dict=None,
                  formfile=None, filename=None,

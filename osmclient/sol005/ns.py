@@ -76,7 +76,7 @@ class Ns(object):
     def delete(self, name):
         ns = self.get(name)
         resp = self._http.delete_cmd('{}/{}'.format(self._apiBase,ns['_id']))
-        #print 'RESP: '.format(resp)
+        # print 'RESP: {}'.format(resp)
         if resp is None:
             print 'Deleted'
         else:
@@ -87,27 +87,55 @@ class Ns(object):
                admin_status='ENABLED'):
 
         nsd = self._client.nsd.get(nsd_name)
-        
-        datacenter = self._client.vim.get(account)
-        if datacenter is None:
-            raise NotFound("cannot find datacenter account {}".format(account))
+
+        vim_account_id = {}
+
+        def get_vim_account_id(vim_account):
+            if vim_account_id.get(vim_account):
+                return vim_account_id[vim_account]
+
+            vim = self._client.vim.get(vim_account)
+            if vim is None:
+                raise NotFound("cannot find vim account '{}'".format(vim_account))
+            vim_account_id[vim_account] = vim['_id']
+            return vim['_id']
 
         ns = {}
         ns['nsdId'] = nsd['_id']
         ns['nsName'] = nsr_name
         ns['nsDescription'] = description
-        ns['vimAccountId'] = datacenter['_id']
+        ns['vimAccountId'] = get_vim_account_id(account)
         #ns['userdata'] = {}
         #ns['userdata']['key1']='value1'
         #ns['userdata']['key2']='value2'
         
         if ssh_keys is not None:
             # ssh_keys is comma separate list
-            ssh_keys_format = []
-            for key in ssh_keys.split(','):
-                ssh_keys_format.append({'key-pair-ref': key})
+            # ssh_keys_format = []
+            # for key in ssh_keys.split(','):
+            #     ssh_keys_format.append({'key-pair-ref': key})
+            #
+            # ns['ssh-authorized-key'] = ssh_keys_format
+            ns['ssh-authorized-key'] = ssh_keys.split(',')
+        if config:
+            ns_config = yaml.load(config)
+            if "vim-network-name" in ns_config:
+                ns_config["vld"] = ns_config.pop("vim-network-name")
+            if "vld" in ns_config:
+                for vld in ns_config["vld"]:
+                    if vld.get("vim-network-name"):
+                        if isinstance(vld["vim-network-name"], dict):
+                            vim_network_name_dict = {}
+                            for vim_account, vim_net in vld["vim-network-name"].items():
+                                vim_network_name_dict[get_vim_account_id(vim_account)] = vim_net
+                            vld["vim-network-name"] = vim_network_name_dict
+                ns["vld"] = ns_config["vld"]
+            if "vnf" in ns_config:
+                for vnf in ns_config["vnf"]:
+                    if vnf.get("vim_account"):
+                        vnf["vimAccountId"] = get_vim_account_id(vnf.pop("vim_account"))
 
-            ns['ssh-authorized-key'] = ssh_keys_format
+                ns["vnf"] = ns_config["vnf"]
 
         #print yaml.safe_dump(ns)
         try:

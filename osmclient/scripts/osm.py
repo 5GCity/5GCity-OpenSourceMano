@@ -533,7 +533,8 @@ def vnfd_create2(ctx, filename, overwrite):
               help='comma separated list of keys to inject to vnfs')
 @click.option('--config',
               default=None,
-              help='ns specific yaml configuration')
+              help='ns specific yaml configuration:\nvnf: [member-vnf-index: TEXT, vim_account: TEXT]\n'
+              'vld: [name: TEXT, vim-network-name: TEXT or DICT with vim_account, vim_net entries]')
 @click.pass_context
 def ns_create(ctx,
               nsd_name,
@@ -544,8 +545,8 @@ def ns_create(ctx,
               config):
     '''creates a new NS instance'''
     try:
-        if config:
-            check_client_version(ctx.obj, '--config', 'v1')
+        # if config:
+        #     check_client_version(ctx.obj, '--config', 'v1')
         ctx.obj.ns.create(
             nsd_name,
             ns_name,
