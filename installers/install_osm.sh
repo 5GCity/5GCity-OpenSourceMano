@@ -66,6 +66,36 @@ function uninstall(){
     return 0
 }
 
+#Uninstall lightweight OSM: remove dockers
+function uninstall_lightweight(){
+    echo -e "\nUninstalling lightweight OSM"
+    docker stack rm osm
+    COUNTER=0
+    result=11
+    while [ ${COUNTER} -lt 30 ]; do
+        sleep 1
+        result=$(docker stack ps osm | wc -l)
+        #echo "Dockers running: $result"
+        if [ "${result}" == "0" ]; then
+            break
+        fi
+        let COUNTER=COUNTER+1
+    done
+    if [ "${result}" == "0" ]; then
+        echo "All dockers of the stack osm were removed"
+    else
+        FATAL "Some dockers of the stack osm could not be removed. Could not uninstall OSM in single shot. Try to uninstall again"
+    fi
+    sleep 5
+    docker image rm osm/ro
+    docker image rm osm/lcm
+    docker image rm osm/light-ui
+    docker image rm osm/nbi
+    docker image rm osm/mon
+    docker image rm osm/pm
+    return 0
+}
+
 #Configure NAT rules, based on the current IP addresses of containers
 function nat(){
     echo -e "\nChecking required packages: iptables-persistent"
@@ -774,6 +804,7 @@ fi
 OSM_JENKINS="$OSM_DEVOPS/jenkins"
 . $OSM_JENKINS/common/all_funcs
 
+[ -n "$INSTALL_LIGHTWEIGHT" ] && [ -n "$UNINSTALL" ] && uninstall_lightweight && echo -e "\nDONE" && exit 0
 [ -n "$UNINSTALL" ] && uninstall && echo -e "\nDONE" && exit 0
 [ -n "$NAT" ] && nat && echo -e "\nDONE" && exit 0
 [ -n "$UPDATE" ] && update && echo -e "\nDONE" && exit 0
