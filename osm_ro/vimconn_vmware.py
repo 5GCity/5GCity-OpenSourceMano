@@ -586,7 +586,7 @@ class vimconnector(vimconn.vimconnector):
                                     shared = False
                                 filter_dict["shared"] = shared
                                 filter_dict["tenant_id"] = vdc_uuid
-                                if net_details.get('status') == 1:
+                                if int(net_details.get('status')) == 1:
                                     filter_dict["admin_state_up"] = True
                                 else:
                                     filter_dict["admin_state_up"] = False
@@ -674,7 +674,7 @@ class vimconnector(vimconn.vimconnector):
                                     shared = False
                                 filter_entry["shared"] = shared
                                 filter_entry["tenant_id"] = vdcid
-                                if net_details.get('status') == 1:
+                                if int(net_details.get('status')) == 1:
                                     filter_entry["admin_state_up"] = True
                                 else:
                                     filter_entry["admin_state_up"] = False
@@ -745,7 +745,7 @@ class vimconnector(vimconn.vimconnector):
                                     shared = False
                                 filter_dict["shared"] = shared
                                 filter_dict["tenant_id"] = vdc_id
-                                if net_details.get('status') == 1:
+                                if int(net_details.get('status')) == 1:
                                     filter_dict["admin_state_up"] = True
                                 else:
                                     filter_dict["admin_state_up"] = False
