@@ -36,9 +36,9 @@ def check_client_version(obj, what, version='sol005'):
     :raises ClientError: if the specified version does not match the client version
     '''
     fullclassname = obj.__module__ + "." + obj.__class__.__name__
-    message = 'the following commands or options are only supported with the option "--sol005": {}'.format(what)
+    message = 'The following commands or options are only supported with the option "--sol005": {}'.format(what)
     if version == 'v1':
-        message = 'the following commands or options are not supported when using option "--sol005": {}'.format(what)
+        message = 'The following commands or options are not supported when using option "--sol005": {}'.format(what)
     if fullclassname != 'osmclient.{}.client.Client'.format(version):
         raise ClientException(message)
     return
