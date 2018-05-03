@@ -2303,6 +2303,8 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                                                 str(nsd["id"]), str(vld["id"]), str(vld["ip-profile-ref"])),
                                             HTTP_Bad_Request)
                     db_ip_profiles[ip_profile_name2db_table_index[ip_profile_name]]["sce_net_id"] = sce_net_uuid
+                elif vld.get("vim-network-name"):
+                    db_sce_net["vim_network_name"] = get_str(vld, "vim-network-name", 255)
 
                 # table sce_interfaces (vld:vnfd-connection-point-ref)
                 for iface in vld.get("vnfd-connection-point-ref").itervalues():
@@ -3043,6 +3045,7 @@ def create_instance(mydb, tenant_id, instance_dict):
         #              yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False))
 
         # 1. Creating new nets (sce_nets) in the VIM"
+        number_mgmt_networks = 0
         db_instance_nets = []
         for sce_net in scenarioDict['nets']:
             descriptor_net = instance_dict.get("networks", {}).get(sce_net["name"], {})
@@ -3070,38 +3073,49 @@ def create_instance(mydb, tenant_id, instance_dict):
                         net_name = "{}.{}".format(instance_name, sce_net["name"])
                         net_name = net_name[:255]     # limit length
 
+                if sce_net["external"]:
+                    number_mgmt_networks += 1
                 if "netmap-use" in site or "netmap-create" in site:
                     create_network = False
                     lookfor_network = False
                     if "netmap-use" in site:
                         lookfor_network = True
                         if utils.check_valid_uuid(site["netmap-use"]):
-                            filter_text = "scenario id '%s'" % site["netmap-use"]
                             lookfor_filter["id"] = site["netmap-use"]
                         else:
-                            filter_text = "scenario name '%s'" % site["netmap-use"]
                             lookfor_filter["name"] = site["netmap-use"]
                     if "netmap-create" in site:
                         create_network = True
                         net_vim_name = net_name
                         if site["netmap-create"]:
                             net_vim_name = site["netmap-create"]
+                elif sce_net.get("vim_network_name"):
+                    create_network = False
+                    lookfor_network = True
+                    lookfor_filter["name"] = sce_net.get("vim_network_name")
                 elif sce_net["external"]:
                     if sce_net['vim_id'] != None:
                         # there is a netmap at datacenter_nets database   # TODO REVISE!!!!
                         create_network = False
                         lookfor_network = True
                         lookfor_filter["id"] = sce_net['vim_id']
-                        filter_text = "vim_id '{}' datacenter_netmap name '{}'. Try to reload vims with "\
-                                      "datacenter-net-update".format(sce_net['vim_id'], sce_net["name"])
-                        # look for network at datacenter and return error
+                    elif vim["config"].get("management_network_id") or vim["config"].get("management_network_name"):
+                        if number_mgmt_networks > 1:
+                            raise NfvoException("Found several VLD of type mgmt. "
+                                                "You must concrete what vim-network must be use for each one",
+                                                HTTP_Bad_Request)
+                        create_network = False
+                        lookfor_network = True
+                        if vim["config"].get("management_network_id"):
+                            lookfor_filter["id"] = vim["config"]["management_network_id"]
+                        else:
+                            lookfor_filter["name"] = vim["config"]["management_network_name"]
                     else:
                         # There is not a netmap, look at datacenter for a net with this name and create if not found
                         create_network = True
                         lookfor_network = True
                         lookfor_filter["name"] = sce_net["name"]
                         net_vim_name = sce_net["name"]
-                        filter_text = "scenario name '%s'" % sce_net["name"]
                 else:
                     net_vim_name = net_name
                     create_network = True
@@ -3542,7 +3556,6 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                                              WHERE={'vim_id': flavor_id})
         if not extended_flavor_dict:
             raise NfvoException("flavor '{}' not found".format(flavor_id), HTTP_Not_Found)
-            return
 
         # extended_flavor_dict_yaml = yaml.load(extended_flavor_dict[0])
         myVMDict['disks'] = None

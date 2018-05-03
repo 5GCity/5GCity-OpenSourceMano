@@ -582,7 +582,7 @@ class nfvo_db(db_base.db_base):
                     if scenario_dict["cloud_config"]:
                         scenario_dict["cloud-config"] = yaml.load(scenario_dict["cloud_config"])
                     del scenario_dict["cloud_config"]
-                    #sce_vnfs
+                    # sce_vnfs
                     cmd = "SELECT uuid,name,member_vnf_index,vnf_id,description FROM sce_vnfs WHERE scenario_id='{}' "\
                           "ORDER BY created_at".format(scenario_dict['uuid'])
                     self.logger.debug(cmd)
@@ -672,7 +672,7 @@ class nfvo_db(db_base.db_base):
                                 raise db_base.db_base_Exception("More than one ip-profile found with this criteria: net_id='{}'".format(vnf_net['uuid']), db_base.HTTP_Bad_Request)
                             
                     #sce_nets
-                    cmd = "SELECT uuid,name,type,external,description" \
+                    cmd = "SELECT uuid,name,type,external,description,vim_network_name" \
                           " FROM sce_nets  WHERE scenario_id='{}'" \
                           " ORDER BY created_at ".format(scenario_dict['uuid'])
                     self.logger.debug(cmd)
