@@ -50,13 +50,9 @@ class Http(http.Http):
         curl_cmd.close()
         # TODO 202 accepted should be returned somehow
         if data.getvalue():
-            return json.loads(data.getvalue().decode())
-        elif http_code == 404:
-            return "NOT FOUND"
-        elif http_code >= 300:
-            return "Failed"
+            return http_code, json.loads(data.getvalue().decode())
         else:
-            return
+            return http_code, None
 
     def send_cmd(self, endpoint='', postfields_dict=None,
                  formfile=None, filename=None,

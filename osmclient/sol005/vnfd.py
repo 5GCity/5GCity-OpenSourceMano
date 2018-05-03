@@ -90,9 +90,11 @@ class Vnfd(object):
 
     def delete(self, name):
         vnfd = self.get(name)
-        resp = self._http.delete_cmd('{}/{}'.format(self._apiBase,vnfd['_id']))
-        #print 'RESP: '.format(resp)
-        if resp is None:
+        http_code, resp = self._http.delete_cmd('{}/{}'.format(self._apiBase,vnfd['_id']))
+        #print 'RESP: {}'.format(resp)
+        if http_code == 202:
+            print 'Deletion in progress'
+        elif http_code == 204:
             print 'Deleted'
         else:
             raise ClientException("failed to delete vnfd {}: {}".format(name, resp))

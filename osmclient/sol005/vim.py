@@ -88,8 +88,11 @@ class Vim(object):
         vim_id = vim_name
         if not utils.validate_uuid4(vim_name):
             vim_id = self.get_id(vim_name)
-        resp = self._http.delete_cmd('{}/{}'.format(self._apiBase,vim_id))
-        if resp is None:
+        http_code, resp = self._http.delete_cmd('{}/{}'.format(self._apiBase,vim_id))
+        #print 'RESP: {}'.format(resp)
+        if http_code == 202:
+            print 'Deletion in progress'
+        elif http_code == 204:
             print 'Deleted'
         else:
             raise ClientException("failed to delete vim {} - {}".format(vim_name, resp))
