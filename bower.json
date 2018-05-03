@@ -1,0 +1,27 @@
+{
+  "name": "osm-lw-ui",
+  "authors": [
+    "Francesco Lombardo <flombardo@cnit.it>"
+  ],
+  "description": "OSM Light UI",
+  "main": "",
+  "license": "Apache-2.0",
+  "homepage": "https://osm.etsi.org",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "resolutions": {
+    "jquery": "2 - 3"
+  },
+  "dependencies": {
+    "admin-lte": "^2.4.3",
+    "codemirror": "^5.36.0",
+    "d3": "^5.1.0",
+    "bootbox.js": "bootbox#^4.4.0"
+  }
+}

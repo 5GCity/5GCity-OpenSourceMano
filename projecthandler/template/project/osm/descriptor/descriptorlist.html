@@ -1,0 +1,57 @@
+{% load staticfiles %}
+{% load get %}
+<div class="col-md-12">
+
+    <div class="box">
+        <div class="box-header with-border">
+            <h3 class="box-title">
+            </h3>
+            <div class="box-tools">
+
+                <a href="{% url 'projects:new_descriptor' project_id=project_id descriptor_type=descriptor_type %}"
+                   class="btn btn-block btn-primary btn-sm"><i
+                        class="fa fa-upload"></i><span> Onboard {{descriptor_type|upper}}</span></a>
+            </div>
+        </div>
+        <div class="box-body">
+            <table id="descriptors_table" class="table table-bordered table-striped dataTable"
+                       role="grid">
+                <thead>
+                <tr role="row">
+                    <th>Id</th>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th style="width:10%">Vendor</th>
+                    <th style="width:5%">Version</th>
+                    <th style="width:35%">Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for k in descriptors %}
+                <tr role="row">
+                    <td>{{ k|get:"_id" }}</td>
+                    <td>{{ k|get:"short-name" }} </td>
+                    <td>{{ k|get:"description" }} </td>
+                    <td>{{ k|get:"vendor" }} </td>
+                    <td>{{ k|get:"version" }} </td>
+                    <td>
+                        <div class="btn-group">
+                            {% if descriptor_type == "nsd" %}
+                            <button type="button" class="btn btn-default" data-container="body" data-toggle="tooltip" data-placement="top" title="Instantiate NS" onclick="javascript:openModalCreateNS('{{project_id}}', '{{descriptor_type}}', '{{ k|get:"_id" }}')"><i class="fa fa-paper-plane"></i></button>
+                            {% endif %}
+                            <button type="button" class="btn btn-default" data-container="body" data-toggle="tooltip" data-placement="top" title="Edit" onclick="javascript:openDescriptorView('{{project_id}}', '{{descriptor_type}}', '{{ k|get:"_id" }}')"><i class="fa fa-edit"></i></button>
+                            <button type="button" class="btn btn-default" data-container="body" data-toggle="tooltip" data-placement="top" title="Show content" onclick="javascript:openPackageContentList('{{project_id}}', '{{descriptor_type}}', '{{ k|get:"_id" }}')"><i class="fa fa-folder-open"></i></button>
+                            <button type="button" class="btn btn-default" data-container="body" data-toggle="tooltip" data-placement="top" title="Show Graph" onclick="location.href='/projects/{{project_id}}/graph?type={{descriptor_type}}&id={{ k|get:"_id" }}'" disabled><i class="fa fa-sitemap fa-fw"></i></button>
+                            <button type="button" class="btn btn-default" data-container="body" data-toggle="tooltip" data-placement="top" title="Download package" onclick="location.href='{% url 'projects:custom_action' project_id=project_id descriptor_type=descriptor_type descriptor_id=k|get:'_id' action_name='download_pkg' %}'"><i class="fa fa-download fa-fw"></i></button>
+                            <button type="button" class="btn btn-default" data-container="body" data-toggle="tooltip" data-placement="top" title="Delete" onclick="javascript:deletePackage('{{project_id}}', '{{descriptor_type}}', '{{ k|get:"_id" }}')"><i class="fa fa-trash-o"></i></button>
+                        </div>
+
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+
+            </table>
+        </div>
+    </div>
+</div>

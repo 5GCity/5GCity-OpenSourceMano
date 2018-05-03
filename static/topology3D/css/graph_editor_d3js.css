@@ -1,0 +1,415 @@
+
+.node_path {
+    opacity: 1;
+    stroke: #2F3550;
+    stroke-width: 1;
+}
+
+.node_selected {
+    opacity: 1 !important;
+    stroke: #2F3550 !important;
+    stroke-width: 3 !important;
+}
+
+.hidden_circle {
+    opacity: 0;
+    stroke: #FF0000 !important;
+    stroke-width: 2 !important;
+}
+
+.hidden_circle:hover {
+    opacity: 1;
+    stroke: #FF0000 !important;
+    stroke-width: 2;
+}
+
+.node_path:hover {
+    opacity: 1;
+    stroke: #2F3550;
+    stroke-width: 3;
+}
+
+.node_path:hover text {
+    opacity: 0.4;
+
+}
+
+.link {
+    fill: none;
+}
+
+.link path {
+    stroke-width: 2;
+}
+
+.matted {
+    opacity: 0.3;
+}
+
+.invisible {
+    visibility: hidden;
+}
+
+.drag_box {
+    padding: 0 40px 0 0;
+    margin-bottom: 0px !important;
+    padding-top: 0px;
+    top: 14px;
+    /* right: 25px !important; */
+    /* width: 15%; */
+    position: absolute;
+    z-index: 1;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    right: 0;
+    cursor: move;
+}
+
+.selector_box {
+    padding: 0 40px 0 0;
+    margin-bottom: 0px !important;
+    padding-top: 0px;
+    top: 70px;
+    /* right: 25px !important; */
+    /* width: 15%; */
+    position: absolute;
+    z-index: 1;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    right: 0;
+    cursor: move;
+}
+
+.drag_button {
+    cursor: move !important;
+    /*border-style: dashed;*/
+    border-width: thin;
+    border-color: black;
+    color: white;
+    border-radius: 50% !important;
+    height: 50px !important;
+    width: 50px !important;
+    margin-right: 5px;
+}
+
+.drag_button p {
+    font-family: "Lucida Console", Monaco, monospace;;
+    font-size: 0.6em;
+    font-weight: bold;
+    text-decoration: none;
+    color: black;
+    text-align: center;
+    padding-top: 50%;
+    padding-bottom: 50%;
+    width: 100%;
+}
+
+.left-tool-bar {
+    top: 14px;
+    cursor: default;
+    line-height: 22px;
+    position: absolute;
+
+    padding: 0px 6px;
+
+    /* top: 7px; */
+    /* right: 6px; */
+    z-index: 1;
+    text-align: center;
+    font-size: 12px;
+    /*color: #777;
+    /* border-radius: 20px; */
+
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.left-tool-bar-monitoring {
+
+    z-index: 1;
+    text-align: center;
+    font-size: 12px;
+
+    top: 64px;
+    cursor: default;
+    padding: 0 6px;
+    line-height: 22px;
+    position: absolute;
+
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.vnffg-box {
+    top: 80px;
+    left: 100px;
+    cursor: default;
+    position: absolute;
+    width: 130px;
+
+    padding-top: 0px;
+    padding-bottom: 0px;
+
+    /* top: 7px; */
+    /* right: 6px; */
+    z-index: 1;
+    text-align: center;
+    font-size: 12px;
+    /*color: #777;
+    /* border-radius: 20px; */
+
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+textarea {
+    font-family: "Lucida Console", Monaco, monospace;
+    height: 350px !important;
+    resize: none;
+}
+
+.form-group {
+    margin-bottom: 0px !important;
+    margin-top: 0px !important;
+}
+
+.modal-body {
+    overflow-y: auto;
+}
+
+[draggable=true] {
+    -khtml-user-drag: element;
+    -webkit-user-drag: element;
+    -khtml-user-select: none;
+    -webkit-user-select: none;
+}
+
+.help-key {
+    border: 1px solid #ddd;
+    padding: 4px;
+    border-radius: 3px;
+    background: #f6f6f6;
+    font-family: Courier, monospace;
+    box-shadow: #999 1px 1px 1px;
+}
+
+/*
+Palette section
+*/
+#palette {
+    position: absolute;
+    top: 20px;
+    bottom: 20px;
+    right: 22px;
+    background: #f3f3f3;
+    width: 170px;
+    text-align: center;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    border: 1px solid #bbb;
+    box-sizing: border-box;
+    padding: 0 0 0 0;
+}
+
+.palette-status-indicator {
+    top: 50%;
+    position: relative;
+    justify-content: center;
+}
+
+.palette-status-hidden > .palette-status-indicator {
+    top: 50%;
+    position: relative;
+    justify-content: center;
+    display: none;
+}
+
+.palette-container {
+    #display: none;
+    position: absolute;
+    top: 0px;
+    right: 0;
+    bottom: 25px;
+    left: 0;
+    padding: 0;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.palette-category {
+
+    border-bottom: 1px solid #ccc;
+}
+
+.palette-hide {
+    display: none;
+}
+
+.palette-header {
+    position: relative;
+    background: #f3f3f3;
+    cursor: pointer;
+    text-align: left;
+    padding: 1px;
+    font-weight: bold;
+    font-size: 16px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.palette-content {
+
+    background: #fff;
+    padding: 3px;
+}
+
+.palette-close > .palette-content {
+    background: #fff;
+    padding: 3px;
+    display: none;
+}
+
+.palette-close > .palette-header > i.fa.fa-chevron-down {
+
+    filter: none;
+    -ms-filter: "progid:DXImageTransform.Microsoft.BasicImage(rotation=1)";
+    -webkit-transform: rotate(-90deg);
+    -ms-transform: rotate(-90deg);
+    transform: rotate(-90deg);
+}
+
+.palette-node {
+    cursor: move;
+    margin: 3px auto;
+    height: 35px;
+    border-radius: 5px;
+    border: 1px solid #999;
+    background: #ddd no-repeat 5% 50%;
+    width: 80%;
+    background-size: contain;
+    position: relative;
+}
+
+.palette-node-label {
+    font-size: 13px;
+    font-weight: bold;
+    padding-left: 30px;
+    margin-left: auto;
+    margin-right: auto;
+    position: relative;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.palette-node-icon-container {
+    position: absolute;
+    text-align: center;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 30px;
+    border-right: 1px solid rgba(0, 0, 0, 0.1);
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.palette-node-icon {
+    /* display: inline-block;*/
+    width: 30px;
+    height: 100%;
+    background-position: 50% 50%;
+    background-size: contain;
+    background-repeat: no-repeat;
+}
+
+.palette-node-circle {
+    display: inline-block;
+    margin-top: 2px;
+    width: 28px;
+    height: 28px;
+    -webkit-border-radius: 14px;
+    -moz-border-radius: 14px;
+    border-radius: 14px;
+    background: red;
+}
+
+.palette-node-square {
+    display: inline-block;
+    margin-top: 4px;
+    padding-top: 1px;
+    width: 26px;
+    height: 26px;
+    background: red;
+}
+
+.palette-node-triangle {
+    padding-top: 1px;
+    width: 0px;
+    height: 0px;
+    border-left: 15px solid transparent;
+    border-right: 15px solid transparent;
+    border-bottom: 30px solid #2f2f2f;
+}
+
+/*
+END Palette section
+*/
+
+/*
+Popup section
+*/
+.popup.bg {
+    fill: black;
+    opacity: 0.21;
+    border-radius: 3px;
+}
+
+.popup.summary.bg {
+    fill: white;
+    opacity: 1;
+}
+
+.popup.summary.counter {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: 'Source Sans Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+.popup.summary.countervalue {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: 'Source Sans Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+.popup.title {
+    fill: black;
+    font-size: 16px;
+    font-family: 'Source Sans Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+/*
+Popup section
+*/

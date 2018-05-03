@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% load staticfiles %}
+
+{% block head_block %}
+{{ block.super }}
+    <link rel="stylesheet" href="{% static "bower_components/admin-lte/plugins/select2/select2.css" %}">
+
+    <style type="text/css">
+
+  input:required:invalid, input:focus:invalid {
+
+    background-position: right top;
+    background-repeat: no-repeat;
+  }
+  input:required:valid {
+
+    background-position: right top;
+    background-repeat: no-repeat;
+  }
+
+</style>
+{% endblock %}
+
+{% block left_sidebar %}
+    {% include 'left_sidebar_base.html' %}
+{% endblock %}
+
+{% block breadcrumb_body %}
+{{ block.super }}
+<li><a href='{% url "projects:new_project" %}'>New Project</a></li>
+{% endblock %}
+
+{% block content_body %}
+{{ block.super }}
+<div class="row">
+    <div class="col-md-12">
+        <!-- general form elements -->
+        <div class="box box-primary">
+            <div class="box-header with-border">
+                <h3 class="box-title">New Project</h3>
+            </div>
+            <!-- /.box-header -->
+            <!-- form start -->
+            <form role="form" method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="box-body">
+                    <div class="row">
+                        <div class="form-group col-xs-3">
+                            <p for="typeButtonsSelect">Project Type</p>
+                            <input type="hidden" class="form-control input-sm" name="type" id="projectType"
+                                    required>
+                            <select id="select_type" class="js-example-basic-single form-control" style="width: 75%">
+
+                            </select>
+
+                        </div>
+                        <div class="form-group col-xs-4">
+                            <p for="projectName">Project Name</p>
+                            <input type="text" class="form-control input-sm" name="name" id="projectName"
+                                   placeholder="Enter Project name" required>
+                        </div>
+                        <div class="form-group col-xs-4">
+                            <p for="projectInfo">Info</p>
+                            <input type="text" class="form-control input-sm" name="info" id="projectInfo"
+                                   placeholder="Short Description">
+                        </div>
+
+
+                    </div>
+                    <div class="row">
+                        <div id="startGroup" class="form-group col-xs-5" style="display: none;">
+
+
+                            <div id="startButtonsSelect" class="btn-group" data-toggle="buttons">
+                                <label id="s-scratch" class="btn btn-primary active">
+                                    <input id="scratch" type="radio" name="startfrom" autocomplete="off" value="scratch">
+                                     Empty project
+                                </label>
+                                <label id="s-example" class="btn btn-primary">
+                                    <input type="radio" name="startfrom" autocomplete="off" value="example">
+                                     Example project
+                                </label>
+                                <label id="s-files" class="btn btn-primary">
+                                    <input type="radio" name="startfrom" autocomplete="off" value="files">
+                                     Load files
+                                </label>
+
+
+                            </div>
+                        </div>
+                    </div>
+                    <div id="typeStartContainer" class="row">
+                         <div class="form-group col-xs-8">
+                        {% autoescape off %}{{ type_container_template }}{% endautoescape %}
+                        </div>
+                    </div>
+
+                    <!-- /.box-body -->
+                </div>
+                <div class="box-footer">
+                    <button id="createButton" type="submit" class="btn btn-primary" disabled>Create</button>
+                </div>
+            </form>
+        </div>
+        <!-- /.box -->
+
+    </div>
+</div>
+{% endblock %}
+
+{% block resource_block %}
+{{ block.super }}
+    <!-- Select2 -->
+    <script src="{% static "bower_components/admin-lte/plugins/select2/select2.full.min.js" %}"></script>
+
+    <script src="{% static "src/projecthandler/new_project.js" %}"></script>
+<script>
+{% if data_type_selector %}
+var data_type_selector ={{ data_type_selector |safe }};
+{% endif %}
+
+{% if type_example_files %}
+var type_example_files = {{type_example_files | safe}};
+{% endif %}
+
+</script>
+{% endblock %}
+

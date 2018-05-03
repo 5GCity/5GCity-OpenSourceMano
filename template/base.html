@@ -1,0 +1,159 @@
+{% load staticfiles %}
+<!DOCTYPE html>
+<html>
+<head>
+
+    {% block head_base %}
+        {% include "head.html" %}
+    {% endblock %}
+    {% block head_block %}
+
+    {% endblock %}
+  <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+  <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+  <!--[if lt IE 9]>
+  <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
+  <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+  <![endif]-->
+
+  <!-- Google Font
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,600,700,300italic,400italic,600italic">-->
+</head>
+
+
+{% block body %}
+
+{% if request.COOKIES.collapsed_sidebar == '1' %}
+<body class="skin-purple sidebar-mini sidebar-collapse">
+{% else %}
+<body class="skin-purple hold-transition sidebar-mini">
+{% endif %}
+
+<div class="wrapper">
+
+  <header class="main-header">
+    <!-- Logo -->
+    {% block logo_sidebar %}
+        {% include "logo_sidebar.html" %}
+    {% endblock %}
+    <!-- Header Navbar: style can be found in header.less -->
+    <nav class="navbar navbar-static-top">
+      <!-- Sidebar toggle button-->
+      <a href="#" class="sidebar-toggle" data-toggle="push-menu" role="button">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </a>
+
+      <div class="navbar-custom-menu">
+        <ul class="nav navbar-nav">
+            {% if user.get_full_name %}
+          <!-- User Account: style can be found in dropdown.less -->
+          <li class="dropdown user user-menu">
+            <a href="#" class="dropdown-toggle" data-toggle="dropdown">
+              <img src="{% static  user.get_avatar  %}" class="user-image" alt="User Image">
+                        <span class="hidden-xs">{{ user.username }}</span>
+            </a>
+            <ul class="dropdown-menu">
+                        <!-- User image -->
+                        <li class="user-header">
+                            <img src="{% static  user.get_avatar  %}" class="img-circle" alt="User Image">
+                            <p id="user_menu_name_role">
+                                {{ user.get_full_name }}
+                                <small id="user_menu_role">{{ user.get_user_role_name }}</small>
+                            </p>
+                        </li>
+                        <!-- Menu Footer-->
+                        <li class="user-footer">
+                            <div class="pull-left">
+                              <a href="#" class="btn btn-default btn-flat" disabled>Settings</a>
+                            </div>
+                            <div class="pull-right">
+                                <a href="/auth" class="btn btn-default btn-flat">Sign out</a>
+                            </div>
+                        </li>
+                    </ul>
+          </li>
+            {% endif %}
+        </ul>
+      </div>
+    </nav>
+  </header>
+
+        <!-- =============================================== -->
+        {% block left_sidebar %}
+
+        {% endblock %}
+
+      <!-- =============================================== -->
+
+      <!-- Content Wrapper. Contains page content -->
+      <div class="content-wrapper">
+          <!-- Content Header (Page header) -->
+            <section class="content-header">
+                <h1 id="title_header">
+                    {% block title_header_big %}
+
+                    {% endblock %}
+                    <small>
+                        {% block title_header_small %}
+
+                        {% endblock %}
+                    </small>
+                </h1>
+                <ol id="breadcrumb" class="breadcrumb">
+                    {% block breadcrumb_body %}
+                        <li><a href='{% url "home" %}'><i class="fa fa-home fa-fw"></i> Home</a></li>
+                    {% endblock %}
+                </ol>
+            </section>
+
+          <!-- Main content -->
+            <section id="main_content" class="content">
+                {% block content_body %}
+
+                {% endblock %}
+            </section>
+          <!-- /.content -->
+        {% include "modals/error_alert.html" %}
+      </div><!-- /.content-wrapper -->
+        {% block footer %}
+            {% include "footer.html" %}
+        {% endblock %}
+
+
+    </div>
+<!-- ./wrapper -->
+
+<!-- jQuery 3 -->
+<script src="/static/bower_components/jquery/dist/jquery.min.js"></script>
+<!-- Bootstrap 3.3.7 -->
+<script src="/static/bower_components/bootstrap/dist/js/bootstrap.min.js"></script>
+<!-- FastClick -->
+<script src="/static/bower_components/fastclick/lib/fastclick.js"></script>
+<!-- AdminLTE App -->
+<script src="/static/bower_components/admin-lte/dist/js/adminlte.min.js"></script>
+<!-- iCheck -->
+<script src="/static/bower_components/admin-lte/plugins/iCheck/icheck.min.js"></script>
+<!-- pace -->
+<script src="/static/bower_components/admin-lte/plugins/pace/pace.min.js"></script>
+<!-- bootbox -->
+<script src="/static/bower_components/bootbox.js/bootbox.js"></script>
+<!-- RDCL3D AdminLTE session storage handler -->
+<script src="/static/src/adminlte_session_storage.js"></script>
+<!-- Utility JS -->
+<script src="/static/src/utils.js"></script>
+
+<script>
+    $(document).ready(function () {
+        $('[data-toggle="tooltip"]').tooltip()
+    });
+
+</script>
+{% block resource_block %}
+
+{% endblock %}
+</body>
+{% endblock %}
+</html>

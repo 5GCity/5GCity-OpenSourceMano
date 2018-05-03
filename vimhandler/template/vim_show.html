@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% load get %}
+{% load staticfiles %}
+{% block head_base %}
+    {% with skin_css="AdminLTE/dist/css/skins/skin-purple.min.css"%}
+        {{ block.super }}
+    {% endwith %}
+{% endblock %}
+
+{% block body %}
+    {% with skin="purple"%}
+        {{ block.super }}
+    {% endwith %}
+{% endblock %}
+{% block logo_sidebar %}
+    {% with logo_mini="assets/img/osm_small_logo.png" logo="assets/img/OSM-logo.png" %}
+        {{ block.super }}
+    {% endwith %}
+{% endblock %}
+
+
+
+{% block head_block %}
+    {{ block.super }}
+
+{% endblock %}
+{% block title_header_big %}
+    {{ block.super }}
+{% endblock %}
+{% block left_sidebar %}
+
+    {% include 'left_sidebar_base.html' %}
+
+{% endblock %}
+
+
+{% block breadcrumb_body %}
+    {{ block.super }}
+    <li><a href="{% url 'vim:list' %}">Vims</a></li>
+{% endblock %}
+
+{% block content_body %}
+    {{ block.super }}
+
+<div class="row">
+    <div class="col-md-12">
+
+        <div class="box">
+            <div class="box-header with-border">
+                <h3 class="box-title">VIM Account details</h3>
+                <div class="box-tools">
+
+                </div>
+            </div>
+            <div class="box-body">
+
+                <div class="row">
+                    <div class="col-lg-6">
+                        <div class="row">
+                            <label for="name" class="col-sm-3 control-label">Name</label>
+                            <div class="col-sm-6 input-group input-group-sm">
+                                <p id="name"> {{datacenter.name|default:"---" }}</p>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <label for="vim_user" class="col-sm-3 control-label">Vim Username</label>
+                            <div class="col-sm-6 input-group input-group-sm">
+                                <p id="vim_user"> {{datacenter.vim_user|default:"---" }}</p>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <label for="vim_url" class="col-sm-3 control-label">Vim URL</label>
+                            <div class="col-sm-6 input-group input-group-sm">
+                                <p id="vim_url"> {{datacenter.vim_url|default:"---" }}</p>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <label for="vim_type" class="col-sm-3 control-label">Type</label>
+                            <div class="col-sm-6 input-group input-group-sm">
+                                <p id="vim_type"> {{datacenter.vim_type|default:"---" }}</p>
+                            </div>
+                        </div>
+
+
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="row">
+                                <label for="vim_tenant_name" class="col-sm-3 control-label">Tenant name</label>
+                                <div class="col-sm-6 input-group input-group-sm">
+                                    <p id="vim_tenant_name"> {{datacenter.vim_tenant_name|default:"---" }}</p>
+                                </div>
+                        </div>
+                        <div class="row">
+                                <label for="description" class="col-sm-3 control-label">Description</label>
+                                <div class="col-sm-6 input-group input-group-sm">
+                                    <p id="description"> {{datacenter.description|default:"---" }}</p>
+                                </div>
+                        </div>
+                        <div class="row">
+                                <label for="schema_type" class="col-sm-3 control-label">Schema Type</label>
+                                <div class="col-sm-6 input-group input-group-sm">
+                                    <p id="schema_type"> {{datacenter.schema_type|default:"---" }}</p>
+                                </div>
+                        </div>
+                        <div class="row">
+                                <label for="schema_version" class="col-sm-3 control-label">Schema Version</label>
+                                <div class="col-sm-6 input-group input-group-sm">
+                                    <p id="schema_version"> {{datacenter.schema_version|default:"---" }}</p>
+                                </div>
+                        </div>
+                    </div>
+
+
+                </div>
+                {% if datacenter.vim_type == 'openvim' %}
+                    {% include 'config/openvim_show.html' %}
+                {% elif datacenter.vim_type == 'openstack' %}
+                    {% include 'config/openstack_show.html' %}
+                {% elif datacenter.vim_type == 'vmware' %}
+                    {% include 'config/vmware_show.html' %}
+                {% elif datacenter.vim_type == 'aws' %}
+                    {% include 'config/aws_show.html' %}
+                {% endif %}
+            </div>
+            <div class="box-footer">
+                <div class="">
+                    <button onclick="location.href='{% url 'vim:list' %}'" class="btn btn-primary">Back to VIM Accounts</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block resource_block %}
+    {{ block.super }}
+    <!-- Utility JS -->
+
+    <script>
+
+    </script>
+
+{% endblock %}
+
+{% block footer %}
+    {% include "footer.html"  %}
+{% endblock %}

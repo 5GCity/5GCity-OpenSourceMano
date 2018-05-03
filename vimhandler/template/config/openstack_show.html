@@ -1,0 +1,130 @@
+<div class="panel" id="openstack_config">
+    <h5 class="box-title">
+        <a data-toggle="collapse" data-parent="#accordion" href="#openstack_config_collapse">
+            Config parameters
+        </a>
+    </h5>
+    <div id="openstack_config_collapse" class="panel-collapse collapse ">
+
+        <div class="col-lg-6">
+
+            <div class="row">
+                <label for="ostack_sdn_ctrl" class="col-sm-4 control-label">SDN Controller:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="ostack_sdn_ctrl"> {{datacenter.sdn_ctrl|default:"---" }}</p>
+                </div>
+            </div>
+            <div class="row">
+                <label for="ostack_ssdn_port_map" class="col-sm-4 control-label">SDN Port Mapping:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="ostack_ssdn_port_map"> {{datacenter.sdn_port_map|default:"---" }}</p>
+                </div>
+            </div>
+            <div class="row">
+                <label for="ostack_security_groups" class="col-sm-4 control-label">Security Groups:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="ostack_security_groups"> {{datacenter.security_groups|default:"---" }}</p>
+                </div>
+            </div>
+            <div class="row">
+                <label for="availability_zone" class="col-sm-4 control-label">Availability Zone:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="availability_zone"> {{datacenter.availability_zone|default:"---" }}</p>
+                </div>
+            </div>
+            <div class="row">
+                <label for="ostack_region_name" class="col-sm-4 control-label">Region Name:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="ostack_region_name"> {{datacenter.region_name|default:"---" }}</p>
+                </div>
+            </div>
+            <div class="row">
+                <label for="option_insecure" class="col-sm-4 control-label">Insecure:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="option_insecure"> {{datacenter.insecure|default:"---" }}</p>
+                </div>
+            </div>
+            <div class="row">
+                <label for="use_existing_flavors" class="col-sm-4 control-label">Use existing flavors:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="use_existing_flavors"> {{datacenter.use_existing_flavors|default:"---" }}</p>
+                </div>
+            </div>
+            <div class="row">
+                <label for="use_internal_endpoint" class="col-sm-4 control-label">Use internal endpoint:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="use_internal_endpoint"> {{datacenter.use_internal_endpoint|default:"---" }}</p>
+                </div>
+            </div>
+            <div class="row">
+                <label for="APIversion" class="col-sm-4 control-label">API version:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="APIversion"> {{datacenter.APIversion|default:"---" }}</p>
+                </div>
+            </div>
+
+        </div>
+        <div class="col-lg-6">
+            <div class="row">
+
+                <label for="project_domain_id" class="col-sm-4 control-label">Project domain id:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="project_domain_id"> {{datacenter.project_domain_id|default:"---" }}</p>
+                </div>
+            </div>
+            <div class="row">
+
+                <label for="project_domain_name" class="col-sm-4 control-label">Project domain name:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="project_domain_name"> {{datacenter.project_domain_name|default:"---" }}</p>
+                </div>
+            </div>
+            <div class="row">
+
+                <label for="user_domain_id" class="col-sm-4 control-label">User domain id:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="user_domain_id"> {{datacenter.user_domain_id|default:"---" }}</p>
+                </div>
+            </div>
+            <div class="row">
+                <label for="user_domain_name" class="col-sm-4 control-label">User domain name:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="user_domain_name"> {{datacenter.user_domain_name|default:"---" }}</p>
+                </div>
+            </div>
+            <div class="row">
+
+                <label for="keypair" class="col-sm-4 control-label">Keypair:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="keypair"> {{datacenter.keypair|default:"---" }}</p></div>
+            </div>
+            <div class="row">
+
+                <label for="dataplane_physical_net" class="col-sm-4 control-label">Dataplane physical net:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="dataplane_physical_net"> {{datacenter.dataplane_physical_net|default:"---" }}</p>
+                </div>
+            </div>
+            <div class="row">
+
+                <label for="use_floating_ip" class="col-sm-4 control-label">Use floating ip:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="use_floating_ip"> {{datacenter.use_floating_ip|default:"---" }}</p>
+                </div>
+            </div>
+            <div class="row">
+
+                <label for="dataplane_net_vlan_range" class="col-sm-4 control-label">Dataplane net vlan range:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="dataplane_net_vlan_range"> {{datacenter.dataplane_net_vlan_range|default:"---" }}</p>
+                </div>
+            </div>
+            <div class="row">
+
+                <label for="microversion" class="col-sm-4 control-label">Microversion:</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <p id="microversion"> {{datacenter.microversion|default:"---" }}</p></div>
+            </div>
+        </div>
+    </div>
+</div>

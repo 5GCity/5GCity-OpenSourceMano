@@ -1,0 +1,89 @@
+#
+#   Copyright 2018 CNIT - Consorzio Nazionale Interuniversitario per le Telecomunicazioni
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an  BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+
+from django.shortcuts import render
+from django.contrib.auth import login, logout, authenticate
+from django.http import HttpResponseRedirect
+from sf_user.models import CustomUser
+import urllib
+import uuid
+
+
+# Create your views here.
+def login_view(request):
+    if hasattr(request.user, "is_guest_user") and request.user.is_guest_user == True:
+        print "is_guest", request.user.is_guest_user
+        CustomUser.objects.get(id=request.user.id).delete()
+    logout(request)
+    extra_data = {}
+    next_page = ""
+    if request.GET:
+        next_page = request.GET['next']
+    error_message = ''
+    if request.POST:
+        print request.POST.get('username')
+        print request.POST.get('password')
+        next_page = request.POST.get('next')
+        next_page = urllib.unquote(next_page).decode('iso-8859-2')
+        user = authenticate(username=request.POST.get('username'), password=request.POST.get('password'))
+        print "Auth Result: " + str(user) + " -> " + str(user)
+        if user and user.is_active:
+            if user.is_authenticated():
+                login(request, user)
+                print next_page
+                if next_page == "" or next_page is None:
+                    return HttpResponseRedirect('/home')
+                else:
+                    return HttpResponseRedirect(next_page)
+        else:
+            error_message = 'Login failed!'
+    return render(request, 'login.html', {'error_message':error_message, 'collapsed_sidebar': False})
+
+
+def guest_login(request):
+    #user = CustomUser.objects.get(id=request.user.id)
+    if hasattr(request.user, "is_guest_user") and request.user.is_guest_user == True:
+        CustomUser.objects.get(id=request.user.id).delete()
+    logout(request)
+    next = ""
+
+    guest_user_name = "Guest_"+str(uuid.uuid4())
+    guest_user_email = guest_user_name+"@guest.it"
+    guest_user = CustomUser.objects.create(username=guest_user_name, is_guest_user="True", email=guest_user_email, first_name='User', last_name='Guest')
+    print guest_user.username
+
+    if guest_user and guest_user.is_active:
+        if guest_user.is_authenticated():
+            login(request, guest_user)
+            if next == "":
+                return HttpResponseRedirect('/home')
+            else:
+                return HttpResponseRedirect(next)
+
+    return render(request, 'login.html', {'error_message': 'New Guest session failed.'})
+
+
+def register_view(request):
+
+    logout(request)
+    extra_data = {}
+    next = ""
+    if request.GET:
+        next = request.GET['next']
+    error_message = ''
+    if request.POST:
+        print "new user"
+    return render(request, 'register_user.html', {'error_message': error_message, 'collapsed_sidebar': False})

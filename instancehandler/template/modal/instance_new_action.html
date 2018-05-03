@@ -1,0 +1,57 @@
+<div class="modal" id="modal_instance_new_action" xmlns="http://www.w3.org/1999/html">
+    <div   class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">×</span></button>
+                <h4 class="modal-title" >Perform Action</h4>
+            </div>
+            <form id="formActionNS" action="" class="form-horizontal" method="post" enctype="multipart/form-data">
+                     {% csrf_token %}
+            <div class="modal-body" id="modal_instance_new_action_body" >
+
+                    <div class="row">
+                        <label for="primitive" class="col-sm-2">Primitive:</label>
+                        <div class="col-sm-3">
+                            <input class="form-control input-sm" id="primitive" name="primitive" required>
+                        </div>
+
+                        <label for="vnf_member_index" class="col-sm-4">VNF Member index: </label>
+                            <div class="col-sm-2">
+                                <input class="form-control input-sm" id="vnf_member_index" name="vnf_member_index" required>
+                            </div>
+                    </div>
+
+                <div class="row">
+                    <h5 class="col-sm-4">Primitive parameters :</h5>
+
+                </div>
+
+                <div id="primitive_params_div">
+
+                    <div class="form-group">
+                        <label  class="col-sm-2">Name: </label>
+                            <div class="col-sm-3">
+                                <input name="primitive_params_name" class="form-control input-sm" >
+                            </div>
+                        <label class="col-sm-2">Value: </label>
+                            <div class="col-sm-3">
+                                <input name="primitive_params_value" class="form-control input-sm" >
+                            </div>
+                        <button type="button" class="btn btn-success btn-add btn-sm">+</button>
+                    </div>
+                </div>
+
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default pull-left" data-dismiss="modal">Cancel</button>
+                <button  class="btn btn-primary pull-right" >Execute</button>
+            </div>
+            </form>
+
+        </div>
+        <!-- /.modal-content -->
+    </div>
+    <!-- /.modal-dialog -->
+</div>

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% load staticfiles %}
+
+{% block head_block %}
+  	{{ block.super }}
+    <link rel="stylesheet" href="/static/bower_components/datatables.net-bs/css/dataTables.bootstrap.min.css">
+{% endblock %}
+{% block title_header_big %}
+
+{% endblock %}
+
+{% block left_sidebar %}
+
+{% endblock %}
+
+{% block breadcrumb_body %}
+  	{{ block.super }}
+    <li><a href="{% url 'projects:projects_list' %}">Projects</a></li>
+{% endblock %}
+
+{% block content_body %}
+  	{{ block.super }}
+{% if alert_message %}
+    {% if alert_message.success %}
+        <div class="alert alert-success alert-dismissible fade in">
+            <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
+            <h4><i class="icon fa fa-check"></i> Success</h4>
+            {{alert_message.message}}
+        </div>
+    {% endif %}
+    {% if not alert_message.success %}
+        <div class="alert alert-danger alert-dismissible fade in">
+            <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
+            <h4><i class="icon fa fa-ban"></i> Alert!</h4>
+            {{alert_message.message}}
+        </div>
+    {% endif %}
+{% endif %}
+
+{% endblock %}
+
+
+
+
+{% block resource_block %}
+  	{{ block.super }}
+
+    <script src="/static/bower_components/datatables.net/js/jquery.dataTables.min.js"></script>
+    <script src="/static/bower_components/datatables.net-bs/js/dataTables.bootstrap.min.js"></script>
+    <script src="/static/src/projecthandler/descriptorslist.js"></script>
+
+{% endblock %}
+

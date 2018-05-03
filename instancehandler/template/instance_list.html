@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% load get %}
+{% load staticfiles %}
+
+
+
+{% block head_block %}
+    {{ block.super }}
+    <!-- Codemirror core CSS -->
+    <link rel="stylesheet" href="/static/bower_components/codemirror/lib/codemirror.css">
+    <link rel="stylesheet" href="/static/bower_components/codemirror/addon/fold/foldgutter.css" />
+    <link rel="stylesheet" href="/static/bower_components/codemirror/theme/neat.css">
+    <link rel="stylesheet" href="/static/bower_components/codemirror/addon/dialog/dialog.css">
+    <link rel="stylesheet" href="/static/bower_components/codemirror/addon/display/fullscreen.css">
+{% endblock %}
+{% block title_header_big %}
+    {{ block.super }}
+{% endblock %}
+{% block left_sidebar %}
+    {% include 'osm/osm_project_left_sidebar.html' %}
+{% endblock %}
+
+
+{% block breadcrumb_body %}
+    {{ block.super }}
+    <li><a href="{% url 'projects:instances:list' project_id=project_id type=type %}">Instances</a></li>
+{% endblock %}
+
+{% block content_body %}
+    {{ block.super }}
+    {% include 'modal/instance_create.html' %}
+    {% csrf_token %}
+    <div class="row">
+        <div class="col-md-12">
+
+            <div class="box">
+                <div class="box-header with-border">
+                    <h3 class="box-title">Instances</h3>
+                    <!--
+                    <div class="box-tools">
+                        <a href="javascript:newVimModal()" class="btn btn-block btn-primary btn-sm"><i
+                                class="fa fa-plus"></i><span> New VIM</span></a>
+                    </div>
+                    -->
+                </div>
+                <div class="box-body">
+                    <table id="instances_table" class="table table-bordered table-striped">
+                        <thead>
+                        <tr>
+                            <th>Id</th>
+                            <th>Name</th>
+                            <th>Nsd name</th>
+                            <th style="width:5%">Operational Status</th>
+                            <th style="width:5%">Config Status</th>
+                            <th>Detailed Status</th>
+                            <th >Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for i in instances %}
+                            <tr>
+
+                                <td>{{ i|get:"_id" }}</td>
+                                <td>{{ i|get:"short-name" }}</td>
+                                <td>{{ i|get:"nsd-name-ref" }}</td>
+
+                                {% if i|get:"operational-status" == 'failed' %}
+                                    <td><span class="label label-danger">{{ i|get:"operational-status"  }}</span> </td>
+                                {% elif i|get:"operational-status" == 'init' %}
+                                     <td><span class="label label-warning">{{ i|get:"operational-status"  }}</span> </td>
+                                {% elif i|get:"operational-status" == 'running' %}
+                                     <td><span class="label label-success">{{ i|get:"operational-status"  }}</span> </td>
+                                {% else  %}
+                                    <td>{{ i|get:"operational-status"  }}</td>
+                                {% endif %}
+                                {% if i|get:"config-status" == 'failed' %}
+                                    <td><span class="label label-danger">{{ i|get:"config-status"  }}</span> </td>
+                                {% elif i|get:"config-status" == 'init' %}
+                                     <td><span class="label label-warning">{{ i|get:"config-status"  }}</span> </td>
+                                {% elif i|get:"config-status" == 'running' %}
+                                     <td><span class="label label-success">{{ i|get:"config-status"  }}</span> </td>
+                                {% elif i|get:"config-status" == 'configured' %}
+                                    <td><span class="label label-success">{{ i|get:"config-status"  }}</span> </td>
+                                {% else  %}
+                                    <td>{{ i|get:"config-status"  }}</td>
+                                {% endif %}
+                                <td style=" max-width:1px;overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">{{ i|get:"detailed-status" }}</td>
+                                <td>
+                                    <div class="btn-group">
+                                        <button type="button" class="btn btn-default"
+                                                onclick="javascript:showInstanceDetails('{% url 'projects:instances:show' instance_id=i|get:'_id' project_id=project_id type=type %}')"
+                                                data-toggle="tooltip" data-placement="top" data-container="body" title="Show Info"><i
+                                                class="fa fa-info"></i>
+                                        </button>
+
+                                        <button type="button" class="btn btn-default"
+                                                onclick="javascript:deleteNs('{% url 'projects:instances:delete' instance_id=i|get:'_id' project_id=project_id type=type %}')"
+                                                data-toggle="tooltip" data-placement="top" data-container="body" title="Delete"><i
+                                                class="fa fa-trash-o"></i></button>
+
+                                            <button type="button" class="btn btn-default dropdown-toggle"
+                                                    data-toggle="dropdown" aria-expanded="false">Actions
+                                                <span class="fa fa-caret-down"></span></button>
+                                            <ul class="dropdown-menu">
+                                                <li><a href="#" onclick="javascript:performAction('{% url 'projects:instances:action' instance_id=i|get:'_id' project_id=project_id type=type %}')">
+                                                    <i class="fa fa-magic"></i>Exec NS Primitive</a></li>
+                                                <li><a href="#"> <i class="fa fa-list"></i>Active operations</a></li>
+                                            </ul>
+
+
+                                    </div>
+
+                                </td>
+
+
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+{% include 'modal/instance_show.html' %}
+{% include 'modal/instance_new_action.html' %}
+{% endblock %}
+
+{% block resource_block %}
+    {{ block.super }}
+    <!-- Utility JS -->
+
+    <script src="/static/bower_components/codemirror/lib/codemirror.js"></script>
+    <script src="/static/bower_components/codemirror/addon/fold/foldcode.js"></script>
+    <script src="/static/bower_components/codemirror/addon/fold/foldgutter.js"></script>
+    <script src="/static/bower_components/codemirror/addon/fold/brace-fold.js"></script>
+    <script src="/static/bower_components/codemirror/mode/javascript/javascript.js"></script>
+    <script src="/static/bower_components/codemirror/addon/search/searchcursor.js"></script>
+    <script src="/static/bower_components/codemirror/addon/search/search.js"></script>
+    <script src="/static/bower_components/codemirror/addon/dialog/dialog.js"></script>
+    <script src="/static/bower_components/codemirror/addon/display/autorefresh.js"></script>
+    <script src="/static/bower_components/codemirror/addon/edit/matchbrackets.js"></script>
+    <script src="/static/bower_components/codemirror/addon/edit/closebrackets.js"></script>
+    <script src="/static/bower_components/codemirror/addon/display/fullscreen.js"></script>
+    <script src="/static/bower_components/codemirror/keymap/sublime.js"></script>
+    <script src="/static/src/instancehandler/instance_list.js"></script>
+
+{% endblock %}
+
+{% block footer %}
+    {% include "footer.html" %}
+{% endblock %}
