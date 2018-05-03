@@ -41,9 +41,9 @@ class Package(object):
         if pkg_type is None:
             raise ClientException("Cannot determine package type")
         if pkg_type['type'] == 'nsd':
-            endpoint = '/nsd/v1/ns_descriptors'
+            endpoint = '/nsd/v1/ns_descriptors_content'
         else:
-            endpoint = '/vnfpkgm/v1/vnf_packages'
+            endpoint = '/vnfpkgm/v1/vnf_packages_content'
         #endpoint = '/nsds' if pkg_type['type'] == 'nsd' else '/vnfds'
         #print 'Endpoint: {}'.format(endpoint)
         headers = self._client._headers
@@ -57,8 +57,7 @@ class Package(object):
         http_header = ['{}: {}'.format(key,val)
                       for (key,val) in headers.items()]
         self._http.set_http_header(http_header)
-        resp = self._http.post_cmd(endpoint=endpoint,
-                                   filename=filename)
+        resp = self._http.post_cmd(endpoint=endpoint, filename=filename)
         #print 'RESP: {}'.format(yaml.safe_dump(resp))
         if not resp or 'id' not in resp:
             raise ClientException("failed to upload package")
