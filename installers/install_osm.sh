@@ -561,7 +561,7 @@ EONG
 function generate_docker_env_files() {
     echo "Generating docker env files"
     OSMLCM_VCA_HOST=`juju show-controller|grep api-endpoints|awk -F\' '{print $2}'|awk -F\: '{print $1}'`
-    OSMLCM_VCA_SECRET=`grep password /home/ubuntu/.local/share/juju/accounts.yaml |awk '{print $2}'`
+    OSMLCM_VCA_SECRET=`grep password ${HOME}/.local/share/juju/accounts.yaml |awk '{print $2}'`
     MYSQL_ROOT_PASSWORD=`date +%s | sha256sum | base64 | head -c 32`
     echo "OSMLCM_VCA_HOST=${OSMLCM_VCA_HOST}" |sudo tee ${OSM_DEVOPS}/installers/docker/lcm.env
     echo "OSMLCM_VCA_SECRET=${OSMLCM_VCA_SECRET}" |sudo tee -a ${OSM_DEVOPS}/installers/docker/lcm.env
