@@ -36,6 +36,7 @@ class JujuCharmNotFound(Exception):
 class JujuApplicationExists(Exception):
     """The Application already exists."""
 
+
 class N2VCPrimitiveExecutionFailed(Exception):
     """Something failed while attempting to execute a primitive."""
 
@@ -45,6 +46,7 @@ logging.getLogger('websockets.protocol').setLevel(logging.INFO)
 logging.getLogger('juju.client.connection').setLevel(logging.WARN)
 logging.getLogger('juju.model').setLevel(logging.WARN)
 logging.getLogger('juju.machine').setLevel(logging.WARN)
+
 
 class VCAMonitor(ModelObserver):
     """Monitor state changes within the Juju Model."""
@@ -131,6 +133,7 @@ class VCAMonitor(ModelObserver):
 #
 # Create unique models per network service
 # Document all public functions
+
 
 class N2VC:
 
@@ -404,11 +407,14 @@ class N2VC:
             # FIXME: This is hard-coded until model-per-ns is added
             model_name = 'default'
 
+            model = await self.controller.get_model(model_name)
+
             if primitive == 'config':
                 # config is special, and expecting params to be a dictionary
-                await self.set_config(application_name, params['params'])
+                self.log.debug("Setting charm configuration for {}".format(application_name))
+                self.log.debug(params['params'])
+                await self.set_config(model, application_name, params['params'])
             else:
-                model = await self.controller.get_model(model_name)
                 app = await self.get_application(model, application_name)
                 if app:
                     # Run against the first (and probably only) unit in the app
@@ -448,9 +454,19 @@ class N2VC:
     async def DestroyNetworkService(self, nsd):
         raise NotImplementedError()
 
-    async def GetMetrics(self, nsd, vnfd):
-        """Get the metrics collected by the VCA."""
-        raise NotImplementedError()
+    async def GetMetrics(self, model_name, application_name):
+        """Get the metrics collected by the VCA.
+
+        :param model_name The name of the model
+        :param application_name The name of the application
+        """
+        metrics = {}
+        model = await self.get_model(model_name)
+        app = await self.get_application(model, application_name)
+        if app:
+            metrics = await app.get_metrics()
+
+        return metrics
 
     # Non-public methods
     async def add_relation(self, a, b, via=None):
@@ -471,12 +487,12 @@ class N2VC:
         finally:
             await m.disconnect()
 
-    async def apply_config(self, config, application):
-        """Apply a configuration to the application."""
-        print("JujuApi: Applying configuration to {}.".format(
-            application
-        ))
-        return await self.set_config(application=application, config=config)
+    # async def apply_config(self, config, application):
+    #     """Apply a configuration to the application."""
+    #     print("JujuApi: Applying configuration to {}.".format(
+    #         application
+    #     ))
+    #     return await self.set_config(application=application, config=config)
 
     def _get_config_from_dict(self, config_primitive, values):
         """Transform the yang config primitive to dict.
@@ -744,12 +760,12 @@ class N2VC:
 
         return result
 
-    async def set_config(self, application, config):
+    async def set_config(self, model_name, application, config):
         """Apply a configuration to the application."""
         if not self.authenticated:
             await self.login()
 
-        app = await self.get_application(self.default_model, application)
+        app = await self.get_application(model_name, application)
         if app:
             self.log.debug("JujuApi: Setting config for Application {}".format(
                 application,
@@ -762,20 +778,20 @@ class N2VC:
                 if config[key] != newconf[key]['value']:
                     self.log.debug("JujuApi: Config not set! Key {} Value {} doesn't match {}".format(key, config[key], newconf[key]))
 
-    async def set_parameter(self, parameter, value, application=None):
-        """Set a config parameter for a service."""
-        if not self.authenticated:
-            await self.login()
-
-        self.log.debug("JujuApi: Setting {}={} for Application {}".format(
-            parameter,
-            value,
-            application,
-        ))
-        return await self.apply_config(
-            {parameter: value},
-            application=application,
-        )
+    # async def set_parameter(self, parameter, value, application=None):
+    #     """Set a config parameter for a service."""
+    #     if not self.authenticated:
+    #         await self.login()
+    #
+    #     self.log.debug("JujuApi: Setting {}={} for Application {}".format(
+    #         parameter,
+    #         value,
+    #         application,
+    #     ))
+    #     return await self.apply_config(
+    #         {parameter: value},
+    #         application=application,
+        # )
 
     async def wait_for_application(self, name, timeout=300):
         """Wait for an application to become active."""
