@@ -87,6 +87,9 @@ class Metrics(object):
 
         endpoint = Common.get_endpoint("metric", values['vim_uuid'])
 
+        if 'metric_name' in values and values['metric_name'] not in METRIC_MAPPINGS.keys():
+            raise ValueError('Metric ' + values['metric_name'] + ' is not supported.')
+
         if message.key == "create_metric_request":
             # Configure metric
             metric_details = values['metric_create']
@@ -101,10 +104,9 @@ class Metrics(object):
                     metric_id=metric_id, r_id=resource_id)
                 log.info("Response messages: %s", resp_message)
                 self._producer.create_metrics_resp(
-                    'create_metric_response', resp_message,
-                    'metric_response')
+                    'create_metric_response', resp_message)
             except Exception as exc:
-                log.warn("Failed to create response: %s", exc)
+                log.warning("Failed to create response: %s", exc)
 
         elif message.key == "read_metric_data_request":
             # Read all metric data related to a specified metric
@@ -115,7 +117,7 @@ class Metrics(object):
             try:
 
                 metric_id = self.get_metric_id(endpoint, auth_token, METRIC_MAPPINGS[values['metric_name']],
-                                          values['resource_uuid'])
+                                               values['resource_uuid'])
                 resp_message = self._response.generate_response(
                     'read_metric_data_response',
                     m_id=metric_id,
@@ -125,10 +127,9 @@ class Metrics(object):
                     times=timestamps, metrics=metric_data)
                 log.info("Response message: %s", resp_message)
                 self._producer.read_metric_data_response(
-                    'read_metric_data_response', resp_message,
-                    'metric_response')
+                    'read_metric_data_response', resp_message)
             except Exception as exc:
-                log.warn("Failed to send read metric response:%s", exc)
+                log.warning("Failed to send read metric response:%s", exc)
 
         elif message.key == "delete_metric_request":
             # delete the specified metric in the request
@@ -146,15 +147,14 @@ class Metrics(object):
                     cor_id=values['correlation_id'])
                 log.info("Response message: %s", resp_message)
                 self._producer.delete_metric_response(
-                    'delete_metric_response', resp_message,
-                    'metric_response')
+                    'delete_metric_response', resp_message)
             except Exception as exc:
-                log.warn("Failed to send delete response:%s", exc)
+                log.warning("Failed to send delete response:%s", exc)
 
         elif message.key == "update_metric_request":
             # Gnocchi doesn't support configuration updates
             # Log and send a response back to this effect
-            log.warn("Gnocchi doesn't support metric configuration\
+            log.warning("Gnocchi doesn't support metric configuration\
                       updates.")
             req_details = values['metric_create']
             metric_name = req_details['metric_name']
@@ -170,10 +170,9 @@ class Metrics(object):
                     r_id=resource_id, m_id=metric_id)
                 log.info("Response message: %s", resp_message)
                 self._producer.update_metric_response(
-                    'update_metric_response', resp_message,
-                    'metric_response')
+                    'update_metric_response', resp_message)
             except Exception as exc:
-                log.warn("Failed to send an update response:%s", exc)
+                log.warning("Failed to send an update response:%s", exc)
 
         elif message.key == "list_metric_request":
             list_details = values['metrics_list_request']
@@ -188,13 +187,12 @@ class Metrics(object):
                     cor_id=list_details['correlation_id'])
                 log.info("Response message: %s", resp_message)
                 self._producer.list_metric_response(
-                    'list_metric_response', resp_message,
-                    'metric_response')
+                    'list_metric_response', resp_message)
             except Exception as exc:
-                log.warn("Failed to send a list response:%s", exc)
+                log.warning("Failed to send a list response:%s", exc)
 
         else:
-            log.warn("Unknown key, no action will be performed.")
+            log.warning("Unknown key, no action will be performed.")
 
         return
 
@@ -203,13 +201,13 @@ class Metrics(object):
         try:
             resource_id = values['resource_uuid']
         except KeyError:
-            log.warn("Resource is not defined correctly.")
+            log.warning("Resource is not defined correctly.")
             return None, None, False
 
         # Check/Normalize metric name
         norm_name, metric_name = self.get_metric_name(values)
         if metric_name is None:
-            log.warn("This metric is not supported by this plugin.")
+            log.warning("This metric is not supported by this plugin.")
             return None, resource_id, False
 
         # Check for an existing metric for this resource
@@ -261,7 +259,7 @@ class Metrics(object):
 
                     return metric_id, new_resource_id, True
                 except Exception as exc:
-                    log.warn("Failed to create a new resource:%s", exc)
+                    log.warning("Failed to create a new resource:%s", exc)
             return None, None, False
 
         else:
@@ -277,12 +275,12 @@ class Metrics(object):
             result = Common.perform_request(
                 url, auth_token, req_type="delete")
             if str(result.status_code) == "404":
-                log.warn("Failed to delete the metric.")
+                log.warning("Failed to delete the metric.")
                 return False
             else:
                 return True
         except Exception as exc:
-            log.warn("Failed to carry out delete metric request:%s", exc)
+            log.warning("Failed to carry out delete metric request:%s", exc)
         return False
 
     def list_metrics(self, endpoint, auth_token, values):
@@ -293,7 +291,7 @@ class Metrics(object):
             # Check if the metric_name was specified for the list
             metric_name = values['metric_name'].lower()
             if metric_name not in METRIC_MAPPINGS.keys():
-                log.warn("This metric is not supported, won't be listed.")
+                log.warning("This metric is not supported, won't be listed.")
                 metric_name = None
         except KeyError as exc:
             log.info("Metric name is not specified: %s", exc)
@@ -348,7 +346,7 @@ class Metrics(object):
                 log.info("There are no metrics available")
                 return []
         except Exception as exc:
-            log.warn("Failed to generate any metric list. %s", exc)
+            log.warning("Failed to generate any metric list. %s", exc)
         return None
 
     def get_metric_id(self, endpoint, auth_token, metric_name, resource_id):
@@ -379,8 +377,9 @@ class Metrics(object):
         timestamps = []
         data = []
         try:
-            #get metric_id
-            metric_id = self.get_metric_id(endpoint, auth_token, METRIC_MAPPINGS[values['metric_name']], values['resource_uuid'])
+            # get metric_id
+            metric_id = self.get_metric_id(endpoint, auth_token, METRIC_MAPPINGS[values['metric_name']],
+                                           values['resource_uuid'])
             # Try and collect measures
             collection_unit = values['collection_unit'].upper()
             collection_period = values['collection_period']
@@ -412,7 +411,7 @@ class Metrics(object):
 
             return timestamps, data
         except Exception as exc:
-            log.warn("Failed to gather specified measures: %s", exc)
+            log.warning("Failed to gather specified measures: %s", exc)
         return timestamps, data
 
     def response_list(self, metric_list, metric_name=None, resource=None):
@@ -424,7 +423,7 @@ class Metrics(object):
             # Only list OSM metrics
             name = None
             if row['name'] in METRIC_MAPPINGS.values():
-                for k,v in six.iteritems(METRIC_MAPPINGS):
+                for k, v in six.iteritems(METRIC_MAPPINGS):
                     if row['name'] == v:
                         name = k
                 metric = {"metric_name": name,

@@ -23,9 +23,9 @@
 
 import json
 import unittest
-from BaseHTTPServer import BaseHTTPRequestHandler
 
 import mock
+from six.moves.BaseHTTPServer import BaseHTTPRequestHandler
 
 from osm_mon.core.message_bus.producer import KafkaProducer
 from osm_mon.core.settings import Config

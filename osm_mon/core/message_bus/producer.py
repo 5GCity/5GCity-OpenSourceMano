@@ -25,13 +25,9 @@ and AWS.
 """
 
 import logging
-
 import os
 
-from jsmin import jsmin
-
 from kafka import KafkaProducer as kaf
-
 from kafka.errors import KafkaError
 
 __author__ = "Prithiv Mohan"
@@ -83,225 +79,166 @@ class KafkaProducer(object):
         except KafkaError:
             pass
 
-    def create_alarm_request(self, key, message, topic):
+    def create_alarm_request(self, key, message):
         """Create alarm request from SO to MON."""
         # External to MON
 
-        payload_create_alarm = jsmin(
-            open(os.path.join(json_path, 'create_alarm.json')).read())
         self.publish(key,
                      value=message,
                      topic='alarm_request')
 
-    def create_alarm_response(self, key, message, topic):
+    def create_alarm_response(self, key, message):
         """Response to a create alarm request from MON to SO."""
         # Internal to MON
 
-        payload_create_alarm_resp = jsmin(
-            open(os.path.join(json_path, 'create_alarm_resp.json')).read())
-
         self.publish(key,
                      value=message,
                      topic='alarm_response')
 
-    def acknowledge_alarm(self, key, message, topic):
+    def acknowledge_alarm(self, key, message):
         """Alarm acknowledgement request from SO to MON."""
         # Internal to MON
 
-        payload_acknowledge_alarm = jsmin(
-            open(os.path.join(json_path, 'acknowledge_alarm.json')).read())
-
         self.publish(key,
                      value=message,
                      topic='alarm_request')
 
-    def list_alarm_request(self, key, message, topic):
+    def list_alarm_request(self, key, message):
         """List alarms request from SO to MON."""
         # External to MON
 
-        payload_alarm_list_req = jsmin(
-            open(os.path.join(json_path, 'list_alarm_req.json')).read())
-
         self.publish(key,
                      value=message,
                      topic='alarm_request')
 
-    def notify_alarm(self, key, message, topic):
+    def notify_alarm(self, key, message):
         """Notify of triggered alarm from MON to SO."""
-        payload_notify_alarm = jsmin(
-            open(os.path.join(json_path, 'notify_alarm.json')).read())
 
         self.publish(key,
                      value=message,
                      topic='alarm_response')
 
-    def list_alarm_response(self, key, message, topic):
+    def list_alarm_response(self, key, message):
         """Response for list alarms request from MON to SO."""
-        payload_list_alarm_resp = jsmin(
-            open(os.path.join(json_path, 'list_alarm_resp.json')).read())
 
         self.publish(key,
                      value=message,
                      topic='alarm_response')
 
-    def update_alarm_request(self, key, message, topic):
+    def update_alarm_request(self, key, message):
         """Update alarm request from SO to MON."""
         # External to Mon
 
-        payload_update_alarm_req = jsmin(
-            open(os.path.join(json_path, 'update_alarm_req.json')).read())
-
         self.publish(key,
                      value=message,
                      topic='alarm_request')
 
-    def update_alarm_response(self, key, message, topic):
+    def update_alarm_response(self, key, message):
         """Response from update alarm request from MON to SO."""
         # Internal to Mon
 
-        payload_update_alarm_resp = jsmin(
-            open(os.path.join(json_path, 'update_alarm_resp.json')).read())
-
         self.publish(key,
                      value=message,
                      topic='alarm_response')
 
-    def delete_alarm_request(self, key, message, topic):
+    def delete_alarm_request(self, key, message):
         """Delete alarm request from SO to MON."""
         # External to Mon
-
-        payload_delete_alarm_req = jsmin(
-            open(os.path.join(json_path, 'delete_alarm_req.json')).read())
 
         self.publish(key,
                      value=message,
                      topic='alarm_request')
 
-    def delete_alarm_response(self, key, message, topic):
+    def delete_alarm_response(self, key, message):
         """Response for a delete alarm request from MON to SO."""
         # Internal to Mon
-
-        payload_delete_alarm_resp = jsmin(
-            open(os.path.join(json_path, 'delete_alarm_resp.json')).read())
 
         self.publish(key,
                      value=message,
                      topic='alarm_response')
 
-    def create_metrics_request(self, key, message, topic):
+    def create_metrics_request(self, key, message):
         """Create metrics request from SO to MON."""
         # External to Mon
 
-        payload_create_metrics_req = jsmin(
-            open(os.path.join(json_path, 'create_metric_req.json')).read())
-
         self.publish(key,
                      value=message,
                      topic='metric_request')
 
-    def create_metrics_resp(self, key, message, topic):
+    def create_metrics_resp(self, key, message):
         """Response for a create metric request from MON to SO."""
         # Internal to Mon
 
-        payload_create_metrics_resp = jsmin(
-            open(os.path.join(json_path, 'create_metric_resp.json')).read())
-
         self.publish(key,
                      value=message,
                      topic='metric_response')
 
-    def read_metric_data_request(self, key, message, topic):
+    def read_metric_data_request(self, key, message):
         """Read metric data request from SO to MON."""
         # External to Mon
 
-        payload_read_metric_data_request = jsmin(
-            open(os.path.join(json_path, 'read_metric_data_req.json')).read())
-
         self.publish(key,
                      value=message,
                      topic='metric_request')
 
-    def read_metric_data_response(self, key, message, topic):
+    def read_metric_data_response(self, key, message):
         """Response from MON to SO for read metric data request."""
         # Internal to Mon
 
-        payload_metric_data_response = jsmin(
-            open(os.path.join(json_path, 'read_metric_data_resp.json')).read())
-
         self.publish(key,
                      value=message,
                      topic='metric_response')
 
-    def list_metric_request(self, key, message, topic):
+    def list_metric_request(self, key, message):
         """List metric request from SO to MON."""
         # External to MON
 
-        payload_metric_list_req = jsmin(
-            open(os.path.join(json_path, 'list_metric_req.json')).read())
-
         self.publish(key,
                      value=message,
                      topic='metric_request')
 
-    def list_metric_response(self, key, message, topic):
+    def list_metric_response(self, key, message):
         """Response from SO to MON for list metrics request."""
         # Internal to MON
 
-        payload_metric_list_resp = jsmin(
-            open(os.path.join(json_path, 'list_metric_resp.json')).read())
-
         self.publish(key,
                      value=message,
                      topic='metric_response')
 
-    def delete_metric_request(self, key, message, topic):
+    def delete_metric_request(self, key, message):
         """Delete metric request from SO to MON."""
         # External to Mon
 
-        payload_delete_metric_req = jsmin(
-            open(os.path.join(json_path, 'delete_metric_req.json')).read())
-
         self.publish(key,
                      value=message,
                      topic='metric_request')
 
-    def delete_metric_response(self, key, message, topic):
+    def delete_metric_response(self, key, message):
         """Response from MON to SO for delete metric request."""
         # Internal to Mon
 
-        payload_delete_metric_resp = jsmin(
-            open(os.path.join(json_path, 'delete_metric_resp.json')).read())
-
         self.publish(key,
                      value=message,
                      topic='metric_response')
 
-    def update_metric_request(self, key, message, topic):
+    def update_metric_request(self, key, message):
         """Metric update request from SO to MON."""
         # External to Mon
-
-        payload_update_metric_req = jsmin(
-            open(os.path.join(json_path, 'update_metric_req.json')).read())
 
         self.publish(key,
                      value=message,
                      topic='metric_request')
 
-    def update_metric_response(self, key, message, topic):
+    def update_metric_response(self, key, message):
         """Reponse from MON to SO for metric update."""
         # Internal to Mon
-
-        payload_update_metric_resp = jsmin(
-            open(os.path.join(json_path, 'update_metric_resp.json')).read())
 
         self.publish(key,
                      value=message,
                      topic='metric_response')
 
-    def access_credentials(self, key, message, topic):
+    def access_credentials(self, key, message):
         """Send access credentials to MON from SO."""
-        payload_access_credentials = jsmin(
-            open(os.path.join(json_path, 'access_credentials.json')).read())
 
         self.publish(key,
                      value=message,

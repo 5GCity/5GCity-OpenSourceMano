@@ -25,14 +25,15 @@
 import logging
 
 from peewee import *
-from playhouse.sqlite_ext import SqliteExtDatabase
+from playhouse.db_url import connect
 
 from osm_mon.core.settings import Config
 
 log = logging.getLogger(__name__)
 cfg = Config.instance()
+cfg.read_environ()
 
-db = SqliteExtDatabase('mon.db')
+db = connect(cfg.DATABASE)
 
 
 class BaseModel(Model):

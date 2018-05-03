@@ -27,7 +27,8 @@
   "alarm_delete_request":
   {
     "alarm_uuid": { "type": "string" },
-    "correlation_id": { "type": "integer" }
+    "correlation_id": { "type": "integer" },
+    "vdu_id": { "type": "string"}
   },
   "required": [ "schema_version",
                 "schema_type",

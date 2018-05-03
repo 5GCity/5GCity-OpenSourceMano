@@ -26,7 +26,6 @@ Connecting with AWS services --CloudWatch/EC2 using Required keys
 __author__ = "Wajeeha Hamid"
 __date__   = "18-September-2017"
 
-import sys
 import os
 
 try:
@@ -50,7 +49,7 @@ class Connection():
     """Connection Establishement with AWS -- VPC/EC2/CloudWatch"""
 #-----------------------------------------------------------------------------------------------------------------------------
     def setEnvironment(self):  
-    	try:
+        try:
             """Credentials for connecting to AWS-CloudWatch""" 
             #Reads from the environment variables
             self.AWS_KEY = os.environ.get("AWS_ACCESS_KEY_ID")

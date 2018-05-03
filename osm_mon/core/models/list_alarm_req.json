@@ -28,6 +28,7 @@
   {
     "correlation_id": { "type": "integer" },
     "resource_uuid": { "type": "string" },
+    "vdu_id": { "type": "string"},
     "alarm_name": { "type": "string" },
     "severity": { "type" : "string" }
   },

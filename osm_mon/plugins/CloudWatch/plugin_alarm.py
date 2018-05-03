@@ -22,19 +22,16 @@
 '''
 AWS-Plugin implements all the methods of MON to interact with AWS using the BOTO client
 '''
+from io import open
+from osm_mon.core.message_bus.producer import KafkaProducer
+from osm_mon.plugins.CloudWatch.metric_alarms import MetricAlarm
+from osm_mon.plugins.CloudWatch.metrics import Metrics
 
 __author__ = "Wajeeha Hamid"
 __date__   = "18-September-2017"
 
-import sys
 import json
 import logging
-from jsmin import jsmin
-from connection import Connection
-from metric_alarms import MetricAlarm
-from metrics import Metrics
-sys.path.append("../../core/message_bus")
-from producer import KafkaProducer
 
 log = logging.getLogger(__name__)
 
@@ -90,12 +87,12 @@ class plugin_alarms():
                         log.debug("Alarm Already exists")
                         payload = json.dumps(config_resp)                                   
                         file = open('../../core/models/create_alarm_resp.json','wb').write((payload))
-                        self.producer.create_alarm_response(key='create_alarm_response',message=payload,topic = 'alarm_response')
+                        self.producer.create_alarm_response(key='create_alarm_response',message=payload)
              
                     else: 
                         payload = json.dumps(config_resp)                                
                         file = open('../../core/models/create_alarm_resp.json','wb').write((payload))                           
-                        self.producer.create_alarm_response(key='create_alarm_response',message=payload,topic = 'alarm_response')
+                        self.producer.create_alarm_response(key='create_alarm_response',message=payload)
                         log.info("New alarm created with alarm info: %s", config_resp)                           
              
                 else:

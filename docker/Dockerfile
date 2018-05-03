@@ -25,16 +25,16 @@ FROM ubuntu:16.04
 LABEL authors="Guillermo Calvino"
 
 RUN apt-get --yes update \
- && apt-get --yes install git python python-pip sudo libmysqlclient-dev \
+ && apt-get --yes install git python python-pip python3 python3-pip libmysqlclient-dev libssl-dev libffi-dev \
  && pip install pip==9.0.3
 
 COPY requirements.txt /mon/requirements.txt
 
-RUN pip install -r /mon/requirements.txt
+RUN pip3 install -r /mon/requirements.txt
 
 COPY . /mon
 
-RUN pip install /mon
+RUN pip3 install /mon
 
 # These ENV must be provided
 # ENV BROKER_URI=kafka:9092

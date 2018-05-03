@@ -29,6 +29,7 @@
     "correlation_id": { "type": "integer" },
     "alarm_uuid": { "type": "string" },
     "metric_uuid": { "type": "string" },
+    "vdu_id": { "type": "string"},
     "description": { "type": "string" },
     "severity": { "type": "string" },
     "operation": { "type": "string" },

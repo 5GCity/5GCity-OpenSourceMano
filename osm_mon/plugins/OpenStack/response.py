@@ -58,7 +58,7 @@ class OpenStack_Response(object):
         elif key == "notify_alarm":
             message = self.notify_alarm(**kwargs)
         else:
-            log.warn("Failed to generate a valid response message.")
+            log.warning("Failed to generate a valid response message.")
             message = None
 
         return message

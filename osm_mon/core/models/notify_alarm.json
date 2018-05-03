@@ -28,8 +28,8 @@
     {
       "alarm_uuid": { "type": "string" },
       "resource_uuid": { "type": "string" },
+      "vdu_id": { "type": "string"},
       "description": { "type": "string" },
-      "tenant_uuid": { "type": "string" },
       "vim_type": { "type": "string" },
       "vim_uuid": { "type": "string" },
       "severity": { "type" : "string" },

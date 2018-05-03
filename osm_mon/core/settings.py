@@ -60,6 +60,7 @@ class Config(object):
 
     _configuration = [
         CfgParam('BROKER_URI', "localhost:9092", six.text_type),
+        CfgParam('DATABASE', "sqlite:///mon_sqlite.db", six.text_type),
         CfgParam('OS_NOTIFIER_URI', "http://localhost:8662", six.text_type),
         CfgParam('OS_DEFAULT_GRANULARITY', "300", six.text_type),
     ]
@@ -79,5 +80,5 @@ class Config(object):
                 val = str(os.environ[key])
                 setattr(self, key, val)
             except KeyError as exc:
-                log.warn("Failed to configure plugin: %s", exc)
+                log.warning("Environment variable not present: %s", exc)
         return

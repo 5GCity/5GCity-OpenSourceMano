@@ -70,6 +70,10 @@ class NotifierHandler(BaseHTTPRequestHandler):
         # Gets the size of data
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
+        try:
+            post_data = post_data.decode()
+        except AttributeError:
+            pass
         self.wfile.write("<html><body><h1>POST!</h1></body></tml>")
         log.info("This alarm was triggered: %s", json.loads(post_data))
 
@@ -122,9 +126,9 @@ class NotifierHandler(BaseHTTPRequestHandler):
                     except Exception as exc:
                         log.exception("Couldn't notify SO of the alarm:")
                 else:
-                    log.warn("No resource_id for alarm; no SO response sent.")
+                    log.warning("No resource_id for alarm; no SO response sent.")
             else:
-                log.warn("Authentication failure; SO notification not sent.")
+                log.warning("Authentication failure; SO notification not sent.")
         except:
             log.exception("Could not notify alarm.")
 
@@ -138,7 +142,7 @@ def run(server_class=HTTPServer, handler_class=NotifierHandler, port=8662):
         log.info("Starting alarm notifier server on port: %s", port)
         httpd.serve_forever()
     except Exception as exc:
-        log.warn("Failed to start webserver, %s", exc)
+        log.warning("Failed to start webserver, %s", exc)
 
 
 if __name__ == "__main__":

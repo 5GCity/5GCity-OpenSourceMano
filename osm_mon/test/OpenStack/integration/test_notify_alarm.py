@@ -21,6 +21,8 @@
 ##
 """Tests for all common OpenStack methods."""
 
+
+from __future__ import unicode_literals
 import json
 import logging
 import socket
@@ -76,6 +78,10 @@ class MockNotifierHandler(BaseHTTPRequestHandler):
         self._set_headers()
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
+        try:
+            post_data = post_data.decode()
+        except AttributeError:
+            pass
         self.notify_alarm(json.loads(post_data))
 
     def notify_alarm(self, values):

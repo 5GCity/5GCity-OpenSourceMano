@@ -28,7 +28,8 @@
   {
     "metric_name": { "type": "string" },
     "correlation_id": { "type": "integer" },
-    "resource_uuid": { "type": "string" }
+    "resource_uuid": { "type": "string" },
+    "vdu_id": { "type": "string"}
   },
   "required": [ "schema_version",
                 "schema_type",

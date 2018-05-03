@@ -24,16 +24,7 @@
 __author__ = "Wajeeha Hamid"
 __date__   = "18-September-2017"
 
-import sys
-import os
-import re
-import datetime
-import random
-import json
 import logging
-from random import randint
-from operator import itemgetter
-from connection import Connection
 
 log = logging.getLogger(__name__)
 
@@ -67,7 +58,7 @@ class MetricAlarm():
         self.del_resp = dict()
 
     def config_alarm(self,cloudwatch_conn,create_info):
-    	"""Configure or Create a new alarm"""
+        """Configure or Create a new alarm"""
         inner_dict = dict()
         """ Alarm Name to ID Mapping """
         alarm_info = create_info['alarm_create_request']
@@ -128,7 +119,7 @@ class MetricAlarm():
 #-----------------------------------------------------------------------------------------------------------------------------
     def update_alarm(self,cloudwatch_conn,update_info):
 
-    	"""Update or reconfigure an alarm"""
+        """Update or reconfigure an alarm"""
         inner_dict = dict()
         alarm_info = update_info['alarm_update_request']
 
@@ -188,7 +179,7 @@ class MetricAlarm():
 #-----------------------------------------------------------------------------------------------------------------------------
     def delete_Alarm(self,cloudwatch_conn,del_info_all):
 
-    	"""Deletes an Alarm with specified alarm_id"""
+        """Deletes an Alarm with specified alarm_id"""
         inner_dict = dict()
         del_info = del_info_all['alarm_delete_request']
         status = self.is_present(cloudwatch_conn,del_info['alarm_uuid'])
@@ -261,7 +252,7 @@ class MetricAlarm():
 #-----------------------------------------------------------------------------------------------------------------------------
     def alarm_details(self,cloudwatch_conn,ack_info):
 
-	"""Get an individual alarm details specified by alarm_name"""
+        """Get an individual alarm details specified by alarm_name"""
         try:
             alarms_details=cloudwatch_conn.describe_alarm_history()  
             alarm_details_all = dict()     
@@ -306,10 +297,10 @@ class MetricAlarm():
                                 return alarm_details_dict                     
                   
         except Exception as e:
-        	log.error("Error getting alarm details: %s",str(e))           
+            log.error("Error getting alarm details: %s",str(e))
 #-----------------------------------------------------------------------------------------------------------------------------
     def is_present(self,cloudwatch_conn,alarm_id):
-    	"""Finding alarm from already configured alarms"""
+        """Finding alarm from already configured alarms"""
         alarm_info = dict()
         try:
             alarms = cloudwatch_conn.describe_alarms()

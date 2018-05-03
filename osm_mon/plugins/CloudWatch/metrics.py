@@ -26,9 +26,7 @@ AWS-Plugin implements all the methods of MON to interact with AWS using the BOTO
 __author__ = "Wajeeha Hamid"
 __date__   = "18-Sept-2017"
 
-import sys
 import datetime
-import json
 import logging
 
 try:
@@ -71,7 +69,7 @@ class Metrics():
     
     def metricsData(self,cloudwatch_conn,data_info):
 
-    	"""Getting Metrics Stats for an Hour.The datapoints are
+        """Getting Metrics Stats for an Hour.The datapoints are
         received after every one minute.
         Time interval can be modified using Timedelta value"""
 
@@ -182,7 +180,7 @@ class Metrics():
                         metrics_info['resource_uuid'] = instance_id 
                         metrics_list.insert(itr,metrics_info)
                         itr += 1
-                    print metrics_list
+                    log.info(metrics_list)
                     return metrics_list
                 else: 
                     for alarm in alarms:
@@ -246,7 +244,7 @@ class Metrics():
             if metric_status == True:
                 check_resp['status'] = True
             else:
-            	check_resp['status'] = False
+                check_resp['status'] = False
 
             return check_resp
 

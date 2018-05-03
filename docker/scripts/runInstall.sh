@@ -21,6 +21,6 @@
 # contact: bdiaz@whitestack.com or glavado@whitestack.com
 ##
 /bin/bash /mon/osm_mon/plugins/vRealiseOps/vROPs_Webservice/install.sh
-nohup python /mon/osm_mon/plugins/OpenStack/Aodh/notifier.py &
-python /mon/osm_mon/core/message_bus/common_consumer.py
+nohup python3 /mon/osm_mon/plugins/OpenStack/Aodh/notifier.py &
+python3 /mon/osm_mon/core/message_bus/common_consumer.py
 

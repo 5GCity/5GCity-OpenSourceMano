@@ -56,7 +56,7 @@ class config_alarm_name_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "create_alarm_response": 
                 info = json.loads(json.loads(message.value))
-                print info
+                print(info)
                 time.sleep(1)
                 self.assertTrue(info['alarm_create_response']['status'])
                 return        
@@ -73,7 +73,7 @@ class config_alarm_name_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "create_alarm_response": 
                 info = json.loads(json.loads(message.value))
-                print info
+                print(info)
                 time.sleep(1)
                 producer.request("test_schemas/delete_alarm/name_valid_delete1.json",'delete_alarm_request','','alarm_request')
                 self.assertTrue(info['alarm_create_response']['status'])   
@@ -91,7 +91,7 @@ class config_alarm_name_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "create_alarm_response": 
                 info = json.loads(json.loads(message.value))
-                print info
+                print(info)
                 time.sleep(1)
                 producer.request("test_schemas/delete_alarm/name_valid_delete2.json",'delete_alarm_request', '','alarm_request')
                 self.assertTrue(info['alarm_create_response']['status']) 
@@ -109,7 +109,7 @@ class config_alarm_name_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "create_alarm_response": 
                 info = json.loads(json.loads(message.value))
-                print info,"---"
+                print(info, "---")
                 time.sleep(1)
                 producer.request("test_schemas/delete_alarm/name_valid.json",'delete_alarm_request', '','alarm_request')
                 self.assertEqual(info, None)  
@@ -127,7 +127,7 @@ class config_alarm_name_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "create_alarm_response": 
                 info = json.loads(json.loads(message.value))
-                print info
+                print(info)
                 time.sleep(1)
                 producer.request("test_schemas/delete_alarm/name_valid_delete3.json",'delete_alarm_request', '','alarm_request')
                 self.assertTrue(info['alarm_create_response']['status']) 
@@ -145,7 +145,7 @@ class config_alarm_name_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "create_alarm_response": 
                 info = json.loads(json.loads(message.value))
-                print info,"---"
+                print(info, "---")
                 time.sleep(1)
                 producer.request("test_schemas/delete_alarm/name_valid_delete3.json",'delete_alarm_request', '','alarm_request')
                 self.assertEqual(info, None)
@@ -163,7 +163,7 @@ class config_alarm_name_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "create_alarm_response": 
                 info = json.loads(json.loads(message.value))
-                print info
+                print(info)
                 time.sleep(1)
                 producer.request("test_schemas/delete_alarm/name_valid_delete3.json",'delete_alarm_request', '','alarm_request')
                 self.assertTrue(info['alarm_create_response']['status']) 
@@ -181,7 +181,7 @@ class config_alarm_name_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "create_alarm_response": 
                 info = json.loads(json.loads(message.value))
-                print info
+                print(info)
                 time.sleep(1)
                 self.assertEqual(info,None) 
                 return                 
@@ -203,7 +203,7 @@ class update_alarm_name_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "update_alarm_response": 
                 info = json.loads(json.loads(json.loads(message.value)))
-                print info
+                print(info)
                 time.sleep(1)
                 producer.request("test_schemas/delete_alarm/name_valid_delete4.json",'delete_alarm_request', '','alarm_request')
                 self.assertTrue(info['alarm_update_response']['status'])
@@ -221,7 +221,7 @@ class update_alarm_name_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "update_alarm_response": 
                 info = json.loads(json.loads(json.loads(message.value)))
-                print info
+                print(info)
                 time.sleep(1)
                 self.assertEqual(info,None)
                 return
@@ -239,7 +239,7 @@ class update_alarm_name_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "update_alarm_response": 
                 info = json.loads(json.loads(json.loads(message.value)))
-                print info
+                print(info)
                 time.sleep(1)
                 producer.request("test_schemas/delete_alarm/name_valid.json",'delete_alarm_request', '','alarm_request')
                 self.assertTrue(info['alarm_update_response']['status'])
@@ -257,7 +257,7 @@ class update_alarm_name_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "update_alarm_response": 
                 info = json.loads(json.loads(json.loads(message.value)))
-                print info
+                print(info)
                 time.sleep(1)
                 self.assertEqual(info,None)
                 return            
@@ -275,7 +275,7 @@ class update_alarm_name_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "update_alarm_response": 
                 info = json.loads(json.loads(json.loads(message.value)))
-                print info
+                print(info)
                 time.sleep(1)
                 producer.request("test_schemas/delete_alarm/name_valid.json",'delete_alarm_request', '','alarm_request')
                 self.assertTrue(info['alarm_update_response']['status'])
@@ -297,7 +297,7 @@ class delete_alarm_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "delete_alarm_response": 
                 info = json.loads(json.loads(json.loads(message.value)))
-                print info
+                print(info)
                 time.sleep(1)                
                 self.assertTrue(info['alarm_deletion_response']['status'])
                 return
@@ -314,7 +314,7 @@ class delete_alarm_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "delete_alarm_response": 
                 info = json.loads(json.loads(json.loads(message.value)))
-                print info
+                print(info)
                 time.sleep(1)                
                 self.assertEqual(info,None)
                 return             
@@ -334,7 +334,7 @@ class list_alarm_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "list_alarm_response": 
                 info = json.loads(json.loads(json.loads(message.value)))
-                print info
+                print(info)
                 time.sleep(1)                
                 self.assertEqual(type(info),dict)
                 return
@@ -351,7 +351,7 @@ class list_alarm_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "list_alarm_response": 
                 info = json.loads(json.loads(json.loads(message.value)))
-                print info
+                print(info)
                 time.sleep(1)                
                 self.assertEqual(type(info),dict)
                 return
@@ -368,7 +368,7 @@ class list_alarm_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "list_alarm_response": 
                 info = json.loads(json.loads(json.loads(message.value)))
-                print info
+                print(info)
                 time.sleep(1)                
                 self.assertEqual(type(info),dict)
                 return
@@ -389,7 +389,7 @@ class alarm_details_test(unittest.TestCase):
         for message in _consumer:
             if message.key == "notify_alarm": 
                 info = json.loads(json.loads(json.loads(message.value)))
-                print info
+                print(info)
                 time.sleep(1)                
                 self.assertEqual(type(info),dict)
                 return                

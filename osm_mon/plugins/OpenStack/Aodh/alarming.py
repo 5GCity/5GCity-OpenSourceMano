@@ -102,7 +102,7 @@ class Alarming(object):
         resource_id = values['resource_uuid']
 
         if metric_name not in METRIC_MAPPINGS.keys():
-            log.warn("This metric is not supported.")
+            log.warning("This metric is not supported.")
             return None, False
 
         # Check for the required metric
@@ -119,11 +119,11 @@ class Alarming(object):
                     url, auth_token, req_type="post", payload=payload)
                 return json.loads(new_alarm.text)['alarm_id'], True
             else:
-                log.warn("The required Gnocchi metric does not exist.")
+                log.warning("The required Gnocchi metric does not exist.")
                 return None, False
 
         except Exception as exc:
-            log.warn("Failed to create the alarm: %s", exc)
+            log.warning("Failed to create the alarm: %s", exc)
         return None, False
 
     def alarming(self, message):
@@ -163,8 +163,7 @@ class Alarming(object):
                     cor_id=alarm_details['correlation_id'])
                 log.info("Response Message: %s", resp_message)
                 self._producer.create_alarm_response(
-                    'create_alarm_response', resp_message,
-                    'alarm_response')
+                    'create_alarm_response', resp_message)
             except Exception:
                 log.exception("Response creation failed:")
 
@@ -183,8 +182,7 @@ class Alarming(object):
                     cor_id=list_details['correlation_id'])
                 log.info("Response Message: %s", resp_message)
                 self._producer.list_alarm_response(
-                    'list_alarm_response', resp_message,
-                    'alarm_response')
+                    'list_alarm_response', resp_message)
             except Exception:
                 log.exception("Failed to send a valid response back.")
 
@@ -203,8 +201,7 @@ class Alarming(object):
                     cor_id=request_details['correlation_id'])
                 log.info("Response message: %s", resp_message)
                 self._producer.delete_alarm_response(
-                    'delete_alarm_response', resp_message,
-                    'alarm_response')
+                    'delete_alarm_response', resp_message)
             except Exception:
                 log.exception("Failed to create delete response: ")
 
@@ -219,7 +216,7 @@ class Alarming(object):
             if response is True:
                 log.info("Acknowledged the alarm and cleared it.")
             else:
-                log.warn("Failed to acknowledge/clear the alarm.")
+                log.warning("Failed to acknowledge/clear the alarm.")
 
         elif message.key == "update_alarm_request":
             # Update alarm configurations
@@ -236,8 +233,7 @@ class Alarming(object):
                     status=status)
                 log.info("Response message: %s", resp_message)
                 self._producer.update_alarm_response(
-                    'update_alarm_response', resp_message,
-                    'alarm_response')
+                    'update_alarm_response', resp_message)
             except Exception:
                 log.exception("Failed to send an update response: ")
 
@@ -274,14 +270,14 @@ class Alarming(object):
         try:
             resource = list_details['resource_uuid']
         except KeyError as exc:
-            log.warn("Resource id not specified for list request: %s", exc)
+            log.warning("Resource id not specified for list request: %s", exc)
             return None
 
         # Checking what fields are specified for a list request
         try:
             name = list_details['alarm_name'].lower()
             if name not in ALARM_NAMES.keys():
-                log.warn("This alarm is not supported, won't be used!")
+                log.warning("This alarm is not supported, won't be used!")
                 name = None
         except KeyError as exc:
             log.info("Alarm name isn't specified.")
@@ -373,7 +369,7 @@ class Alarming(object):
             resource_id = rule['resource_id']
             metric_name = [key for key, value in six.iteritems(METRIC_MAPPINGS) if value == rule['metric']][0]
         except Exception as exc:
-            log.warn("Failed to retrieve existing alarm info: %s.\
+            log.warning("Failed to retrieve existing alarm info: %s.\
                      Can only update OSM alarms.", exc)
             return None, False
 
@@ -391,7 +387,7 @@ class Alarming(object):
 
                 return json.loads(update_alarm.text)['alarm_id'], True
             except Exception as exc:
-                log.warn("Alarm update could not be performed: %s", exc)
+                log.warning("Alarm update could not be performed: %s", exc)
                 return None, False
         return None, False
 
@@ -439,7 +435,7 @@ class Alarming(object):
                                   'alarm_actions': [cfg.OS_NOTIFIER_URI], })
             return payload
         except KeyError as exc:
-            log.warn("Alarm is not configured correctly: %s", exc)
+            log.warning("Alarm is not configured correctly: %s", exc)
         return None
 
     def get_alarm_state(self, endpoint, auth_token, alarm_id):
@@ -451,7 +447,7 @@ class Alarming(object):
                 url, auth_token, req_type="get")
             return json.loads(alarm_state.text)
         except Exception as exc:
-            log.warn("Failed to get the state of the alarm:%s", exc)
+            log.warning("Failed to get the state of the alarm:%s", exc)
         return None
 
     def check_for_metric(self, auth_token, metric_endpoint, m_name, r_id):

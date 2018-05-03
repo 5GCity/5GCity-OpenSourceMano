@@ -52,8 +52,13 @@ class MetricIntegrationTest(unittest.TestCase):
         self.openstack_auth = Common()
 
         try:
-            self.producer = KafkaProducer(bootstrap_servers='localhost:9092')
+            self.producer = KafkaProducer(bootstrap_servers='localhost:9092',
+                                          key_serializer=str.encode,
+                                          value_serializer=str.encode
+                                          )
             self.req_consumer = KafkaConsumer(bootstrap_servers='localhost:9092',
+                                              key_deserializer=bytes.decode,
+                                              value_deserializer=bytes.decode,
                                               auto_offset_reset='earliest',
                                               consumer_timeout_ms=60000)
             self.req_consumer.subscribe(['metric_request'])
@@ -72,14 +77,13 @@ class MetricIntegrationTest(unittest.TestCase):
                    "vim_uuid": "1",
                    "correlation_id": 123,
                    "metric_create":
-                       {"metric_name": "my_metric",
+                       {"metric_name": "cpu_utilization",
                         "resource_uuid": "resource_id"}}
 
         self.producer.send('metric_request', key="create_metric_request",
                            value=json.dumps(payload))
 
         for message in self.req_consumer:
-            print(message)
             # Check the vim desired by the message
             vim_type = json.loads(message.value)["vim_type"].lower()
             if vim_type == "openstack":
@@ -92,7 +96,7 @@ class MetricIntegrationTest(unittest.TestCase):
                     'create_metric_response', status=True, cor_id=123,
                     metric_id="metric_id", r_id="resource_id")
                 create_resp.assert_called_with(
-                    'create_metric_response', resp.return_value, 'metric_response')
+                    'create_metric_response', resp.return_value)
 
                 return
         self.fail("No message received in consumer")
@@ -108,8 +112,7 @@ class MetricIntegrationTest(unittest.TestCase):
         payload = {"vim_type": "OpenSTACK",
                    "vim_uuid": "1",
                    "correlation_id": 123,
-                   "metric_uuid": "metric_id",
-                   "metric_name": "metric_name",
+                   "metric_name": "cpu_utilization",
                    "resource_uuid": "resource_id"}
 
         self.producer.send('metric_request', key="delete_metric_request",
@@ -123,11 +126,11 @@ class MetricIntegrationTest(unittest.TestCase):
 
                 # A response message is generated and sent by MON's producer
                 resp.assert_called_with(
-                    'delete_metric_response', m_id="metric_id",
-                    m_name="metric_name", status=True, r_id="resource_id",
+                    'delete_metric_response', m_id=None,
+                    m_name="cpu_utilization", status=True, r_id="resource_id",
                     cor_id=123)
                 del_resp.assert_called_with(
-                    'delete_metric_response', resp.return_value, 'metric_response')
+                    'delete_metric_response', resp.return_value)
 
                 return
         self.fail("No message received in consumer")
@@ -143,8 +146,7 @@ class MetricIntegrationTest(unittest.TestCase):
         payload = {"vim_type": "OpenSTACK",
                    "vim_uuid": "test_id",
                    "correlation_id": 123,
-                   "metric_uuid": "metric_id",
-                   "metric_name": "metric_name",
+                   "metric_name": "cpu_utilization",
                    "resource_uuid": "resource_id"}
 
         self.producer.send('metric_request', key="read_metric_data_request",
@@ -159,12 +161,11 @@ class MetricIntegrationTest(unittest.TestCase):
 
                 # A response message is generated and sent by MON's producer
                 resp.assert_called_with(
-                    'read_metric_data_response', m_id="metric_id",
-                    m_name="metric_name", r_id="resource_id", cor_id=123, times=[],
+                    'read_metric_data_response', m_id=None,
+                    m_name="cpu_utilization", r_id="resource_id", cor_id=123, times=[],
                     metrics=[])
                 read_resp.assert_called_with(
-                    'read_metric_data_response', resp.return_value,
-                    'metric_response')
+                    'read_metric_data_response', resp.return_value)
 
                 return
         self.fail("No message received in consumer")
@@ -196,7 +197,7 @@ class MetricIntegrationTest(unittest.TestCase):
                 resp.assert_called_with(
                     'list_metric_response', m_list=[], cor_id=123)
                 list_resp.assert_called_with(
-                    'list_metric_response', resp.return_value, 'metric_response')
+                    'list_metric_response', resp.return_value)
 
                 return
         self.fail("No message received in consumer")
@@ -232,7 +233,7 @@ class MetricIntegrationTest(unittest.TestCase):
                     'update_metric_response', status=False, cor_id=123,
                     r_id="resource_id", m_id="metric_id")
                 update_resp.assert_called_with(
-                    'update_metric_response', resp.return_value, 'metric_response')
+                    'update_metric_response', resp.return_value)
 
                 return
         self.fail("No message received in consumer")

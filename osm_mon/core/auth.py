@@ -47,8 +47,6 @@ class AuthManager:
 
     def get_credentials(self, vim_uuid):
         creds = self.database_manager.get_credentials(vim_uuid)
-        if creds.config is None:
-            creds.config = {}
         return creds
 
     def delete_auth_credentials(self, creds_dict):

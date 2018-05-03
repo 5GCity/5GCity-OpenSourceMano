@@ -26,14 +26,16 @@ Montoring plugin receiver that consumes the request messages &
 responds using producer for vROPs
 """
 
-import sys
-import os
 import json
 import logging
+import os
+import sys
 import traceback
-from mon_plugin_vrops import MonPlugin
-from kafka_consumer_vrops import vROP_KafkaConsumer
+
+
 #Core producer
+from osm_mon.plugins.vRealiseOps.mon_plugin_vrops import MonPlugin
+
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..'))
 from osm_mon.core.message_bus.producer import KafkaProducer
 #from core.message_bus.producer import KafkaProducer

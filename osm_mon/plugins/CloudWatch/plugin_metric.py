@@ -22,17 +22,13 @@
 '''
 AWS-Plugin implements all the methods of MON to interact with AWS using the BOTO client
 '''
+from osm_mon.core.message_bus.producer import KafkaProducer
+from osm_mon.plugins.CloudWatch.metrics import Metrics
 
 __author__ = "Wajeeha Hamid"
 __date__   = "18-September-2017"
 
-import sys
 import json
-from connection import Connection
-from metric_alarms import MetricAlarm
-from metrics import Metrics
-sys.path.append("../../core/message_bus")
-from producer import KafkaProducer
 import logging
 
 log = logging.getLogger(__name__)
