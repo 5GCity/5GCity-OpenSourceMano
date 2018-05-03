@@ -589,6 +589,16 @@ function install_lightweight() {
     DEFAULT_IF=`route -n |awk '$1~/^0.0.0.0/ {print $8}'`
     DEFAULT_IP=`ip -o -4 a |grep ${DEFAULT_IF}|awk '{split($4,a,"/"); print a[1]}'`
     DEFAULT_MTU=$(ip addr show ${DEFAULT_IF} | perl -ne 'if (/mtu\s(\d+)/) {print $1;}')
+    need_packages_lw="lxd"
+    echo -e "Checking required packages: $need_packages_lw"
+    dpkg -l $need_packages_lw &>/dev/null \
+      || ! echo -e "One or several required packages are not installed. Updating apt cache requires root privileges." \
+      || sudo apt-get update \
+      || FATAL "failed to run apt-get update"
+    dpkg -l $need_packages_lw &>/dev/null \
+      || ! echo -e "Installing $need_packages_lw requires root privileges." \
+      || sudo apt-get install -y $need_packages_lw \
+      || FATAL "failed to install $need_packages_lw"
     install_juju
     install_docker_ce
     #install_docker_compose
