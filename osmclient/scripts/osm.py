@@ -866,6 +866,8 @@ def vim_show(ctx, name):
     '''
     try:
         resp = ctx.obj.vim.get(name)
+        if 'vim_password' in resp:
+            resp['vim_password']='********'
     except ClientException as inst:
         print(inst.message)
         exit(1)
