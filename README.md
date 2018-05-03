@@ -38,38 +38,14 @@ snap install lxd
 snap install juju --classic
 ```
 
-### Install the IM
+## Metrics
 
-The pyangbind library, used by the IM to parse the Yang data models does not support Python3 at the moment. Work is being done in coordination with the pyangbind maintainer, and Python3 support is expected to hand in the near future.
+### Limitations
 
-In the meantime, we will install and use Python3-compatible branches of pyangbind and the IM module.
+There are currently a few limitations with regard to metrics in Juju.
+1. Metrics are polled by the Controller every five minutes. This interval is not modifiable
+2. The Juju API and CLI only expose the most recently polled metric, so it's necessary to poll the N2VC `GetMetrics` method more often, and discard duplicate values.
 
-```
-sudo apt install libxml2-dev libxslt1-dev build-essential
-
-git clone http://github.com/adamisrael/pyangbind.git
-cd pyangbind
-pip3 install -r requirements.txt
-pip3 install -r requirements.DEVELOPER.txt
-
-sudo python3 setup.py develop
-```
-
-Checkout the IM module and use the proposed branch from Gerrit:
-```bash
-git clone https://osm.etsi.org/gerrit/osm/IM.git
-cd IM
-git fetch https://israelad@osm.etsi.org/gerrit/osm/IM refs/changes/78/5778/2 && git checkout FETCH_HEAD
-sudo python3 setup.py develop
-```
-
-```bash
-git clone https://osm.etsi.org/gerrit/osm/N2VC.git
-cd N2VC
-git fetch https://israelad@osm.etsi.org/gerrit/osm/N2VC refs/changes/70/5870/5 && git checkout FETCH_HEAD
-sudo python3 setup.py develop
-
-```
 
 ## Testing
 A basic test has been written to exercise the functionality of the library, and to serve as a demonstration of how to use it.
@@ -99,7 +75,6 @@ nosetests3 --nocapture tests/test_python.py
 
 Many. This is still in active development for Release FOUR.
 
-- `GetMetrics` does not work yet. There seems to be
 - An exception is thrown after using N2VC, probably related to the internal AllWatcher used by juju.Model. This shouldn't break usage of N2VC, but it is ugly and needs to be fixed.
 
 ```

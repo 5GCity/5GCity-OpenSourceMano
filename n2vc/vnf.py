@@ -246,10 +246,7 @@ class N2VC:
 
         Deploy the charm(s) referenced in a VNF Descriptor.
 
-        You can pass either the nsd record or the id of the network
-        service, but this method will fail without one of them.
-
-        :param str ns_name: The name of the network service
+        :param str model_name: The name of the network service.
         :param str application_name: The name of the application
         :param dict vnfd: The name of the application
         :param str charm_path: The path to the Juju charm
@@ -400,10 +397,22 @@ class N2VC:
                 raise
 
     async def ExecutePrimitive(self, model_name, application_name, primitive, callback, *callback_args, **params):
-        """
-        Queue the execution of a primitive
+        """Execute a primitive of a charm for Day 1 or Day 2 configuration.
 
-        returns the UUID of the executed primitive
+        Execute a primitive defined in the VNF descriptor.
+
+        :param str model_name: The name of the network service.
+        :param str application_name: The name of the application
+        :param str primitive: The name of the primitive to execute.
+        :param obj callback: A callback function to receive status changes.
+        :param tuple callback_args: A list of arguments to be passed to the callback function.
+        :param dict params: A dictionary of key=value pairs representing the primitive's parameters
+          Examples::
+          {
+            'rw_mgmt_ip': '1.2.3.4',
+            # Pass the initial-config-primitives section of the vnf or vdu
+            'initial-config-primitives': {...}
+          }
         """
         uuid = None
         try:
@@ -436,6 +445,15 @@ class N2VC:
         return uuid
 
     async def RemoveCharms(self, model_name, application_name, callback=None, *callback_args):
+        """Remove a charm from the VCA.
+
+        Remove a charm referenced in a VNF Descriptor.
+
+        :param str model_name: The name of the network service.
+        :param str application_name: The name of the application
+        :param obj callback: A callback function to receive status changes.
+        :param tuple callback_args: A list of arguments to be passed to the callback function.
+        """
         try:
             if not self.authenticated:
                 await self.login()
