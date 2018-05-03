@@ -217,7 +217,12 @@ def vnfd_list2(ctx, filter):
 @click.pass_context
 def vnf_list(ctx):
     ''' list all VNF instances'''
-    resp = ctx.obj.vnf.list()
+    try:
+        check_client_version(ctx.obj, ctx.command.name, 'v1')
+        resp = ctx.obj.vnf.list()
+    except ClientException as inst:
+        print(inst.message)
+        exit(1)
     table = PrettyTable(
         ['vnf name',
          'id',
