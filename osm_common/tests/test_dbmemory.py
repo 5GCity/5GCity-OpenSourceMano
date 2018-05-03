@@ -23,8 +23,6 @@ def db_memory_with_data():
 
     return db
 
-
-
 def empty_exception_message():
     return 'database exception '
 
@@ -68,8 +66,7 @@ def test_db_connect():
     ("test", {}),
     ("test", {"_id": 1}),
     ("test", {"data": 1}),
-    ("test", {"_id": 1, "data": 1}),
-])
+    ("test", {"_id": 1, "data": 1})])
 def test_get_list_with_empty_db(db_memory, table, filter):
     result = db_memory.get_list(table, filter)
 
@@ -89,8 +86,7 @@ def test_get_list_with_empty_db(db_memory, table, filter):
     ("test_table", {}, []),
     ("test_table", {"_id": 1}, []),
     ("test_table", {"data": 1}, []),
-    ("test_table", {"_id": 1, "data": 1}, []),
-])
+    ("test_table", {"_id": 1, "data": 1}, [])])
 def test_get_list_with_non_empty_db(db_memory_with_data, table, filter, expected_data):
     result = db_memory_with_data.get_list(table, filter)
 
@@ -118,8 +114,7 @@ def test_get_list_exception(db_memory_with_data):
     ("test", {"data": 3}, {"_id": 3, "data": 3}),
     ("test", {"_id": 1, "data": 1}, {"_id": 1, "data": 1}),
     ("test", {"_id": 2, "data": 2}, {"_id": 2, "data": 2}),
-    ("test", {"_id": 3, "data": 3}, {"_id": 3, "data": 3}),
-])
+    ("test", {"_id": 3, "data": 3}, {"_id": 3, "data": 3})])
 def test_get_one(db_memory_with_data, table, filter, expected_data):
     result = db_memory_with_data.get_one(table, filter)
 
@@ -130,8 +125,7 @@ def test_get_one(db_memory_with_data, table, filter, expected_data):
     assert result in db_memory_with_data.db[table]
 
 @pytest.mark.parametrize("table, filter, expected_data", [
-    ("test", {}, {"_id": 1, "data": 1}),
-])
+    ("test", {}, {"_id": 1, "data": 1})])
 def test_get_one_with_multiple_results(db_memory_with_data, table, filter, expected_data):
     result = db_memory_with_data.get_one(table, filter, fail_on_more=False)
 
@@ -157,8 +151,7 @@ def test_get_one_with_multiple_results_exception(db_memory_with_data):
     ("test", {"_id": 4, "data": 4}),
     ("test_table", {"_id": 4}),
     ("test_table", {"data": 4}),
-    ("test_table", {"_id": 4, "data": 4}),
-])
+    ("test_table", {"_id": 4, "data": 4})])
 def test_get_one_with_non_empty_db_exception(db_memory_with_data, table, filter):
     with pytest.raises(DbException) as excinfo:
         db_memory_with_data.get_one(table, filter)
@@ -171,8 +164,7 @@ def test_get_one_with_non_empty_db_exception(db_memory_with_data, table, filter)
     ("test", {"_id": 4, "data": 4}),
     ("test_table", {"_id": 4}),
     ("test_table", {"data": 4}),
-    ("test_table", {"_id": 4, "data": 4}),
-])
+    ("test_table", {"_id": 4, "data": 4})])
 def test_get_one_with_non_empty_db_none(db_memory_with_data, table, filter):
     result = db_memory_with_data.get_one(table, filter, fail_on_empty=False)
     
@@ -184,8 +176,7 @@ def test_get_one_with_non_empty_db_none(db_memory_with_data, table, filter):
     ("test", {"_id": 4, "data": 4}),
     ("test_table", {"_id": 4}),
     ("test_table", {"data": 4}),
-    ("test_table", {"_id": 4, "data": 4}),
-])
+    ("test_table", {"_id": 4, "data": 4})])
 def test_get_one_with_empty_db_exception(db_memory, table, filter):
     with pytest.raises(DbException) as excinfo:
         db_memory.get_one(table, filter)
@@ -198,8 +189,7 @@ def test_get_one_with_empty_db_exception(db_memory, table, filter):
     ("test", {"_id": 4, "data": 4}),
     ("test_table", {"_id": 4}),
     ("test_table", {"data": 4}),
-    ("test_table", {"_id": 4, "data": 4}),
-])
+    ("test_table", {"_id": 4, "data": 4})])
 def test_get_one_with_empty_db_none(db_memory, table, filter):
     result = db_memory.get_one(table, filter, fail_on_empty=False)
     
@@ -221,8 +211,7 @@ def test_get_one_generic_exception(db_memory_with_data):
     ("test", {"_id": 1}, [{"_id": 2, "data": 2}, {"_id": 3, "data": 3}]), 
     ("test", {"_id": 2}, [{"_id": 1, "data": 1}, {"_id": 3, "data": 3}]), 
     ("test", {"_id": 1, "data": 1}, [{"_id": 2, "data": 2}, {"_id": 3, "data": 3}]),
-    ("test", {"_id": 2, "data": 2}, [{"_id": 1, "data": 1}, {"_id": 3, "data": 3}]),
-])
+    ("test", {"_id": 2, "data": 2}, [{"_id": 1, "data": 1}, {"_id": 3, "data": 3}])])
 def test_del_list_with_non_empty_db(db_memory_with_data, table, filter, expected_data):
     result = db_memory_with_data.del_list(table, filter)
 
@@ -240,8 +229,7 @@ def test_del_list_with_non_empty_db(db_memory_with_data, table, filter, expected
     ("test", {"data": 1}),
     ("test", {"data": 2}),
     ("test", {"_id": 1, "data": 1}),
-    ("test", {"_id": 2, "data": 2}),
-])
+    ("test", {"_id": 2, "data": 2})])
 def test_del_list_with_empty_db(db_memory, table, filter):
     result = db_memory.del_list(table, filter)
     assert result['deleted'] == 0
@@ -264,8 +252,7 @@ def test_del_list_generic_exception(db_memory_with_data):
     ("test", {"_id": 1, "data": 1}, {"_id": 1, "data": 1}),
     ("test", {"_id": 2}, {"_id": 2, "data": 2}),
     ("test", {"data": 2}, {"_id": 2, "data": 2}),
-    ("test", {"_id": 2, "data": 2}, {"_id": 2, "data": 2}),
-])
+    ("test", {"_id": 2, "data": 2}, {"_id": 2, "data": 2})])
 def test_del_one(db_memory_with_data, table, filter, data):
     result = db_memory_with_data.del_one(table, filter)
 
@@ -289,8 +276,7 @@ def test_del_one(db_memory_with_data, table, filter, data):
     ("test_table", {"data": 1}),
     ("test_table", {"data": 2}),
     ("test_table", {"_id": 1, "data": 1}),
-    ("test_table", {"_id": 2, "data": 2}),
-])
+    ("test_table", {"_id": 2, "data": 2})])
 def test_del_one_with_empty_db_exception(db_memory, table, filter):
     with pytest.raises(DbException) as excinfo:
         db_memory.del_one(table, filter)
@@ -311,8 +297,7 @@ def test_del_one_with_empty_db_exception(db_memory, table, filter):
     ("test_table", {"data": 1}),
     ("test_table", {"data": 2}),
     ("test_table", {"_id": 1, "data": 1}),
-    ("test_table", {"_id": 2, "data": 2}),
-])
+    ("test_table", {"_id": 2, "data": 2})])
 def test_del_one_with_empty_db_none(db_memory, table, filter):
     result = db_memory.del_one(table, filter, fail_on_empty=False)
 
@@ -331,8 +316,7 @@ def test_del_one_with_empty_db_none(db_memory, table, filter):
     ("test_table", {"data": 1}),
     ("test_table", {"data": 2}),
     ("test_table", {"_id": 1, "data": 1}),
-    ("test_table", {"_id": 2, "data": 2}),
-])
+    ("test_table", {"_id": 2, "data": 2})])
 def test_del_one_with_non_empty_db_exception(db_memory_with_data, table, filter):
     with pytest.raises(DbException) as excinfo:
         db_memory_with_data.del_one(table, filter)
@@ -352,8 +336,7 @@ def test_del_one_with_non_empty_db_exception(db_memory_with_data, table, filter)
     ("test_table", {"data": 1}),
     ("test_table", {"data": 2}),
     ("test_table", {"_id": 1, "data": 1}),
-    ("test_table", {"_id": 2, "data": 2}),
-])
+    ("test_table", {"_id": 2, "data": 2})])
 def test_del_one_with_non_empty_db_none(db_memory_with_data, table, filter):
     result = db_memory_with_data.del_one(table, filter, fail_on_empty=False)
 
@@ -361,8 +344,7 @@ def test_del_one_with_non_empty_db_none(db_memory_with_data, table, filter):
 
 @pytest.mark.parametrize("fail_on_empty", [
     (True),
-    (False),
-])
+    (False)])
 def test_del_one_generic_exception(db_memory_with_data, fail_on_empty):
     table = 'test'
     filter = {}
@@ -382,8 +364,7 @@ def test_del_one_generic_exception(db_memory_with_data, fail_on_empty):
     ("test", {"data": 1}, {"_id": 3, "data": 42}),
     ("test", {"data": 3}, {"_id": 3, "data": 42}),
     ("test", {"_id": 1, "data": 1}, {"_id": 3, "data": 42}),
-    ("test", {"_id": 3, "data": 3}, {"_id": 3, "data": 42}),
-])
+    ("test", {"_id": 3, "data": 3}, {"_id": 3, "data": 42})])
 def test_replace(db_memory_with_data, table, filter, indata):
     result = db_memory_with_data.replace(table, filter, indata)
 
@@ -403,8 +384,7 @@ def test_replace(db_memory_with_data, table, filter, indata):
     ("test_table", {}, {'_id': 2, 'data': 1}),
     ("test_table", {}, {'_id': 1, 'data': 2}),
     ("test_table", {'_id': 1}, {'_id': 1, 'data': 1}),
-    ("test_table", {'_id': 1, 'data': 1}, {'_id': 1, 'data': 1}),
-])
+    ("test_table", {'_id': 1, 'data': 1}, {'_id': 1, 'data': 1})])
 def test_replace_without_data_exception(db_memory, table, filter, indata):
     with pytest.raises(DbException) as excinfo:
         db_memory.replace(table, filter, indata, fail_on_empty=True)
@@ -421,8 +401,7 @@ def test_replace_without_data_exception(db_memory, table, filter, indata):
     ("test_table", {}, {'_id': 2, 'data': 1}),
     ("test_table", {}, {'_id': 1, 'data': 2}),
     ("test_table", {'_id': 1}, {'_id': 1, 'data': 1}),
-    ("test_table", {'_id': 1, 'data': 1}, {'_id': 1, 'data': 1}),
-])
+    ("test_table", {'_id': 1, 'data': 1}, {'_id': 1, 'data': 1})])
 def test_replace_without_data_none(db_memory, table, filter, indata):
     result = db_memory.replace(table, filter, indata, fail_on_empty=False)
     assert result == None
@@ -432,8 +411,7 @@ def test_replace_without_data_none(db_memory, table, filter, indata):
     ("test_table", {}, {'_id': 2, 'data': 1}),
     ("test_table", {}, {'_id': 1, 'data': 2}),
     ("test_table", {'_id': 1}, {'_id': 1, 'data': 1}),
-    ("test_table", {'_id': 1, 'data': 1}, {'_id': 1, 'data': 1}),
-])
+    ("test_table", {'_id': 1, 'data': 1}, {'_id': 1, 'data': 1})])
 def test_replace_with_data_exception(db_memory_with_data, table, filter, indata):
     with pytest.raises(DbException) as excinfo:
         db_memory_with_data.replace(table, filter, indata, fail_on_empty=True)
@@ -445,16 +423,14 @@ def test_replace_with_data_exception(db_memory_with_data, table, filter, indata)
     ("test_table", {}, {'_id': 2, 'data': 1}),
     ("test_table", {}, {'_id': 1, 'data': 2}),
     ("test_table", {'_id': 1}, {'_id': 1, 'data': 1}),
-    ("test_table", {'_id': 1, 'data': 1}, {'_id': 1, 'data': 1}),
-])
+    ("test_table", {'_id': 1, 'data': 1}, {'_id': 1, 'data': 1})])
 def test_replace_with_data_none(db_memory_with_data, table, filter, indata):
     result = db_memory_with_data.replace(table, filter, indata, fail_on_empty=False)
     assert result == None
 
 @pytest.mark.parametrize("fail_on_empty", [
     (True),
-    (False),
-])
+    (False)])
 def test_replace_generic_exception(db_memory_with_data, fail_on_empty):
     table = 'test'
     filter = {}
@@ -483,8 +459,7 @@ def test_replace_generic_exception(db_memory_with_data, fail_on_empty):
     ("test_table", "1", {"data_1": 1, "data_2": 2}),
     ("test_table", "1", {"data_1": 2, "data_2": 1}),
     ("test_table", "2", {"data_1": 1, "data_2": 2}),
-    ("test_table", "2", {"data_1": 2, "data_2": 1}),
-])
+    ("test_table", "2", {"data_1": 2, "data_2": 1})])
 def test_create_with_empty_db_with_id(db_memory, table, id, data):
     data_to_insert = data
     data_to_insert['_id'] = id
@@ -513,8 +488,7 @@ def test_create_with_empty_db_with_id(db_memory, table, id, data):
     ("test_table", "4", {"data_1": 1, "data_2": 2}),
     ("test_table", "5", {"data_1": 2, "data_2": 1}),
     ("test_table", "4", {"data_1": 1, "data_2": 2}),
-    ("test_table", "5", {"data_1": 2, "data_2": 1}),
-])
+    ("test_table", "5", {"data_1": 2, "data_2": 1})])
 def test_create_with_non_empty_db_with_id(db_memory_with_data, table, id, data):
     data_to_insert = data
     data_to_insert['_id'] = id
@@ -543,8 +517,7 @@ def test_create_with_non_empty_db_with_id(db_memory_with_data, table, id, data):
     ("test_table", {"data_1": 1, "data_2": 2}),
     ("test_table", {"data_1": 2, "data_2": 1}),
     ("test_table", {"data_1": 1, "data_2": 2}),
-    ("test_table", {"data_1": 2, "data_2": 1}),
-])
+    ("test_table", {"data_1": 2, "data_2": 1})])
 def test_create_with_empty_db_without_id(db_memory, table, data):
     returned_id = db_memory.create(table, data)
 
@@ -573,8 +546,7 @@ def test_create_with_empty_db_without_id(db_memory, table, data):
     ("test_table", {"data_1": 1, "data_2": 2}),
     ("test_table", {"data_1": 2, "data_2": 1}),
     ("test_table", {"data_1": 1, "data_2": 2}),
-    ("test_table", {"data_1": 2, "data_2": 1}),
-])
+    ("test_table", {"data_1": 2, "data_2": 1})])
 def test_create_with_non_empty_db_without_id(db_memory_with_data, table, data):
     returned_id = db_memory_with_data.create(table, data)
 

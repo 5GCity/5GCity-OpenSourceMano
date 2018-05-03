@@ -66,8 +66,7 @@ def test_constructor_with_logger():
     ({'logger_name': 'fs_local', 'path': valid_path()}, 'fs_local', valid_path()),
     ({'logger_name': 'fs_local', 'path': valid_path()[:-1]}, 'fs_local', valid_path()),
     ({'path': valid_path()}, 'fs', valid_path()),
-    ({'path': valid_path()[:-1]}, 'fs', valid_path()),
-])
+    ({'path': valid_path()[:-1]}, 'fs', valid_path())])
 def test_fs_connect_with_valid_config(config, exp_logger, exp_path):
     fs = FsLocal()
     fs.fs_connect(config)
@@ -79,8 +78,7 @@ def test_fs_connect_with_valid_config(config, exp_logger, exp_path):
     ({'logger_name': 'fs_local', 'path': invalid_path()}, fs_connect_exception_message(invalid_path())),
     ({'logger_name': 'fs_local', 'path': invalid_path()[:-1]}, fs_connect_exception_message(invalid_path()[:-1])),
     ({'path': invalid_path()}, fs_connect_exception_message(invalid_path())),
-    ({'path': invalid_path()[:-1]}, fs_connect_exception_message(invalid_path()[:-1])),
-])
+    ({'path': invalid_path()[:-1]}, fs_connect_exception_message(invalid_path()[:-1]))])
 def test_fs_connect_with_invalid_path(config, exp_exception_message):
     fs = FsLocal()
     
@@ -113,8 +111,7 @@ def test_mkdir_with_exception(fs_local):
     (str(uuid.uuid4()), 'file', False),
     ([str(uuid.uuid4())], 'file', False),
     (str(uuid.uuid4()), 'dir', False),
-    ([str(uuid.uuid4())], 'dir', False),
-])
+    ([str(uuid.uuid4())], 'dir', False)])
 def test_file_exists_returns_false(fs_local, storage, mode, expected):
     assert fs_local.file_exists(storage, mode) == expected
 
@@ -122,8 +119,7 @@ def test_file_exists_returns_false(fs_local, storage, mode, expected):
     (str(uuid.uuid4()), 'file', True),
     ([str(uuid.uuid4())], 'file', True),
     (str(uuid.uuid4()), 'dir', True),
-    ([str(uuid.uuid4())], 'dir', True),
-])
+    ([str(uuid.uuid4())], 'dir', True)])
 def test_file_exists_returns_true(fs_local, storage, mode, expected):
     path = valid_path() + storage if isinstance(storage, str) else valid_path() + storage[0]
 
@@ -143,8 +139,7 @@ def test_file_exists_returns_true(fs_local, storage, mode, expected):
     (str(uuid.uuid4()), 'file'),
     ([str(uuid.uuid4())], 'file'),
     (str(uuid.uuid4()), 'dir'),
-    ([str(uuid.uuid4())], 'dir'),
-])
+    ([str(uuid.uuid4())], 'dir')])
 def test_file_size(fs_local, storage, mode):
     path = valid_path() + storage if isinstance(storage, str) else valid_path() + storage[0]
 
@@ -164,8 +159,7 @@ def test_file_size(fs_local, storage, mode):
 
 @pytest.mark.parametrize("files, path", [
     (['foo', 'bar', 'foobar'], str(uuid.uuid4())),
-    (['foo', 'bar', 'foobar'], [str(uuid.uuid4())]),
-])
+    (['foo', 'bar', 'foobar'], [str(uuid.uuid4())])])
 def test_file_extract(fs_local, files, path):
     for f in files:
         os.mknod(valid_path() + f)
@@ -204,8 +198,7 @@ def test_file_extract(fs_local, files, path):
     ([str(uuid.uuid4())], 'a'),
     ([str(uuid.uuid4())], 'rb'),
     ([str(uuid.uuid4())], 'wb'),
-    ([str(uuid.uuid4())], 'ab'),
-])
+    ([str(uuid.uuid4())], 'ab')])
 def test_file_open(fs_local, storage, mode):
     path = valid_path() + storage if isinstance(storage, str) else valid_path() + storage[0]
 
@@ -222,8 +215,7 @@ def test_file_open(fs_local, storage, mode):
     (str(uuid.uuid4()), 'r'),
     (str(uuid.uuid4()), 'rb'),
     ([str(uuid.uuid4())], 'r'),
-    ([str(uuid.uuid4())], 'rb'),
-])
+    ([str(uuid.uuid4())], 'rb')])
 def test_file_open_file_not_found_exception(fs_local, storage, mode):
     with pytest.raises(FsException) as excinfo:
         fs_local.file_open(storage, mode)
@@ -242,8 +234,7 @@ def test_file_open_file_not_found_exception(fs_local, storage, mode):
     ([str(uuid.uuid4())], 'a'),
     ([str(uuid.uuid4())], 'rb'),
     ([str(uuid.uuid4())], 'wb'),
-    ([str(uuid.uuid4())], 'ab'),
-])
+    ([str(uuid.uuid4())], 'ab')])
 def test_file_open_io_error(fs_local, storage, mode):
     path = valid_path() + storage if isinstance(storage, str) else valid_path() + storage[0]
 
@@ -261,8 +252,7 @@ def test_file_open_io_error(fs_local, storage, mode):
     (str(uuid.uuid4()), True),
     (str(uuid.uuid4()), False),
     ([str(uuid.uuid4())], True),
-    ([str(uuid.uuid4())], False),
-])
+    ([str(uuid.uuid4())], False)])
 def test_dir_ls(fs_local, storage, with_files):
     path = valid_path() + storage if isinstance(storage, str) else valid_path() + storage[0]
 
@@ -285,8 +275,7 @@ def test_dir_ls(fs_local, storage, with_files):
 
 @pytest.mark.parametrize("storage", [
     (str(uuid.uuid4())),
-    ([str(uuid.uuid4())]),
-])
+    ([str(uuid.uuid4())])])
 def test_dir_ls_with_not_a_directory_error(fs_local, storage):
     path = valid_path() + storage if isinstance(storage, str) else valid_path() + storage[0]
 
@@ -301,8 +290,7 @@ def test_dir_ls_with_not_a_directory_error(fs_local, storage):
 
 @pytest.mark.parametrize("storage", [
     (str(uuid.uuid4())),
-    ([str(uuid.uuid4())]),
-])
+    ([str(uuid.uuid4())])])
 def test_dir_ls_with_io_error(fs_local, storage):
     path = valid_path() + storage if isinstance(storage, str) else valid_path() + storage[0]
 
@@ -324,8 +312,7 @@ def test_dir_ls_with_io_error(fs_local, storage):
     ([str(uuid.uuid4())], True, True),
     ([str(uuid.uuid4())], False, True),
     ([str(uuid.uuid4())], True, False),
-    ([str(uuid.uuid4())], False, False),
-])
+    ([str(uuid.uuid4())], False, False)])
 def test_file_delete_with_dir(fs_local, storage, with_files, ignore_non_exist):
     path = valid_path() + storage if isinstance(storage, str) else valid_path() + storage[0]
 
@@ -341,8 +328,7 @@ def test_file_delete_with_dir(fs_local, storage, with_files, ignore_non_exist):
 
 @pytest.mark.parametrize("storage", [
     (str(uuid.uuid4())),
-    ([str(uuid.uuid4())]),
-])
+    ([str(uuid.uuid4())])])
 def test_file_delete_expect_exception(fs_local, storage):
     with pytest.raises(FsException) as excinfo:
         fs_local.file_delete(storage)
@@ -351,12 +337,10 @@ def test_file_delete_expect_exception(fs_local, storage):
 
 @pytest.mark.parametrize("storage", [
     (str(uuid.uuid4())),
-    ([str(uuid.uuid4())]),
-])
+    ([str(uuid.uuid4())])])
 def test_file_delete_no_exception(fs_local, storage):
     path = valid_path() + storage if isinstance(storage, str) else valid_path() + storage[0]
 
     fs_local.file_delete(storage, ignore_non_exist=True)
 
     assert os.path.exists(path) == False
-    
