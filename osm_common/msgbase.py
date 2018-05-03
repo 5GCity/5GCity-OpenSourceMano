@@ -35,13 +35,13 @@ class MsgBase(object):
         pass
 
     def write(self, topic, key, msg):
-        pass
+        raise MsgException("Method 'write' not implemented")
 
     def read(self, topic):
-        pass
+        raise MsgException("Method 'read' not implemented")
 
     async def aiowrite(self, topic, key, msg, loop):
-        pass
+        raise MsgException("Method 'aiowrite' not implemented")
 
     async def aioread(self, topic, loop):
-        pass
+        raise MsgException("Method 'aioread' not implemented")

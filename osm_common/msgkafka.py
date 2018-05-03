@@ -35,7 +35,8 @@ class MsgKafka(MsgBase):
 
     def disconnect(self):
         try:
-            self.loop.close()
+            pass
+            # self.loop.close()
         except Exception as e:  # TODO refine
             raise MsgException(str(e))
 

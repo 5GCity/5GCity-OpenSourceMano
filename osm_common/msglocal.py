@@ -115,3 +115,14 @@ class MsgLocal(MsgBase):
             raise
         except Exception as e:  # TODO refine
             raise MsgException(str(e))
+
+    async def aiowrite(self, topic, key, msg, loop=None):
+        """
+        Asyncio write. It blocks
+        :param topic: str
+        :param key: str
+        :param msg: message, can be str or yaml
+        :param loop: asyncio loop
+        :return: nothing if ok or raises an exception
+        """
+        return self.write(topic, key, msg)

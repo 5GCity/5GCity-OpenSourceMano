@@ -24,19 +24,19 @@ class FsBase(object):
         pass
 
     def mkdir(self, folder):
-        pass
+        raise FsException("Method 'mkdir' not implemented")
 
     def file_exists(self, storage):
-        pass
+        raise FsException("Method 'file_exists' not implemented")
 
     def file_size(self, storage):
-        pass
+        raise FsException("Method 'file_size' not implemented")
 
     def file_extract(self, tar_object, path):
-        pass
+        raise FsException("Method 'file_extract' not implemented")
 
     def file_open(self, storage, mode):
-        pass
+        raise FsException("Method 'file_open' not implemented")
 
     def file_delete(self, storage, ignore_non_exist=False):
-        pass
+        raise FsException("Method 'file_delete' not implemented")
