@@ -2240,7 +2240,8 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                 db_sce_vnf = {
                     "uuid": sce_vnf_uuid,
                     "scenario_id": scenario_uuid,
-                    "name": get_str(vnf, "member-vnf-index", 255),
+                    # "name": get_str(vnf, "member-vnf-index", 255),
+                    "name": existing_vnf[0]["name"][:200] + "." + get_str(vnf, "member-vnf-index", 50),
                     "vnf_id": existing_vnf[0]["uuid"],
                     "member_vnf_index": str(vnf["member-vnf-index"]),
                     # TODO 'start-by-default': True
@@ -2991,11 +2992,11 @@ def create_instance(mydb, tenant_id, instance_dict):
         for vnf_name, vnf_instance_desc in instance_dict.get("vnfs",{}).iteritems():
             found = False
             for scenario_vnf in scenarioDict['vnfs']:
-                if vnf_name == scenario_vnf['name']:
+                if vnf_name == scenario_vnf['name'] or vnf_name == scenario_vnf['member_vnf_index']:
                     found = True
                     break
             if not found:
-                raise NfvoException("Invalid vnf name '{}' at instance:vnfs".format(vnf_instance_desc), HTTP_Bad_Request)
+                raise NfvoException("Invalid vnf name '{}' at instance:vnfs".format(vnf_name), HTTP_Bad_Request)
             if "datacenter" in vnf_instance_desc:
                 # Add this datacenter to myvims
                 vnf_instance_desc["datacenter"] = get_datacenter_uuid(mydb, tenant_id, vnf_instance_desc["datacenter"])
@@ -4199,16 +4200,16 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
 
     input_vnfs = action_dict.pop("vnfs", [])
     input_vms = action_dict.pop("vms", [])
-    action_over_all = True if len(input_vnfs)==0 and len (input_vms)==0 else False
+    action_over_all = True if not input_vnfs and not input_vms else False
     vm_result = {}
     vm_error = 0
     vm_ok = 0
     for sce_vnf in instanceDict['vnfs']:
         for vm in sce_vnf['vms']:
-            if not action_over_all:
-                if sce_vnf['uuid'] not in input_vnfs and sce_vnf['vnf_name'] not in input_vnfs and \
-                                vm['uuid'] not in input_vms and vm['name'] not in input_vms:
-                    continue
+            if not action_over_all and sce_vnf['uuid'] not in input_vnfs and sce_vnf['vnf_name'] not in input_vnfs and \
+                    sce_vnf['member_vnf_index'] not in input_vnfs and \
+                    vm['uuid'] not in input_vms and vm['name'] not in input_vms:
+                continue
             try:
                 if "add_public_key" in action_dict:
                     mgmt_access = {}
