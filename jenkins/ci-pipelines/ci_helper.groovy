@@ -75,7 +75,8 @@ def systest_run(container_name, test, source_rc = null) {
         pre_source = "/tmp/" + source_rc.substring(source_rc.lastIndexOf('/')+1)
  
         lxc_file_push(container_name,source_rc,pre_source)
-        lxc_run(container_name, "sh -c '. ${pre_source}; make -C devops/systest OSM_HOSTNAME=${so_ip} OSM_RO_HOSTNAME=${ro_ip} ${test}'")
+        result = lxc_run(container_name, "sh -c '. ${pre_source}; make -C devops/systest OSM_HOSTNAME=${so_ip} OSM_RO_HOSTNAME=${ro_ip} ${test}'")
+        echo result
     }
     else
     {
