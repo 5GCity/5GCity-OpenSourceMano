@@ -112,7 +112,8 @@ def ns_list(ctx, filter):
         ['ns instance name',
          'id',
          'operational status',
-         'config status'])
+         'config status',
+         'detailed status'])
     for ns in resp:
         fullclassname = ctx.obj.__module__ + "." + ctx.obj.__class__.__name__
         if fullclassname == 'osmclient.sol005.client.Client':
@@ -126,13 +127,15 @@ def ns_list(ctx, filter):
             nsr_id = nsr['ns-instance-config-ref']
         opstatus = nsr['operational-status'] if 'operational-status' in nsr else 'Not found'
         configstatus = nsr['config-status'] if 'config-status' in nsr else 'Not found'
+        detailed_status = nsr['detailed-status'] if 'detailed-status' in nsr else 'Not found'
         if configstatus == "config_not_needed":
             configstatus = "configured (no charms)"
         table.add_row(
             [nsr_name,
              nsr_id,
              opstatus,
-             configstatus])
+             configstatus,
+             detailed_status])
     table.align = 'l'
     print(table)
 
