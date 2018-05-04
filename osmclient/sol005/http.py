@@ -120,6 +120,9 @@ class Http(http.Http):
         curl_cmd.setopt(pycurl.HTTPGET, 1)
         curl_cmd.setopt(pycurl.WRITEFUNCTION, data.write)
         curl_cmd.perform()
+        http_code = curl_cmd.getinfo(pycurl.HTTP_CODE)
         curl_cmd.close()
-        return data.getvalue()
+        if data.getvalue():
+            return http_code, data.getvalue()
+        return http_code, None
 

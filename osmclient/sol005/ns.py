@@ -22,6 +22,7 @@ from osmclient.common import utils
 from osmclient.common.exceptions import ClientException
 from osmclient.common.exceptions import NotFound
 import yaml
+import json
 
 
 class Ns(object):
@@ -144,9 +145,9 @@ class Ns(object):
             self._apiResource = '/ns_instances_content'
             self._apiBase = '{}{}{}'.format(self._apiName,
                                             self._apiVersion, self._apiResource)
-            #print resp
             resp = self._http.post_cmd(endpoint=self._apiBase,
                                        postfields_dict=ns)
+            #print 'RESP: {}'.format(resp)
             if not resp or 'id' not in resp:
                 raise ClientException('unexpected response from server: '.format(
                                       resp))
@@ -156,6 +157,76 @@ class Ns(object):
             message="failed to create ns: {} nsd: {}\nerror:\n{}".format(
                     nsr_name,
                     nsd_name,
+                    exc.message)
+            raise ClientException(message)
+
+    def list_op(self, name, filter=None):
+        """Returns the list of operations of a NS
+        """
+        ns = self.get(name)
+        try:
+            self._apiResource = '/ns_lcm_op_occs'
+            self._apiBase = '{}{}{}'.format(self._apiName,
+                                      self._apiVersion, self._apiResource)
+            filter_string = ''
+            if filter:
+                filter_string = '&{}'.format(filter)
+            http_code, resp = self._http.get2_cmd('{}?nsInstanceId={}'.format(self._apiBase, ns['_id'],
+                                                                  filter_string) )
+            resp = json.loads(resp.decode())
+            #print 'RESP: {}'.format(resp)
+            if http_code == 200:
+                return resp
+            else:
+                raise ClientException('{}'.format(resp['detail']))
+
+        except ClientException as exc:
+            message="failed to get operation list of NS {}:\nerror:\n{}".format(
+                    name,
+                    exc.message)
+            raise ClientException(message)
+
+    def get_op(self, operationId):
+        """Returns the status of an operation
+        """
+        try:
+            self._apiResource = '/ns_lcm_op_occs'
+            self._apiBase = '{}{}{}'.format(self._apiName,
+                                      self._apiVersion, self._apiResource)
+            http_code, resp = self._http.get2_cmd('{}/{}'.format(self._apiBase, operationId))
+            resp = json.loads(resp.decode())
+            #print 'RESP: {}'.format(resp)
+            if http_code == 200:
+                return resp
+            else:
+                raise ClientException("{}".format(resp['detail']))
+        except ClientException as exc:
+            message="failed to get status of operation {}:\nerror:\n{}".format(
+                    operationId,
+                    exc.message)
+            raise ClientException(message)
+
+    def exec_op(self, name, op_name, op_data=None):
+        """Executes an operation on a NS
+        """
+        ns = self.get(name)
+        try:
+            self._apiResource = '/ns_instances'
+            self._apiBase = '{}{}{}'.format(self._apiName,
+                                            self._apiVersion, self._apiResource)
+            endpoint = '{}/{}/{}'.format(self._apiBase, ns['_id'], op_name)
+            #print 'OP_NAME: {}'.format(op_name)
+            #print 'OP_DATA: {}'.format(json.dumps(op_data))
+            resp = self._http.post_cmd(endpoint=endpoint, postfields_dict=op_data)
+            #print 'RESP: {}'.format(resp)
+            if not resp or 'id' not in resp:
+                raise ClientException('unexpected response from server: '.format(
+                                      resp))
+            else:
+                print resp['id']
+        except ClientException as exc:
+            message="failed to exec operation {}:\nerror:\n{}".format(
+                    name,
                     exc.message)
             raise ClientException(message)
 

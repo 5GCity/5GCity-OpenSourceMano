@@ -243,6 +243,27 @@ def vnf_list(ctx):
     table.align = 'l'
     print(table)
 
+@cli.command(name='ns-op-list')
+@click.argument('name')
+@click.pass_context
+def ns_op_list(ctx, name):
+    '''shows the history of operations over a NS instance
+
+    NAME: name or ID of the NS instance
+    '''
+    try:
+        check_client_version(ctx.obj, ctx.command.name)
+        resp = ctx.obj.ns.list_op(name)
+    except ClientException as inst:
+        print(inst.message)
+        exit(1)
+
+    table = PrettyTable(['id', 'operation', 'status'])
+    for op in resp:
+         table.add_row([op['id'], op['lcmOperationType'],
+                        op['operationState']])
+    table.align = 'l'
+    print(table)
 
 ####################
 # SHOW operations
@@ -448,6 +469,29 @@ def ns_monitoring_show(ctx, ns_name):
                  monitor['name'],
                     monitor['value-integer'],
                     monitor['units']])
+    table.align = 'l'
+    print(table)
+
+@cli.command(name='ns-op-show', short_help='shows the info of an operation')
+@click.argument('id')
+@click.option('--filter', default=None)
+@click.pass_context
+def ns_op_show(ctx, id, filter):
+    '''shows the detailed info of an operation
+
+    ID: operation identifier
+    '''
+    try:
+        check_client_version(ctx.obj, ctx.command.name)
+        op_info = ctx.obj.ns.get_op(id)
+    except ClientException as inst:
+        print(inst.message)
+        exit(1)
+
+    table = PrettyTable(['field', 'value'])
+    for k, v in op_info.items():
+        if filter is None or filter in k:
+            table.add_row([k, json.dumps(v, indent=2)])
     table.align = 'l'
     print(table)
 
@@ -1018,6 +1062,34 @@ def vcs_list(ctx):
         table.add_row([component['component_name'], component['state']])
     table.align = 'l'
     print(table)
+
+
+@cli.command(name='ns-action')
+@click.argument('ns_name')
+@click.option('--vnf_name', default=None)
+@click.option('--action_name', prompt=True)
+@click.option('--params', prompt=True)
+@click.pass_context
+def ns_action(ctx,
+              ns_name,
+              vnf_name,
+              params):
+    '''executes an action/primitive over a NS instance
+
+    NS_NAME: name or ID of the NS instance
+    '''
+    try:
+        check_client_version(ctx.obj, ctx.command.name)
+        op_data={}
+        if vnf_name:
+            op_data['vnf_member_index'] = vnf_name
+        op_data['primitive'] = action_name
+        op_data['primitive_params'] = yaml.load(params)
+        ctx.obj.ns.exec_op(ns_name, op_name='action', op_data=op_data)
+
+    except ClientException as inst:
+        print(inst.message)
+        exit(1)
 
 
 if __name__ == '__main__':

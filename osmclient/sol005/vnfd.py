@@ -72,7 +72,7 @@ class Vnfd(object):
         vnfd = self.get(name)
         headers = self._client._headers
         headers['Accept'] = 'application/binary'
-        resp2 = self._http.get2_cmd('{}/{}/{}'.format(self._apiBase, vnfd['_id'], thing))
+        http_code, resp2 = self._http.get2_cmd('{}/{}/{}'.format(self._apiBase, vnfd['_id'], thing))
         #print yaml.safe_dump(resp2)
         if resp2:
             #store in a file
