@@ -1,11 +1,9 @@
 ===========
 osm-common
 ===========
-
-Contains general modules for lightweight build database, storage and message access.
-The target is to use same library for OSM modules, in order to easy migration to other technologies, that is
-different database or storage object system.
+Contains common modules for OSM lightweight build, that manages database, storage and messaging access.
+It uses a plugin stile in order to easy migration to other technologies, as e.g. different database or storage object system.
 For database: mongo and memory (volatile) are implemented.
-For message: Kafka and local file system are implemented.
-For storage: only local file system is implemented.
+For messaging: Kafka and local file system are implemented.
+For storage: local file system is implemented.
 
