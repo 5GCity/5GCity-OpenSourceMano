@@ -533,7 +533,7 @@ function install_juju() {
     echo "Installing juju"
     sudo snap install juju --classic
     sudo dpkg-reconfigure -p medium lxd
-    juju bootstrap localhost osm
+    sg lxd -c "juju bootstrap localhost osm"
     echo "Finished installation of juju"
 }
 
