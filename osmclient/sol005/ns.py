@@ -111,7 +111,7 @@ class Ns(object):
         #ns['userdata'] = {}
         #ns['userdata']['key1']='value1'
         #ns['userdata']['key2']='value2'
-        
+
         if ssh_keys is not None:
             # ssh_keys is comma separate list
             # ssh_keys_format = []
@@ -119,7 +119,10 @@ class Ns(object):
             #     ssh_keys_format.append({'key-pair-ref': key})
             #
             # ns['ssh-authorized-key'] = ssh_keys_format
-            ns['ssh-authorized-key'] = ssh_keys.split(',')
+            ns['ssh-authorized-key'] = []
+            for pubkeyfile in ssh_keys.split(','):
+                with open(pubkeyfile, 'r') as f:
+                    ns['ssh-authorized-key'].append(f.read())
         if config:
             ns_config = yaml.load(config)
             if "vim-network-name" in ns_config:
