@@ -400,6 +400,12 @@ class N2VC:
                 raise
 
     async def ExecutePrimitive(self, model_name, application_name, primitive, callback, *callback_args, **params):
+        """
+        Queue the execution of a primitive
+
+        returns the UUID of the executed primitive
+        """
+        uuid = None
         try:
             if not self.authenticated:
                 await self.login()
@@ -422,11 +428,12 @@ class N2VC:
                     if unit:
                         self.log.debug("Executing primitive {}".format(primitive))
                         action = await unit.run_action(primitive, **params)
-                        # action = await action.wait()
+                        uuid = action.id
                 await model.disconnect()
         except Exception as e:
             self.log.debug("Caught exception while executing primitive: {}".format(e))
             raise e
+        return uuid
 
     async def RemoveCharms(self, model_name, application_name, callback=None, *callback_args):
         try:
