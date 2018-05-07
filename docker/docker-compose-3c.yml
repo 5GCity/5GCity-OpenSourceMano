@@ -1,7 +1,7 @@
 version: '3'
 services:
   osm-ro-db:
-    image: mysql
+    image: mysql:5
     container_name: osm-ro-db
     restart: always
     environment:
@@ -10,7 +10,7 @@ services:
       - MYSQL_USER=mano
       - MYSQL_PASSWORD=manopw
   osm-ro-ovim-db:
-    image: mysql
+    image: mysql:5
     container_name: osm-ro-ovim-db
     restart: always
     environment:

@@ -1,7 +1,7 @@
 version: '2'
 services:
   osm-ro-db:
-    image: mysql
+    image: mysql:5
     container_name: osm-ro-db
     restart: always
     environment:
