@@ -671,8 +671,6 @@ class Lcm:
             db_nsr["detailed-status"] = "creating"
             db_nsr["operational-status"] = "init"
 
-            deloyment_timeout = 120
-
             RO = ROclient.ROClient(self.loop, **self.ro_config)
 
             # get vnfds, instantiate at RO
@@ -755,8 +753,8 @@ class Lcm:
             step = ns_status_detailed = "Waiting ns ready at RO"
             db_nsr["detailed-status"] = ns_status_detailed
             self.logger.debug(logging_text + step + " RO_ns_id={}".format(RO_nsr_id))
-            deloyment_timeout = 600
-            while deloyment_timeout > 0:
+            deployment_timeout = 2*3600   # Two hours
+            while deployment_timeout > 0:
                 desc = await RO.show("ns", RO_nsr_id)
                 ns_status, ns_status_info = RO.check_ns_status(desc)
                 nsr_lcm["RO"]["nsr_status"] = ns_status
@@ -766,14 +764,15 @@ class Lcm:
                     db_nsr["detailed-status"] = ns_status_detailed + "; {}".format(ns_status_info)
                     self.update_db("nsrs", nsr_id, db_nsr)
                 elif ns_status == "ACTIVE":
+                    step = "Getting ns VNF management IP address"
                     nsr_lcm["nsr_ip"] = RO.get_ns_vnf_ip(desc)
                     break
                 else:
                     assert False, "ROclient.check_ns_status returns unknown {}".format(ns_status)
 
                 await asyncio.sleep(5, loop=self.loop)
-                deloyment_timeout -= 5
-            if deloyment_timeout <= 0:
+                deployment_timeout -= 5
+            if deployment_timeout <= 0:
                 raise ROclient.ROClientException("Timeout waiting ns to be ready")
             db_nsr["detailed-status"] = "Configuring vnfr"
             self.update_db("nsrs", nsr_id, db_nsr)

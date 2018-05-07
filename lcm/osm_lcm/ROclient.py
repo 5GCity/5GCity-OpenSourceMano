@@ -305,12 +305,16 @@ class ROClient:
         """
         ns_ip = {"vnf": {}, "vdu": {}}
         for vnf in ns_descriptor["vnfs"]:
-            ns_ip["vnf"][str(vnf["member_vnf_index"])] = vnf["ip_address"]
+            if not vnf.get("ip_address"):
+                raise ROClientException("No ip_address returned for ns member_vnf_index '{}'".format(
+                    vnf["member_vnf_index"]), http_code=500)
+            ns_ip["vnf"][str(vnf["member_vnf_index"])] = vnf.get("ip_address")
             ns_ip["vdu"][str(vnf["member_vnf_index"])] = {}
             for vm in vnf["vms"]:
                 if vm.get("ip_address"):
                     ns_ip["vdu"][str(vnf["member_vnf_index"])][vm["vdu_osm_id"]] = vm["ip_address"]
         return ns_ip
+
 
     async def _get_item_uuid(self, session, item, item_id_name, all_tenants=False):
         if all_tenants:
