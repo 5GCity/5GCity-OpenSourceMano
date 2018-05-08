@@ -29,8 +29,8 @@ ALLOWED_HOSTS = []
 
 AUTH_USER_MODEL = "sf_user.CustomUser"
 
-SITE_NAME = "OSM Light Weight"
-SHORT_SITE_NAME = "OSM-LW-UI"
+SITE_NAME = "Open Source MANO"
+SHORT_SITE_NAME = "OSM"
 
 LOGIN_URL = '/auth/'
 LOGOUT_URL = '/auth/'
