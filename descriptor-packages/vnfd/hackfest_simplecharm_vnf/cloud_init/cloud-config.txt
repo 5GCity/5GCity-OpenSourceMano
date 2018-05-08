@@ -1,0 +1,4 @@
+#cloud-config
+password: osm4u
+chpasswd: { expire: False }
+ssh_pwauth: True
