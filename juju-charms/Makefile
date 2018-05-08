@@ -38,5 +38,5 @@ $(CHARM_BUILD_DIR)/%: $(CHARM_SRC_DIR)/%
 	docker run -u $$(id -u):$$(id -g) -v$$(pwd):$$(pwd) -w$$(pwd) $(CHARM_DOCKER_TAG) charm-build -o $(BUILD_DIR) $<
 else
 $(CHARM_BUILD_DIR)/%: $(CHARM_SRC_DIR)/%
-	charm-build -o $(BUILD_DIR) $<
+	charm build -o $(BUILD_DIR) $<
 endif
