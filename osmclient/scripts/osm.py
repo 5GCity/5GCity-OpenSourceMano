@@ -1073,6 +1073,7 @@ def vcs_list(ctx):
 def ns_action(ctx,
               ns_name,
               vnf_name,
+              action_name,
               params):
     '''executes an action/primitive over a NS instance
 
