@@ -17,7 +17,7 @@
 
 BUILD_DIR = .
 
-CHARMS:= pingpong vyos-proxy netutils
+CHARMS:= pingpong vyos-proxy netutils simple
 CHARM_SRC_DIR := layers
 CHARM_BUILD_DIR := $(BUILD_DIR)/builds
 
