@@ -103,3 +103,4 @@ vnfd:vnfd-catalog:
                 -   name: filename
                     data-type: STRING
                     default-value: '/home/ubuntu/touched'
+

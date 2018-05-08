@@ -12,9 +12,9 @@ nsd:nsd-catalog:
         -   vnfd-id-ref: hackfest-simplecharm-vnf
             member-vnf-index: '2'
         vld:
-        -   id: mgmt
-            name: mgmt
-            short-name: mgmt
+        -   id: mgmtnet
+            name: mgmtnet
+            short-name: mgmtnet
             type: ELAN
             mgmt-network: 'true'
             vim-network-name: mgmt
@@ -36,3 +36,4 @@ nsd:nsd-catalog:
             -   vnfd-id-ref: hackfest-simplecharm-vnf
                 member-vnf-index-ref: '2'
                 vnfd-connection-point-ref: vnf-data
+
