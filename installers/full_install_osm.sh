@@ -613,32 +613,38 @@ function install_lightweight() {
     generate_docker_images
     generate_docker_env_files
     deploy_lightweight
+    [ -n "$INSTALL_VIMEMU" ] && install_vimemu
     install_osmclient
     return 0
 }
 
 function install_vimemu() {
-    # install Docker
-    install_docker_ce
+    echo "\nInstalling vim-emu"
+    EMUTEMPDIR="$(mktemp -d -q --tmpdir "installosmvimemu.XXXXXX")"
+    trap 'rm -rf "${EMUTEMPDIR}"' EXIT
     # clone vim-emu repository (attention: branch is currently master only)
     echo "Cloning vim-emu repository ..."
-    git clone https://osm.etsi.org/gerrit/osm/vim-emu.git
+    git clone https://osm.etsi.org/gerrit/osm/vim-emu.git $EMUTEMPDIR
     # build vim-emu docker
     echo "Building vim-emu Docker container..."
-    sudo docker build -t vim-emu-img -f vim-emu/Dockerfile vim-emu/
+    sudo docker build -t vim-emu-img -f $EMUTEMPDIR/Dockerfile $EMUTEMPDIR/
     # start vim-emu container as daemon
     echo "Starting vim-emu Docker container 'vim-emu' ..."
-    sudo docker run --name vim-emu -t -d --rm --privileged --pid='host' -v /var/run/docker.sock:/var/run/docker.sock vim-emu-img python examples/osm_default_daemon_topology_2_pop.py
+    if [ -n "$INSTALL_LIGHTWEIGHT" ]; then
+        # in lightweight mode, the emulator needs to be attached to netOSM
+        sudo docker run --name vim-emu -t -d --rm --privileged --pid='host' --network=netOSM -v /var/run/docker.sock:/var/run/docker.sock vim-emu-img python examples/osm_default_daemon_topology_2_pop.py
+    else
+        # classic build mode
+        sudo docker run --name vim-emu -t -d --rm --privileged --pid='host' -v /var/run/docker.sock:/var/run/docker.sock vim-emu-img python examples/osm_default_daemon_topology_2_pop.py
+    fi
     echo "Waiting for 'vim-emu' container to start ..."
     sleep 5
     export VIMEMU_HOSTNAME=$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' vim-emu)
     echo "vim-emu running at ${VIMEMU_HOSTNAME} ..."
-    echo -e "You might be interested in adding the following OSM client env variables to your .bashrc file:"
-    echo "     export OSM_HOSTNAME=${OSM_HOSTNAME}"
-    echo "     export OSM_RO_HOSTNAME=${OSM_RO_HOSTNAME}"
-    echo -e "You might be interested in adding the following vim-emu env variables to your .bashrc file:"
+    # print vim-emu connection info
+    echo -e "\nYou might be interested in adding the following vim-emu env variables to your .bashrc file:"
     echo "     export VIMEMU_HOSTNAME=${VIMEMU_HOSTNAME}"
-    echo -e "\nTo add the emulated VIM to OSM you should do:"
+    echo -e "To add the emulated VIM to OSM you should do:"
     echo "     osm vim-create --name emu-vim1 --user username --password password --auth_url http://${VIMEMU_HOSTNAME}:6001/v2.0 --tenant tenantName --account_type openstack"
 }
 
@@ -884,10 +890,7 @@ fi
 [ -z "$NOCONFIGURE" ] && install_osmclient
 
 #Install vim-emu (optional)
-if [ -n "$INSTALL_VIMEMU" ]; then
-    echo -e "\nInstalling vim-emu ..."
-    install_vimemu
-fi
+[ -n "$INSTALL_VIMEMU" ] && install_docker_ce && install_vimemu
 
 wget -q -O- https://osm-download.etsi.org/ftp/osm-4.0-four/README2.txt &> /dev/null
 track end
