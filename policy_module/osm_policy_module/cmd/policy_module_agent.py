@@ -24,6 +24,7 @@
 import argparse
 import logging
 import sys
+import logstash
 
 from osm_policy_module.core.agent import PolicyModuleAgent
 from osm_policy_module.core.config import Config
@@ -48,10 +49,18 @@ def main():
                             format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %I:%M:%S %p', filemode='a',
                             level=logging.INFO)
+    if cfg.get('policy_module', 'enable_logstash_handler') == 'true':
+        logstash_host = cfg.get('policy_module', 'logstash_host')
+        logstash_port = int(cfg.get('policy_module', 'logstash_port'))
+        root_logger = logging.getLogger()
+        root_logger.addHandler(logstash.TCPLogstashHandler(logstash_host, logstash_port, version=1))
+        root_logger.info("Logstash handler configured.")
     log = logging.getLogger(__name__)
+    log.info("Config: %s", cfg)
     log.info("Syncing database...")
     db_manager = DatabaseManager()
     db_manager.create_tables()
+    log.info("Database synced correctly.")
     log.info("Starting policy module agent...")
     agent = PolicyModuleAgent()
     agent.run()

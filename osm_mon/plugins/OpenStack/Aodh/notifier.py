@@ -61,7 +61,6 @@ class NotifierHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         """Get request functionality."""
         self._set_headers()
-        self.wfile.write("<html><body><h1>hi!</h1></body></html>")
 
     def do_POST(self):
         """POST request function."""
@@ -74,7 +73,6 @@ class NotifierHandler(BaseHTTPRequestHandler):
             post_data = post_data.decode()
         except AttributeError:
             pass
-        self.wfile.write("<html><body><h1>POST!</h1></body></tml>")
         log.info("This alarm was triggered: %s", json.loads(post_data))
 
         # Generate a notify_alarm response for the SO
@@ -121,7 +119,7 @@ class NotifierHandler(BaseHTTPRequestHandler):
                             sev=values['severity'], date=a_date,
                             state=values['current'], vim_type="openstack")
                         producer.notify_alarm(
-                            'notify_alarm', resp_message, 'alarm_response')
+                            'notify_alarm', resp_message)
                         log.info("Sent an alarm response to SO: %s", resp_message)
                     except Exception as exc:
                         log.exception("Couldn't notify SO of the alarm:")

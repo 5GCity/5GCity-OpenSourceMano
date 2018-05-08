@@ -45,7 +45,10 @@ class Config(object):
                 'kafka_server_host': '127.0.0.1',
                 'kafka_server_port': '9092',
                 'log_dir': 'stdout',
-                'log_level': 'INFO'
+                'log_level': 'INFO',
+                'enable_logstash_handler': 'false',
+                'logstash_host': 'logstash',
+                'logstash_port': '5000'
             },
         }
 
@@ -65,3 +68,6 @@ class Config(object):
                 return self.config[group]
             return self.config[group].get(name, default)
         return default
+
+    def __str__(self):
+        return str(self.config)

@@ -24,13 +24,16 @@ FROM ubuntu:16.04
 
 LABEL authors="Benjamín Díaz"
 
-ADD . /policy_module
-
 RUN apt-get --yes update \
- && apt-get --yes install software-properties-common python-software-properties \
- && apt-get --yes install git python python-pip sudo libmysqlclient-dev libxext-dev libxrender-dev libxtst-dev \
- && pip install pip==9.0.3 \
- && pip install -r /policy_module/requirements.txt \
- && pip install /policy_module
+ && apt-get --yes install python3 python3-pip libmysqlclient-dev \
+ && pip3 install pip==9.0.3
+
+COPY requirements.txt /policy_module/requirements.txt
+
+RUN pip3 install -r /policy_module/requirements.txt
+
+COPY . /policy_module
+
+RUN pip3 install /policy_module
 
 CMD bash /policy_module/scripts/gen_config_from_env.sh && osm-policy-agent --config osm_policy_agent.cfg
