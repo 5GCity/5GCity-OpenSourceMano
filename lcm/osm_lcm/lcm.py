@@ -603,7 +603,7 @@ class Lcm:
             # if db_vim["_admin"]["operationalState"] == "PROCESSING":
             #     #TODO check if VIM is creating and wait
             if db_vim["_admin"]["operationalState"] != "ENABLED":
-                raise LcmException("VIM={} is not available. operationalSstatus={}".format(
+                raise LcmException("VIM={} is not available. operationalState={}".format(
                     vim_account, db_vim["_admin"]["operationalState"]))
             RO_vim_id = db_vim["_admin"]["deployed"]["RO"]
             vim_2_RO[vim_account] = RO_vim_id
@@ -653,6 +653,7 @@ class Lcm:
         # get all needed from database
         db_nsr = None
         db_nslcmop = None
+        db_vnfr = {}
         exc = None
         step = "Getting nsr, nslcmop, RO_vims from db"
         try:
@@ -660,10 +661,12 @@ class Lcm:
             db_nsr = self.db.get_one("nsrs", {"_id": nsr_id})
             nsd = db_nsr["nsd"]
             nsr_name = db_nsr["name"]   # TODO short-name??
-
             needed_vnfd = {}
+            vnfr_filter = {"nsr-id-ref": nsr_id, "member-vnf-index-ref": None}
             for c_vnf in nsd["constituent-vnfd"]:
                 vnfd_id = c_vnf["vnfd-id-ref"]
+                vnfr_filter["member-vnf-index-ref"] = c_vnf["member-vnf-index"]
+                db_vnfr[c_vnf["member-vnf-index"]] = self.db.get_one("vnfrs", vnfr_filter)
                 if vnfd_id not in needed_vnfd:
                     step = "Getting vnfd={} from db".format(vnfd_id)
                     needed_vnfd[vnfd_id] = self.db.get_one("vnfds", {"id": vnfd_id})
@@ -744,7 +747,6 @@ class Lcm:
                         self.logger.debug(logging_text + step + " RO_ns_id={}".format(RO_nsr_id))
                         await RO.delete("ns", RO_nsr_id)
                         RO_nsr_id = nsr_lcm["RO"]["nsr_id"] = None
-
             if not RO_nsr_id:
                 step = db_nsr["detailed-status"] = "Creating ns at RO"
                 self.logger.debug(logging_text + step)
@@ -755,7 +757,19 @@ class Lcm:
                 RO_nsr_id = nsr_lcm["RO"]["nsr_id"] = desc["uuid"]
                 db_nsr["_admin"]["nsState"] = "INSTANTIATED"
                 nsr_lcm["RO"]["nsr_status"] = "BUILD"
+
             self.update_db("nsrs", nsr_id, db_nsr)
+            # update VNFR vimAccount
+            step = "Updating VNFR vimAcccount"
+            for vnf_index, vnfr in db_vnfr.items():
+                if vnfr.get("vim-account-id"):
+                    continue
+                if db_nsr["instantiate_params"].get("vnf") and db_nsr["instantiate_params"]["vnf"].get(vnf_index) \
+                        and db_nsr["instantiate_params"]["vnf"][vnf_index].get("vimAccountId"):
+                    vnfr["vim-account-id"] = db_nsr["instantiate_params"]["vnf"][vnf_index]["vimAccountId"]
+                else:
+                    vnfr["vim-account-id"] = db_nsr["instantiate_params"]["vimAccountId"]
+                self.update_db("vnfrs", vnfr["_id"], vnfr)
 
             # wait until NS is ready
             step = ns_status_detailed = "Waiting ns ready at RO"
@@ -772,8 +786,8 @@ class Lcm:
                     db_nsr["detailed-status"] = ns_status_detailed + "; {}".format(ns_status_info)
                     self.update_db("nsrs", nsr_id, db_nsr)
                 elif ns_status == "ACTIVE":
-                    step = "Getting ns VNF management IP address"
-                    nsr_lcm["nsr_ip"] = RO.get_ns_vnf_ip(desc)
+                    step = "Getting ns VIM information"
+                    ns_RO_info = nsr_lcm["nsr_ip"] = RO.get_ns_vnf_info(desc)
                     break
                 else:
                     assert False, "ROclient.check_ns_status returns unknown {}".format(ns_status)
@@ -782,6 +796,18 @@ class Lcm:
                 deployment_timeout -= 5
             if deployment_timeout <= 0:
                 raise ROclient.ROClientException("Timeout waiting ns to be ready")
+            step = "Updating VNFRs"
+            for vnf_index, vnfr_deployed in ns_RO_info.items():
+                vnfr = db_vnfr[vnf_index]
+                vnfr["ip-address"] = vnfr_deployed.get("ip_address")
+                for vdu_id, vdu_deployed in vnfr_deployed["vdur"].items():
+                    for vdur in vnfr["vdur"]:
+                        if vdur["vdu-id-ref"] == vdu_id:
+                            vdur["vim-id"] = vdu_deployed.get("vim_id")
+                            vdur["ip-address"] = vdu_deployed.get("ip_address")
+                            break
+                self.update_db("vnfrs", vnfr["_id"], vnfr)
+
             db_nsr["detailed-status"] = "Configuring vnfr"
             self.update_db("nsrs", nsr_id, db_nsr)
 
@@ -813,7 +839,7 @@ class Lcm:
                 )
 
                 # Setup the runtime parameters for this VNF
-                params['rw_mgmt_ip'] = nsr_lcm['nsr_ip']["vnf"][vnf_index]
+                params['rw_mgmt_ip'] = db_vnfr[vnf_index]["ip-address"]
 
                 # ns_name will be ignored in the current version of N2VC
                 # but will be implemented for the next point release.
@@ -1071,6 +1097,7 @@ class Lcm:
             elif db_nslcmop["operationParams"].get("autoremove"):
                 self.db.del_one("nsrs", {"_id": nsr_id})
                 self.db.del_list("nslcmops", {"nsInstanceId": nsr_id})
+                self.db.del_list("vnfrs", {"nsr-id-ref": nsr_id})
             else:
                 db_nsr_update = {
                     "operational-status": "terminated",
@@ -1110,8 +1137,8 @@ class Lcm:
         db_nslcmop = None
         db_nslcmop_update = None
         exc = None
-        step = "Getting nsr, nslcmop"
         try:
+            step = "Getting information from database"
             db_nslcmop = self.db.get_one("nslcmops", {"_id": nslcmop_id})
             db_nsr = self.db.get_one("nsrs", {"_id": nsr_id})
             nsr_lcm = db_nsr["_admin"].get("deployed")

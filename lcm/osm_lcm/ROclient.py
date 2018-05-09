@@ -297,23 +297,29 @@ class ROClient:
             return "BUILD", "VMs: {}/{}, networks: {}/{}".format(vm_done, vm_total, net_done, net_total)
 
     @staticmethod
-    def get_ns_vnf_ip(ns_descriptor):
+    def get_ns_vnf_info(ns_descriptor):
         """
-        Get a dict with the IPs of every vnf and vdu
+        Get a dict with the VIM_id, ip_addresses, mac_addresses of every vnf and vdu
         :param ns_descriptor: instance descriptor obtained with self.show("ns", )
-        :return: dict with {member_vnf_index: ip_address, ... member_vnf_index.vdu_id: ip_address ...}
+        :return: dict with {<member_vnf_index>: {ip_address: XXXX, vdur:{ip_address: XXX, vim_id: XXXX}}}
         """
-        ns_ip = {"vnf": {}, "vdu": {}}
+        ns_info = {}
         for vnf in ns_descriptor["vnfs"]:
             if not vnf.get("ip_address"):
                 raise ROClientException("No ip_address returned for ns member_vnf_index '{}'".format(
                     vnf["member_vnf_index"]), http_code=500)
-            ns_ip["vnf"][str(vnf["member_vnf_index"])] = vnf.get("ip_address")
-            ns_ip["vdu"][str(vnf["member_vnf_index"])] = {}
+            vnfr_info = {
+                "ip_address": vnf.get("ip_address"),
+                "vdur": {}
+            }
             for vm in vnf["vms"]:
-                if vm.get("ip_address"):
-                    ns_ip["vdu"][str(vnf["member_vnf_index"])][vm["vdu_osm_id"]] = vm["ip_address"]
-        return ns_ip
+                vdur = {
+                    "vim_id": vm.get("vim_vm_id"),
+                    "ip_address": vm.get("ip_address")
+                }
+                vnfr_info["vdur"][vm["vdu_osm_id"]] = vdur
+            ns_info[str(vnf["member_vnf_index"])] = vnfr_info
+        return ns_info
 
 
     async def _get_item_uuid(self, session, item, item_id_name, all_tenants=False):
