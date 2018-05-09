@@ -67,7 +67,7 @@ $(CHARM_BUILD_DIR)/%: $(CHARM_SRC_DIR)/%
 	$(CHARM_DIR) $(CHARM_DOCKER_TAG) charm-build -o $(CHARM_DIR) $<
 else
 $(CHARM_BUILD_DIR)/%: $(CHARM_SRC_DIR)/%
-	$(Q)charm-build -o $(CHARM_DIR) $<
+	$(Q)charm build -o $(CHARM_DIR) $<
 endif
  
 clean:
