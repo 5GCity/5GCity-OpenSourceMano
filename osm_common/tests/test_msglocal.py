@@ -70,7 +70,9 @@ def test_constructor():
 
     assert msg.logger == logging.getLogger('msg')
     assert msg.path == None
-    assert len(msg.files) == 0
+    assert len(msg.files_read) == 0
+    assert len(msg.files_write) == 0
+    assert len(msg.buffer) == 0
 
 def test_constructor_with_logger():
     logger_name = 'msg_local'
@@ -79,7 +81,9 @@ def test_constructor_with_logger():
 
     assert msg.logger == logging.getLogger(logger_name)
     assert msg.path == None
-    assert len(msg.files) == 0
+    assert len(msg.files_read) == 0
+    assert len(msg.files_write) == 0
+    assert len(msg.buffer) == 0
 
 @pytest.mark.parametrize("config, logger_name, path", [
     ({"logger_name": "msg_local", "path": valid_path()}, "msg_local", valid_path()),
@@ -95,7 +99,9 @@ def test_connect(msg_local, config, logger_name, path):
 
     assert msg_local.logger == logging.getLogger(logger_name)
     assert msg_local.path == path
-    assert len(msg_local.files) == 0
+    assert len(msg_local.files_read) == 0
+    assert len(msg_local.files_write) == 0
+    assert len(msg_local.buffer) == 0
 
 @pytest.mark.parametrize("config", [
     ({"logger_name": "msg_local", "path": invalid_path()}),
@@ -106,8 +112,47 @@ def test_connect_with_exception(msg_local, config):
     assert str(excinfo.value).startswith(empty_exception_message())
     assert excinfo.value.http_code == http.HTTPStatus.INTERNAL_SERVER_ERROR
 
-def test_disconnect():
-    pass
+def test_disconnect(msg_local_config):
+    msg_local_config.disconnect()
+
+    for f in msg_local_config.files_read.values():
+        assert f.closed
+    
+    for f in msg_local_config.files_write.values():
+        assert f.closed
+
+def test_disconnect_with_read(msg_local_config):
+    msg_local_config.read('topic1', blocks=False)
+    msg_local_config.read('topic2', blocks=False)
+
+    msg_local_config.disconnect()
+
+    for f in msg_local_config.files_read.values():
+        assert f.closed
+    
+    for f in msg_local_config.files_write.values():
+        assert f.closed
+
+def test_disconnect_with_write(msg_local_with_data):
+    msg_local_with_data.disconnect()
+
+    for f in msg_local_with_data.files_read.values():
+        assert f.closed
+    
+    for f in msg_local_with_data.files_write.values():
+        assert f.closed
+
+def test_disconnect_with_read_and_write(msg_local_with_data):
+    msg_local_with_data.read('topic1', blocks=False)
+    msg_local_with_data.read('topic2', blocks=False)
+    
+    msg_local_with_data.disconnect()
+
+    for f in msg_local_with_data.files_read.values():
+        assert f.closed
+    
+    for f in msg_local_with_data.files_write.values():
+        assert f.closed
 
 @pytest.mark.parametrize("topic, key, msg", [
     ("test_topic", "test_key", "test_msg"),
@@ -157,8 +202,8 @@ def test_write_with_multiple_calls(msg_local_config, topic, key, msg, times):
             assert yaml.load(data) == {key: msg if not isinstance(msg, tuple) else list(msg)}
 
 def test_write_exception(msg_local_config):
-    msg_local_config.files = MagicMock()
-    msg_local_config.files.__contains__.side_effect = Exception()
+    msg_local_config.files_write = MagicMock()
+    msg_local_config.files_write.__contains__.side_effect = Exception()
     
     with pytest.raises(MsgException) as excinfo:
         msg_local_config.write("test", "test", "test")
@@ -182,6 +227,7 @@ def test_write_exception(msg_local_config):
     (["topic", "topic1", "topic2"], [{"key": "value"}, {"key1": "value1"}])])
 def test_read(msg_local_with_data, topics, datas):
     def write_to_topic(topics, datas):
+        # Allow msglocal to block while waiting
         time.sleep(2)
         for topic in topics:
             for data in datas:
@@ -191,7 +237,7 @@ def test_read(msg_local_with_data, topics, datas):
 
     # If file is not opened first, the messages written won't be seen
     for topic in topics:
-        if topic not in msg_local_with_data.files:
+        if topic not in msg_local_with_data.files_read:
             msg_local_with_data.read(topic, blocks=False)
 
     t = threading.Thread(target=write_to_topic, args=(topics, datas))
@@ -235,13 +281,12 @@ def test_read_non_block(msg_local_with_data, topics, datas):
 
     # If file is not opened first, the messages written won't be seen
     for topic in topics:
-        if topic not in msg_local_with_data.files:
+        if topic not in msg_local_with_data.files_read:
             msg_local_with_data.read(topic, blocks=False)
 
     t = threading.Thread(target=write_to_topic, args=(topics, datas))
     t.start()
-
-    time.sleep(2)
+    t.join()
 
     for topic in topics:
         for data in datas:
@@ -253,8 +298,6 @@ def test_read_non_block(msg_local_with_data, topics, datas):
             assert recv_topic == topic
             assert recv_key == key
             assert recv_msg == val
-    
-    t.join()
 
 @pytest.mark.parametrize("topics, datas", [
     (["topic"], [{"key": "value"}]),
@@ -282,7 +325,7 @@ def test_read_non_block_none(msg_local_with_data, topics, datas):
 
     # If file is not opened first, the messages written won't be seen
     for topic in topics:
-        if topic not in msg_local_with_data.files:
+        if topic not in msg_local_with_data.files_read:
             msg_local_with_data.read(topic, blocks=False)
 
     t = threading.Thread(target=write_to_topic, args=(topics, datas))
@@ -299,8 +342,8 @@ def test_read_non_block_none(msg_local_with_data, topics, datas):
     (True),
     (False)])
 def test_read_exception(msg_local_with_data, blocks):
-    msg_local_with_data.files = MagicMock()
-    msg_local_with_data.files.__contains__.side_effect = Exception()
+    msg_local_with_data.files_read = MagicMock()
+    msg_local_with_data.files_read.__contains__.side_effect = Exception()
 
     with pytest.raises(MsgException) as excinfo:
         msg_local_with_data.read("topic1", blocks=blocks)
@@ -333,7 +376,7 @@ def test_aioread(msg_local_with_data, event_loop, topics, datas):
 
     # If file is not opened first, the messages written won't be seen
     for topic in topics:
-        if topic not in msg_local_with_data.files:
+        if topic not in msg_local_with_data.files_read:
             msg_local_with_data.read(topic, blocks=False)
 
     t = threading.Thread(target=write_to_topic, args=(topics, datas))
@@ -354,8 +397,8 @@ def test_aioread(msg_local_with_data, event_loop, topics, datas):
     t.join()
 
 def test_aioread_exception(msg_local_with_data, event_loop):
-    msg_local_with_data.files = MagicMock()
-    msg_local_with_data.files.__contains__.side_effect = Exception()
+    msg_local_with_data.files_read = MagicMock()
+    msg_local_with_data.files_read.__contains__.side_effect = Exception()
 
     with pytest.raises(MsgException) as excinfo:
         event_loop.run_until_complete(msg_local_with_data.aioread("topic1", event_loop))
@@ -368,5 +411,61 @@ def test_aioread_general_exception(msg_local_with_data, event_loop):
 
     with pytest.raises(MsgException) as excinfo:
         event_loop.run_until_complete(msg_local_with_data.aioread("topic1", event_loop))
+    assert str(excinfo.value).startswith(empty_exception_message())
+    assert excinfo.value.http_code == http.HTTPStatus.INTERNAL_SERVER_ERROR
+
+@pytest.mark.parametrize("topic, key, msg", [
+    ("test_topic", "test_key", "test_msg"),
+    ("test", "test_key", "test_msg"),
+    ("test_topic", "test", "test_msg"),
+    ("test_topic", "test_key", "test"),
+    ("test_topic", "test_list", ["a", "b", "c"]),
+    ("test_topic", "test_tuple", ("c", "b", "a")),
+    ("test_topic", "test_dict", {"a": 1, "b": 2, "c": 3}),
+    ("test_topic", "test_number", 123),
+    ("test_topic", "test_float", 1.23),
+    ("test_topic", "test_boolean", True),
+    ("test_topic", "test_none", None)])
+def test_aiowrite(msg_local_config, event_loop, topic, key, msg):
+    file_path = msg_local_config.path + topic
+    
+    event_loop.run_until_complete(msg_local_config.aiowrite(topic, key, msg))
+
+    assert os.path.exists(file_path)
+
+    with open(file_path, 'r') as stream:
+        assert yaml.load(stream) == {key: msg if not isinstance(msg, tuple) else list(msg)}
+
+@pytest.mark.parametrize("topic, key, msg, times", [
+    ("test_topic", "test_key", "test_msg", 2),
+    ("test", "test_key", "test_msg", 3),
+    ("test_topic", "test", "test_msg", 4),
+    ("test_topic", "test_key", "test", 2),
+    ("test_topic", "test_list", ["a", "b", "c"], 3),
+    ("test_topic", "test_tuple", ("c", "b", "a"), 4),
+    ("test_topic", "test_dict", {"a": 1, "b": 2, "c": 3}, 2),
+    ("test_topic", "test_number", 123, 3),
+    ("test_topic", "test_float", 1.23, 4),
+    ("test_topic", "test_boolean", True, 2),
+    ("test_topic", "test_none", None, 3)])
+def test_aiowrite_with_multiple_calls(msg_local_config, event_loop, topic, key, msg, times):
+    file_path = msg_local_config.path + topic
+    
+    for _ in range(times):
+        event_loop.run_until_complete(msg_local_config.aiowrite(topic, key, msg))
+
+    assert os.path.exists(file_path)
+
+    with open(file_path, 'r') as stream:
+        for _ in range(times):
+            data = stream.readline()
+            assert yaml.load(data) == {key: msg if not isinstance(msg, tuple) else list(msg)}
+
+def test_aiowrite_exception(msg_local_config, event_loop):
+    msg_local_config.files_write = MagicMock()
+    msg_local_config.files_write.__contains__.side_effect = Exception()
+    
+    with pytest.raises(MsgException) as excinfo:
+        event_loop.run_until_complete(msg_local_config.aiowrite("test", "test", "test"))
     assert str(excinfo.value).startswith(empty_exception_message())
     assert excinfo.value.http_code == http.HTTPStatus.INTERNAL_SERVER_ERROR
