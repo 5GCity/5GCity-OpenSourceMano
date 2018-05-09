@@ -62,6 +62,15 @@ def test_constructor_with_logger():
     assert fs.logger == logging.getLogger(logger_name)
     assert fs.path is None
 
+def test_get_params(fs_local):
+    params = fs_local.get_params()
+
+    assert len(params) == 2
+    assert "fs" in params
+    assert "path" in params
+    assert params["fs"] == "local"
+    assert params["path"] == valid_path()
+
 @pytest.mark.parametrize("config, exp_logger, exp_path", [
     ({'logger_name': 'fs_local', 'path': valid_path()}, 'fs_local', valid_path()),
     ({'logger_name': 'fs_local', 'path': valid_path()[:-1]}, 'fs_local', valid_path()),
@@ -85,6 +94,9 @@ def test_fs_connect_with_invalid_path(config, exp_exception_message):
     with pytest.raises(FsException) as excinfo:
         fs.fs_connect(config)
     assert str(excinfo.value) == exp_exception_message
+
+def test_fs_disconnect(fs_local):
+    fs_local.fs_disconnect()
 
 def test_mkdir_with_valid_path(fs_local):
     folder_name = str(uuid.uuid4())

@@ -18,7 +18,7 @@ def test_constructor():
     assert isinstance(msgbase, MsgBase)
 
 def test_connect(msg_base):
-    msg_base.connect()
+    msg_base.connect(None)
 
 def test_disconnect(msg_base):
     msg_base.disconnect()

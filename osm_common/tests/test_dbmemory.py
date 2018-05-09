@@ -62,6 +62,9 @@ def test_db_connect():
     assert db.logger == logging.getLogger(logger_name)
     assert len(db.db) == 0
 
+def test_db_disconnect(db_memory):
+    db_memory.db_disconnect()
+
 @pytest.mark.parametrize("table, filter", [
     ("test", {}),
     ("test", {"_id": 1}),
