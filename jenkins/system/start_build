@@ -58,8 +58,8 @@ apt-get install -y python-pip python python-pycurl charm-tools python-pytest pyt
 apt-get install -y python-osmclient
 
 export OSM_USE_LOCAL_DEVOPS=true
-echo "devops/installers/install_osm.sh --test $*"
-devops/installers/install_osm.sh --test $*
+echo "devops/installers/full_install_osm.sh --test $*"
+devops/installers/full_install_osm.sh --test $*
 RC=$?
 
 # workaround.  for upload packages, lxdbr0 needs to be promiscuous
