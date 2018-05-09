@@ -9,7 +9,7 @@ VERSION = "4.0.0rc2"
 README = open(os.path.join(here, 'README.rst')).read()
 
 setup(
-    #python_requires='>=3.5',
+    # python_requires='>=3.5',
     name=_name,
     description='OSM common utilities',
     long_description=README,
@@ -22,7 +22,7 @@ setup(
     maintainer_email='alfonso.tiernosepulveda@telefonica.com',
     url='https://osm.etsi.org/gitweb/?p=osm/common.git;a=summary',
     license='Apache 2.0',
-#    setup_requires=['setuptools-version-command'],
+    # setup_requires=['setuptools-version-command'],
 
     packages=[_name],
     include_package_data=True,
@@ -32,6 +32,7 @@ setup(
         'pymongo',
         'aiokafka',
         'PyYAML',
-        'pip3',
+        'pip',
     ],
 )
+
