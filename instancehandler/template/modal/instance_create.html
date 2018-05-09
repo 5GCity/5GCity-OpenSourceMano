@@ -1,53 +1,69 @@
 <div class="modal" id="modal_new_instance" xmlns="http://www.w3.org/1999/html">
-    <div   class="modal-dialog">
+    <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">×</span></button>
-                <h4 class="modal-title" >New Instance</h4>
+                <h4 class="modal-title">New Instance</h4>
             </div>
-             <form id="formCreateNS" action='{% url "projects:instances:create"  project_id=project_id%}' class="form-horizontal"
-                      method="post" enctype="multipart/form-data">
-                     {% csrf_token %}
-            <div class="modal-body" id="modal_new_instance_body" >
-                <div class="form-group">
-                    <label for="nsName" class="col-sm-3 control-label">Name</label>
+            <form id="formCreateNS" action='{% url "projects:instances:create"  project_id=project_id %}'
+                  class="form-horizontal"
+                  method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body" id="modal_new_instance_body">
+                    <div class="form-group">
+                        <label for="nsName" class="col-sm-3 control-label">Name *</label>
                         <div class="col-sm-6">
                             <input class="form-control" id="nsName" name="nsName"
                                    placeholder="Ns name" required>
                         </div>
-                </div>
-                <div class="form-group">
-                    <label for="nsDescription" class="col-sm-3 control-label">Description</label>
+                    </div>
+                    <div class="form-group">
+                        <label for="nsDescription" class="col-sm-3 control-label">Description</label>
                         <div class="col-sm-6">
                             <input class="form-control" id="nsDescription" name="nsDescription"
-                                   placeholder="Description" >
+                                   placeholder="Description">
                         </div>
-                </div>
-                <div class="form-group">
-                    <label for="nsdId" class="col-sm-3 control-label">Nsd Id</label>
+                    </div>
+                    <div class="form-group">
+                        <label for="nsdId" class="col-sm-3 control-label">Nsd Id *</label>
                         <div class="col-sm-6">
                             <input class="form-control" id="nsdId" name="nsdId"
-                                   placeholder="Nsd Id" >
+                                   placeholder="Nsd Id">
                         </div>
-                </div>
-                <div class="form-group">
-                    <label for="vimAccountId" class="col-sm-3 control-label">Vim Account Id</label>
+                    </div>
+                    <div class="form-group">
+                        <label for="vimAccountId" class="col-sm-3 control-label">Vim Account Id *</label>
                         <div class="col-sm-6">
                             <select id="vimAccountId" class="js-example-basic form-control" name="vimAccountId">
                             </select>
                         </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="ssh_key" class="col-sm-3 control-label">SSH Key </label>
+                        <div class="col-sm-6">
+                            <textarea class="form-control" id="ssh_key" name="ssh_key"
+                                      placeholder="Paste your key here..." rows="4"></textarea>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="config" class="col-sm-3 control-label">Config </label>
+                        <div class="col-sm-6">
+                            <textarea class="form-control" id="config" name="config" placeholder="Yaml config"
+                                      rows="4"></textarea>
+                        </div>
+                    </div>
+
                 </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default pull-left" data-dismiss="modal">Cancel</button>
+                    <button class="btn btn-primary"
+                            data-loading-text="<i class='fa fa-circle-o-notch fa-spin'></i> Creating..."
+                            id="create_new_instance">Create
+                    </button>
 
-
-
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-default pull-left" data-dismiss="modal">Cancel</button>
-                <button class="btn btn-primary"  data-loading-text="<i class='fa fa-circle-o-notch fa-spin'></i> Creating..." id="create_new_instance">Create</button>
-
-            </div>
-                 </form>
+                </div>
+            </form>
         </div>
         <!-- /.modal-content -->
     </div>

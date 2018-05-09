@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="/static/bower_components/codemirror/theme/neat.css">
     <link rel="stylesheet" href="/static/bower_components/codemirror/addon/dialog/dialog.css">
     <link rel="stylesheet" href="/static/bower_components/codemirror/addon/display/fullscreen.css">
+    <link rel="stylesheet" href="/static/bower_components/select2/dist/css/select2.min.css">
 {% endblock %}
 {% block title_header_big %}
     {{ block.super }}
@@ -36,12 +37,16 @@
             <div class="box">
                 <div class="box-header with-border">
                     <h3 class="box-title">Instances</h3>
-                    <!--
+
                     <div class="box-tools">
-                        <a href="javascript:newVimModal()" class="btn btn-block btn-primary btn-sm"><i
-                                class="fa fa-plus"></i><span> New VIM</span></a>
+
+                        <button type="button" class="btn btn-default" data-container="body"
+                                data-toggle="tooltip" data-placement="top" title="Instantiate NS"
+                                onclick="javascript:openModalCreateNS({ 'project_id':'{{project_id}}','vim_list_url': '{% url "vim:list" %}'})" disabled>
+                            <i class="fa fa-paper-plane"></i> <span> New NS</span></button>
+
                     </div>
-                    -->
+
                 </div>
                 <div class="box-body">
                     <table id="instances_table" class="table table-bordered table-striped">
@@ -122,14 +127,15 @@
         </div>
 
     </div>
-{% include 'modal/instance_show.html' %}
-{% include 'modal/instance_new_action.html' %}
+    {% include 'modal/instance_create.html' %}
+    {% include 'modal/instance_show.html' %}
+    {% include 'modal/instance_new_action.html' %}
 {% endblock %}
 
 {% block resource_block %}
     {{ block.super }}
     <!-- Utility JS -->
-
+    <script src="/static/bower_components/select2/dist/js/select2.js"></script>
     <script src="/static/bower_components/codemirror/lib/codemirror.js"></script>
     <script src="/static/bower_components/codemirror/addon/fold/foldcode.js"></script>
     <script src="/static/bower_components/codemirror/addon/fold/foldgutter.js"></script>
@@ -144,6 +150,7 @@
     <script src="/static/bower_components/codemirror/addon/display/fullscreen.js"></script>
     <script src="/static/bower_components/codemirror/keymap/sublime.js"></script>
     <script src="/static/src/instancehandler/instance_list.js"></script>
+    <script src="/static/src/instancehandler/instance_create.js"></script>
 
 {% endblock %}
 
