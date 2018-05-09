@@ -98,6 +98,7 @@ class VCAMonitor(ModelObserver):
                                 self.ns_name,
                                 delta.data['application'],
                                 new_status,
+                                new.workload_status_message,
                                 *callback_args)
 
                 if old and not new:
@@ -107,6 +108,7 @@ class VCAMonitor(ModelObserver):
                             self.ns_name,
                             delta.data['application'],
                             "removed",
+                            "",
                             *callback_args)
             except Exception as e:
                 self.log.debug("[1] notify_callback exception {}".format(e))
@@ -212,10 +214,10 @@ class N2VC:
         """Close any open connections."""
         yield self.logout()
 
-    def notify_callback(self, model_name, application_name, status, callback=None, *callback_args):
+    def notify_callback(self, model_name, application_name, status, message, callback=None, *callback_args):
         try:
             if callback:
-                callback(model_name, application_name, status, *callback_args)
+                callback(model_name, application_name, status, message, *callback_args)
         except Exception as e:
             self.log.error("[0] notify_callback exception {}".format(e))
             raise e
