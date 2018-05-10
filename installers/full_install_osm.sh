@@ -32,7 +32,7 @@ function usage(){
     echo -e "     -l <lxd_repo>:  use specified repository url for lxd images"
     echo -e "     -p <path>:      use specified repository path for lxd images"
     echo -e "     --lightweight:  install lightweight build of OSM (default installation)"
-    echo -e "     --soui:         install classic build of OSM (based on LXD containers, with SO and UI)"
+    echo -e "     --soui:         install classic build of OSM (Rel THREE v3.1, based on LXD containers, with SO and UI)"
     echo -e "     --vimemu:       additionally fetch, build, and deploy the VIM emulator as a docker container"
     echo -e "     --develop:      (deprecated, use '-b master') install OSM from source code using the master branch"
 #    echo -e "     --reconfigure:  reconfigure the modules (DO NOT change NAT rules)"
@@ -748,7 +748,7 @@ while getopts ":hy-:b:r:k:u:R:l:p:D:" o; do
             [ "${OPTARG}" == "lxdinstall" ] && INSTALL_LXD="y" && continue
             [ "${OPTARG}" == "lxdimages" ] && INSTALL_FROM_LXDIMAGES="y" && continue
             [ "${OPTARG}" == "lightweight" ] && INSTALL_LIGHTWEIGHT="y" && continue
-            [ "${OPTARG}" == "soui" ] && INSTALL_LIGHTWEIGHT="" && continue
+            [ "${OPTARG}" == "soui" ] && INSTALL_LIGHTWEIGHT="" && RELEASE="-R ReleaseTHREE" && REPOSITORY="-r stable" && continue
             [ "${OPTARG}" == "vimemu" ] && INSTALL_VIMEMU="y" && continue
             [ "${OPTARG}" == "noconfigure" ] && NOCONFIGURE="y" && continue
             [ "${OPTARG}" == "showopts" ] && SHOWOPTS="y" && continue
