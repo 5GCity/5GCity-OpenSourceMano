@@ -332,6 +332,7 @@ class Lcm:
             sdn_RO.pop("_admin", None)
             sdn_RO.pop("schema_version", None)
             sdn_RO.pop("schema_type", None)
+            sdn_RO.pop("description", None)
             desc = await RO.create("sdn", descriptor=sdn_RO)
             RO_sdn_id = desc["uuid"]
             db_sdn["_admin"]["deployed"]["RO"] = RO_sdn_id
@@ -370,6 +371,7 @@ class Lcm:
                 sdn_RO.pop("_admin", None)
                 sdn_RO.pop("schema_version", None)
                 sdn_RO.pop("schema_type", None)
+                sdn_RO.pop("description", None)
                 if sdn_RO:
                     desc = await RO.edit("sdn", RO_sdn_id, descriptor=sdn_RO)
                 db_sdn["_admin"]["operationalState"] = "ENABLED"

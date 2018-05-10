@@ -229,6 +229,8 @@ class ROClient:
             return {'datacenter': indata}
         elif item == "ns" or item == "instances":
             return {'instance': indata}
+        elif item == "sdn":
+            return {'sdn_controller': indata}
         else:
             assert False, "_create_envelop with unknown item {}".format(item)
 
