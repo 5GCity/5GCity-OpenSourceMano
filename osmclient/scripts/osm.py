@@ -1128,8 +1128,16 @@ def upload_package(ctx, filename):
 @click.argument('ns_name')
 @click.pass_context
 def show_ns_scaling(ctx, ns_name):
-    check_client_version(ctx.obj, ctx.command.name, 'v1')
-    resp = ctx.obj.ns.list()
+    '''shows the status of a NS scaling operation
+
+    NS_NAME: name of the NS instance being scaled
+    '''
+    try:
+        check_client_version(ctx.obj, ctx.command.name, 'v1')
+        resp = ctx.obj.ns.list()
+    except ClientException as inst:
+        print(inst.message)
+        exit(1)
 
     table = PrettyTable(
         ['group-name',
@@ -1164,14 +1172,27 @@ def show_ns_scaling(ctx, ns_name):
 @click.option('--index', prompt=True)
 @click.pass_context
 def ns_scale(ctx, ns_name, ns_scale_group, index):
-    check_client_version(ctx.obj, ctx.command.name, 'v1')
-    ctx.obj.ns.scale(ns_name, ns_scale_group, index)
+    '''scales NS
+
+    NS_NAME: name of the NS instance to be scaled
+    '''
+    try:
+        check_client_version(ctx.obj, ctx.command.name, 'v1')
+        ctx.obj.ns.scale(ns_name, ns_scale_group, index)
+    except ClientException as inst:
+        print(inst.message)
+        exit(1)
 
 
 @cli.command(name='config-agent-list')
 @click.pass_context
 def config_agent_list(ctx):
-    check_client_version(ctx.obj, ctx.command.name, 'v1')
+    '''list config agents'''
+    try:
+        check_client_version(ctx.obj, ctx.command.name, 'v1')
+    except ClientException as inst:
+        print(inst.message)
+        exit(1)
     table = PrettyTable(['name', 'account-type', 'details'])
     for account in ctx.obj.vca.list():
         table.add_row(
@@ -1186,6 +1207,10 @@ def config_agent_list(ctx):
 @click.argument('name')
 @click.pass_context
 def config_agent_delete(ctx, name):
+    '''deletes a config agent
+
+    NAME: name of the config agent to be deleted
+    '''
     try:
         check_client_version(ctx.obj, ctx.command.name, 'v1')
         ctx.obj.vca.delete(name)
@@ -1209,6 +1234,7 @@ def config_agent_delete(ctx, name):
               confirmation_prompt=True)
 @click.pass_context
 def config_agent_add(ctx, name, account_type, server, user, secret):
+    '''adds a config agent'''
     try:
         check_client_version(ctx.obj, ctx.command.name, 'v1')
         ctx.obj.vca.create(name, account_type, server, user, secret)
@@ -1219,6 +1245,7 @@ def config_agent_add(ctx, name, account_type, server, user, secret):
 @cli.command(name='ro-dump')
 @click.pass_context
 def ro_dump(ctx):
+    '''shows RO agent information'''
     check_client_version(ctx.obj, ctx.command.name, 'v1')
     resp = ctx.obj.vim.get_resource_orchestrator()
     table = PrettyTable(['key', 'attribute'])
