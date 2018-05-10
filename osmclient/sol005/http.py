@@ -56,11 +56,13 @@ class Http(http.Http):
 
     def send_cmd(self, endpoint='', postfields_dict=None,
                  formfile=None, filename=None,
-                 put_method=False):
+                 put_method=False, patch_method=False):
         data = BytesIO()
         curl_cmd = self._get_curl_cmd(endpoint)
         if put_method:
             curl_cmd.setopt(pycurl.PUT, 1)
+        elif patch_method:
+            curl_cmd.setopt(pycurl.CUSTOMREQUEST, "PATCH")
         else:
             curl_cmd.setopt(pycurl.POST, 1)
         curl_cmd.setopt(pycurl.WRITEFUNCTION, data.write)
@@ -104,7 +106,7 @@ class Http(http.Http):
                              postfields_dict=postfields_dict,
                              formfile=formfile,
                              filename=filename,
-                             put_method=False)
+                             put_method=False, patch_method=False)
 
     def put_cmd(self, endpoint='', postfields_dict=None,
                 formfile=None, filename=None):
@@ -112,7 +114,15 @@ class Http(http.Http):
                              postfields_dict=postfields_dict,
                              formfile=formfile,
                              filename=filename,
-                             put_method=True)
+                             put_method=True, patch_method=False)
+
+    def patch_cmd(self, endpoint='', postfields_dict=None,
+                formfile=None, filename=None):
+        return self.send_cmd(endpoint=endpoint,
+                             postfields_dict=postfields_dict,
+                             formfile=formfile,
+                             filename=filename,
+                             put_method=False, patch_method=True)
 
     def get2_cmd(self, endpoint):
         data = BytesIO()

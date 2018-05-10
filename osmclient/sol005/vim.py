@@ -59,13 +59,14 @@ class Vim(object):
 
     def update(self, vim_name, vim_account):
         vim = self.get(vim_name)
-        resp = self._http.put_cmd(endpoint='{}/{}'.format(self._apiBase,vim['_id']),
+        #resp = self._http.put_cmd(endpoint='{}/{}'.format(self._apiBase,vim['_id']),
+        resp = self._http.patch_cmd(endpoint='{}/{}'.format(self._apiBase,vim['_id']),
                                        postfields_dict=vim_account)
-        if not resp or '_id' not in resp:
-            raise ClientException('failed to update vim: '.format(
-                                  resp))
+        #print 'RESP: {}'.format(resp)
+        if not resp or 'id' not in resp:
+            raise ClientException('failed to update vim: '.format(resp))
         else:
-            print resp['_id']
+            print resp['id']
 
     def update_vim_account_dict(self, vim_account, vim_access):
         vim_account['vim_type'] = vim_access['vim-type']
