@@ -553,10 +553,10 @@ function generate_docker_images() {
     git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/RO
     docker build ${LWTEMPDIR}/RO -f ${LWTEMPDIR}/RO/docker/Dockerfile-local -t osm/ro || ! echo "cannot build RO docker image" >&2
     docker build ${LWTEMPDIR}/RO/lcm -t osm/lcm || ! echo "cannot build LCM docker image" >&2
-    git -C ${LWTEMPDIR} clone https://github.com/superfluidity/osm-light-ui.git
-    docker build ${LWTEMPDIR}/osm-light-ui -t osm/light-ui -f ${LWTEMPDIR}/osm-light-ui/code/docker/Dockerfile
-#    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/LW-UI
-#    docker build ${LWTEMPDIR}/LW-UI -t osm/light-ui -f ${LWTEMPDIR}/LW-UI/Dockerfile
+#    git -C ${LWTEMPDIR} clone https://github.com/superfluidity/osm-light-ui.git
+#    docker build ${LWTEMPDIR}/osm-light-ui -t osm/light-ui -f ${LWTEMPDIR}/osm-light-ui/code/docker/Dockerfile
+    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/LW-UI
+    docker build ${LWTEMPDIR}/LW-UI -t osm/light-ui -f ${LWTEMPDIR}/LW-UI/Dockerfile
 EONG
     echo "Finished generation of docker images"
 }
