@@ -58,10 +58,14 @@ def create(request):
                 config_key = k[7:]
                 vim_data['config'][config_key] = v
         if 'additional_conf' in new_vim_dict:
-            additional_conf_dict = json.loads(new_vim_dict['additional_conf'])
-            for k,v in additional_conf_dict.items():
-                vim_data['config'][k] = v
-        print vim_data
+            try:
+                additional_conf_dict = json.loads(new_vim_dict['additional_conf'])
+                for k,v in additional_conf_dict.items():
+                    vim_data['config'][k] = v
+            except Exception as e:
+                # TODO return error on json.loads exception
+                print e
+
         result = client.vim_create(vim_data)
         # TODO  'vim:show', to_redirect=True, vim_id=vim_id
         return __response_handler(request, result, 'vim:list', to_redirect=True)
