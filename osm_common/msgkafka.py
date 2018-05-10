@@ -41,17 +41,22 @@ class MsgKafka(MsgBase):
             raise MsgException(str(e))
 
     def write(self, topic, key, msg):
+        """
+        Write a message at kafka bus
+        :param topic: message topic, must be string
+        :param key: message key, must be string
+        :param msg: message content, can be string or dictionary
+        :return: None or raises MsgException on failing
+        """
         try:
-            self.loop.run_until_complete(self.aiowrite(topic=topic, key=key,
-                                                       msg=yaml.safe_dump(msg, default_flow_style=True),
-                                                       loop=self.loop))
+            self.loop.run_until_complete(self.aiowrite(topic=topic, key=key, msg=msg))
 
         except Exception as e:
             raise MsgException("Error writing {} topic: {}".format(topic, str(e)))
 
     def read(self, topic):
         """
-        Read from one or several topics. it is non blocking returning None if nothing is available
+        Read from one or several topics.
         :param topic: can be str: single topic; or str list: several topics
         :return: topic, key, message; or None
         """
