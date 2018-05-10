@@ -1,113 +1,107 @@
-<div class="panel" id="vmware_config" style="display: none;">
-    <h5 class="box-title">
-        <a data-toggle="collapse" data-parent="#accordion" href="#vmware_config_collapse">
-            Config parameters
-        </a>
-    </h5>
-    <div id="vmware_config_collapse" class="panel-collapse collapse ">
-        <div class="col-lg-6">
-            <div class="row">
+<div id="vmware_config_collapse" class="config-vim row">
 
-                <label for="vmware_sdn_ctrl" class="col-sm-4 control-label">SDN Controller</label>
-                <div class="col-sm-6 input-group input-group-sm">
-                    <p id="vmware_sdn_ctrl"> {{datacenter.sdn_ctrl|default:"---" }}</p>
-                </div>
-            </div>
-            <div class="row">
+    <div class="col-lg-6">
+        <div class="row">
 
-                <label for="vmware_sdn_port_map" class="col-sm-4 control-label">SDN Port Mapping</label>
-                <div class="col-sm-6 input-group input-group-sm">
-                    <p id="vmware_sdn_port_map"> {{datacenter.sdn_port_map|default:"---" }}</p>
-                </div>
-            </div>
-            <div class="row">
-
-                <label for="orgname" class="col-sm-4 control-label">Org. name</label>
-                <div class="col-sm-6 input-group input-group-sm">
-                    <p id="orgname"> {{datacenter.orgname|default:"---" }}</p>
-                </div>
-            </div>
-            <div class="row">
-
-                <label for="admin_username" class="col-sm-4 control-label">Admin username</label>
-                <div class="col-sm-6 input-group input-group-sm">
-                    <p id="admin_username"> {{datacenter.admin_username|default:"---" }}</p>
-                </div>
-            </div>
-            <div class="row">
-
-                <label for="admin_password" class="col-sm-4 control-label">Admin password</label>
-                <div class="col-sm-6 input-group input-group-sm">
-                    <p id="admin_password"> {{datacenter.admin_password|default:"---" }}</p>
-                </div>
-            </div>
-            <div class="row">
-
-                <label for="nsx_manager" class="col-sm-4 control-label">Nsx manager</label>
-                <div class="col-sm-6 input-group input-group-sm">
-                    <p id="nsx_manager"> {{datacenter.nsx_manager|default:"---" }}</p>
-                </div>
-            </div>
-            <div class="row">
-
-                <label for="nsx_user" class="col-sm-4 control-label">Nsx user</label>
-                <div class="col-sm-6 input-group input-group-sm">
-                    <p id="nsx_user"> {{datacenter.nsx_user|default:"---" }}</p>
-                </div>
-            </div>
-            <div class="row">
-
-                <label for="nsx_password" class="col-sm-4 control-label">Nsx password</label>
-                <div class="col-sm-6 input-group input-group-sm">
-                    <p id="nsx_password"> {{datacenter.nsx_password|default:"---" }}</p>
-                </div>
+            <label for="vmware_sdn_ctrl" class="col-sm-4 control-label">SDN Controller</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="vmware_sdn_ctrl"> {{ datacenter.sdn_ctrl|default:"---" }}</p>
             </div>
         </div>
-        <div class="col-lg-6">
-            <div class="row">
+        <div class="row">
 
-                <label for="vcenter_ip" class="col-sm-4 control-label">Vcenter ip</label>
-                <div class="col-sm-6 input-group input-group-sm">
-                    <p id="vcenter_ip"> {{datacenter.vcenter_ip|default:"---" }}</p>
-                </div>
+            <label for="vmware_sdn_port_map" class="col-sm-4 control-label">SDN Port Mapping</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="vmware_sdn_port_map"> {{ datacenter.sdn_port_map|default:"---" }}</p>
             </div>
-            <div class="row">
+        </div>
+        <div class="row">
 
-                <label for="vcenter_port" class="col-sm-4 control-label">Vcenter port</label>
-                <div class="col-sm-6 input-group input-group-sm">
-                    <p id="vcenter_port"> {{datacenter.vcenter_port|default:"---" }}</p></div>
+            <label for="orgname" class="col-sm-4 control-label">Org. name</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="orgname"> {{ datacenter.orgname|default:"---" }}</p>
             </div>
-            <div class="row">
+        </div>
+        <div class="row">
 
-                <label for="vcenter_user" class="col-sm-4 control-label">Vcenter user</label>
-                <div class="col-sm-6 input-group input-group-sm">
-                    <p id="vcenter_user"> {{datacenter.vcenter_user|default:"---" }}</p></div>
+            <label for="admin_username" class="col-sm-4 control-label">Admin username</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="admin_username"> {{ datacenter.admin_username|default:"---" }}</p>
             </div>
-            <div class="row">
+        </div>
+        <div class="row">
 
-                <label for="vcenter_password" class="col-sm-4 control-label">Vcenter password</label>
-                <div class="col-sm-6 input-group input-group-sm">
-                    <p id="vcenter_password"> {{datacenter.vcenter_password|default:"---" }}</p>
-                </div>
+            <label for="admin_password" class="col-sm-4 control-label">Admin password</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="admin_password"> {{ datacenter.admin_password|default:"---" }}</p>
             </div>
-            <div class="row">
+        </div>
+        <div class="row">
 
-                <label for="vrops_site" class="col-sm-4 control-label">Vrops site</label>
-                <div class="col-sm-6 input-group input-group-sm">
-                    <p id="vrops_site"> {{datacenter.vrops_site|default:"---" }}</p></div>
+            <label for="nsx_manager" class="col-sm-4 control-label">Nsx manager</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="nsx_manager"> {{ datacenter.nsx_manager|default:"---" }}</p>
             </div>
-            <div class="row">
+        </div>
+        <div class="row">
 
-                <label for="vrops_user" class="col-sm-4 control-label">Vrops user</label>
-                <div class="col-sm-6 input-group input-group-sm">
-                    <p id="vrops_user"> {{datacenter.vrops_user|default:"---" }}</p></div>
+            <label for="nsx_user" class="col-sm-4 control-label">Nsx user</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="nsx_user"> {{ datacenter.nsx_user|default:"---" }}</p>
             </div>
-            <div class="row">
+        </div>
+        <div class="row">
 
-                <label for="vrops_password" class="col-sm-4 control-label">Vrops password</label>
-                <div class="col-sm-6 input-group input-group-sm">
-                    <p id="vrops_password"> {{datacenter.vrops_password|default:"---" }}</p>
-                </div>
+            <label for="nsx_password" class="col-sm-4 control-label">Nsx password</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="nsx_password"> {{ datacenter.nsx_password|default:"---" }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="row">
+
+            <label for="vcenter_ip" class="col-sm-4 control-label">Vcenter ip</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="vcenter_ip"> {{ datacenter.vcenter_ip|default:"---" }}</p>
+            </div>
+        </div>
+        <div class="row">
+
+            <label for="vcenter_port" class="col-sm-4 control-label">Vcenter port</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="vcenter_port"> {{ datacenter.vcenter_port|default:"---" }}</p></div>
+        </div>
+        <div class="row">
+
+            <label for="vcenter_user" class="col-sm-4 control-label">Vcenter user</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="vcenter_user"> {{ datacenter.vcenter_user|default:"---" }}</p></div>
+        </div>
+        <div class="row">
+
+            <label for="vcenter_password" class="col-sm-4 control-label">Vcenter password</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="vcenter_password"> {{ datacenter.vcenter_password|default:"---" }}</p>
+            </div>
+        </div>
+        <div class="row">
+
+            <label for="vrops_site" class="col-sm-4 control-label">Vrops site</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="vrops_site"> {{ datacenter.vrops_site|default:"---" }}</p></div>
+        </div>
+        <div class="row">
+
+            <label for="vrops_user" class="col-sm-4 control-label">Vrops user</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="vrops_user"> {{ datacenter.vrops_user|default:"---" }}</p></div>
+        </div>
+        <div class="row">
+
+            <label for="vrops_password" class="col-sm-4 control-label">Vrops password</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="vrops_password"> {{ datacenter.vrops_password|default:"---" }}</p>
             </div>
         </div>
     </div>

@@ -1,23 +1,6 @@
 {% extends "base.html" %}
 {% load get %}
 {% load staticfiles %}
-{% block head_base %}
-    {% with skin_css="AdminLTE/dist/css/skins/skin-purple.min.css"%}
-        {{ block.super }}
-    {% endwith %}
-{% endblock %}
-
-{% block body %}
-    {% with skin="purple"%}
-        {{ block.super }}
-    {% endwith %}
-{% endblock %}
-{% block logo_sidebar %}
-    {% with logo_mini="assets/img/osm_small_logo.png" logo="assets/img/OSM-logo.png" %}
-        {{ block.super }}
-    {% endwith %}
-{% endblock %}
-
 
 
 {% block head_block %}
@@ -42,125 +25,164 @@
 {% block content_body %}
     {{ block.super }}
 
-<div class="row">
-    <div class="col-md-12">
-        <form action='{% url "vim:create" %}' method="post">
-            {% csrf_token %}
-            <div class="box">
-                <div class="box-header with-border">
-                    <h3 class="box-title">New VIM Account</h3>
-                    <div class="box-tools">
+    <div class="row">
+        <div class="col-md-12">
+            <form action='{% url "vim:create" %}' method="post">
+                {% csrf_token %}
+                <div class="box">
+                    <div class="box-header with-border">
+                        <h3 class="box-title">NEW VIM ACCOUNT</h3>
+                        <div class="box-tools">
 
+                        </div>
                     </div>
-                </div>
-                <div class="box-body">
+                    <div class="box-body">
 
-                    <div class="row">
-                        <div class="col-lg-6">
-                            <div class="row">
-                                <div class="form-group">
-                                    <label for="name" class="col-sm-3 control-label">Name*</label>
-                                    <div class="col-sm-6 input-group input-group-sm">
-                                        <input class="form-control" id="name" name="name" placeholder="VIM name" required>
+                        <div class="row">
+                            <div class="col-lg-6">
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="name" class="col-sm-3 control-label">Name*</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input class="form-control" id="name" name="name" placeholder="VIM name"
+                                                   required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="vim_user" class="col-sm-3 control-label">Vim Username*</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input class="form-control" id="vim_user" name="vim_user"
+                                                   placeholder="Vim Username" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="vim_password" class="col-sm-3 control-label">Vim Password*</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input type="password" class="form-control" id="vim_password"
+                                                   name="vim_password" placeholder="Vim Password" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="vim_url" class="col-sm-3 control-label">Vim URL*</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input type="url" class="form-control" id="vim_url" name="vim_url"
+                                                   placeholder="Vim URL" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="vim_type" class="col-sm-3 control-label">Type*</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <select id="vim_type" name="vim_type" class="form-control"
+                                                    onchange="toggleConfig(this)">
+                                                <option value="openvim">OpenVIM</option>
+                                                <option value="openstack">Openstack</option>
+                                                <option value="vmware">VMware vCD</option>
+                                                <option value="aws">AWS</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="vim_tenant_name" class="col-sm-3 control-label">Tenant name*</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input class="form-control" id="vim_tenant_name" name="vim_tenant_name"
+                                                   placeholder="Tenant name" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="description" class="col-sm-3 control-label">Description</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input class="form-control" id="description" name="description"
+                                                   placeholder="Description">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="schema_type" class="col-sm-3 control-label">Schema Type</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input class="form-control" id="schema_type" name="schema_type"
+                                                   placeholder="Schema Type">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="schema_version" class="col-sm-3 control-label">Schema
+                                            Version</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input class="form-control" id="schema_version" name="schema_version"
+                                                   placeholder="Schema Version">
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="row">
-                                <div class="form-group">
-                                    <label for="vim_user" class="col-sm-3 control-label">Vim Username*</label>
-                                    <div class="col-sm-6 input-group input-group-sm">
-                                        <input class="form-control" id="vim_user" name="vim_user" placeholder="Vim Username" required>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="form-group">
-                                    <label for="vim_password" class="col-sm-3 control-label">Vim Password*</label>
-                                    <div class="col-sm-6 input-group input-group-sm">
-                                        <input type="password" class="form-control" id="vim_password" name="vim_password" placeholder="Vim Password" required>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="form-group">
-                                    <label for="vim_url" class="col-sm-3 control-label">Vim URL*</label>
-                                    <div class="col-sm-6 input-group input-group-sm">
-                                        <input type="url" class="form-control" id="vim_url" name="vim_url" placeholder="Vim URL" required>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="form-group">
-                                    <label for="vim_type" class="col-sm-3 control-label">Type*</label>
-                                    <div class="col-sm-6 input-group input-group-sm">
-                                        <select id="vim_type" name="vim_type" class="form-control" onchange="toggleConfig(this)">
-                                            <option value="openvim">OpenVIM</option>
-                                          <option value="openstack">Openstack</option>
-                                          <option value="vmware">VMware vCD</option>
-                                          <option value="aws">AWS</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-
-
-
 
 
                         </div>
-                        <div class="col-lg-6">
-                                                        <div class="row">
-                                <div class="form-group">
-                                    <label for="vim_tenant_name" class="col-sm-3 control-label">Tenant name*</label>
-                                    <div class="col-sm-6 input-group input-group-sm">
-                                        <input class="form-control" id="vim_tenant_name" name="vim_tenant_name" placeholder="Tenant name" required>
+
+                        <div id="config" class="panel box">
+
+                                <a data-toggle="collapse" data-parent="#accordion" href="#config_collapse"
+                                   aria-expanded="false" class="collapsed" style="color:black">
+                                    <h5 class="box-title" style="background-color:#f7f7f7; text-align: center;">
+                                        CONFIG PARAMETERS
+                                    </h5>
+                                </a>
+
+
+                            <div id="config_collapse" class="panel-collapse collapse ">
+                                {% include 'config/openvim.html' %}
+                                {% include 'config/openstack.html' %}
+                                {% include 'config/vmware.html' %}
+                                {% include 'config/aws.html' %}
+
+                                <div class="row">
+                                    <div class="col-lg-6">
+                                        <div class="row ">
+                                            <div class="form-group">
+                                                <label for="additional_conf" class="col-sm-4 control-label">Additional configuration</label>
+                                                <div class="col-sm-6 input-group input-group-sm">
+                                                    <input class="form-control" id="additional_conf"
+                                                           name="additional_conf"
+                                                           placeholder='{ "key1": [...],  "key2": {}, "key3": "" }'>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="row">
-                                <div class="form-group">
-                                    <label for="description" class="col-sm-3 control-label">Description</label>
-                                    <div class="col-sm-6 input-group input-group-sm">
-                                        <input class="form-control" id="description" name="description" placeholder="Description">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="form-group">
-                                    <label for="schema_type" class="col-sm-3 control-label">Schema Type</label>
-                                    <div class="col-sm-6 input-group input-group-sm">
-                                        <input class="form-control" id="schema_type" name="schema_type" placeholder="Schema Type">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="form-group">
-                                    <label for="schema_version" class="col-sm-3 control-label">Schema Version</label>
-                                    <div class="col-sm-6 input-group input-group-sm">
-                                        <input class="form-control" id="schema_version" name="schema_version" placeholder="Schema Version" >
-                                    </div>
-                                </div>
+
                             </div>
                         </div>
 
 
                     </div>
-                    {% include 'config/openvim.html' %}
-                    {% include 'config/openstack.html' %}
-                    {% include 'config/vmware.html' %}
-                    {% include 'config/aws.html' %}
+                    <div class="box-footer">
+                        <button onclick="location.href='{% url 'vim:list' %}'" class="btn btn-default pull-left">Back to
+                            VIM Accounts
+                        </button>
+                        <button class="btn btn-primary pull-right">Create</button>
+                    </div>
+                </div>
+            </form>
+        </div>
 
-                </div>
-                <div class="box-footer">
-                    <button onclick="location.href='{% url 'vim:list' %}'" class="btn btn-default pull-left">Back to VIM Accounts</button>
-                    <button class="btn btn-primary pull-right">Create</button>
-                </div>
-            </div>
-        </form>
     </div>
-
-</div>
 {% endblock %}
 
 {% block resource_block %}
@@ -172,11 +194,11 @@
             toggleConfig(document.getElementById("vim_type"));
         });
         function toggleConfig(element){
-            $('.panel').hide();
+            $('.config-vim').hide();
             $('.config-input').prop('disabled', true);
             var type_selected = element.options[element.selectedIndex].value;
             console.log("type selected: " + type_selected);
-            var div_config_index = type_selected + '_config';
+            var div_config_index = type_selected + '_config_collapse';
             $('#'+div_config_index).show();
             $('#'+div_config_index+' .config-input').prop('disabled', false);
         }

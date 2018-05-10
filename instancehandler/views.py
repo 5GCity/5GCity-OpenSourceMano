@@ -40,28 +40,29 @@ def create(request, project_id=None):
         "nsdId": request.POST.get('nsdId', ''),
         "vimAccountId": request.POST.get('vimAccountId', ''),
     }
-    if 'ssh_key' in request.POST:
+    if 'ssh_key' in request.POST and request.POST.get('ssh_key') != '':
         ns_data["ssh-authorized-key"] = [request.POST.get('ssh_key')]
 
     if 'config' in request.POST:
         ns_config = yaml.load(request.POST.get('config'))
-        if "vim-network-name" in ns_config:
-            ns_config["vld"] = ns_config.pop("vim-network-name")
-        if "vld" in ns_config:
-            for vld in ns_config["vld"]:
-                if vld.get("vim-network-name"):
-                    if isinstance(vld["vim-network-name"], dict):
-                        vim_network_name_dict = {}
-                        for vim_account, vim_net in vld["vim-network-name"].items():
-                            vim_network_name_dict[ns_data["vimAccountId"]] = vim_net
-                        vld["vim-network-name"] = vim_network_name_dict
-            ns_data["vld"] = ns_config["vld"]
-        if "vnf" in ns_config:
-            for vnf in ns_config["vnf"]:
-                if vnf.get("vim_account"):
-                    vnf["vimAccountId"] = ns_data["vimAccountId"]
+        if isinstance(ns_config, dict):
+            if "vim-network-name" in ns_config:
+                ns_config["vld"] = ns_config.pop("vim-network-name")
+            if "vld" in ns_config:
+                for vld in ns_config["vld"]:
+                    if vld.get("vim-network-name"):
+                        if isinstance(vld["vim-network-name"], dict):
+                            vim_network_name_dict = {}
+                            for vim_account, vim_net in vld["vim-network-name"].items():
+                                vim_network_name_dict[ns_data["vimAccountId"]] = vim_net
+                            vld["vim-network-name"] = vim_network_name_dict
+                ns_data["vld"] = ns_config["vld"]
+            if "vnf" in ns_config:
+                for vnf in ns_config["vnf"]:
+                    if vnf.get("vim_account"):
+                        vnf["vimAccountId"] = ns_data["vimAccountId"]
 
-            ns_data["vnf"] = ns_config["vnf"]
+                ns_data["vnf"] = ns_config["vnf"]
     print ns_data
     client = Client()
     result = client.ns_create(ns_data)

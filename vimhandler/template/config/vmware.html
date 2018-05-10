@@ -1,146 +1,144 @@
-<div class="panel" id="vmware_config" style="display: none;">
-    <h5 class="box-title">
-        <a data-toggle="collapse" data-parent="#accordion" href="#vmware_config_collapse">
-            Config parameters
-        </a>
-    </h5>
-    <div id="vmware_config_collapse" class="panel-collapse collapse ">
-        <div class="col-lg-6">
-            <div class="row">
-                <div class="form-group">
-                    <label for="vmware_sdn_ctrl" class="col-sm-4 control-label">SDN Controller</label>
-                    <div class="col-sm-6 input-group input-group-sm">
-                        <input disabled class="form-control config-input" id="vmware_sdn_ctrl" name="config_sdn_controller"
-                               placeholder="sdn_controller">
-                    </div>
-                </div>
-            </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="vmware_sdn_port_map" class="col-sm-4 control-label">SDN Port Mapping</label>
-                    <div class="col-sm-6 input-group input-group-sm">
-                        <input disabled class="form-control config-input" id="vmware_sdn_port_map" name="config_sdn_port_mapping"
-                               placeholder="sdn_port_mapping">
-                    </div>
-                </div>
-            </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="orgname" class="col-sm-4 control-label">Org. name</label>
-                    <div class="col-sm-6 input-group input-group-sm">
-                        <input disabled class="form-control config-input" id="orgname" name="config_orgname"
-                               placeholder="orgname">
-                    </div>
-                </div>
-            </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="admin_username" class="col-sm-4 control-label">Admin username</label>
-                    <div class="col-sm-6 input-group input-group-sm">
-                        <input disabled class="form-control config-input" id="admin_username" name="config_admin_username"
-                               placeholder="admin_username">
-                    </div>
-                </div>
-            </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="admin_password" class="col-sm-4 control-label">Admin password</label>
-                    <div class="col-sm-6 input-group input-group-sm">
-                        <input disabled class="form-control config-input" type="password" id="admin_password" name="config_admin_password"
-                               placeholder="admin_password">
-                    </div>
-                </div>
-            </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="nsx_manager" class="col-sm-4 control-label">Nsx manager</label>
-                    <div class="col-sm-6 input-group input-group-sm">
-                        <input disabled class="form-control config-input" id="nsx_manager" name="config_nsx_manager"
-                               placeholder="nsx_manager">
-                    </div>
-                </div>
-            </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="nsx_user" class="col-sm-4 control-label">Nsx user</label>
-                    <div class="col-sm-6 input-group input-group-sm">
-                        <input disabled class="form-control config-input" id="nsx_user" name="config_nsx_user"
-                               placeholder="nsx_user">
-                    </div>
-                </div>
-            </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="nsx_password" class="col-sm-4 control-label">Nsx password</label>
-                    <div class="col-sm-6 input-group input-group-sm">
-                        <input disabled type="password" class="form-control config-input" id="nsx_password" name="config_nsx_password"
-                               placeholder="nsx_password">
-                    </div>
+<div id="vmware_config_collapse" class="config-vim row">
+    <div class="col-lg-6">
+        <div class="row">
+            <div class="form-group">
+                <label for="vmware_sdn_ctrl" class="col-sm-4 control-label">SDN Controller</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled class="form-control config-input" id="vmware_sdn_ctrl" name="config_sdn_controller"
+                           placeholder="sdn_controller">
                 </div>
             </div>
         </div>
-        <div class="col-lg-6">
-            <div class="row">
-                <div class="form-group">
-                    <label for="vcenter_ip" class="col-sm-4 control-label">Vcenter ip</label>
-                    <div class="col-sm-6 input-group input-group-sm">
-                        <input disabled class="form-control config-input" id="vcenter_ip" name="config_vcenter_ip"
-                               placeholder="vcenter_ip">
-                    </div>
+        <div class="row">
+            <div class="form-group">
+                <label for="vmware_sdn_port_map" class="col-sm-4 control-label">SDN Port Mapping</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled class="form-control config-input" id="vmware_sdn_port_map"
+                           name="config_sdn_port_mapping"
+                           placeholder="sdn_port_mapping">
                 </div>
             </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="vcenter_port" class="col-sm-4 control-label">Vcenter port</label>
-                    <div class="col-sm-6 input-group input-group-sm">
-                        <input disabled class="form-control config-input" id="vcenter_port" name="config_vcenter_port"
-                               placeholder="vcenter_port">
-                    </div>
+        </div>
+        <div class="row">
+            <div class="form-group">
+                <label for="orgname" class="col-sm-4 control-label">Org. name</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled class="form-control config-input" id="orgname" name="config_orgname"
+                           placeholder="orgname">
                 </div>
             </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="vcenter_user" class="col-sm-4 control-label">Vcenter user</label>
-                    <div class="col-sm-6 input-group input-group-sm">
-                        <input disabled class="form-control config-input" id="vcenter_user" name="config_vcenter_user"
-                               placeholder="vcenter_user">
-                    </div>
+        </div>
+        <div class="row">
+            <div class="form-group">
+                <label for="admin_username" class="col-sm-4 control-label">Admin username</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled class="form-control config-input" id="admin_username" name="config_admin_username"
+                           placeholder="admin_username">
                 </div>
             </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="vcenter_password" class="col-sm-4 control-label">Vcenter password</label>
-                    <div class="col-sm-6 input-group input-group-sm">
-                        <input disabled type="password" class="form-control config-input" id="vcenter_password" name="config_vcenter_password"
-                               placeholder="vcenter_password">
-                    </div>
+        </div>
+        <div class="row">
+            <div class="form-group">
+                <label for="admin_password" class="col-sm-4 control-label">Admin password</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled class="form-control config-input" type="password" id="admin_password"
+                           name="config_admin_password"
+                           placeholder="admin_password">
                 </div>
             </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="vrops_site" class="col-sm-4 control-label">Vrops site</label>
-                    <div class="col-sm-6 input-group input-group-sm">
-                        <input disabled class="form-control config-input" id="vrops_site" name="config_vrops_site"
-                               placeholder="vrops_site">
-                    </div>
+        </div>
+        <div class="row">
+            <div class="form-group">
+                <label for="nsx_manager" class="col-sm-4 control-label">Nsx manager</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled class="form-control config-input" id="nsx_manager" name="config_nsx_manager"
+                           placeholder="nsx_manager">
                 </div>
             </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="vrops_user" class="col-sm-4 control-label">Vrops user</label>
-                    <div class="col-sm-6 input-group input-group-sm">
-                        <input disabled class="form-control config-input" id="vrops_user" name="config_vrops_user"
-                               placeholder="vrops_user">
-                    </div>
+        </div>
+        <div class="row">
+            <div class="form-group">
+                <label for="nsx_user" class="col-sm-4 control-label">Nsx user</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled class="form-control config-input" id="nsx_user" name="config_nsx_user"
+                           placeholder="nsx_user">
                 </div>
             </div>
-            <div class="row">
-                <div class="form-group">
-                    <label for="vrops_password" class="col-sm-4 control-label">Vrops password</label>
-                    <div class="col-sm-6 input-group input-group-sm">
-                        <input disabled class="form-control config-input" type="password" id="vrops_password" name="config_vrops_password"
-                               placeholder="vrops_password">
-                    </div>
+        </div>
+        <div class="row">
+            <div class="form-group">
+                <label for="nsx_password" class="col-sm-4 control-label">Nsx password</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled type="password" class="form-control config-input" id="nsx_password"
+                           name="config_nsx_password"
+                           placeholder="nsx_password">
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="row">
+            <div class="form-group">
+                <label for="vcenter_ip" class="col-sm-4 control-label">Vcenter ip</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled class="form-control config-input" id="vcenter_ip" name="config_vcenter_ip"
+                           placeholder="vcenter_ip">
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="form-group">
+                <label for="vcenter_port" class="col-sm-4 control-label">Vcenter port</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled class="form-control config-input" id="vcenter_port" name="config_vcenter_port"
+                           placeholder="vcenter_port">
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="form-group">
+                <label for="vcenter_user" class="col-sm-4 control-label">Vcenter user</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled class="form-control config-input" id="vcenter_user" name="config_vcenter_user"
+                           placeholder="vcenter_user">
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="form-group">
+                <label for="vcenter_password" class="col-sm-4 control-label">Vcenter password</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled type="password" class="form-control config-input" id="vcenter_password"
+                           name="config_vcenter_password"
+                           placeholder="vcenter_password">
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="form-group">
+                <label for="vrops_site" class="col-sm-4 control-label">Vrops site</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled class="form-control config-input" id="vrops_site" name="config_vrops_site"
+                           placeholder="vrops_site">
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="form-group">
+                <label for="vrops_user" class="col-sm-4 control-label">Vrops user</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled class="form-control config-input" id="vrops_user" name="config_vrops_user"
+                           placeholder="vrops_user">
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="form-group">
+                <label for="vrops_password" class="col-sm-4 control-label">Vrops password</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled class="form-control config-input" type="password" id="vrops_password"
+                           name="config_vrops_password"
+                           placeholder="vrops_password">
                 </div>
             </div>
         </div>

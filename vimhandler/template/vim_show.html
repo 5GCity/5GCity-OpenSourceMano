@@ -112,15 +112,30 @@
 
 
                 </div>
-                {% if datacenter.vim_type == 'openvim' %}
-                    {% include 'config/openvim_show.html' %}
-                {% elif datacenter.vim_type == 'openstack' %}
-                    {% include 'config/openstack_show.html' %}
-                {% elif datacenter.vim_type == 'vmware' %}
-                    {% include 'config/vmware_show.html' %}
-                {% elif datacenter.vim_type == 'aws' %}
-                    {% include 'config/aws_show.html' %}
-                {% endif %}
+                 <div id="config" class="panel box">
+
+                                <a data-toggle="collapse" data-parent="#accordion" href="#config_collapse"
+                                   aria-expanded="false" class="collapsed" style="color:black">
+                                    <h5 class="box-title" style="background-color:#f7f7f7; text-align: center;">
+                                        CONFIG PARAMETERS
+                                    </h5>
+                                </a>
+
+
+                            <div id="config_collapse" class="panel-collapse collapse ">
+                                {% if datacenter.vim_type == 'openvim' %}
+                                    {% include 'config/openvim_show.html' %}
+                                {% elif datacenter.vim_type == 'openstack' %}
+                                    {% include 'config/openstack_show.html' %}
+                                {% elif datacenter.vim_type == 'vmware' %}
+                                    {% include 'config/vmware_show.html' %}
+                                {% elif datacenter.vim_type == 'aws' %}
+                                    {% include 'config/aws_show.html' %}
+                                {% endif %}
+
+                            </div>
+                        </div>
+
             </div>
             <div class="box-footer">
                 <div class="">
