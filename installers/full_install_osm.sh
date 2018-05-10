@@ -312,7 +312,9 @@ function configure_SOUI(){
 
     echo -e "       Configuring SO"
     sudo route add -host $JUJU_CONTROLLER_IP gw $VCA_CONTAINER_IP
+    sudo ip route add 10.44.127.0/24 via $VCA_CONTAINER_IP
     sudo sed -i "$ i route add -host $JUJU_CONTROLLER_IP gw $VCA_CONTAINER_IP" /etc/rc.local
+    sudo sed -i "$ i ip route add 10.44.127.0/24 via $VCA_CONTAINER_IP" /etc/rc.local
     # make journaling persistent
     lxc exec SO-ub -- mkdir -p /var/log/journal
     lxc exec SO-ub -- systemd-tmpfiles --create --prefix /var/log/journal
