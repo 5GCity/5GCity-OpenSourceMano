@@ -1,6 +1,9 @@
 version: '3'
 volumes:
-  OSMstorage:
+  ro_db:
+  mongo_db:
+  mon_db:
+  osm_packages:
 networks:
   netOSM:
     external: true
@@ -34,12 +37,14 @@ services:
 #      - "27017:27017"
     networks:
       - netOSM
+    volumes:
+      - mongo_db:/data/db
   nbi:
     image: osm/nbi
     networks:
       - netOSM
     volumes:
-      - OSMstorage:/app/storage
+      - osm_packages:/app/storage
     environment:
       OSMNBI_DATABASE_HOST: mongo
       OSMNBI_MESSAGE_HOST: kafka
@@ -52,8 +57,8 @@ services:
     image: osm/lcm
     networks:
       - netOSM
-    volumes:
-      - OSMstorage:/app/storage
+#    volumes:
+#      - OSMstorage:/app/storage
     environment:
       OSMLCM_RO_HOST: ro
       OSMLCM_DATABASE_HOST: mongo
@@ -68,6 +73,8 @@ services:
     image: mysql:5
     networks:
       - netOSM
+    volumes:
+      - ro_db:/var/lib/mysql
     env_file:
       - ./ro-db.env
 #    ports:
@@ -88,8 +95,11 @@ services:
     image: osm/mon
     networks:
       - netOSM
+    volumes:
+      - mon_db:/app/database
     environment:
       BROKER_URI: kafka:9092
+      DATABASE: sqlite:///app/database/mon_sqlite.db
     env_file:
       - ./mon.env
     #depends_on:
