@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% load get %}
+{% load date_tag %}
+{% load staticfiles %}
+
+
+
+{% block head_block %}
+    {{ block.super }}
+    <!-- Codemirror core CSS -->
+    <link rel="stylesheet" href="/static/bower_components/codemirror/lib/codemirror.css">
+    <link rel="stylesheet" href="/static/bower_components/codemirror/addon/fold/foldgutter.css" />
+    <link rel="stylesheet" href="/static/bower_components/codemirror/theme/neat.css">
+    <link rel="stylesheet" href="/static/bower_components/codemirror/addon/dialog/dialog.css">
+    <link rel="stylesheet" href="/static/bower_components/codemirror/addon/display/fullscreen.css">
+    <link rel="stylesheet" href="/static/bower_components/select2/dist/css/select2.min.css">
+{% endblock %}
+{% block title_header_big %}
+    {{ block.super }}
+{% endblock %}
+{% block left_sidebar %}
+    {% include 'osm/osm_project_left_sidebar.html' %}
+{% endblock %}
+
+
+{% block breadcrumb_body %}
+    {{ block.super }}
+    <li><a href="{% url 'projects:instances:list' project_id=project_id type=type %}">Instances</a></li>
+{% endblock %}
+
+{% block content_body %}
+    {{ block.super }}
+    {% include 'modal/instance_create.html' %}
+    {% csrf_token %}
+    <div class="row">
+        <div class="col-md-12">
+
+            <div class="box">
+                <div class="box-header with-border">
+                    <h3 class="box-title">Active operations</h3>
+
+                </div>
+                <div class="box-body">
+                    <table id="instances_table" class="table table-bordered table-striped">
+                        <thead>
+                        <tr>
+                            <th>Id</th>
+                            <th>Type</th>
+                            <th>Operation State</th>
+                            <th>Start Time</th>
+                            <th>Status Entered Time</th>
+                            <th>Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for i in operations %}
+                            <tr>
+
+                                <td>{{ i|get:"_id" }}</td>
+                                <td>{{ i|get:"lcmOperationType" }}</td>
+
+                                {% if i|get:"operationState" == 'FAILED' %}
+                                    <td><span class="label label-danger">{{ i|get:"operationState"  }}</span> </td>
+                                {% elif i|get:"operationState" == 'PROCESSING' %}
+                                     <td><span class="label label-warning">{{ i|get:"operationState"  }}</span> </td>
+                                {% elif i|get:"operationState" == 'COMPLETED' %}
+                                     <td><span class="label label-success">{{ i|get:"operationState"  }}</span> </td>
+                                {% else  %}
+                                    <td>{{ i|get:"operationState"  }}</td>
+                                {% endif %}
+
+                                <td >{{ i.startTime|get_date }}</td>
+                                <td >{{ i.statusEnteredTime|get_date }}</td>
+                                <td>
+                                    <div class="btn-group">
+                                        <button type="button" class="btn btn-default"
+                                                onclick="javascript:showOperationDetails('{% url 'projects:instances:ns_operation' op_id=i|get:'_id' instance_id=i|get:'nsInstanceId' project_id=project_id type=type %}')"
+                                                data-toggle="tooltip" data-placement="top" data-container="body" title="More Info"><i
+                                                class="fa fa-info"></i>
+                                        </button>
+
+
+                                    </div>
+
+                                </td>
+
+
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    {% include 'modal/operation_show.html' %}
+{% endblock %}
+
+{% block resource_block %}
+    {{ block.super }}
+    <!-- Utility JS -->
+    <script src="/static/bower_components/select2/dist/js/select2.js"></script>
+    <script src="/static/bower_components/codemirror/lib/codemirror.js"></script>
+    <script src="/static/bower_components/codemirror/addon/fold/foldcode.js"></script>
+    <script src="/static/bower_components/codemirror/addon/fold/foldgutter.js"></script>
+    <script src="/static/bower_components/codemirror/addon/fold/brace-fold.js"></script>
+    <script src="/static/bower_components/codemirror/mode/javascript/javascript.js"></script>
+    <script src="/static/bower_components/codemirror/addon/search/searchcursor.js"></script>
+    <script src="/static/bower_components/codemirror/addon/search/search.js"></script>
+    <script src="/static/bower_components/codemirror/addon/dialog/dialog.js"></script>
+    <script src="/static/bower_components/codemirror/addon/display/autorefresh.js"></script>
+    <script src="/static/bower_components/codemirror/addon/edit/matchbrackets.js"></script>
+    <script src="/static/bower_components/codemirror/addon/edit/closebrackets.js"></script>
+    <script src="/static/bower_components/codemirror/addon/display/fullscreen.js"></script>
+    <script src="/static/bower_components/codemirror/keymap/sublime.js"></script>
+    <script src="/static/src/instancehandler/instance_operations_list.js"></script>
+
+{% endblock %}
+
+{% block footer %}
+    {% include "footer.html" %}
+{% endblock %}

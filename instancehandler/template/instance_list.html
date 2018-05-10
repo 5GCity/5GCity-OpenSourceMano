@@ -109,7 +109,7 @@
                                             <ul class="dropdown-menu">
                                                 <li><a href="#" onclick="javascript:performAction('{% url 'projects:instances:action' instance_id=i|get:'_id' project_id=project_id type=type %}')">
                                                     <i class="fa fa-magic"></i>Exec NS Primitive</a></li>
-                                                <li><a href="#"> <i class="fa fa-list"></i>Active operations</a></li>
+                                                <li><a href="{% url 'projects:instances:ns_operations' project_id=project_id type=type instance_id=i|get:'_id'%}"> <i class="fa fa-list"></i>Active operations</a></li>
                                             </ul>
 
 

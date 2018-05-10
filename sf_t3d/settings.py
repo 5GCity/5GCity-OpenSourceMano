@@ -92,7 +92,7 @@ TEMPLATES = [
             ],
             'libraries':{
                 'get': 'sf_t3d.templatetags.get',
-
+                'date_tag': 'sf_t3d.templatetags.datetag',
             }
         },
     },

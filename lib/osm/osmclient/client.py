@@ -235,6 +235,30 @@ class Client(object):
                                    json=action_payload)
         return None
 
+    def ns_op_list(self, id):
+        token = self.get_token()
+        headers = {}
+        if token:
+            headers['Authorization'] = 'Bearer {}'.format(token)
+            headers['Content-Type'] = 'application/json'
+            headers['accept'] = 'application/json'
+
+            _url = "{0}/nslcm/v1/ns_lcm_op_occs/?nsInstanceId={1}".format(self._base_path, id)
+            return self._send_get(_url, headers=headers)
+        return None
+
+    def ns_op(self, id):
+        token = self.get_token()
+        headers = {}
+        if token:
+            headers['Authorization'] = 'Bearer {}'.format(token)
+            headers['Content-Type'] = 'application/json'
+            headers['accept'] = 'application/json'
+
+            _url = "{0}/nslcm/v1/ns_lcm_op_occs/{1}".format(self._base_path, id)
+            return self._send_get(_url, headers=headers)
+        return None
+
     def vnfd_list(self):
         token = self.get_token()
         if token:

@@ -21,7 +21,9 @@ urlpatterns = [
     url(r'^(?P<type>[ns|vnf]+)/list/', views.list, name='list'),
     url(r'^create/', views.create, name='create'),
     url(r'^(?P<type>[ns|vnf]+)/(?P<instance_id>[0-9a-z-]+)/delete$', views.delete, name='delete'),
-    url(r'^(?P<type>[ns|vnf]+)/(?P<instance_id>[0-9a-z-]+)/action', views.action, name='action'),
+    url(r'^(?P<type>[ns|vnf]+)/(?P<instance_id>[0-9a-z-]+)/action$', views.action, name='action'),
+    url(r'^(?P<type>[ns|vnf]+)/(?P<instance_id>[0-9a-z-]+)/operation$', views.ns_operations, name='ns_operations'),
+    url(r'^(?P<type>[ns|vnf]+)/(?P<instance_id>[0-9a-z-]+)/operation/(?P<op_id>[0-9a-z-]+)', views.ns_operation, name='ns_operation'),
     url(r'^(?P<type>[ns|vnf]+)/(?P<instance_id>[0-9a-z-]+)', views.show, name='show'),
 
 ]

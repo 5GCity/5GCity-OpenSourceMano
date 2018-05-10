@@ -20,6 +20,7 @@ function openModalCreateNS(args) {
     // load vim account list
     select2_groups = $('#vimAccountId').select2({
         placeholder: 'Select VIM',
+        width: '100%',
         ajax: {
             url: args.vim_list_url,
             dataType: 'json',

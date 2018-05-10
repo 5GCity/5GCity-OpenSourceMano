@@ -68,6 +68,17 @@ def create(request, project_id=None):
     result = client.ns_create(ns_data)
     return __response_handler(request, result, 'projects:instances:list', to_redirect=True, type='ns', project_id=project_id)
 
+@login_required
+def ns_operations(request, project_id=None, instance_id=None, type=None):
+    client = Client()
+    result = client.ns_op_list(instance_id)
+    return __response_handler(request, {'operations': result, 'type': 'ns', 'project_id': project_id}, 'instance_operations_list.html')
+
+@login_required
+def ns_operation(request, op_id, project_id=None, instance_id=None, type=None):
+    client = Client()
+    result = client.ns_op(op_id)
+    return __response_handler(request, result)
 
 @login_required
 def action(request, project_id=None, instance_id=None, type=None):
