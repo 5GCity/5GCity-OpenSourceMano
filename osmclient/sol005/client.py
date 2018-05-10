@@ -19,8 +19,6 @@ OSM SOL005 client API
 """
 
 #from osmclient.v1 import vnf
-#from osmclient.v1 import ns
-#from osmclient.v1 import vim
 #from osmclient.v1 import vca
 from osmclient.sol005 import vnfd
 from osmclient.sol005 import nsd
@@ -28,6 +26,7 @@ from osmclient.sol005 import ns
 from osmclient.sol005 import vim
 from osmclient.sol005 import package
 from osmclient.sol005 import http
+from osmclient.sol005 import sdncontroller
 from osmclient.common.exceptions import ClientException
 
 class Client(object):
@@ -84,6 +83,7 @@ class Client(object):
         self.package = package.Package(self._http_client, client=self)
         self.ns = ns.Ns(self._http_client, client=self)
         self.vim = vim.Vim(self._http_client, client=self)
+        self.sdnc = sdncontroller.SdnController(self._http_client, client=self)
         '''
         self.vnf = vnf.Vnf(http_client, client=self, **kwargs)
         self.vca = vca.Vca(http_client, client=self, **kwargs)

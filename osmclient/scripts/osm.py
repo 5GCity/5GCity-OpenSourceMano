@@ -927,6 +927,182 @@ def vim_show(ctx, name):
 
 
 ####################
+# SDN controller operations
+####################
+
+@cli.command(name='sdnc-create')
+@click.option('--name',
+              prompt=True,
+              help='Name to create sdn controller')
+@click.option('--type',
+              prompt=True,
+              help='SDN controller type')
+@click.option('--sdn_controller_version',
+              help='SDN controller username')
+@click.option('--ip_address',
+              prompt=True,
+              help='SDN controller IP address')
+@click.option('--port',
+              prompt=True,
+              help='SDN controller port')
+@click.option('--switch_dpid',
+              prompt=True,
+              help='Switch DPID (Openflow Datapath ID)')
+@click.option('--user',
+              help='SDN controller username')
+@click.option('--password',
+              hide_input=True,
+              confirmation_prompt=True,
+              help='SDN controller password')
+#@click.option('--description',
+#              default='no description',
+#              help='human readable description')
+@click.pass_context
+def sdnc_create(ctx,
+               name,
+               type,
+               sdn_controller_version,
+               ip_address,
+               port,
+               switch_dpid,
+               user,
+               password):
+    '''creates a new SDN controller
+    '''
+    sdncontroller = {}
+    sdncontroller['name'] = name
+    sdncontroller['type'] = type
+    sdncontroller['ip'] = ip_address
+    sdncontroller['port'] = int(port)
+    sdncontroller['dpid'] = switch_dpid
+    if sdn_controller_version:
+        sdncontroller['version'] = sdn_controller_version
+    if user:
+        sdncontroller['user'] = user
+    if password:
+        sdncontroller['password'] = password
+#    sdncontroller['description'] = description
+    try:
+        check_client_version(ctx.obj, ctx.command.name)
+        ctx.obj.sdnc.create(name, sdncontroller)
+    except ClientException as inst:
+        print(inst.message)
+
+
+@cli.command(name='sdnc-update', short_help='updates an SDN controller')
+@click.argument('name')
+@click.option('--newname', help='New name for the SDN controller')
+@click.option('--type', help='SDN controller type')
+@click.option('--sdn_controller_version', help='SDN controller username')
+@click.option('--ip_address', help='SDN controller IP address')
+@click.option('--port', help='SDN controller port')
+@click.option('--switch_dpid', help='Switch DPID (Openflow Datapath ID)')
+@click.option('--user', help='SDN controller username')
+@click.option('--password', help='SDN controller password')
+#@click.option('--description',  default=None, help='human readable description')
+@click.pass_context
+def sdnc_update(ctx,
+               name,
+               newname,
+               type,
+               sdn_controller_version,
+               ip_address,
+               port,
+               switch_dpid,
+               user,
+               password):
+    '''updates an SDN controller
+
+    NAME: name or ID of the SDN controller
+    '''
+    sdncontroller = {}
+    if newname: sdncontroller['name'] = newname
+    if type: sdncontroller['type'] = type
+    if ip_address: sdncontroller['ip'] = ip_address
+    if port: sdncontroller['port'] = int(port)
+    if switch_dpid: sdncontroller['dpid'] = switch_dpid
+#    sdncontroller['description'] = description
+    if sdn_controller_version is not None:
+        if sdn_controller_version=="":
+            sdncontroller['version'] = None
+        else:
+            sdncontroller['version'] = sdn_controller_version
+    if user is not None:
+        if user=="":
+            sdncontroller['user'] = None
+        else:
+            sdncontroller['user'] = user
+    if password is not None:
+        if password=="":
+            sdncontroller['password'] = None
+        else:
+            sdncontroller['password'] = user
+    try:
+        check_client_version(ctx.obj, ctx.command.name)
+        ctx.obj.sdnc.update(name, sdncontroller)
+    except ClientException as inst:
+        print(inst.message)
+        exit(1)
+
+
+@cli.command(name='sdnc-delete')
+@click.argument('name')
+@click.pass_context
+def sdnc_delete(ctx, name):
+    '''deletes an SDN controller
+
+    NAME: name or ID of the SDN controller to be deleted
+    '''
+    try:
+        check_client_version(ctx.obj, ctx.command.name)
+        ctx.obj.sdnc.delete(name)
+    except ClientException as inst:
+        print(inst.message)
+        exit(1)
+
+
+@cli.command(name='sdnc-list')
+@click.option('--filter', default=None,
+              help='restricts the list to the SDN controllers matching the filter')
+@click.pass_context
+def sdnc_list(ctx, filter):
+    '''list all SDN controllers'''
+    try:
+        check_client_version(ctx.obj, ctx.command.name)
+        resp = ctx.obj.sdnc.list(filter)
+    except ClientException as inst:
+        print(inst.message)
+        exit(1)
+    table = PrettyTable(['name', 'id'])
+    for sdnc in resp:
+        table.add_row([sdnc['name'], sdnc['_id']])
+    table.align = 'l'
+    print(table)
+
+
+@cli.command(name='sdnc-show')
+@click.argument('name')
+@click.pass_context
+def sdnc_show(ctx, name):
+    '''shows the details of an SDN controller
+
+    NAME: name or ID of the SDN controller
+    '''
+    try:
+        check_client_version(ctx.obj, ctx.command.name)
+        resp = ctx.obj.sdnc.get(name)
+    except ClientException as inst:
+        print(inst.message)
+        exit(1)
+
+    table = PrettyTable(['key', 'attribute'])
+    for k, v in resp.items():
+        table.add_row([k, json.dumps(v, indent=2)])
+    table.align = 'l'
+    print(table)
+
+
+####################
 # Other operations
 ####################
 

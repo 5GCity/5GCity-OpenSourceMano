@@ -30,20 +30,29 @@ class SdnController(object):
         self._client = client
         self._apiName = '/admin'
         self._apiVersion = '/v1'
-        self._apiResource = '/sdn_controllers'
+        self._apiResource = '/sdns'
         self._apiBase = '{}{}{}'.format(self._apiName,
                                         self._apiVersion, self._apiResource)
     def create(self, name, sdn_controller):
-        if 'type' not in vim_access: 
-            raise Exception("type not provided")
-
         resp = self._http.post_cmd(endpoint=self._apiBase,
                                        postfields_dict=sdn_controller)
-        if not resp or '_id' not in resp:
+        #print 'RESP: {}'.format(resp)
+        if not resp or 'id' not in resp:
             raise ClientException('failed to create SDN controller: '.format(
                                   resp))
         else:
-            print resp['_id']
+            print resp['id']
+
+    def update(self, name, sdn_controller):
+        sdnc = self.get(name)
+        resp = self._http.patch_cmd(endpoint='{}/{}'.format(self._apiBase,sdnc['_id']),
+                                       postfields_dict=sdn_controller)
+        print 'RESP: {}'.format(resp)
+        if not resp or 'id' not in resp:
+            raise ClientException('failed to update SDN controller: '.format(
+                                  resp))
+        else:
+            print resp['id']
 
     def delete(self, name):
         sdn_controller = self.get(name)
@@ -65,6 +74,7 @@ class SdnController(object):
         if filter:
             filter_string = '?{}'.format(filter)
         resp = self._http.get_cmd('{}{}'.format(self._apiBase,filter_string))
+        #print 'RESP: {}'.format(resp)
         if resp:
             return resp
         return list()
