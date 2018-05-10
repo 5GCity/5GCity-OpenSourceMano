@@ -18,6 +18,7 @@ from msgbase import MsgException
 from os import environ
 # from vca import DeployApplication, RemoveApplication
 from n2vc.vnf import N2VC
+from n2vc import version as N2VC_version
 # import os.path
 # import time
 
@@ -106,7 +107,11 @@ class Lcm:
             # artifacts=config['VCA'][''],
             artifacts=None,
         )
-
+        # check version of N2VC
+        # TODO enhance with int conversion or from distutils.version import LooseVersion
+        # or with list(map(int, version.split(".")))
+        if N2VC_version < "0.0.2":
+            raise LcmException("Not compatible osm/N2VC version '{}'. Needed '0.0.2' or higher".format(N2VC_version))
         try:
             if config["database"]["driver"] == "mongo":
                 self.db = dbmongo.DbMongo()
@@ -459,21 +464,26 @@ class Lcm:
             if ci_file:
                 ci_file.close()
 
-    def n2vc_callback(self, model_name, application_name, workload_status, db_nsr, db_nslcmop, vnf_member_index, task=None):
-        """Update the lcm database with the status of the charm.
-
-        Updates the VNF's operational status with the state of the charm:
-        - blocked: The unit needs manual intervention
-        - maintenance: The unit is actively deploying/configuring
-        - waiting: The unit is waiting for another charm to be ready
-        - active: The unit is deployed, configured, and ready
-        - error: The charm has failed and needs attention.
-        - terminated: The charm has been destroyed
-        - removing,
-        - removed
-
-        Updates the network service's config-status to reflect the state of all
-        charms.
+    def n2vc_callback(self, model_name, application_name, status, message, db_nsr, db_nslcmop, vnf_member_index, task=None):
+        """
+        Callback both for charm status change and task completion
+        :param model_name: Charm model name
+        :param application_name: Charm application name
+        :param status: Can be
+            - blocked: The unit needs manual intervention
+            - maintenance: The unit is actively deploying/configuring
+            - waiting: The unit is waiting for another charm to be ready
+            - active: The unit is deployed, configured, and ready
+            - error: The charm has failed and needs attention.
+            - terminated: The charm has been destroyed
+            - removing,
+            - removed
+        :param message: detailed message error
+        :param db_nsr: nsr database content
+        :param db_nslcmop: nslcmop database content
+        :param vnf_member_index: NSD vnf-member-index
+        :param task: None for charm status change, or task for completion task callback
+        :return:
         """
         nsr_id = None
         nslcmop_id = None
@@ -501,7 +511,7 @@ class Lcm:
                             nsr_lcm["VCA"][vnf_member_index]['detailed-status'] = str(exc)
                         elif ns_action == "action":
                             db_nslcmop["operationState"] = "FAILED"
-                            db_nslcmop["detailedStatus"] = str(exc)
+                            db_nslcmop["detailed-status"] = str(exc)
                             db_nslcmop["statusEnteredTime"] = time()
                             update_nslcmop = True
                             return
@@ -511,25 +521,24 @@ class Lcm:
                         # TODO revise with Adam if action is finished and ok when task is done
                         if ns_action == "action":
                             db_nslcmop["operationState"] = "COMPLETED"
-                            db_nslcmop["detailedStatus"] = "Done"
+                            db_nslcmop["detailed-status"] = "Done"
                             db_nslcmop["statusEnteredTime"] = time()
                             update_nslcmop = True
                         # task is Done, but callback is still ongoing. So ignore
                         return
-            elif workload_status:
-                self.logger.debug(logging_text + " Enter workload_status={}".format(workload_status))
-                if nsr_lcm["VCA"][vnf_member_index]['operational-status'] == workload_status:
+            elif status:
+                self.logger.debug(logging_text + " Enter status={}".format(status))
+                if nsr_lcm["VCA"][vnf_member_index]['operational-status'] == status:
                     return  # same status, ignore
-                nsr_lcm["VCA"][vnf_member_index]['operational-status'] = workload_status
-                # TODO N2VC some error message in case of error should be obtained from N2VC
-                nsr_lcm["VCA"][vnf_member_index]['detailed-status'] = ""
+                nsr_lcm["VCA"][vnf_member_index]['operational-status'] = status
+                nsr_lcm["VCA"][vnf_member_index]['detailed-status'] = str(message)
             else:
                 self.logger.critical(logging_text + " Enter with bad parameters", exc_info=True)
                 return
 
-            some_failed = False
             all_active = True
             status_map = {}
+            n2vc_error_text = []   # contain text error list. If empty no one is in error status
             for vnf_index, vca_info in nsr_lcm["VCA"].items():
                 vca_status = vca_info["operational-status"]
                 if vca_status not in status_map:
@@ -539,26 +548,24 @@ class Lcm:
 
                 if vca_status != "active":
                     all_active = False
-                if vca_status == "error":
-                    some_failed = True
-                    db_nsr["config-status"] = "failed"
-                    error_text = "fail configuring vnf_index={} {}".format(vnf_member_index,
-                                                                           vca_info["detailed-status"])
-                    db_nsr["detailed-status"] = error_text
-                    db_nslcmop["operationState"] = "FAILED_TEMP"
-                    db_nslcmop["detailedStatus"] = error_text
-                    db_nslcmop["statusEnteredTime"] = time()
-                    break
+                elif vca_status in ("error", "blocked"):
+                    n2vc_error_text.append("member_vnf_index={} {}: {}".format(vnf_member_index, vca_status,
+                                                                           vca_info["detailed-status"]))
 
             if all_active:
                 self.logger.debug("[n2vc_callback] ns_instantiate={} vnf_index={} All active".format(nsr_id, vnf_member_index))
                 db_nsr["config-status"] = "configured"
                 db_nsr["detailed-status"] = "done"
                 db_nslcmop["operationState"] = "COMPLETED"
-                db_nslcmop["detailedStatus"] = "Done"
+                db_nslcmop["detailed-status"] = "Done"
                 db_nslcmop["statusEnteredTime"] = time()
-            elif some_failed:
-                pass
+            elif n2vc_error_text:
+                db_nsr["config-status"] = "failed"
+                error_text = "fail configuring " + ";".join(n2vc_error_text)
+                db_nsr["detailed-status"] = error_text
+                db_nslcmop["operationState"] = "FAILED_TEMP"
+                db_nslcmop["detailed-status"] = error_text
+                db_nslcmop["statusEnteredTime"] = time()
             else:
                 cs = "configuring: "
                 separator = ""
@@ -566,7 +573,8 @@ class Lcm:
                     cs += separator + "{}: {}".format(status, num)
                     separator = ", "
                 db_nsr["config-status"] = cs
-                db_nslcmop["detailedStatus"] = cs
+                db_nsr["detailed-status"] = cs
+                db_nslcmop["detailed-status"] = cs
             update_nsr = update_nslcmop = True
 
         except Exception as e:
@@ -840,7 +848,7 @@ class Lcm:
                         None,                # Callback parameter (task)
                     )
                 )
-                task.add_done_callback(functools.partial(self.n2vc_callback, model_name, application_name, None,
+                task.add_done_callback(functools.partial(self.n2vc_callback, model_name, application_name, None, None,
                                                          db_nsr, db_nslcmop, vnf_index))
                 self.lcm_ns_tasks[nsr_id][nslcmop_id]["create_charm:" + vnf_index] = task
 
@@ -1056,7 +1064,7 @@ class Lcm:
                     "_admin": {"deployed": nsr_lcm, }
                 }
                 db_nslcmop_update = {
-                    "detailedStatus": "; ".join(failed_detail),
+                    "detailed-status": "; ".join(failed_detail),
                     "operationState": "FAILED",
                     "statusEnteredTime": time()
                 }
@@ -1070,7 +1078,7 @@ class Lcm:
                     "_admin": {"deployed": nsr_lcm, "nsState": "NOT_INSTANTIATED"}
                 }
                 db_nslcmop_update = {
-                    "detailedStatus": "Done",
+                    "detailed-status": "Done",
                     "operationState": "COMPLETED",
                     "statusEnteredTime": time()
                 }
@@ -1143,7 +1151,7 @@ class Lcm:
             result = "FAILED"  # by default
             result_detail = ""
             if task.cancelled():
-                db_nslcmop["detailedStatus"] = "Task has been cancelled"
+                db_nslcmop["detailed-status"] = "Task has been cancelled"
             elif task.done():
                 exc = task.exception()
                 if exc:
@@ -1159,7 +1167,7 @@ class Lcm:
                 result_detail = "timeout"
 
             db_nslcmop_update = {
-                "detailedStatus": result_detail,
+                "detailed-status": result_detail,
                 "operationState": result,
                 "statusEnteredTime": time()
             }
