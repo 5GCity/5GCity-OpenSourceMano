@@ -233,3 +233,63 @@ class Ns(object):
                     exc.message)
             raise ClientException(message)
 
+    def create_alarm(self, alarm):
+        ns = self.get(alarm['ns_name'])
+        alarm['ns_id'] = ns['_id']
+        alarm.pop('ns_name')
+        data = {}
+        data["create_alarm_request"] = {}
+        data["create_alarm_request"]["alarm_create_request"] = alarm
+        try:
+            resp = self._http.post_cmd(endpoint='/test/message/alarm_request',
+                                       postfields_dict=data)
+            #print 'RESP: {}'.format(resp)
+            if not resp:
+                raise ClientException('unexpected response from server: '.format(
+                                      resp))
+            print 'Alarm created'
+        except ClientException as exc:
+            message="failed to create alarm: alarm {}\nerror:\n{}".format(
+                    alarm,
+                    exc.message)
+            raise ClientException(message)
+
+    def delete_alarm(self, name):
+        data = {}
+        data["delete_alarm_request"] = {}
+        data["delete_alarm_request"]["alarm_delete_request"] = {}
+        data["delete_alarm_request"]["alarm_delete_request"]["alarm_uuid"] = name
+        try:
+            resp = self._http.post_cmd(endpoint='/test/message/alarm_request',
+                                       postfields_dict=data)
+            #print 'RESP: {}'.format(resp)
+            if not resp:
+                raise ClientException('unexpected response from server: '.format(
+                                      resp))
+            print 'Alarm deleted'
+        except ClientException as exc:
+            message="failed to delete alarm: alarm {}\nerror:\n{}".format(
+                    alarm,
+                    exc.message)
+            raise ClientException(message)
+
+    def export_metric(self, metric):
+        ns = self.get(metric['ns_name'])
+        metric['ns_id'] = ns['_id']
+        metric.pop('ns_name')
+        data = {}
+        data["read_metric_data_request"] = metric
+        try:
+            resp = self._http.post_cmd(endpoint='/test/message/metric_request',
+                                       postfields_dict=data)
+            #print 'RESP: {}'.format(resp)
+            if not resp:
+                raise ClientException('unexpected response from server: '.format(
+                                      resp))
+            print 'Metric exported'
+        except ClientException as exc:
+            message="failed to export metric: metric {}\nerror:\n{}".format(
+                    metric,
+                    exc.message)
+            raise ClientException(message)
+

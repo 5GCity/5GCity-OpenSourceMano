@@ -1103,6 +1103,106 @@ def sdnc_show(ctx, name):
 
 
 ####################
+# Fault Management operations
+####################
+
+@cli.command(name='ns-alarm-create')
+@click.argument('name')
+@click.option('--ns', prompt=True, help='NS instance id or name')
+@click.option('--vnf', prompt=True,
+              help='VNF name (VNF member index as declared in the NSD)')
+@click.option('--vdu', prompt=True,
+              help='VDU name (VDU name as declared in the VNFD)')
+@click.option('--metric', prompt=True,
+              help='Name of the metric (e.g. cpu_utilization)')
+@click.option('--severity', default='WARNING',
+              help='severity of the alarm (WARNING, MINOR, MAJOR, CRITICAL, INDETERMINATE)')
+@click.option('--threshold_value', prompt=True,
+              help='threshold value that, when crossed, an alarm is triggered')
+@click.option('--threshold_operator', prompt=True,
+              help='threshold operator describing the comparison (GE, LE, GT, LT, EQ')
+@click.option('--statistic', default='AVERAGE',
+              help='statistic (AVERAGE, MINIMUM, MAXIMUM, COUNT, SUM)')
+@click.pass_context
+def ns_alarm_create(ctx, name, ns, vnf, vdu, metric, severity,
+                    threshold_value, threshold_operator, statistic):
+    '''creates a new alarm for a NS instance'''
+    alarm = {}
+    alarm['alarm_name'] = name
+    alarm['ns_name'] = ns
+    alarm['vnf_member_index'] = vnf
+    alarm['vdu_name'] = vdu
+    alarm['metric_name'] = metric
+    alarm['severity'] = severity
+    alarm['threshold_value'] = int(threshold_value)
+    alarm['operation'] = threshold_operator
+    alarm['statistic'] = statistic
+    try:
+        check_client_version(ctx.obj, ctx.command.name)
+        ctx.obj.ns.create_alarm(alarm)
+    except ClientException as inst:
+        print(inst.message)
+        exit(1)
+
+
+@cli.command(name='ns-alarm-delete')
+@click.argument('name')
+@click.pass_context
+def ns_alarm_delete(ctx, name):
+    '''deletes an alarm
+
+    NAME: name of the alarm to be deleted
+    '''
+    try:
+        check_client_version(ctx.obj, ctx.command.name)
+        ctx.obj.ns.delete_alarm(name)
+    except ClientException as inst:
+        print(inst.message)
+        exit(1)
+
+
+####################
+# Performance Management operations
+####################
+
+@cli.command(name='ns-metric-export')
+@click.option('--ns', prompt=True, help='NS instance id or name')
+@click.option('--vnf', prompt=True,
+              help='VNF name (VNF member index as declared in the NSD)')
+@click.option('--vdu', prompt=True,
+              help='VDU name (VDU name as declared in the VNFD)')
+@click.option('--metric', prompt=True,
+              help='name of the metric (e.g. cpu_utilization)')
+#@click.option('--period', default='1w',
+#              help='metric collection period (e.g. 20s, 30m, 2h, 3d, 1w)')
+@click.option('--interval', help='periodic interval (seconds) to export metrics continuously')
+@click.pass_context
+def ns_metric_export(ctx, ns, vnf, vdu, metric, interval):
+    '''exports a metric to the internal OSM bus, which can be read by other apps
+    '''
+    metric_data = {}
+    metric_data['ns_name'] = ns
+    metric_data['vnf_member_index'] = vnf
+    metric_data['vdu_name'] = vdu
+    metric_data['metric_name'] = metric
+    metric_data['collection_unit'] = 'WEEK'
+    metric_data['collection_period'] = 1
+    try:
+        check_client_version(ctx.obj, ctx.command.name)
+        if not interval:
+            ctx.obj.ns.export_metric(metric_data)
+        else:
+            i = 1
+            while True:
+                ctx.obj.ns.export_metric(metric_data)
+                time.sleep(int(interval))
+                i+=1
+    except ClientException as inst:
+        print(inst.message)
+        exit(1)
+
+
+####################
 # Other operations
 ####################
 
