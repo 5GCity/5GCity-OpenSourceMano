@@ -554,7 +554,8 @@ function generate_docker_images() {
     docker build ${LWTEMPDIR}/NBI -f ${LWTEMPDIR}/NBI/Dockerfile.local -t osm/nbi || ! echo "cannot build NBI docker image" >&2
     git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/RO
     docker build ${LWTEMPDIR}/RO -f ${LWTEMPDIR}/RO/docker/Dockerfile-local -t osm/ro || ! echo "cannot build RO docker image" >&2
-    docker build ${LWTEMPDIR}/RO/lcm -t osm/lcm || ! echo "cannot build LCM docker image" >&2
+    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/LCM
+    docker build ${LWTEMPDIR}/LCM -f ${LWTEMPDIR}/LCM/Dockerfile.local -t osm/lcm || ! echo "cannot build LCM docker image" >&2
 #    git -C ${LWTEMPDIR} clone https://github.com/superfluidity/osm-light-ui.git
 #    docker build ${LWTEMPDIR}/osm-light-ui -t osm/light-ui -f ${LWTEMPDIR}/osm-light-ui/code/docker/Dockerfile
     git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/LW-UI
