@@ -28,14 +28,13 @@
   "ack_details":
   {
     "alarm_uuid": { "type": "string" },
-    "resource_uuid": { "type": "string" },
-    "tenant_uuid": { "type": "string" }
+    "ns_id": { "type": "string"},
+    "vnf_member_index": { "type": "integer"},
+    "vdu_name": { "type": "string"}
   },
   "required": [ "schema_version",
                 "schema_type",
-                "vim_type",
-                "vim_uuid",
                 "alarm_uuid",
-                "resource_uuid",
-                "tenant_uuid" ]
+                "ns_id",
+                "vnf_member_index" ]
 }

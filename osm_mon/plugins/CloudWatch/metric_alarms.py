@@ -244,7 +244,7 @@ class MetricAlarm():
 
             alarm_info['schema_version'] = str(list_info['schema_version'])
             alarm_info['schema_type'] = 'list_alarm_response'    
-            alarm_info['list_alarm_resp'] = alarm_list
+            alarm_info['list_alarm_response'] = alarm_list
 
             return alarm_info                  
         except Exception as e:

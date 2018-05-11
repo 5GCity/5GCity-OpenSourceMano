@@ -256,7 +256,7 @@ class TestPluginReceiver(unittest.TestCase):
         msg.topic = "metric_request"
         msg.key = "create_metric_request"
 
-        msg.value = json.dumps({"metric_create":"metric_details"})
+        msg.value = json.dumps({"metric_create_request":"metric_details"})
 
         # set the return value
         m_verify_metric.return_value = True
@@ -281,7 +281,7 @@ class TestPluginReceiver(unittest.TestCase):
         msg.topic = "metric_request"
         msg.key = "update_metric_request"
 
-        msg.value = json.dumps({"metric_create":"metric_details"})
+        msg.value = json.dumps({"metric_create_request":"metric_details"})
 
         # set the return value
         m_verify_metric.return_value = True
@@ -594,7 +594,7 @@ class TestPluginReceiver(unittest.TestCase):
 
         # Mock metric_info
         metric_info = {'vim_type' : 'VMware','correlation_id': 'e14b203c',
-                       'metric_create':{
+                       'metric_create_request':{
                                         'resource_uuid': '6486e69',
                                         'metric_name': 'CPU_UTILIZATION',
                                         'metric_unit': '%'
@@ -617,7 +617,7 @@ class TestPluginReceiver(unittest.TestCase):
 
         # Mock metric_info
         metric_info = {'vim_type' : 'VMware','correlation_id': 'e14b203c',
-                       'metric_create':{
+                       'metric_create_request':{
                                         'resource_uuid': '6486e69',
                                         'metric_name': 'CPU_UTILIZATION',
                                         'metric_unit': '%'

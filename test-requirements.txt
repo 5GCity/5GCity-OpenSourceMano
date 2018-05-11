@@ -19,18 +19,5 @@
 # For those usages not covered by the Apache License, Version 2.0 please
 # contact: helena.mcgough@intel.com or adrian.hoban@intel.com
 ##
-
-hacking>=0.10.0,<0.11
-
 flake8<3.0
 mock
-oslosphinx>=2.5.0 # Apache-2.0
-oslotest>=1.10.0 # Apache-2.0
-os-testr
-testrepository>=0.0.18
-pylint
-python-subunit>=0.0.18
-pytest
-testscenarios>=0.4
-testtools>=1.4.0
-kafka

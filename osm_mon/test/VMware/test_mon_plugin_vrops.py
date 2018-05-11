@@ -1036,6 +1036,7 @@ class TestMonPlugin(unittest.TestCase):
 
 
     @mock.patch.object(monPlugin.requests, 'get')
+    # @unittest.skip("NEEDS FIX")
     def test_get_alarm_defination_by_name_no_valid_alarm_found(self, m_get):
         """Test get_alarm_defination_by_name: With no valid alarm found in returned list"""
 

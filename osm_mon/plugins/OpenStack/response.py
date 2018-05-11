@@ -68,7 +68,7 @@ class OpenStack_Response(object):
         alarm_list_resp = {"schema_version": schema_version,
                            "schema_type": "list_alarm_response",
                            "correlation_id": kwargs['cor_id'],
-                           "list_alarm_resp": kwargs['alarm_list']}
+                           "list_alarm_response": kwargs['alarm_list']}
         return json.dumps(alarm_list_resp)
 
     def create_alarm_response(self, **kwargs):

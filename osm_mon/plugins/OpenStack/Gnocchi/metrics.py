@@ -75,7 +75,7 @@ class Metrics(object):
         # Initializer a producer to send responses back to SO
         self._producer = KafkaProducer("metric_response")
 
-    def metric_calls(self, message):
+    def metric_calls(self, message, vim_uuid):
         """Consume info from the message bus to manage metric requests."""
         try:
             values = json.loads(message.value)
@@ -83,16 +83,16 @@ class Metrics(object):
             values = yaml.safe_load(message.value)
         log.info("OpenStack metric action required.")
 
-        auth_token = Common.get_auth_token(values['vim_uuid'])
+        auth_token = Common.get_auth_token(vim_uuid)
 
-        endpoint = Common.get_endpoint("metric", values['vim_uuid'])
+        endpoint = Common.get_endpoint("metric", vim_uuid)
 
         if 'metric_name' in values and values['metric_name'] not in METRIC_MAPPINGS.keys():
             raise ValueError('Metric ' + values['metric_name'] + ' is not supported.')
 
         if message.key == "create_metric_request":
             # Configure metric
-            metric_details = values['metric_create']
+            metric_details = values['metric_create_request']
             metric_id, resource_id, status = self.configure_metric(
                 endpoint, auth_token, metric_details)
 
@@ -100,7 +100,7 @@ class Metrics(object):
             try:
                 resp_message = self._response.generate_response(
                     'create_metric_response', status=status,
-                    cor_id=values['correlation_id'],
+                    cor_id=metric_details['correlation_id'],
                     metric_id=metric_id, r_id=resource_id)
                 log.info("Response messages: %s", resp_message)
                 self._producer.create_metrics_resp(
@@ -156,7 +156,7 @@ class Metrics(object):
             # Log and send a response back to this effect
             log.warning("Gnocchi doesn't support metric configuration\
                       updates.")
-            req_details = values['metric_create']
+            req_details = values['metric_create_request']
             metric_name = req_details['metric_name']
             resource_id = req_details['resource_uuid']
             metric_id = self.get_metric_id(
@@ -166,13 +166,13 @@ class Metrics(object):
             try:
                 resp_message = self._response.generate_response(
                     'update_metric_response', status=False,
-                    cor_id=values['correlation_id'],
+                    cor_id=req_details['correlation_id'],
                     r_id=resource_id, m_id=metric_id)
                 log.info("Response message: %s", resp_message)
                 self._producer.update_metric_response(
                     'update_metric_response', resp_message)
             except Exception as exc:
-                log.warning("Failed to send an update response:%s", exc)
+                log.exception("Failed to send an update response:")
 
         elif message.key == "list_metric_request":
             list_details = values['metrics_list_request']
@@ -223,7 +223,7 @@ class Metrics(object):
                                          'unit': values['metric_unit']}}
                 result = Common.perform_request(
                     res_url, auth_token, req_type="post",
-                    payload=json.dumps(payload))
+                    payload=json.dumps(payload, sort_keys=True))
                 # Get id of newly created metric
                 for row in json.loads(result.text):
                     if row['name'] == metric_name:
@@ -243,7 +243,7 @@ class Metrics(object):
 
                     resource_payload = json.dumps({'id': resource_id,
                                                    'metrics': {
-                                                       metric_name: metric}})
+                                                       metric_name: metric}}, sort_keys=True)
 
                     resource = Common.perform_request(
                         url, auth_token, req_type="post",

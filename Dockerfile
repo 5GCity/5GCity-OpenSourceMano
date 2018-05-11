@@ -24,20 +24,7 @@
 
 FROM ubuntu:16.04
 RUN  apt-get update && \
-  DEBIAN_FRONTEND=noninteractive apt-get --yes install git tox make python python-pip debhelper && \
-  DEBIAN_FRONTEND=noninteractive apt-get --yes install wget python-dev python-software-properties python-stdeb&& \
-  DEBIAN_FRONTEND=noninteractive pip install -U pip && \
-  DEBIAN_FRONTENT=noninteractive pip install -U requests logutils jsonschema lxml kafka mock && \
-  DEBIAN_FRONTEND=noninteractive pip install -U setuptools setuptools-version-command stdeb jsmin && \
-  DEBIAN_FRONTEND=noninteractive pip install -U six pyvcloud==19.1.1 bottle cherrypy pyopenssl && \
+  DEBIAN_FRONTEND=noninteractive apt-get --yes install git tox make python python-pip python3 python3-pip debhelper && \
+  DEBIAN_FRONTEND=noninteractive apt-get --yes install wget python-dev python-software-properties python-stdeb && \
   DEBIAN_FRONTEND=noninteractive apt-get --yes install default-jre libmysqlclient-dev && \
-  DEBIAN_FRONTEND=noninteractive apt-get --yes install libmysqlclient-dev libxml2 && \
-  DEBIAN_FRONTEND=noninteractive pip install -U MySQL-python \
-                                                python-openstackclient \
-                                                python-keystoneclient \
-                                                aodhclient \
-                                                gnocchiclient \
-                                                boto==2.48 \
-                                                python-cloudwatchlogs-logging \
-                                                py-cloudwatch \
-                                                peewee==3.1.*
+  DEBIAN_FRONTEND=noninteractive apt-get --yes install libmysqlclient-dev libxml2 python3-all

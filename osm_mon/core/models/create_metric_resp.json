@@ -22,12 +22,9 @@
 {
   "schema_version": { "type": "string" },
   "schema_type": { "type": "string" },
-  "correlation_id": { "type": "integer" },
-  "vim_uuid": { "type": "string" },
   "metric_create_response":
   {
-    "metric_uuid": { "type": "string" },
-    "resource_uuid": { "type": "string" },
+    "correlation_id": { "type": "integer" },
     "status": { "type": "boolean" }
   },
   "required": [ "schema_type",

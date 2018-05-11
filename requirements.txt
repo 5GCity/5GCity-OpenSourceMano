@@ -18,7 +18,6 @@
 
 # For those usages not covered by the Apache License, Version 2.0 please
 # contact: prithiv.mohan@intel.com or adrian.hoban@intel.com
-stdeb==0.8.*
 kafka==1.3.*
 lxml==4.2.*
 requests==2.18.*

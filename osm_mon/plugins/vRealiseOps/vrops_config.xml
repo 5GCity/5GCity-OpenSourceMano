@@ -1,25 +1,3 @@
-<!--
-##
-# Copyright 2016-2017 VMware Inc.
-# This file is part of ETSI OSM
-# All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may
-# not use this file except in compliance with the License. You may obtain
-# a copy of the License at
-#
-#         http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-# License for the specific language governing permissions and limitations
-# under the License.
-#
-# For those usages not covered by the Apache License, Version 2.0 please
-# contact:  osslegalrouting@vmware.com
-##
--->
 <alarmsDefaultConfig>
     <Average_Memory_Usage_Above_Threshold>
         <vrops_alarm>Avg_Mem_Usage_Above_Thr</vrops_alarm>
@@ -147,22 +125,20 @@
     </PACKETS_SENT>
     <Access_Config>
         <vrops_site>https://192.169.241.123</vrops_site>
-        <vrops_user>Admin</vrops_user>
-        <vrops_password>VMware1!</vrops_password>
-        <vcloud-site>https://mano-vcd-1.corp.local</vcloud-site>
-        <admin_username>administrator</admin_username>
-        <admin_password>VMware1!</admin_password>
+        <vrops_user>admin</vrops_user>
+        <vrops_password>vmware</vrops_password>
+        <vcloud-site>https://192.169.241.15</vcloud-site>
+        <admin_username>admin</admin_username>
+        <admin_password>vmware</admin_password>
         <nsx_manager>https://192.169.241.104</nsx_manager>
         <nsx_user>admin</nsx_user>
         <nsx_password>VMware1!</nsx_password>
-        <vcenter_ip>192.169.241.103</vcenter_ip>
+        <vcenter_ip>192.169.241.13</vcenter_ip>
         <vcenter_port>443</vcenter_port>
-        <vcenter_user>administrator@vsphere.local</vcenter_user>
-        <vcenter_password>VMware1!</vcenter_password>
-        <vim_tenant_name>Org2-VDC-PVDC1</vim_tenant_name>
+        <vcenter_user>admin</vcenter_user>
+        <vcenter_password>vmware</vcenter_password>
+        <vim_tenant_name>Org2</vim_tenant_name>
         <orgname>Org2</orgname>
-        <tenant_id>Org2-VDC-PVDC1</tenant_id>
+        <tenant_id>Org2</tenant_id>
     </Access_Config>
 </alarmsDefaultConfig>
-
-

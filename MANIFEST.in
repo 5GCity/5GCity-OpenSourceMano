@@ -21,7 +21,6 @@
 
 include requirements.txt
 include README.rst
-include kafkad
-recursive-include osm_mon *
+recursive-include osm_mon *.py
 recursive-include devops-stages *
-recursive-include test *
+recursive-include test *.py

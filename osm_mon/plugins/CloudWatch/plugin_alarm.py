@@ -107,7 +107,7 @@ class plugin_alarms():
                     ack_details = self.get_ack_details(alarm_info)
                     payload = json.dumps(ack_details)                                  
                     file = open('../../core/models/notify_alarm.json','wb').write((payload))
-                    self.producer.notify_alarm(key='notify_alarm',message=payload,topic = 'alarm_response')
+                    self.producer.notify_alarm(key='notify_alarm',message=payload)
                     log.info("Acknowledge sent: %s", ack_details)
 
                 else:
@@ -127,13 +127,13 @@ class plugin_alarms():
                     if update_resp == None:                                    
                         payload = json.dumps(update_resp)                                   
                         file = open('../../core/models/update_alarm_resp.json','wb').write((payload))
-                        self.producer.update_alarm_response(key='update_alarm_response',message=payload,topic = 'alarm_response')
+                        self.producer.update_alarm_response(key='update_alarm_response',message=payload)
                         log.debug("Alarm Already exists")
 
                     else: 
                         payload = json.dumps(update_resp)                                   
                         file = open('../../core/models/update_alarm_resp.json','wb').write((payload))
-                        self.producer.update_alarm_response(key='update_alarm_response',message=payload,topic = 'alarm_response')
+                        self.producer.update_alarm_response(key='update_alarm_response',message=payload)
                         log.info("Alarm Updated with alarm info: %s", update_resp)                           
 
                 else:
@@ -146,7 +146,7 @@ class plugin_alarms():
                 del_resp = self.delete_alarm(del_info)
                 payload = json.dumps(del_resp)                                   
                 file = open('../../core/models/delete_alarm_resp.json','wb').write((payload))
-                self.producer.delete_alarm_response(key='delete_alarm_response',message=payload,topic = 'alarm_response')
+                self.producer.delete_alarm_response(key='delete_alarm_response',message=payload)
                 log.info("Alarm Deleted with alarm info: %s", del_resp)
 
        
@@ -158,7 +158,7 @@ class plugin_alarms():
                     list_resp = self.get_alarms_list(alarm_info)#['alarm_names']
                     payload = json.dumps(list_resp)                                                                 
                     file = open('../../core/models/list_alarm_resp.json','wb').write((payload))
-                    self.producer.list_alarm_response(key='list_alarm_response',message=payload,topic = 'alarm_response')
+                    self.producer.list_alarm_response(key='list_alarm_response',message=payload)
 
                 else:
                     log.error("Resource ID is Incorrect")             

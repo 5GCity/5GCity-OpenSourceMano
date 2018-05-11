@@ -36,17 +36,6 @@ from osm_mon.plugins.OpenStack.response import OpenStack_Response
 
 log = logging.getLogger(__name__)
 
-ALARM_NAMES = {
-    "average_memory_usage_above_threshold": "average_memory_utilization",
-    "disk_read_ops": "disk_read_ops",
-    "disk_write_ops": "disk_write_ops",
-    "disk_read_bytes": "disk_read_bytes",
-    "disk_write_bytes": "disk_write_bytes",
-    "net_packets_dropped": "packets_dropped",
-    "packets_in_above_threshold": "packets_received",
-    "packets_out_above_threshold": "packets_sent",
-    "cpu_utilization_above_threshold": "cpu_utilization"}
-
 METRIC_MAPPINGS = {
     "average_memory_utilization": "memory.percent",
     "disk_read_ops": "disk.read.requests",
@@ -126,7 +115,7 @@ class Alarming(object):
             log.warning("Failed to create the alarm: %s", exc)
         return None, False
 
-    def alarming(self, message):
+    def alarming(self, message, vim_uuid):
         """Consume info from the message bus to manage alarms."""
         try:
             values = json.loads(message.value)
@@ -134,7 +123,6 @@ class Alarming(object):
             values = yaml.safe_load(message.value)
 
         log.info("OpenStack alarm action required.")
-        vim_uuid = values['vim_uuid']
 
         auth_token = Common.get_auth_token(vim_uuid)
 
@@ -152,11 +140,10 @@ class Alarming(object):
                 alarm_endpoint, metric_endpoint, auth_token, alarm_details, vim_config)
 
             # Generate a valid response message, send via producer
+            if alarm_status is True:
+                log.info("Alarm successfully created")
+                self._database_manager.save_alarm(alarm_id, vim_uuid)
             try:
-                if alarm_status is True:
-                    log.info("Alarm successfully created")
-                    self._database_manager.save_alarm(alarm_id, vim_uuid)
-
                 resp_message = self._response.generate_response(
                     'create_alarm_response', status=alarm_status,
                     alarm_id=alarm_id,
@@ -276,9 +263,6 @@ class Alarming(object):
         # Checking what fields are specified for a list request
         try:
             name = list_details['alarm_name'].lower()
-            if name not in ALARM_NAMES.keys():
-                log.warning("This alarm is not supported, won't be used!")
-                name = None
         except KeyError as exc:
             log.info("Alarm name isn't specified.")
             name = None
@@ -369,8 +353,7 @@ class Alarming(object):
             resource_id = rule['resource_id']
             metric_name = [key for key, value in six.iteritems(METRIC_MAPPINGS) if value == rule['metric']][0]
         except Exception as exc:
-            log.warning("Failed to retrieve existing alarm info: %s.\
-                     Can only update OSM alarms.", exc)
+            log.exception("Failed to retrieve existing alarm info. Can only update OSM alarms.")
             return None, False
 
         # Generates and check payload configuration for alarm update
@@ -387,8 +370,7 @@ class Alarming(object):
 
                 return json.loads(update_alarm.text)['alarm_id'], True
             except Exception as exc:
-                log.warning("Alarm update could not be performed: %s", exc)
-                return None, False
+                log.exception("Alarm update could not be performed: ")
         return None, False
 
     def check_payload(self, values, metric_name, resource_id,

@@ -148,7 +148,7 @@ class NotifierHandler(BaseHTTPRequestHandler):
                         sev=values['severity'], date=a_date,
                         state=values['current'], vim_type="OpenStack")
                     self._producer.notify_alarm(
-                        'notify_alarm', resp_message, 'alarm_response')
+                        'notify_alarm', resp_message)
                 except Exception:
                     pass
 
@@ -278,4 +278,4 @@ class TestNotifier(unittest.TestCase):
         self.handler.notify_alarm(json.loads(post_data))
 
         notify.assert_called_with(
-            "notify_alarm", valid_notify_resp, "alarm_response")
+            "notify_alarm", valid_notify_resp)

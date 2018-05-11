@@ -34,6 +34,8 @@ import traceback
 
 
 #Core producer
+import six
+
 from osm_mon.plugins.vRealiseOps.mon_plugin_vrops import MonPlugin
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..'))
@@ -122,18 +124,18 @@ class PluginReceiver():
                     self.publish_metrics_data_status(metrics_data)
                 elif message.key == "create_metric_request":
                     metric_info = json.loads(message.value)
-                    metric_status = self.verify_metric(metric_info['metric_create'])
+                    metric_status = self.verify_metric(metric_info['metric_create_request'])
                     #Publish message using producer
                     self.publish_create_metric_response(metric_info, metric_status)
                 elif message.key == "update_metric_request":
                     metric_info = json.loads(message.value)
-                    metric_status = self.verify_metric(metric_info['metric_create'])
+                    metric_status = self.verify_metric(metric_info['metric_create_request'])
                     #Publish message using producer
                     self.publish_update_metric_response(metric_info, metric_status)
                 elif message.key == "delete_metric_request":
                     metric_info = json.loads(message.value)
                     #Deleting Metric Data is not allowed. Publish status as False
-                    self.logger.warn("Deleting Metric is not allowed: {}".format(metric_info['metric_name']))
+                    self.logger.warning("Deleting Metric is not allowed: {}".format(metric_info['metric_name']))
                     #Publish message using producer
                     self.publish_delete_metric_response(metric_info)
             elif message.topic == 'access_credentials':
@@ -253,7 +255,7 @@ class PluginReceiver():
                          "metric_create_response":
                             {
                              "metric_uuid":'0',
-                             "resource_uuid":metric_info['metric_create']['resource_uuid'],
+                             "resource_uuid":metric_info['metric_create_request']['resource_uuid'],
                              "status":metric_status
                             }
                        }
@@ -273,7 +275,7 @@ class PluginReceiver():
                         "metric_update_response":
                             {
                              "metric_uuid":'0',
-                             "resource_uuid":metric_info['metric_create']['resource_uuid'],
+                             "resource_uuid":metric_info['metric_create_request']['resource_uuid'],
                              "status":metric_status
                             }
                        }
@@ -287,7 +289,7 @@ class PluginReceiver():
         """
         topic = 'metric_response'
         msg_key = 'delete_metric_response'
-        if metric_info.has_key('tenant_uuid') and metric_info['tenant_uuid'] is not None:
+        if 'tenant_uuid' in metric_info and metric_info['tenant_uuid'] is not None:
             tenant_uuid = metric_info['tenant_uuid']
         else:
             tenant_uuid = None
@@ -322,7 +324,7 @@ class PluginReceiver():
         response_msg = {"schema_version":schema_version,
                         "schema_type":"list_alarm_response",
                         "correlation_id":list_alarm_input['alarm_list_request']['correlation_id'],
-                        "list_alarm_resp":triggered_alarm_list
+                        "list_alarm_response":triggered_alarm_list
                        }
         self.logger.info("Publishing response:\nTopic={}\nKey={}\nValue={}"\
                 .format(topic, msg_key, response_msg))
@@ -357,7 +359,7 @@ class PluginReceiver():
             for config in root:
                 if config.tag == 'Access_Config':
                     for param in config:
-                        for key,val in access_info.iteritems():
+                        for key,val in six.iteritems(access_info):
                             if param.tag == key:
                                 #print param.tag, val
                                 param.text = val
@@ -365,7 +367,7 @@ class PluginReceiver():
             tree.write(CONFIG_FILE_PATH)
             wr_status = True
         except Exception as exp:
-            self.logger.warn("Failed to update Access Config Parameters: {}".format(exp))
+            self.logger.warning("Failed to update Access Config Parameters: {}".format(exp))
 
         return wr_status
 

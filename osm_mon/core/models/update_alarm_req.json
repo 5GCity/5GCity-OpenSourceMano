@@ -22,23 +22,23 @@
 {
   "schema_version": { "type": "string" },
   "schema_type": { "type": "string" },
-  "vim_type": { "type": "string" },
-  "vim_uuid": { "type": "string" },
   "alarm_update_request":
-  {
+{
     "correlation_id": { "type": "integer" },
+    "vim_uuid": { "type": "string" },
     "alarm_uuid": { "type": "string" },
-    "metric_uuid": { "type": "string" },
-    "vdu_id": { "type": "string"},
+    "metric_name": { "type": "string" },
+    "ns_id": { "type": "string"},
+    "vnf_member_index": { "type": "integer"},
+    "vdu_name": { "type": "string"},
     "description": { "type": "string" },
     "severity": { "type": "string" },
     "operation": { "type": "string" },
     "threshold_value": { "type": "string" },
-    "unit": { "type": "string" },
     "statistic": { "type": "string" }
   },
   "required": [ "schema_version",
-                "scema_type",
+                "schema_type",
                 "vim_type",
                 "vim_uuid",
                 "correlation_id",

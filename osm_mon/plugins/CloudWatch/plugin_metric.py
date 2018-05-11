@@ -84,8 +84,8 @@ class plugin_metrics():
                     log.info("Action required against: %s" % (message.topic))
 
                     if message.key == "create_metric_request":                            
-                        if self.check_resource(metric_info['metric_create']['resource_uuid']) == True:
-                            metric_resp = self.create_metric_request(metric_info['metric_create']) #alarm_info = message.value
+                        if self.check_resource(metric_info['metric_create_request']['resource_uuid']) == True:
+                            metric_resp = self.create_metric_request(metric_info['metric_create_request']) #alarm_info = message.value
                             metric_response['schema_version'] = metric_info['schema_version']
                             metric_response['schema_type']    = "create_metric_response"
                             metric_response['metric_create_response'] = metric_resp
@@ -97,8 +97,8 @@ class plugin_metrics():
                             return metric_response
                             
                     elif message.key == "update_metric_request":
-                        if self.check_resource(metric_info['metric_create']['resource_uuid']) == True:
-                            update_resp = self.update_metric_request(metric_info['metric_create'])
+                        if self.check_resource(metric_info['metric_create_request']['resource_uuid']) == True:
+                            update_resp = self.update_metric_request(metric_info['metric_create_request'])
                             metric_response['schema_version'] = metric_info['schema_version']
                             metric_response['schema_type'] = "update_metric_response"
                             metric_response['metric_update_response'] = update_resp

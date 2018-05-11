@@ -22,30 +22,23 @@
 {
   "schema_version": { "type": "string" },
   "schema_type": { "type": "string" },
-  "definitions":
+  "notify_details":
   {
-    "notify_details":
-    {
-      "alarm_uuid": { "type": "string" },
-      "resource_uuid": { "type": "string" },
-      "vdu_id": { "type": "string"},
-      "description": { "type": "string" },
-      "vim_type": { "type": "string" },
-      "vim_uuid": { "type": "string" },
-      "severity": { "type" : "string" },
-      "status": { "type": "string" },
-      "start_date": { "type": "string" },
-      "update_date": { "type": "string" },
-      "cancel_date": { "type": "string" }
-    },
-    "required": [ "schema_version",
-                  "schema_type",
-                  "alarm_uuid",
-                  "resource_uuid",
-                  "vim_type",
-                  "vim_uuid",
-                  "severity",
-                  "status",
-                  "start_date" ]
-  }
+    "alarm_uuid": { "type": "string" },
+    "description": { "type": "string" },
+    "severity": { "type" : "string" },
+    "status": { "type": "string" },
+    "start_date": { "type": "string" },
+    "update_date": { "type": "string" },
+    "cancel_date": { "type": "string" }
+  },
+  "required": [ "schema_version",
+                "schema_type",
+                "alarm_uuid",
+                "resource_uuid",
+                "vim_type",
+                "vim_uuid",
+                "severity",
+                "status",
+                "start_date" ]
 }

@@ -23,5 +23,7 @@
 #__date__   = "14/Sep/2017"
 
 #!/bin/bash
-make clean all BRANCH=master
-make package
+rm -rf deb_dist
+rm -rf dist
+rm -rf osm_mon.egg-info
+tox -e build

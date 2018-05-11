@@ -95,6 +95,8 @@ class TestAlarming(unittest.TestCase):
         check_metric.return_value = "my_metric_id"
         check_pay.return_value = "my_payload"
 
+        perf_req.return_value = type('obj', (object,), {'text': '{"alarm_id":"1"}'})
+
         self.alarming.configure_alarm(alarm_endpoint, metric_endpoint, auth_token, values, {})
         perf_req.assert_called_with(
             "alarm_endpoint/v2/alarms/", auth_token,
@@ -152,6 +154,8 @@ class TestAlarming(unittest.TestCase):
         """Test update alarm with invalid get response."""
         values = {"alarm_uuid": "my_alarm_id"}
 
+        perf_req.return_value = type('obj', (object,), {'invalid_prop': 'Invalid response'})
+
         self.alarming.update_alarm(alarm_endpoint, auth_token, values, {})
 
         perf_req.assert_called_with(mock.ANY, auth_token, req_type="get")
@@ -164,8 +168,8 @@ class TestAlarming(unittest.TestCase):
         resp = Response({"name": "my_alarm",
                          "state": "alarm",
                          "gnocchi_resources_threshold_rule":
-                         {"resource_id": "my_resource_id",
-                          "metric": "my_metric"}})
+                             {"resource_id": "my_resource_id",
+                              "metric": "my_metric"}})
         perf_req.return_value = resp
         check_pay.return_value = None
         values = {"alarm_uuid": "my_alarm_id"}
@@ -179,11 +183,12 @@ class TestAlarming(unittest.TestCase):
     @mock.patch.object(Common, "perform_request")
     def test_update_alarm_valid(self, perf_req, check_pay):
         """Test valid update alarm request."""
-        resp = Response({"name": "my_alarm",
+        resp = Response({"alarm_id": "1",
+                         "name": "my_alarm",
                          "state": "alarm",
                          "gnocchi_resources_threshold_rule":
-                         {"resource_id": "my_resource_id",
-                          "metric": "disk.write.requests"}})
+                             {"resource_id": "my_resource_id",
+                              "metric": "disk.write.requests"}})
         perf_req.return_value = resp
         values = {"alarm_uuid": "my_alarm_id"}
 
@@ -214,13 +219,13 @@ class TestAlarming(unittest.TestCase):
         self.assertDictEqual(
             json.loads(payload), {"name": "alarm_name",
                                   "gnocchi_resources_threshold_rule":
-                                  {"resource_id": "r_id",
-                                   "metric": "disk.write.requests",
-                                   "comparison_operator": "gt",
-                                   "aggregation_method": "count",
-                                   "threshold": 12,
-                                   "granularity": 300,
-                                   "resource_type": "generic"},
+                                      {"resource_id": "r_id",
+                                       "metric": "disk.write.requests",
+                                       "comparison_operator": "gt",
+                                       "aggregation_method": "count",
+                                       "threshold": 12,
+                                       "granularity": 300,
+                                       "resource_type": "generic"},
                                   "severity": "low",
                                   "state": "ok",
                                   "type": "gnocchi_resources_threshold",
@@ -243,13 +248,13 @@ class TestAlarming(unittest.TestCase):
         self.assertEqual(
             json.loads(payload), {"name": "alarm_name",
                                   "gnocchi_resources_threshold_rule":
-                                  {"resource_id": "r_id",
-                                   "metric": "disk.write.requests",
-                                   "comparison_operator": "gt",
-                                   "aggregation_method": "count",
-                                   "threshold": 12,
-                                   "granularity": 300,
-                                   "resource_type": "generic"},
+                                      {"resource_id": "r_id",
+                                       "metric": "disk.write.requests",
+                                       "comparison_operator": "gt",
+                                       "aggregation_method": "count",
+                                       "threshold": 12,
+                                       "granularity": 300,
+                                       "resource_type": "generic"},
                                   "severity": "low",
                                   "state": "alarm",
                                   "type": "gnocchi_resources_threshold",
@@ -266,6 +271,8 @@ class TestAlarming(unittest.TestCase):
     @mock.patch.object(Common, "perform_request")
     def test_get_alarm_state(self, perf_req):
         """Test the get alarm state function."""
+        perf_req.return_value = type('obj', (object,), {'text': '{"alarm_id":"1"}'})
+
         self.alarming.get_alarm_state(alarm_endpoint, auth_token, "alarm_id")
 
         perf_req.assert_called_with(

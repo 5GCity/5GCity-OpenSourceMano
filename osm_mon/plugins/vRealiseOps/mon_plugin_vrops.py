@@ -28,6 +28,7 @@ Monitoring metrics & creating Alarm definitions in vROPs
 import requests
 import logging
 
+import six
 from pyvcloud.vcd.client import BasicLoginCredentials
 from pyvcloud.vcd.client import Client
 API_VERSION = '5.9'
@@ -41,8 +42,8 @@ import os
 import datetime
 from socket import getfqdn
 
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
-requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 OPERATION_MAPPING = {'GE':'GT_EQ', 'LE':'LT_EQ', 'GT':'GT', 'LT':'LT', 'EQ':'EQ'}
 severity_mano2vrops = {'WARNING':'WARNING', 'MINOR':'WARNING', 'MAJOR':"IMMEDIATE",\
@@ -129,18 +130,18 @@ class MonPlugin():
         #1) get alarm & metrics parameters from plugin specific file
         def_a_params = self.get_default_Params(config_dict['alarm_name'])
         if not def_a_params:
-            self.logger.warn("Alarm not supported: {}".format(config_dict['alarm_name']))
+            self.logger.warning("Alarm not supported: {}".format(config_dict['alarm_name']))
             return None
         metric_key_params = self.get_default_Params(config_dict['metric_name'])
         if not metric_key_params:
-            self.logger.warn("Metric not supported: {}".format(config_dict['metric_name']))
+            self.logger.warning("Metric not supported: {}".format(config_dict['metric_name']))
             return None
 
         #1.2) Check if alarm definition already exists
         vrops_alarm_name = def_a_params['vrops_alarm']+ '-' + config_dict['resource_uuid']
         alert_def_list = self.get_alarm_defination_by_name(vrops_alarm_name)
         if alert_def_list:
-            self.logger.warn("Alarm already exists: {}. Try updating by update_alarm_request"\
+            self.logger.warning("Alarm already exists: {}. Try updating by update_alarm_request"\
                             .format(vrops_alarm_name))
             return None
 
@@ -158,13 +159,13 @@ class MonPlugin():
         if symptom_uuid is not None:
             self.logger.info("Symptom defined: {} with ID: {}".format(symptom_params['symptom_name'],symptom_uuid))
         else:
-            self.logger.warn("Failed to create Symptom: {}".format(symptom_params['symptom_name']))
+            self.logger.warning("Failed to create Symptom: {}".format(symptom_params['symptom_name']))
             return None
         #3) create alert definition
         #To Do - Get type & subtypes for all 5 alarms
         alarm_params = {'name':vrops_alarm_name,
                         'description':config_dict['description']\
-                        if config_dict.has_key('description') and config_dict['description'] is not None else config_dict['alarm_name'],
+                        if 'description' in config_dict and config_dict['description'] is not None else config_dict['alarm_name'],
                         'adapterKindKey':def_a_params['adapter_kind'],
                         'resourceKindKey':def_a_params['resource_kind'],
                         'waitCycles':1, 'cancelCycles':1,
@@ -175,7 +176,7 @@ class MonPlugin():
 
         alarm_def = self.create_alarm_definition(alarm_params)
         if alarm_def is None:
-            self.logger.warn("Failed to create Alert: {}".format(alarm_params['name']))
+            self.logger.warning("Failed to create Alert: {}".format(alarm_params['name']))
             return None
 
         self.logger.info("Alarm defined: {} with ID: {}".format(alarm_params['name'],alarm_def))
@@ -183,13 +184,13 @@ class MonPlugin():
         #4) Find vm_moref_id from vApp uuid in vCD
         vm_moref_id = self.get_vm_moref_id(config_dict['resource_uuid'])
         if vm_moref_id is None:
-            self.logger.warn("Failed to find vm morefid for vApp in vCD: {}".format(config_dict['resource_uuid']))
+            self.logger.warning("Failed to find vm morefid for vApp in vCD: {}".format(config_dict['resource_uuid']))
             return None
 
         #5) Based on vm_moref_id, find VM's corresponding resource_id in vROPs to set notification
         resource_id = self.get_vm_resource_id(vm_moref_id)
         if resource_id is None:
-            self.logger.warn("Failed to find resource in vROPs: {}".format(config_dict['resource_uuid']))
+            self.logger.warning("Failed to find resource in vROPs: {}".format(config_dict['resource_uuid']))
             return None
 
         #6) Configure alarm notification for a particular VM using it's resource_id
@@ -285,7 +286,7 @@ class MonPlugin():
                                  data=json.dumps(data))
 
             if resp.status_code != 201:
-                self.logger.warn("Failed to create Symptom definition: {}, response {}"\
+                self.logger.warning("Failed to create Symptom definition: {}, response {}"\
                         .format(symptom_params['symptom_name'], resp.content))
                 return None
 
@@ -296,7 +297,7 @@ class MonPlugin():
             return symptom_id
 
         except Exception as exp:
-            self.logger.warn("Error creating symptom definition : {}\n{}"\
+            self.logger.warning("Error creating symptom definition : {}\n{}"\
             .format(exp, traceback.format_exc()))
 
 
@@ -359,7 +360,7 @@ class MonPlugin():
                                  data=json.dumps(data))
 
             if resp.status_code != 201:
-                self.logger.warn("Failed to create Alarm definition: {}, response {}"\
+                self.logger.warning("Failed to create Alarm definition: {}, response {}"\
                         .format(alarm_params['name'], resp.content))
                 return None
 
@@ -370,7 +371,7 @@ class MonPlugin():
             return alarm_uuid
 
         except Exception as exp:
-            self.logger.warn("Error creating alarm definition : {}\n{}".format(exp, traceback.format_exc()))
+            self.logger.warning("Error creating alarm definition : {}\n{}".format(exp, traceback.format_exc()))
 
 
     def configure_rest_plugin(self):
@@ -427,7 +428,7 @@ class MonPlugin():
                                  data=json.dumps(data))
 
             if resp.status_code is not 201:
-                self.logger.warn("Failed to create REST Plugin: {} for url: {}, \nresponse code: {},"\
+                self.logger.warning("Failed to create REST Plugin: {} for url: {}, \nresponse code: {},"\
                             "\nresponse content: {}".format(plugin_name, webhook_url,\
                             resp.status_code, resp.content))
                 return None
@@ -437,13 +438,13 @@ class MonPlugin():
                 plugin_id = resp_data['pluginId']
 
             if plugin_id is None:
-                self.logger.warn("Failed to get REST Plugin ID for {}, url: {}".format(plugin_name, webhook_url))
+                self.logger.warning("Failed to get REST Plugin ID for {}, url: {}".format(plugin_name, webhook_url))
                 return None
             else:
                 self.logger.info("Created REST Plugin: {} with ID : {} for url: {}".format(plugin_name, plugin_id, webhook_url))
                 status = self.enable_rest_plugin(plugin_id, plugin_name)
                 if status is False:
-                    self.logger.warn("Failed to enable created REST Plugin: {} for url: {}".format(plugin_name, webhook_url))
+                    self.logger.warning("Failed to enable created REST Plugin: {} for url: {}".format(plugin_name, webhook_url))
                     return None
                 else:
                     self.logger.info("Enabled REST Plugin: {} for url: {}".format(plugin_name, webhook_url))
@@ -463,7 +464,7 @@ class MonPlugin():
                             verify = False, headers = headers)
 
         if resp.status_code is not 200:
-            self.logger.warn("Failed to REST GET Alarm plugin details \nResponse code: {}\nResponse content: {}"\
+            self.logger.warning("Failed to REST GET Alarm plugin details \nResponse code: {}\nResponse content: {}"\
             .format(resp.status_code, resp.content))
             return None
 
@@ -475,7 +476,7 @@ class MonPlugin():
                     plugin_id = notify_plugin.get('pluginId')
 
         if plugin_id is None:
-            self.logger.warn("REST plugin {} not found".format(plugin_name))
+            self.logger.warning("REST plugin {} not found".format(plugin_name))
             return None
         else:
             self.logger.info("Found REST Plugin: {}".format(plugin_name))
@@ -502,7 +503,7 @@ class MonPlugin():
                                 verify = False)
 
             if resp.status_code is not 204:
-                self.logger.warn("Failed to enable REST plugin {}. \nResponse code {}\nResponse Content: {}"\
+                self.logger.warning("Failed to enable REST plugin {}. \nResponse code {}\nResponse Content: {}"\
                         .format(plugin_name, resp.status_code, resp.content))
                 return False
 
@@ -510,7 +511,7 @@ class MonPlugin():
             return True
 
         except Exception as exp:
-            self.logger.warn("Error enabling REST plugin for {} plugin: Exception: {}\n{}"\
+            self.logger.warning("Error enabling REST plugin for {} plugin: Exception: {}\n{}"\
                     .format(plugin_name, exp, traceback.format_exc()))
 
     def create_alarm_notification_rule(self, alarm_name, alarm_id, resource_id):
@@ -531,7 +532,7 @@ class MonPlugin():
         #1) Find the REST Plugin id details for - MON_module_REST_Plugin
         plugin_id = self.check_if_plugin_configured(plugin_name)
         if plugin_id is None:
-            self.logger.warn("Failed to get REST plugin_id for : {}".format('MON_module_REST_Plugin'))
+            self.logger.warning("Failed to get REST plugin_id for : {}".format('MON_module_REST_Plugin'))
             return None
 
         #2) Create Alarm notification rule
@@ -556,7 +557,7 @@ class MonPlugin():
                              data=json.dumps(data))
 
         if resp.status_code is not 201:
-            self.logger.warn("Failed to create Alarm notification rule {} for {} alarm."\
+            self.logger.warning("Failed to create Alarm notification rule {} for {} alarm."\
                         "\nResponse code: {}\nResponse content: {}"\
                         .format(notification_name, alarm_name, resp.status_code, resp.content))
             return None
@@ -583,7 +584,7 @@ class MonPlugin():
             return vm_moref_id
 
         except Exception as exp:
-            self.logger.warn("Error occurred while getting VM moref ID for VM : {}\n{}"\
+            self.logger.warning("Error occurred while getting VM moref ID for VM : {}\n{}"\
                         .format(exp, traceback.format_exc()))
 
 
@@ -606,7 +607,7 @@ class MonPlugin():
 
         vca = self.connect_as_admin()
         if not vca:
-            self.logger.warn("Failed to connect to vCD")
+            self.logger.warning("Failed to connect to vCD")
             return parsed_respond
 
         url_list = [self.vcloud_site, '/api/vApp/vapp-', vapp_uuid]
@@ -620,7 +621,7 @@ class MonPlugin():
                                     verify=False)
 
             if response.status_code != 200:
-                self.logger.warn("REST API call {} failed. Return status code {}"\
+                self.logger.warning("REST API call {} failed. Return status code {}"\
                             .format(get_vapp_restcall, response.content))
                 return parsed_respond
 
@@ -645,7 +646,7 @@ class MonPlugin():
                         parsed_respond["vm_vcenter_info"]= vm_vcenter_info
 
             except Exception as exp :
-                self.logger.warn("Error occurred calling rest api for getting vApp details: {}\n{}"\
+                self.logger.warning("Error occurred calling rest api for getting vApp details: {}\n{}"\
                             .format(exp, traceback.format_exc()))
 
         return parsed_respond
@@ -669,7 +670,7 @@ class MonPlugin():
             client_as_admin.set_credentials(BasicLoginCredentials(self.admin_username, org,\
                                                                   self.admin_password))
         except Exception as e:
-            self.logger.warn("Can't connect to a vCloud director as: {} with exception {}"\
+            self.logger.warning("Can't connect to a vCloud director as: {} with exception {}"\
                              .format(self.admin_username, e))
 
         return client_as_admin
@@ -689,7 +690,7 @@ class MonPlugin():
                             verify = False, headers = headers)
 
         if resp.status_code is not 200:
-            self.logger.warn("Failed to get resource details from vROPs for {}"\
+            self.logger.warning("Failed to get resource details from vROPs for {}"\
                              "\nResponse code:{}\nResponse Content: {}"\
                              .format(vm_moref_id, resp.status_code, resp.content))
             return None
@@ -713,7 +714,7 @@ class MonPlugin():
                                                          .format(vm_resource_id, vm_moref_id))
 
         except Exception as exp:
-            self.logger.warn("get_vm_resource_id: Error in parsing {}\n{}"\
+            self.logger.warning("get_vm_resource_id: Error in parsing {}\n{}"\
                              .format(exp, traceback.format_exc()))
 
         return vm_resource_id
@@ -753,13 +754,13 @@ class MonPlugin():
             return_data['tenant_uuid'] = None
         return_data['unit'] = None
         #return_data['tenant_id'] = self.tenant_id
-        #self.logger.warn("return_data: {}".format(return_data))
+        #self.logger.warning("return_data: {}".format(return_data))
 
         #1) Get metric details from plugin specific file & format it into vROPs metrics
         metric_key_params = self.get_default_Params(metric['metric_name'])
 
         if not metric_key_params:
-            self.logger.warn("Metric not supported: {}".format(metric['metric_name']))
+            self.logger.warning("Metric not supported: {}".format(metric['metric_name']))
             #To Do: Return message
             return return_data
 
@@ -769,12 +770,12 @@ class MonPlugin():
         #2.a) Find vm_moref_id from vApp uuid in vCD
         vm_moref_id = self.get_vm_moref_id(metric['resource_uuid'])
         if vm_moref_id is None:
-            self.logger.warn("Failed to find vm morefid for vApp in vCD: {}".format(metric['resource_uuid']))
+            self.logger.warning("Failed to find vm morefid for vApp in vCD: {}".format(metric['resource_uuid']))
             return return_data
         #2.b) Based on vm_moref_id, find VM's corresponding resource_id in vROPs to set notification
         resource_id = self.get_vm_resource_id(vm_moref_id)
         if resource_id is None:
-            self.logger.warn("Failed to find resource in vROPs: {}".format(metric['resource_uuid']))
+            self.logger.warning("Failed to find resource in vROPs: {}".format(metric['resource_uuid']))
             return return_data
 
         #3) Calculate begin & end time for period & period unit
@@ -799,21 +800,21 @@ class MonPlugin():
                             verify = False, headers = headers)
 
         if resp.status_code is not 200:
-            self.logger.warn("Failed to retrive Metric data from vROPs for {}\nResponse code:{}\nResponse Content: {}"\
+            self.logger.warning("Failed to retrive Metric data from vROPs for {}\nResponse code:{}\nResponse Content: {}"\
                     .format(metric['metric_name'], resp.status_code, resp.content))
             return return_data
 
         #5) Convert to required format
         metrics_data = {}
         json_data = json.loads(resp.content)
-        for resp_key,resp_val in json_data.iteritems():
+        for resp_key,resp_val in six.iteritems(json_data):
             if resp_key == 'values':
                 data = json_data['values'][0]
-                for data_k,data_v in data.iteritems():
+                for data_k,data_v in six.iteritems(data):
                     if data_k == 'stat-list':
                         stat_list = data_v
-                        for stat_list_k,stat_list_v in stat_list.iteritems():
-                            for stat_keys,stat_vals in stat_list_v[0].iteritems():
+                        for stat_list_k,stat_list_v in six.iteritems(stat_list):
+                            for stat_keys,stat_vals in six.iteritems(stat_list_v[0]):
                                 if stat_keys == 'timestamps':
                                     metrics_data['time_series'] = stat_list_v[0]['timestamps']
                                 if stat_keys == 'data':
@@ -827,7 +828,7 @@ class MonPlugin():
         """Update alarm configuration (i.e. Symptom & alarm) as per request
         """
         if new_alarm_config.get('alarm_uuid') is None:
-            self.logger.warn("alarm_uuid is required to update an Alarm")
+            self.logger.warning("alarm_uuid is required to update an Alarm")
             return None
         #1) Get Alarm details from it's uuid & find the symptom defination
         alarm_details_json, alarm_details = self.get_alarm_defination_details(new_alarm_config['alarm_uuid'])
@@ -862,7 +863,7 @@ class MonPlugin():
         """Get alarm details based on alarm UUID
         """
         if alarm_uuid is None:
-            self.logger.warn("get_alarm_defination_details: Alarm UUID not provided")
+            self.logger.warning("get_alarm_defination_details: Alarm UUID not provided")
             return None, None
 
         alarm_details = {}
@@ -875,7 +876,7 @@ class MonPlugin():
                             verify = False, headers = headers)
 
         if resp.status_code is not 200:
-            self.logger.warn("Alarm to be updated not found: {}\nResponse code:{}\nResponse Content: {}"\
+            self.logger.warning("Alarm to be updated not found: {}\nResponse code:{}\nResponse Content: {}"\
                     .format(alarm_uuid, resp.status_code, resp.content))
             return None, None
 
@@ -890,7 +891,7 @@ class MonPlugin():
                 alarm_details['sub_type'] = json_data['subType']
                 alarm_details['symptom_definition_id'] = json_data['states'][0]['base-symptom-set']['symptomDefinitionIds'][0]
         except Exception as exp:
-            self.logger.warn("Exception while retriving alarm defination details: {}".format(exp))
+            self.logger.warning("Exception while retriving alarm defination details: {}".format(exp))
             return None, None
 
         return json_data, alarm_details
@@ -903,7 +904,7 @@ class MonPlugin():
         alert_match_list = []
 
         if alarm_name is None:
-            self.logger.warn("get_alarm_defination_by_name: Alarm name not provided")
+            self.logger.warning("get_alarm_defination_by_name: Alarm name not provided")
             return alert_match_list
 
         json_data = {}
@@ -915,7 +916,7 @@ class MonPlugin():
                             verify = False, headers = headers)
 
         if resp.status_code is not 200:
-            self.logger.warn("get_alarm_defination_by_name: Error in response: {}\nResponse code:{}"\
+            self.logger.warning("get_alarm_defination_by_name: Error in response: {}\nResponse code:{}"\
                     "\nResponse Content: {}".format(alarm_name, resp.status_code, resp.content))
             return alert_match_list
 
@@ -923,14 +924,14 @@ class MonPlugin():
             json_data = json.loads(resp.content)
             if json_data['alertDefinitions'] is not None:
                 alerts_list = json_data['alertDefinitions']
-                alert_match_list = filter(lambda alert: alert['name'] == alarm_name, alerts_list)
+                alert_match_list = list(filter(lambda alert: alert['name'] == alarm_name, alerts_list))
                 status = False if not alert_match_list else True
                 #self.logger.debug("Found alert_match_list: {}for larm_name: {},\nstatus: {}".format(alert_match_list, alarm_name,status))
 
             return alert_match_list
 
         except Exception as exp:
-            self.logger.warn("Exception while searching alarm defination: {}".format(exp))
+            self.logger.warning("Exception while searching alarm defination: {}".format(exp))
             return alert_match_list
 
 
@@ -943,18 +944,18 @@ class MonPlugin():
         if symptom_details is None:
             return None
 
-        if new_alarm_config.has_key('severity') and new_alarm_config['severity'] is not None:
+        if 'severity' in new_alarm_config and new_alarm_config['severity'] is not None:
             symptom_details['state']['severity'] = severity_mano2vrops[new_alarm_config['severity']]
-        if new_alarm_config.has_key('operation') and new_alarm_config['operation'] is not None:
+        if 'operation' in new_alarm_config and new_alarm_config['operation'] is not None:
             symptom_details['state']['condition']['operator'] = OPERATION_MAPPING[new_alarm_config['operation']]
-        if new_alarm_config.has_key('threshold_value') and new_alarm_config['threshold_value'] is not None:
+        if 'threshold_value' in new_alarm_config and new_alarm_config['threshold_value'] is not None:
             symptom_details['state']['condition']['value'] = new_alarm_config['threshold_value']
         #Find vrops metric key from metric_name, if required
         """
-        if new_alarm_config.has_key('metric_name') and new_alarm_config['metric_name'] is not None:
+        if 'metric_name' in new_alarm_config and new_alarm_config['metric_name'] is not None:
             metric_key_params = self.get_default_Params(new_alarm_config['metric_name'])
             if not metric_key_params:
-                self.logger.warn("Metric not supported: {}".format(config_dict['metric_name']))
+                self.logger.warning("Metric not supported: {}".format(config_dict['metric_name']))
                 return None
             symptom_details['state']['condition']['key'] = metric_key_params['metric_key']
         """
@@ -970,7 +971,7 @@ class MonPlugin():
                              data=data)
 
         if resp.status_code != 200:
-            self.logger.warn("Failed to update Symptom definition: {}, response {}"\
+            self.logger.warning("Failed to update Symptom definition: {}, response {}"\
                     .format(symptom_uuid, resp.content))
             return None
 
@@ -980,7 +981,7 @@ class MonPlugin():
                     .format(symptom_uuid, new_alarm_config['alarm_uuid']))
             return symptom_uuid
         else:
-            self.logger.warn("Failed to update Symptom Defination {} for : {}"\
+            self.logger.warning("Failed to update Symptom Defination {} for : {}"\
                     .format(symptom_uuid, new_alarm_config['alarm_uuid']))
             return None
 
@@ -990,7 +991,7 @@ class MonPlugin():
         """
         symptom_details = {}
         if symptom_uuid is None:
-            self.logger.warn("get_symptom_defination_details: Symptom UUID not provided")
+            self.logger.warning("get_symptom_defination_details: Symptom UUID not provided")
             return None
 
         api_url = '/suite-api/api/symptomdefinitions/'
@@ -1001,7 +1002,7 @@ class MonPlugin():
                             verify = False, headers = headers)
 
         if resp.status_code is not 200:
-            self.logger.warn("Symptom defination not found {} \nResponse code:{}\nResponse Content: {}"\
+            self.logger.warning("Symptom defination not found {} \nResponse code:{}\nResponse Content: {}"\
                     .format(symptom_uuid, resp.status_code, resp.content))
             return None
 
@@ -1013,9 +1014,9 @@ class MonPlugin():
     def reconfigure_alarm(self, alarm_details_json, new_alarm_config):
         """Reconfigure alarm defination as per input
         """
-        if new_alarm_config.has_key('severity') and new_alarm_config['severity'] is not None:
+        if 'severity' in new_alarm_config and new_alarm_config['severity'] is not None:
             alarm_details_json['states'][0]['severity'] = new_alarm_config['severity']
-        if new_alarm_config.has_key('description') and new_alarm_config['description'] is not None:
+        if 'description' in new_alarm_config and new_alarm_config['description'] is not None:
             alarm_details_json['description'] = new_alarm_config['description']
 
         api_url = '/suite-api/api/alertdefinitions'
@@ -1028,7 +1029,7 @@ class MonPlugin():
                              data=data)
 
         if resp.status_code != 200:
-            self.logger.warn("Failed to update Alarm definition: {}, response code {}, response content: {}"\
+            self.logger.warning("Failed to update Alarm definition: {}, response code {}, response content: {}"\
                     .format(alarm_details_json['id'], resp.status_code, resp.content))
             return None
         else:
@@ -1080,7 +1081,7 @@ class MonPlugin():
                                 auth=(self.vrops_user, self.vrops_password),
                                 verify = False, headers = headers)
             if resp.status_code is not 204:
-                self.logger.warn("Failed to delete notification rules for {}".format(alarm_name))
+                self.logger.warning("Failed to delete notification rules for {}".format(alarm_name))
                 return None
             else:
                 self.logger.info("Deleted notification rules for {}".format(alarm_name))
@@ -1097,12 +1098,12 @@ class MonPlugin():
                             verify = False, headers = headers)
 
         if resp.status_code is not 200:
-            self.logger.warn("Failed to get notification rules details for {}"\
+            self.logger.warning("Failed to get notification rules details for {}"\
                     .format(alarm_name))
             return None
 
         notifications = json.loads(resp.content)
-        if notifications is not None and notifications.has_key('notification-rule'):
+        if notifications is not None and 'notification-rule' in notifications:
             notifications_list = notifications['notification-rule']
             for dict in notifications_list:
                 if dict['name'] is not None and dict['name'] == alarm_notify_id:
@@ -1111,7 +1112,7 @@ class MonPlugin():
                             .format(notification_id, alarm_name))
                     return notification_id
 
-            self.logger.warn("Notification id to be deleted not found for {}"\
+            self.logger.warning("Notification id to be deleted not found for {}"\
                             .format(alarm_name))
             return None
 
@@ -1124,7 +1125,7 @@ class MonPlugin():
                             auth=(self.vrops_user, self.vrops_password),
                             verify = False, headers = headers)
         if resp.status_code is not 204:
-            self.logger.warn("Failed to delete alarm definition {}".format(alarm_id))
+            self.logger.warning("Failed to delete alarm definition {}".format(alarm_id))
             return None
         else:
             self.logger.info("Deleted alarm definition {}".format(alarm_id))
@@ -1139,7 +1140,7 @@ class MonPlugin():
                             auth=(self.vrops_user, self.vrops_password),
                             verify = False, headers = headers)
         if resp.status_code is not 204:
-            self.logger.warn("Failed to delete symptom definition {}".format(symptom_id))
+            self.logger.warning("Failed to delete symptom definition {}".format(symptom_id))
             return None
         else:
             self.logger.info("Deleted symptom definition {}".format(symptom_id))
@@ -1157,7 +1158,7 @@ class MonPlugin():
             return status
         metric_key_params = self.get_default_Params(metric_info['metric_name'])
         if not metric_key_params:
-            self.logger.warn("Metric not supported: {}".format(metric_info['metric_name']))
+            self.logger.warning("Metric not supported: {}".format(metric_info['metric_name']))
             return status
         else:
             #If Metric is supported, verify optional metric unit & return status
@@ -1179,7 +1180,7 @@ class MonPlugin():
 
         triggered_alarms_list = []
         if list_alarm_input.get('resource_uuid') is None:
-            self.logger.warn("Resource UUID is required to get triggered alarms list")
+            self.logger.warning("Resource UUID is required to get triggered alarms list")
             return triggered_alarms_list
 
         #1)Find vROPs resource ID using RO resource UUID
@@ -1197,13 +1198,13 @@ class MonPlugin():
         #1) Find vm_moref_id from vApp uuid in vCD
         vm_moref_id = self.get_vm_moref_id(ro_resource_uuid)
         if vm_moref_id is None:
-            self.logger.warn("Failed to find vm morefid for vApp in vCD: {}".format(ro_resource_uuid))
+            self.logger.warning("Failed to find vm morefid for vApp in vCD: {}".format(ro_resource_uuid))
             return None
 
         #2) Based on vm_moref_id, find VM's corresponding resource_id in vROPs to set notification
         vrops_resource_id = self.get_vm_resource_id(vm_moref_id)
         if vrops_resource_id is None:
-            self.logger.warn("Failed to find resource in vROPs: {}".format(ro_resource_uuid))
+            self.logger.warning("Failed to find resource in vROPs: {}".format(ro_resource_uuid))
             return None
         return vrops_resource_id
 
@@ -1219,12 +1220,12 @@ class MonPlugin():
                             verify = False, headers = headers)
 
         if resp.status_code is not 200:
-            self.logger.warn("Failed to get triggered alarms for {}"\
+            self.logger.warning("Failed to get triggered alarms for {}"\
                     .format(ro_resource_uuid))
             return None
 
         all_alerts = json.loads(resp.content)
-        if all_alerts.has_key('alerts'):
+        if 'alerts' in all_alerts:
             if not all_alerts['alerts']:
                 self.logger.info("No alarms present on resource {}".format(ro_resource_uuid))
                 return resource_alarms
@@ -1241,7 +1242,7 @@ class MonPlugin():
                             alarm_instance['vim_type'] = 'VMware'
                             #find severity of alarm
                             severity = None
-                            for key,value in severity_mano2vrops.iteritems():
+                            for key,value in six.iteritems(severity_mano2vrops):
                                 if value == alarm['alertLevel']:
                                     severity = key
                             if severity is None:

@@ -20,9 +20,15 @@
 # contact: prithiv.mohan@intel.com or adrian.hoban@intel.com
 
 __author__ = "Prithiv Mohan"
-__date__   = "14/Sep/2017"
+__date__ = "14/Sep/2017"
 from setuptools import setup
-from os import system
+
+
+def parse_requirements(requirements):
+    with open(requirements) as f:
+        return [l.strip('\n') for l in f if l.strip('\n') and not l.startswith('#') and '://' not in l]
+
+
 _name = 'osm_mon'
 _version = '1.0'
 _description = 'OSM Monitoring Module'
@@ -33,23 +39,25 @@ _maintainer_email = 'adrian.hoban@intel.com'
 _license = 'Apache 2.0'
 _url = 'https://osm.etsi.org/gitweb/?p=osm/MON.git;a=tree'
 setup(name="osm_mon",
-      version = _version,
-      description = _description,
-      long_description = open('README.rst').read(),
-      author = _author,
-      author_email = _author_email,
-      maintainer = _maintainer,
-      maintainer_email = _maintainer_email,
-      url = _url,
-      license = _license,
-      packages = [_name],
-      package_dir = {_name: _name},
-      package_data = {_name: ['osm_mon/core/message_bus/*.py', 'osm_mon/core/models/*.json',
-                      'osm_mon/plugins/OpenStack/Aodh/*.py', 'osm_mon/plugins/OpenStack/Gnocchi/*.py',
-                      'osm_mon/plugins/vRealiseOps/*', 'osm_mon/plugins/CloudWatch/*']},
-      data_files = [('/etc/systemd/system/', ['scripts/kafka.sh']),
-                   ],
+      version=_version,
+      description=_description,
+      long_description=open('README.rst').read(),
+      author=_author,
+      author_email=_author_email,
+      maintainer=_maintainer,
+      maintainer_email=_maintainer_email,
+      url=_url,
+      license=_license,
+      packages=[_name],
+      package_dir={_name: _name},
+      package_data={_name: ['osm_mon/core/message_bus/*.py', 'osm_mon/core/models/*.json',
+                            'osm_mon/plugins/OpenStack/Aodh/*.py', 'osm_mon/plugins/OpenStack/Gnocchi/*.py',
+                            'osm_mon/plugins/vRealiseOps/*', 'osm_mon/plugins/CloudWatch/*']},
       scripts=['osm_mon/plugins/vRealiseOps/vROPs_Webservice/vrops_webservice',
-               'kafkad', 'osm_mon/core/message_bus/common_consumer.py'],
+               'osm_mon/core/message_bus/common_consumer.py'],
+      install_requires=parse_requirements('requirements.txt'),
       include_package_data=True,
+      dependency_links=[
+          'git+https://osm.etsi.org/gerrit/osm/common.git@857731b#egg=osm-common'
+      ]
       )

@@ -23,4 +23,4 @@
 #__date__   = "14/Sep/2017"
 
 #!/bin/bash
-echo "UNITTEST"
+tox

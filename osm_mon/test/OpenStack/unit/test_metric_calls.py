@@ -131,11 +131,13 @@ class TestMetricCalls(unittest.TestCase):
                                     "name": "metric_name",
                                     "unit": "units"}}}
 
+        perf_req.return_value = type('obj', (object,), {'text': '{"id":"1"}'})
+
         self.metrics.configure_metric(endpoint, auth_token, values)
 
         perf_req.assert_called_with(
             "<ANY>/v1/resource/generic", auth_token, req_type="post",
-            payload=json.dumps(payload))
+            payload=json.dumps(payload, sort_keys=True))
 
     @mock.patch.object(Common, "perform_request")
     def test_delete_metric_req(self, perf_req):
@@ -148,7 +150,7 @@ class TestMetricCalls(unittest.TestCase):
     @mock.patch.object(Common, "perform_request")
     def test_delete_metric_invalid_status(self, perf_req):
         """Test invalid response for delete request."""
-        perf_req.return_value = "404"
+        perf_req.return_value = type('obj', (object,), {"status_code": "404"})
 
         status = self.metrics.delete_metric(endpoint, auth_token, "metric_id")
 
@@ -246,6 +248,8 @@ class TestMetricCalls(unittest.TestCase):
                   "resource_uuid": "resource_id",
                   "collection_unit": "DAY",
                   "collection_period": 1}
+
+        perf_req.return_value = type('obj', (object,), {'text': '{"metric_data":"[]"}'})
 
         get_metric.return_value = "metric_id"
         self.metrics.read_metric_data(endpoint, auth_token, values)
