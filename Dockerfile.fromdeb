@@ -1,0 +1,65 @@
+# This creates som/LCM docker from from last stable package
+
+FROM ubuntu:16.04
+
+# Set the working directory to /app
+WORKDIR /app/osm_lcm
+
+# avoid extra information from packages
+RUN echo 'path-exclude /usr/share/doc/*\n\
+path-include /usr/share/doc/*/copyright\n\
+path-exclude /usr/share/man/*\n\
+path-exclude /usr/share/groff/*\n\
+path-exclude /usr/share/info/*\n\
+path-exclude /usr/share/lintian/*\n\
+path-exclude /usr/share/linda/*\n'\
+> /etc/dpkg/dpkg.cfg.d/01_nodoc && \
+    echo  'APT::Install-Recommends "false";\n\
+APT::AutoRemove::RecommendsImportant "false";\n\
+APT::AutoRemove::SuggestsImportant "false";\n'\
+> /etc/apt/apt.conf.d/99_norecommends
+
+
+RUN apt-get update && apt-get install -y curl software-properties-common \
+    && add-apt-repository -y "deb http://osm-download.etsi.org/repository/osm/debian/ReleaseFOUR testing common LCM" \
+    && curl "http://osm-download.etsi.org/repository/osm/debian/ReleaseFOUR/OSM%20ETSI%20Release%20Key.gpg" | apt-key add - \
+    && apt-get update && apt-get install -y python3-osm-lcm python3-osm-common \
+    && rm -rf /var/lib/apt/lists/*
+
+EXPOSE 9999
+
+LABEL Maintainer="alfonso.tiernosepulveda@telefonica.com" \
+      Description="This implements life cycle management engine for OSM" \
+      Version="1.0" \
+      Author="Alfonso Tierno"
+
+# Used for local storage
+VOLUME /app/storage
+# Used for logs
+VOLUME /app/log
+
+# The following ENV can be added with "docker run -e xxx' to configure LCM
+ENV OSMLCM_RO_HOST         ro
+ENV OSMLCM_RO_PORT         9090
+ENV OSMLCM_RO_TENANT       osm
+
+# VCA
+ENV OSMLCM_VCA_HOST        vca
+ENV OSMLCM_VCA_PORT:       17070
+ENV OSMLCM_VCA_USER:       admin
+ENV OSMLCM_VCA_SECRET:     secret
+
+# database
+ENV OSMLCM_DATABASE_DRIVER mongo
+ENV OSMLCM_DATABASE_HOST   mongo
+ENV OSMLCM_DATABASE_PORT   27017
+ENV OSMLCM_STORAGE_DRIVER  local
+ENV OSMLCM_STORAGE_PATH    /app/storage
+
+# message
+ENV OSMLCM_MESSAGE_DRIVER  kafka
+ENV OSMLCM_MESSAGE_HOST    kafka
+ENV OSMLCM_MESSAGE_PORT    9092
+
+# Run app.py when the container launches
+CMD ["python3", "lcm.py"]
