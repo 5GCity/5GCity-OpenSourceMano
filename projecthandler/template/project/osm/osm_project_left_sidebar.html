@@ -13,9 +13,9 @@
                   <i class="fa fa-file-text fa-fw"></i><span>Overview</span>
               </a>
           </li>
-          {% url "projects:list_descriptors"  project_id=project_id descriptor_type="vnfd" as  nsd_list_url %}
+          {% url "projects:list_descriptors"  project_id=project_id descriptor_type="nsd" as  nsd_list_url %}
           {% url "projects:list_descriptors"  project_id=project_id descriptor_type='vnfd' as  vnfd_list_url %}
-        <li {% if request.get_full_path == nsd_list_url %} class="active treeview" {% else %} class="treeview" {% endif %} >
+        <li {% if request.get_full_path == nsd_list_url or  request.get_full_path == vnfd_list_url%} class="active treeview" {% else %} class="treeview" {% endif %} >
                 <a href="#">
                     <i class="fa fa-archive fa-fw"></i> <span>Packages {{nsd_list}}</span>
                     <span class="pull-right-container">
@@ -24,12 +24,12 @@
                 </a>
                 <ul class="treeview-menu">
                     <li {% if request.get_full_path == nsd_list_url %} class="active" {% endif %}>
-                        <a href="/projects/{{project_id}}/descriptors/nsd">
+                        <a href='{{ nsd_list_url }}'>
                             <i class="fa fa-archive fa-fw"></i>NS Packages
                         </a>
                     </li>
                     <li {% if request.get_full_path == vnfd_list_url %} class="active" {% endif %}>
-                        <a href="/projects/{{project_id}}/descriptors/vnfd">
+                        <a href='{{ vnfd_list_url }}'>
                             <i class="fa fa-archive fa-fw"></i>VNF Packages
                         </a>
                     </li>

@@ -16,7 +16,6 @@
 
 
 function openModalCreateNS(args) {
-
     // load vim account list
     select2_groups = $('#vimAccountId').select2({
         placeholder: 'Select VIM',
@@ -39,18 +38,20 @@ function openModalCreateNS(args) {
             }
         }
     });
-    /*
+
     // load nsd list
     select2_groups = $('#nsdId').select2({
         placeholder: 'Select NSD',
+        width: '100%',
         ajax: {
             url: args.nsd_list_url,
             dataType: 'json',
             processResults: function (data) {
                 nsd_list = [];
-                if (data['nsd_list']) {
-                    for (d in data['nsd_list']) {
-                        var nsd = data['nsd_list'][d];
+
+                if (data['descriptors']) {
+                    for (d in data['descriptors']) {
+                        var nsd = data['descriptors'][d];
                         nsd_list.push({id: nsd['_id'], text: nsd['name']})
                     }
                 }
@@ -61,7 +62,18 @@ function openModalCreateNS(args) {
             }
         }
     });
-    */
-    $('#nsdId').val(args.descriptor_id);
+
+    if(args.descriptor_id){
+        // Set the value, creating a new option if necessary
+        if ($('#nsdId').find("option[value='" + args.descriptor_id + "']").length) {
+            $('#nsdId').val(args.descriptor_id).trigger('change');
+        } else {
+            // Create a DOM Option and pre-select by default
+            var newOption = new Option(args.descriptor_name, args.descriptor_id, true, true);
+            // Append it to the select
+            $('#nsdId').append(newOption).trigger('change');
+        }
+    }
+
     $('#modal_new_instance').modal('show');
 }

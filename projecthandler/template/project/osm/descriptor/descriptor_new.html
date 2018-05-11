@@ -1,22 +1,7 @@
 {% extends "descriptor/descriptor_view_base.html" %}
 
 {% load staticfiles %}
-{% block head_base %}
-    {% with skin_css="AdminLTE/dist/css/skins/skin-purple.min.css"%}
-        {{ block.super }}
-    {% endwith %}
-{% endblock %}
 
-{% block body %}
-    {% with skin="purple"%}
-        {{ block.super }}
-    {% endwith %}
-{% endblock %}
-{% block logo_sidebar %}
-    {% with logo_mini="assets/img/osm_small_logo.png" logo="assets/img/OSM-logo.png"%}
-        {{ block.super }}
-    {% endwith %}
-{% endblock %}
 
 {% block title_header_big %}
 {{ block.super }}
@@ -65,6 +50,7 @@ Onboard new {{ descriptor_type }} package
 {{ block.super }}
 
 <script>
+    var descr_list_url = '{% url "projects:list_descriptors"  project_id=project_id descriptor_type=descriptor_type%}'
 
     var dropZone = document.getElementById('drop-zone');
     dropZone.ondrop = function(e) {
@@ -132,7 +118,7 @@ Onboard new {{ descriptor_type }} package
                     success: function(result) {
                         console.log(result)
 
-                        window.location.href="/projects/{{project_id}}/descriptors/{{descriptor_type}}"
+                        window.location.href=descr_list_url
 
                     },
                     error: function(result) {
@@ -142,7 +128,7 @@ Onboard new {{ descriptor_type }} package
         }
 
     function cancel(id){
-        window.location.href="/projects/{{project_id}}/descriptors/{{descriptor_type}}"
+        window.location.href= descr_list_url
     }
 
 

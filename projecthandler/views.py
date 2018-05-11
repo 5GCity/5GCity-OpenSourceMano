@@ -166,7 +166,6 @@ def delete_project(request, project_id=None):
             return render(request, 'error.html', {'error_msg': 'Project not found.'})
 
 
-
 @login_required
 def show_descriptors(request, project_id=None, descriptor_type=None):
     csrf_token_value = get_token(request)
@@ -174,16 +173,15 @@ def show_descriptors(request, project_id=None, descriptor_type=None):
     project_overview = projects[0].get_overview_data()
     prj_token = project_overview['type']
 
-    page = prj_token + '/' + prj_token + '_project_descriptors.html'
-
-    return render(request, page, {
+    url = prj_token + '/' + prj_token + '_project_descriptors.html'
+    return __response_handler(request, {
         'descriptors': projects[0].get_descriptors(descriptor_type),
         'project_id': project_id,
         'project_type': prj_token,
         'project_overview_data': project_overview,
         "csrf_token_value": csrf_token_value,
         'descriptor_type': descriptor_type
-    })
+    },url)
 
 
 @login_required

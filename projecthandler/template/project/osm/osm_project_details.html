@@ -44,7 +44,7 @@
                     <div class="inner"><h3>{{ project_overview.nsd }}</h3>
                         <p>NS packages</p></div>
                     <div class="icon"><i class="fa fa-archive"></i></div>
-                    <a href="/projects/{{ project_id }}/descriptors/nsd" class="small-box-footer">Open list <i
+                    <a href='{% url "projects:list_descriptors"  project_id=project_id descriptor_type="nsd" %}' class="small-box-footer">Open list <i
                             class="fa fa-arrow-circle-right"></i></a></div>
             </div>
             <div class="col-md-6 ">
@@ -52,7 +52,7 @@
                     <div class="inner"><h3>{{ project_overview.vnfd }}</h3>
                         <p>VNF packages</p></div>
                     <div class="icon"><i class="fa fa-archive"></i></div>
-                    <a href="/projects/{{ project_id }}/descriptors/vnfd" class="small-box-footer">Open list <i
+                    <a href='{% url "projects:list_descriptors"  project_id=project_id descriptor_type="vnfd" %}' class="small-box-footer">Open list <i
                             class="fa fa-arrow-circle-right"></i></a></div>
             </div>
         </div>
