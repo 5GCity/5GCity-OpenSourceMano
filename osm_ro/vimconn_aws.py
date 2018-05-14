@@ -78,7 +78,7 @@ class vimconnector(vimconn.vimconnector):
         if 'region_name' in config:
             self.region = config.get('region_name')
         else:
-            raise vimconn.vimconnNotFoundException("AWS region_name is not specified at config")
+            raise vimconn.vimconnException("AWS region_name is not specified at config")
 
         self.vpc_data = {}
         self.subnet_data = {}
@@ -109,8 +109,11 @@ class vimconnector(vimconn.vimconnector):
             flavor_data = config.get('flavor_info')
             if isinstance(flavor_data, str):
                 try:
-                    with open(flavor_data[1:], 'r') as stream:
-                        self.flavor_info = yaml.load(stream)
+                    if flavor_data[0] == "@":  # read from a file
+                        with open(flavor_data[1:], 'r') as stream:
+                            self.flavor_info = yaml.load(stream)
+                    else:
+                        self.flavor_info = yaml.load(flavor_data)
                 except yaml.YAMLError as e:
                     self.flavor_info = None
                     raise vimconn.vimconnException("Bad format at file '{}': {}".format(flavor_data[1:], e))

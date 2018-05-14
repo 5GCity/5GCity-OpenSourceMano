@@ -372,7 +372,10 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
                                 config=extra, persistent_info=persistent_info
                         )
             except Exception as e:
-                raise NfvoException("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, str(e)), HTTP_Internal_Server_Error)
+                http_code = HTTP_Internal_Server_Error
+                if isinstance(e, vimconn.vimconnException):
+                    http_code = e.http_code
+                raise NfvoException("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, str(e)), http_code)
         return vim_dict
     except db_base_Exception as e:
         raise NfvoException(str(e) + " at nfvo.get_vim", e.http_code)
@@ -4581,9 +4584,10 @@ def deassociate_datacenter_to_tenant(mydb, tenant_id, datacenter, vim_tenant_id=
             logger.error("Cannot delete datacenter_tenants " + str(e))
             pass  # the error will be caused because dependencies, vim_tenant can not be deleted
         thread_id = tenant_datacenter_item["datacenter_tenant_id"]
-        thread = vim_threads["running"][thread_id]
-        thread.insert_task("exit")
-        vim_threads["deleting"][thread_id] = thread
+        thread = vim_threads["running"].get(thread_id)
+        if thread:
+            thread.insert_task("exit")
+            vim_threads["deleting"][thread_id] = thread
     return "datacenter {} detached. {}".format(datacenter_id, warning)
 
 
