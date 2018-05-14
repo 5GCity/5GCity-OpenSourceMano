@@ -751,7 +751,7 @@ while getopts ":hy-:b:r:k:u:R:l:p:D:" o; do
             [ "${OPTARG}" == "lxdinstall" ] && INSTALL_LXD="y" && continue
             [ "${OPTARG}" == "lxdimages" ] && INSTALL_FROM_LXDIMAGES="y" && continue
             [ "${OPTARG}" == "lightweight" ] && INSTALL_LIGHTWEIGHT="y" && continue
-            [ "${OPTARG}" == "soui" ] && INSTALL_LIGHTWEIGHT="" && RELEASE="-R ReleaseTHREE" && REPOSITORY="-r stable" && continue
+            [ "${OPTARG}" == "soui" ] && INSTALL_LIGHTWEIGHT="" && RELEASE="-R ReleaseTHREE-Classic" && REPOSITORY="-r testing" && continue
             [ "${OPTARG}" == "vimemu" ] && INSTALL_VIMEMU="y" && continue
             [ "${OPTARG}" == "noconfigure" ] && NOCONFIGURE="y" && continue
             [ "${OPTARG}" == "showopts" ] && SHOWOPTS="y" && continue
