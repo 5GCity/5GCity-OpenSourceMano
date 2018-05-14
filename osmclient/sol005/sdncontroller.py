@@ -21,7 +21,8 @@ OSM SDN controller API handling
 from osmclient.common import utils
 from osmclient.common.exceptions import ClientException
 from osmclient.common.exceptions import NotFound
-import yaml 
+import yaml
+import json
 
 
 class SdnController(object):
@@ -34,8 +35,10 @@ class SdnController(object):
         self._apiBase = '{}{}{}'.format(self._apiName,
                                         self._apiVersion, self._apiResource)
     def create(self, name, sdn_controller):
-        resp = self._http.post_cmd(endpoint=self._apiBase,
+        http_code, resp = self._http.post_cmd(endpoint=self._apiBase,
                                        postfields_dict=sdn_controller)
+        if resp:
+            resp = json.loads(resp)
         #print 'RESP: {}'.format(resp)
         if not resp or 'id' not in resp:
             raise ClientException('failed to create SDN controller: '.format(
@@ -45,8 +48,10 @@ class SdnController(object):
 
     def update(self, name, sdn_controller):
         sdnc = self.get(name)
-        resp = self._http.patch_cmd(endpoint='{}/{}'.format(self._apiBase,sdnc['_id']),
+        http_code, resp = self._http.patch_cmd(endpoint='{}/{}'.format(self._apiBase,sdnc['_id']),
                                        postfields_dict=sdn_controller)
+        if resp:
+            resp = json.loads(resp)
         print 'RESP: {}'.format(resp)
         if not resp or 'id' not in resp:
             raise ClientException('failed to update SDN controller: '.format(

@@ -22,6 +22,7 @@ from osmclient.common.exceptions import NotFound
 from osmclient.common.exceptions import ClientException
 from osmclient.common import utils
 import yaml
+import json
 import magic
 #from os import stat
 #from os.path import basename
@@ -72,11 +73,11 @@ class Vnfd(object):
         vnfd = self.get(name)
         headers = self._client._headers
         headers['Accept'] = 'application/binary'
-        http_code, resp2 = self._http.get2_cmd('{}/{}/{}'.format(self._apiBase, vnfd['_id'], thing))
+        http_code, resp = self._http.get2_cmd('{}/{}/{}'.format(self._apiBase, vnfd['_id'], thing))
         #print yaml.safe_dump(resp2)
-        if resp2:
+        if resp:
             #store in a file
-            return resp2
+            return resp
         raise NotFound("vnfd {} not found".format(name))
 
     def get_descriptor(self, name, filename):
@@ -124,7 +125,7 @@ class Vnfd(object):
                       for (key,val) in headers.items()]
         self._http.set_http_header(http_header)
         if update_endpoint:
-            resp = self._http.put_cmd(endpoint=update_endpoint, filename=filename)
+            http_code, resp = self._http.put_cmd(endpoint=update_endpoint, filename=filename)
         else:
             ow_string = ''
             if overwrite:
@@ -133,7 +134,9 @@ class Vnfd(object):
             self._apiBase = '{}{}{}'.format(self._apiName,
                                             self._apiVersion, self._apiResource)
             endpoint = '{}{}'.format(self._apiBase,ow_string)
-            resp = self._http.post_cmd(endpoint=endpoint, filename=filename)
+            http_code, resp = self._http.post_cmd(endpoint=endpoint, filename=filename)
+        if resp:
+            resp = json.loads(resp)
         #print resp
         if not resp or 'id' not in resp:
             raise ClientException("failed to upload package")

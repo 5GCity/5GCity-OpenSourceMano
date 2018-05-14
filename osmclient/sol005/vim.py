@@ -22,6 +22,7 @@ from osmclient.common import utils
 from osmclient.common.exceptions import ClientException
 from osmclient.common.exceptions import NotFound
 import yaml
+import json
 
 
 class Vim(object):
@@ -49,8 +50,10 @@ class Vim(object):
 
         vim_account['config'] = vim_config
 
-        resp = self._http.post_cmd(endpoint=self._apiBase,
+        http_code, resp = self._http.post_cmd(endpoint=self._apiBase,
                                        postfields_dict=vim_account)
+        if resp:
+            resp = json.loads(resp)
         if not resp or 'id' not in resp:
             raise ClientException('failed to create vim {}: {}'.format(
                                   name, resp))
@@ -59,9 +62,11 @@ class Vim(object):
 
     def update(self, vim_name, vim_account):
         vim = self.get(vim_name)
-        #resp = self._http.put_cmd(endpoint='{}/{}'.format(self._apiBase,vim['_id']),
-        resp = self._http.patch_cmd(endpoint='{}/{}'.format(self._apiBase,vim['_id']),
+        #http_code, resp = self._http.put_cmd(endpoint='{}/{}'.format(self._apiBase,vim['_id']),
+        http_code, resp = self._http.patch_cmd(endpoint='{}/{}'.format(self._apiBase,vim['_id']),
                                        postfields_dict=vim_account)
+        if resp:
+            resp = json.loads(resp)
         #print 'RESP: {}'.format(resp)
         if not resp or 'id' not in resp:
             raise ClientException('failed to update vim: '.format(resp))

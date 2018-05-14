@@ -28,6 +28,7 @@ from osmclient.sol005 import package
 from osmclient.sol005 import http
 from osmclient.sol005 import sdncontroller
 from osmclient.common.exceptions import ClientException
+import json
 
 class Client(object):
 
@@ -94,8 +95,11 @@ class Client(object):
         postfields_dict = {'username': self._user,
                            'password': self._password,
                            'project-id': self._project}
-        token = self._http_client.post_cmd(endpoint=self._auth_endpoint,
+        http_code, resp = self._http_client.post_cmd(endpoint=self._auth_endpoint,
                               postfields_dict=postfields_dict)
+        if http_code not in (200, 201, 202, 204):
+            raise ClientException(resp)
+        token = json.loads(resp) if resp else None
         if token is not None:
             return token['_id']
         return None

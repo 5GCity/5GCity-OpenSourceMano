@@ -148,8 +148,10 @@ class Ns(object):
             self._apiResource = '/ns_instances_content'
             self._apiBase = '{}{}{}'.format(self._apiName,
                                             self._apiVersion, self._apiResource)
-            resp = self._http.post_cmd(endpoint=self._apiBase,
+            http_code, resp = self._http.post_cmd(endpoint=self._apiBase,
                                        postfields_dict=ns)
+            if resp:
+                resp = json.loads(resp)
             #print 'RESP: {}'.format(resp)
             if not resp or 'id' not in resp:
                 raise ClientException('unexpected response from server: '.format(
@@ -176,7 +178,7 @@ class Ns(object):
                 filter_string = '&{}'.format(filter)
             http_code, resp = self._http.get2_cmd('{}?nsInstanceId={}'.format(self._apiBase, ns['_id'],
                                                                   filter_string) )
-            resp = json.loads(resp.decode())
+            resp = json.loads(resp)
             #print 'RESP: {}'.format(resp)
             if http_code == 200:
                 return resp
@@ -197,7 +199,7 @@ class Ns(object):
             self._apiBase = '{}{}{}'.format(self._apiName,
                                       self._apiVersion, self._apiResource)
             http_code, resp = self._http.get2_cmd('{}/{}'.format(self._apiBase, operationId))
-            resp = json.loads(resp.decode())
+            resp = json.loads(resp)
             #print 'RESP: {}'.format(resp)
             if http_code == 200:
                 return resp
@@ -220,7 +222,9 @@ class Ns(object):
             endpoint = '{}/{}/{}'.format(self._apiBase, ns['_id'], op_name)
             #print 'OP_NAME: {}'.format(op_name)
             #print 'OP_DATA: {}'.format(json.dumps(op_data))
-            resp = self._http.post_cmd(endpoint=endpoint, postfields_dict=op_data)
+            http_code, resp = self._http.post_cmd(endpoint=endpoint, postfields_dict=op_data)
+            if resp:
+                resp = json.loads(resp)
             #print 'RESP: {}'.format(resp)
             if not resp or 'id' not in resp:
                 raise ClientException('unexpected response from server: '.format(
@@ -241,8 +245,10 @@ class Ns(object):
         data["create_alarm_request"] = {}
         data["create_alarm_request"]["alarm_create_request"] = alarm
         try:
-            resp = self._http.post_cmd(endpoint='/test/message/alarm_request',
+            http_code, resp = self._http.post_cmd(endpoint='/test/message/alarm_request',
                                        postfields_dict=data)
+            if resp:
+                resp = json.loads(resp)
             #print 'RESP: {}'.format(resp)
             if not resp:
                 raise ClientException('unexpected response from server: '.format(
@@ -260,8 +266,10 @@ class Ns(object):
         data["delete_alarm_request"]["alarm_delete_request"] = {}
         data["delete_alarm_request"]["alarm_delete_request"]["alarm_uuid"] = name
         try:
-            resp = self._http.post_cmd(endpoint='/test/message/alarm_request',
+            http_code, resp = self._http.post_cmd(endpoint='/test/message/alarm_request',
                                        postfields_dict=data)
+            if resp:
+                resp = json.loads(resp)
             #print 'RESP: {}'.format(resp)
             if not resp:
                 raise ClientException('unexpected response from server: '.format(
@@ -280,8 +288,10 @@ class Ns(object):
         data = {}
         data["read_metric_data_request"] = metric
         try:
-            resp = self._http.post_cmd(endpoint='/test/message/metric_request',
+            http_code, resp = self._http.post_cmd(endpoint='/test/message/metric_request',
                                        postfields_dict=data)
+            if resp:
+                resp = json.loads(resp)
             #print 'RESP: {}'.format(resp)
             if not resp:
                 raise ClientException('unexpected response from server: '.format(

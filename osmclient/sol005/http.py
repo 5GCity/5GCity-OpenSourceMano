@@ -84,21 +84,10 @@ class Http(http.Http):
         curl_cmd.perform()
         http_code = curl_cmd.getinfo(pycurl.HTTP_CODE)
         curl_cmd.close()
-        if http_code not in (200, 201, 202, 204):
-            raise ClientException(data.getvalue().decode())
-        if postfields_dict is not None:
-            if data.getvalue():
-                return json.loads(data.getvalue().decode())
-            return None
-        elif formfile is not None:
-            if data.getvalue():
-                return yaml.safe_load(data.getvalue().decode())
-            return None
-        elif filename is not None:
-            if data.getvalue():
-                return yaml.safe_load(data.getvalue().decode())
-            return None
-        return None
+        if data.getvalue():
+            return http_code, data.getvalue().decode()
+        else:
+            return http_code, None
 
     def post_cmd(self, endpoint='', postfields_dict=None,
                  formfile=None, filename=None):
@@ -133,6 +122,6 @@ class Http(http.Http):
         http_code = curl_cmd.getinfo(pycurl.HTTP_CODE)
         curl_cmd.close()
         if data.getvalue():
-            return http_code, data.getvalue()
+            return http_code, data.getvalue().decode()
         return http_code, None
 

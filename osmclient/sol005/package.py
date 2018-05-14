@@ -26,6 +26,7 @@ import yaml
 from osmclient.common.exceptions import ClientException
 from osmclient.common.exceptions import NotFound
 from osmclient.common import utils
+import json
 
 
 class Package(object):
@@ -57,7 +58,9 @@ class Package(object):
         http_header = ['{}: {}'.format(key,val)
                       for (key,val) in headers.items()]
         self._http.set_http_header(http_header)
-        resp = self._http.post_cmd(endpoint=endpoint, filename=filename)
+        http_code, resp = self._http.post_cmd(endpoint=endpoint, filename=filename)
+        if resp:
+            resp = json.loads(resp)
         #print 'RESP: {}'.format(yaml.safe_dump(resp))
         if not resp or 'id' not in resp:
             raise ClientException("failed to upload package")
