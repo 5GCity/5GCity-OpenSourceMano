@@ -4,6 +4,7 @@ from pymongo import MongoClient, errors
 from osm_common.dbbase import DbException, DbBase
 from http import HTTPStatus
 from time import time, sleep
+from copy import deepcopy
 
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 
@@ -20,6 +21,22 @@ __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 #                     raise DbException(str(e))
 #                 sleep(retry)
 #     return _retry_mongocall
+
+
+def deep_update(to_update, update_with):
+    """
+    Update 'to_update' dict with the content 'update_with' dict recursively
+    :param to_update: must be a dictionary to be modified
+    :param update_with: must be a dictionary. It is not changed
+    :return: to_update
+    """
+    for key in update_with:
+        if key in to_update:
+            if isinstance(to_update[key], dict) and isinstance(update_with[key], dict):
+                deep_update(to_update[key], update_with[key])
+                continue
+        to_update[key] = deepcopy(update_with[key])
+    return to_update
 
 
 class DbMongo(DbBase):
@@ -55,10 +72,17 @@ class DbMongo(DbBase):
         pass  # TODO
 
     @staticmethod
-    def _format_filter(filter):
+    def _format_filter(q_filter):
+        """
+        Translate query string filter into mongo database filter
+        :param q_filter: Query string content. Follows SOL005 section 4.3.2 guidelines, with the follow extensions and
+        differences: It accpept ".nq" (not equal) in addition to ".neq".
+        For arrays if get an item with exact matching. For partial matching, use the special work ".ANYINDEX.".
+        :return: database mongo filter
+        """
         try:
             db_filter = {}
-            for query_k, query_v in filter.items():
+            for query_k, query_v in q_filter.items():
                 dot_index = query_k.rfind(".")
                 if dot_index > 1 and query_k[dot_index+1:] in ("eq", "ne", "gt", "gte", "lt", "lte", "cont",
                                                                "ncont", "neq"):
@@ -83,15 +107,23 @@ class DbMongo(DbBase):
 
                 if operator in ("$eq", "$cont"):
                     # v cannot be a comma separated list, because operator would have been changed to $in
-                    db_filter[k] = v
+                    db_v = v
                 elif operator == "$ncount":
                     # v cannot be a comma separated list, because operator would have been changed to $nin
-                    db_filter[k] = {"$ne": v}
+                    db_v = {"$ne": v}
                 else:
-                    # maybe db_filter[k] exist. e.g. in the query string for values between 5 and 8: "a.gt=5&a.lt=8"
-                    if k not in db_filter:
-                        db_filter[k] = {}
-                    db_filter[k][operator] = v
+                    db_v = {operator: v}
+
+                # process the ANYINDEX word at k
+                kleft, _, kright = k.rpartition(".ANYINDEX.")
+                while kleft:
+                    k = kleft
+                    db_v = {"$elemMatch": {kright: db_v}}
+                    kleft, _, kright = k.rpartition(".ANYINDEX.")
+
+                # insert in db_filter
+                # maybe db_filter[k] exist. e.g. in the query string for values between 5 and 8: "a.gt=5&a.lt=8"
+                deep_update(db_filter, {k: db_v})
 
             return db_filter
         except Exception as e:
@@ -102,7 +134,8 @@ class DbMongo(DbBase):
         try:
             l = []
             collection = self.db[table]
-            rows = collection.find(self._format_filter(filter))
+            db_filter = self._format_filter(filter)
+            rows = collection.find(db_filter)
             for row in rows:
                 l.append(row)
             return l
