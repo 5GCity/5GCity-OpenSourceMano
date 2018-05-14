@@ -40,13 +40,13 @@ class LcmClient:
                                       key_serializer=str.encode,
                                       value_serializer=str.encode)
 
-    def scale(self, nsr_id, name, action):
+    def scale(self, nsr_id: str, name: str, action: str):
         msg = self._create_scale_action_payload(nsr_id, name, action)
         log.info("Sending scale action message: %s", json.dumps(msg))
         self.producer.send(topic='lcm_pm', key='trigger_scaling', value=json.dumps(msg))
         self.producer.flush()
 
-    def _create_scale_action_payload(self, nsr_id, name, action):
+    def _create_scale_action_payload(self, nsr_id: str, name: str, action: str):
         msg = {
             "ns_id": nsr_id,
             "scaling_group_descriptor": {

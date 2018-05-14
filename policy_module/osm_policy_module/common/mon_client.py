@@ -42,9 +42,11 @@ class MonClient:
                                       key_serializer=str.encode,
                                       value_serializer=str.encode)
 
-    def create_alarm(self, metric_name, resource_uuid, vim_uuid, threshold, statistic, operation):
+    def create_alarm(self, metric_name: str, ns_id: str, vdu_name: str, vnf_member_index: str, threshold: int,
+                     statistic: str, operation: str):
         cor_id = random.randint(1, 1000000)
-        msg = self._create_alarm_payload(cor_id, metric_name, resource_uuid, vim_uuid, threshold, statistic, operation)
+        msg = self._create_alarm_payload(cor_id, metric_name, ns_id, vdu_name, vnf_member_index, threshold, statistic,
+                                         operation)
         log.info("Sending create_alarm_request %s", msg)
         future = self.producer.send(topic='alarm_request', key='create_alarm_request', value=json.dumps(msg))
         future.get(timeout=60)
@@ -64,12 +66,15 @@ class MonClient:
 
         raise ValueError('Timeout: No alarm creation response from MON. Is MON up?')
 
-    def _create_alarm_payload(self, cor_id, metric_name, resource_uuid, vim_uuid, threshold, statistic, operation):
+    def _create_alarm_payload(self, cor_id: int, metric_name: str, ns_id: str, vdu_name: str, vnf_member_index: str,
+                              threshold: int, statistic: str, operation: str):
         alarm_create_request = {
             'correlation_id': cor_id,
             'alarm_name': str(uuid.uuid4()),
             'metric_name': metric_name,
-            'resource_uuid': resource_uuid,
+            'ns_id': ns_id,
+            'vdu_name': vdu_name,
+            'vnf_member_index': vnf_member_index,
             'operation': operation,
             'severity': 'critical',
             'threshold_value': threshold,
@@ -77,7 +82,6 @@ class MonClient:
         }
         msg = {
             'alarm_create_request': alarm_create_request,
-            'vim_uuid': vim_uuid
         }
         return msg
 

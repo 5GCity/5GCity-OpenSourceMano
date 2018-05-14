@@ -24,10 +24,10 @@
 
 
 class AlarmConfig:
-    def __init__(self, metric_name, resource_uuid, vim_uuid, threshold, operation, statistic, action):
+    def __init__(self, metric_name, vdu_name, vnf_member_index, threshold, operation, statistic, action):
         self.metric_name = metric_name
-        self.resource_uuid = resource_uuid
-        self.vim_uuid = vim_uuid
+        self.vdu_name = vdu_name
+        self.vnf_member_index = vnf_member_index
         self.threshold = threshold
         self.operation = operation
         self.statistic = statistic

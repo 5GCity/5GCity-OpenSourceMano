@@ -87,10 +87,10 @@
                       "vdu_monitoring_param": {
                         "type": "object",
                         "properties": {
-                          "vim_uuid": {
+                          "vnf_member_index": {
                             "type": "string"
                           },
-                          "resource_id": {
+                          "vdu_name": {
                             "type": "string"
                           },
                           "name": {
