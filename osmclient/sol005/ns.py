@@ -238,22 +238,19 @@ class Ns(object):
             raise ClientException(message)
 
     def create_alarm(self, alarm):
-        ns = self.get(alarm['ns_name'])
-        alarm['ns_id'] = ns['_id']
-        alarm.pop('ns_name')
         data = {}
         data["create_alarm_request"] = {}
         data["create_alarm_request"]["alarm_create_request"] = alarm
         try:
             http_code, resp = self._http.post_cmd(endpoint='/test/message/alarm_request',
                                        postfields_dict=data)
-            if resp:
-                resp = json.loads(resp)
-            #print 'RESP: {}'.format(resp)
-            if not resp:
-                raise ClientException('unexpected response from server: '.format(
-                                      resp))
-            print 'Alarm created'
+            if http_code in (200, 201, 202, 204):
+                #resp = json.loads(resp)
+                #print 'RESP: {}'.format(resp)
+                print 'Alarm created'
+            else:
+                raise ClientException('unexpected response from server: code: {}, resp: {}'.format(
+                                      http_code, resp))
         except ClientException as exc:
             message="failed to create alarm: alarm {}\nerror:\n{}".format(
                     alarm,
@@ -268,13 +265,13 @@ class Ns(object):
         try:
             http_code, resp = self._http.post_cmd(endpoint='/test/message/alarm_request',
                                        postfields_dict=data)
-            if resp:
-                resp = json.loads(resp)
-            #print 'RESP: {}'.format(resp)
-            if not resp:
-                raise ClientException('unexpected response from server: '.format(
-                                      resp))
-            print 'Alarm deleted'
+            if http_code in (200, 201, 202, 204):
+                #resp = json.loads(resp)
+                #print 'RESP: {}'.format(resp)
+                print 'Alarm deleted'
+            else:
+                raise ClientException('unexpected response from server: code: {}, resp: {}'.format(
+                                      http_code, resp))
         except ClientException as exc:
             message="failed to delete alarm: alarm {}\nerror:\n{}".format(
                     alarm,
@@ -282,21 +279,18 @@ class Ns(object):
             raise ClientException(message)
 
     def export_metric(self, metric):
-        ns = self.get(metric['ns_name'])
-        metric['ns_id'] = ns['_id']
-        metric.pop('ns_name')
         data = {}
         data["read_metric_data_request"] = metric
         try:
             http_code, resp = self._http.post_cmd(endpoint='/test/message/metric_request',
                                        postfields_dict=data)
-            if resp:
-                resp = json.loads(resp)
-            #print 'RESP: {}'.format(resp)
-            if not resp:
-                raise ClientException('unexpected response from server: '.format(
-                                      resp))
-            print 'Metric exported'
+            if http_code in (200, 201, 202, 204):
+                #resp = json.loads(resp)
+                #print 'RESP: {}'.format(resp)
+                return 'Metric exported'
+            else:
+                raise ClientException('unexpected response from server: code: {}, resp: {}'.format(
+                                      http_code, resp))
         except ClientException as exc:
             message="failed to export metric: metric {}\nerror:\n{}".format(
                     metric,

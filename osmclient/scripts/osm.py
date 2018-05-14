@@ -1120,16 +1120,18 @@ def sdnc_show(ctx, name):
 @click.option('--threshold_value', prompt=True,
               help='threshold value that, when crossed, an alarm is triggered')
 @click.option('--threshold_operator', prompt=True,
-              help='threshold operator describing the comparison (GE, LE, GT, LT, EQ')
+              help='threshold operator describing the comparison (GE, LE, GT, LT, EQ)')
 @click.option('--statistic', default='AVERAGE',
               help='statistic (AVERAGE, MINIMUM, MAXIMUM, COUNT, SUM)')
 @click.pass_context
 def ns_alarm_create(ctx, name, ns, vnf, vdu, metric, severity,
                     threshold_value, threshold_operator, statistic):
     '''creates a new alarm for a NS instance'''
+    ns_instance = ctx.obj.ns.get(ns)
     alarm = {}
     alarm['alarm_name'] = name
-    alarm['ns_name'] = ns
+    alarm['ns_id'] = ns_instance['_id']
+    alarm['correlation_id'] = ns_instance['_id']
     alarm['vnf_member_index'] = vnf
     alarm['vdu_name'] = vdu
     alarm['metric_name'] = metric
@@ -1145,20 +1147,20 @@ def ns_alarm_create(ctx, name, ns, vnf, vdu, metric, severity,
         exit(1)
 
 
-@cli.command(name='ns-alarm-delete')
-@click.argument('name')
-@click.pass_context
-def ns_alarm_delete(ctx, name):
-    '''deletes an alarm
-
-    NAME: name of the alarm to be deleted
-    '''
-    try:
-        check_client_version(ctx.obj, ctx.command.name)
-        ctx.obj.ns.delete_alarm(name)
-    except ClientException as inst:
-        print(inst.message)
-        exit(1)
+#@cli.command(name='ns-alarm-delete')
+#@click.argument('name')
+#@click.pass_context
+#def ns_alarm_delete(ctx, name):
+#    '''deletes an alarm
+#
+#    NAME: name of the alarm to be deleted
+#    '''
+#    try:
+#        check_client_version(ctx.obj, ctx.command.name)
+#        ctx.obj.ns.delete_alarm(name)
+#    except ClientException as inst:
+#        print(inst.message)
+#        exit(1)
 
 
 ####################
@@ -1180,8 +1182,10 @@ def ns_alarm_delete(ctx, name):
 def ns_metric_export(ctx, ns, vnf, vdu, metric, interval):
     '''exports a metric to the internal OSM bus, which can be read by other apps
     '''
+    ns_instance = ctx.obj.ns.get(ns)
     metric_data = {}
-    metric_data['ns_name'] = ns
+    metric_data['ns_id'] = ns_instance['_id']
+    metric_data['correlation_id'] = ns_instance['_id']
     metric_data['vnf_member_index'] = vnf
     metric_data['vdu_name'] = vdu
     metric_data['metric_name'] = metric
@@ -1190,11 +1194,11 @@ def ns_metric_export(ctx, ns, vnf, vdu, metric, interval):
     try:
         check_client_version(ctx.obj, ctx.command.name)
         if not interval:
-            ctx.obj.ns.export_metric(metric_data)
+            print '{}'.format(ctx.obj.ns.export_metric(metric_data))
         else:
             i = 1
             while True:
-                ctx.obj.ns.export_metric(metric_data)
+                print '{} {}'.format(ctx.obj.ns.export_metric(metric_data),i)
                 time.sleep(int(interval))
                 i+=1
     except ClientException as inst:
