@@ -57,8 +57,8 @@ services:
     image: osm/lcm
     networks:
       - netOSM
-#    volumes:
-#      - OSMstorage:/app/storage
+    volumes:
+      - osm_packages:/app/storage
     environment:
       OSMLCM_RO_HOST: ro
       OSMLCM_DATABASE_HOST: mongo
