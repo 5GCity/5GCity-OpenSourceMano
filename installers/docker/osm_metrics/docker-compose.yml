@@ -1,0 +1,35 @@
+version: '3'
+networks:
+  netOSM:
+    external: true
+services:
+  kafka-exporter:
+    image: osm/kafka-exporter
+    hostname: kafka-exporter
+    ports:
+      - "12340:12340"
+    networks:
+      - netOSM
+  prometheus:
+    image: prom/prometheus
+    hostname: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - netOSM
+    depends_on:
+      - kafka-exporter
+  grafana:
+    image: grafana/grafana
+    volumes:
+      - ./dashboards-osm.yml:/etc/grafana/provisioning/dashboards/dashboards-osm.yml
+      - ./osm-sample-dashboard.json:/etc/grafana/provisioning/dashboards/osm-sample-dashboard.json
+      - ./datasource-prometheus.yml:/etc/grafana/provisioning/datasources/datasource-prometheus.yml
+    hostname: grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - netOSM
+    depends_on:
+      - prometheus
+
