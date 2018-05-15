@@ -27,7 +27,8 @@
 rm -rf pool
 rm -rf dists
 mkdir -p pool/MON
-mv .build/*.deb pool/MON/
+mv deb_dist/*.deb pool/MON/
 mkdir -p dists/unstable/MON/binary-amd64/
 apt-ftparchive packages pool/MON > dists/unstable/MON/binary-amd64/Packages
 gzip -9fk dists/unstable/MON/binary-amd64/Packages
+echo 'dists/**,pool/MON/*.deb'
