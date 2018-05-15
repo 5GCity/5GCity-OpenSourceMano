@@ -2251,27 +2251,32 @@ class vimconnector(vimconn.vimconnector):
                                    'vim_info': yaml.safe_dump(vm_info), 'interfaces': []}
 
                         # get networks
-                        vm_ip = None
-                        vm_mac = None   
-                        if vm.NetworkConnectionSection.NetworkConnection:
-                            vm_mac = vm.NetworkConnectionSection.NetworkConnection.MACAddress
-                        if vm_ip is None:
-                            if not nsx_edge_list:
-                                nsx_edge_list = self.get_edge_details()
-                                if nsx_edge_list is None:
-                                    raise vimconn.vimconnException("refresh_vms_status:"\
-                                                                      "Failed to get edge details from NSX Manager")
-                            if vm_mac is not None:
-                                vm_ip = self.get_ipaddr_from_NSXedge(nsx_edge_list, vm_mac)
+                        vm_ip= None
+                        vm_mac = None
+                        networks = re.findall('<NetworkConnection needsCustomization=.*?</NetworkConnection>',result)
+                        for network in networks:
+                            mac_s = re.search('<MACAddress>(.*?)</MACAddress>',network)
+                            vm_mac = mac_s.group(1) if mac_s else None
+                            ip_s = re.search('<IpAddress>(.*?)</IpAddress>',network)
+                            vm_ip = ip_s.group(1) if ip_s else None
 
-                        network_name = vm.NetworkConnectionSection.NetworkConnection.get('network')    
-                        vm_net_id = self.get_network_id_by_name(network_name)
-                        interface = {"mac_address": vm_mac,
-                                     "vim_net_id": vm_net_id,
-                                     "vim_interface_id": vm_net_id,
-                                     'ip_address': vm_ip}
+                            if vm_ip is None:
+                                if not nsx_edge_list:
+                                    nsx_edge_list = self.get_edge_details()
+                                    if nsx_edge_list is None:
+                                        raise vimconn.vimconnException("refresh_vms_status:"\
+                                                                       "Failed to get edge details from NSX Manager")
+                                if vm_mac is not None:
+                                    vm_ip = self.get_ipaddr_from_NSXedge(nsx_edge_list, vm_mac)
 
-                        vm_dict["interfaces"].append(interface)
+                            network_name = vm.NetworkConnectionSection.NetworkConnection.get('network')
+                            vm_net_id = self.get_network_id_by_name(network_name)
+                            interface = {"mac_address": vm_mac,
+                                         "vim_net_id": vm_net_id,
+                                         "vim_interface_id": vm_net_id,
+                                         "ip_address": vm_ip}
+
+                            vm_dict["interfaces"].append(interface)
 
                     # add a vm to vm dict
                     vms_dict.setdefault(vmuuid, vm_dict)
