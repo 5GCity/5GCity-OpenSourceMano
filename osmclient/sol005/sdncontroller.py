@@ -62,6 +62,8 @@ class SdnController(object):
     def delete(self, name):
         sdn_controller = self.get(name)
         http_code, resp = self._http.delete_cmd('{}/{}'.format(self._apiBase,sdn_controller['_id']))
+        if resp:
+            resp = json.loads(resp)
         #print 'RESP: {}'.format(resp)
         if http_code == 202:
             print 'Deletion in progress'

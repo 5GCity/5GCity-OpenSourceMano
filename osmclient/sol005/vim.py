@@ -95,6 +95,8 @@ class Vim(object):
         if not utils.validate_uuid4(vim_name):
             vim_id = self.get_id(vim_name)
         http_code, resp = self._http.delete_cmd('{}/{}'.format(self._apiBase,vim_id))
+        if resp:
+            resp = json.loads(resp)
         #print 'RESP: {}'.format(resp)
         if http_code == 202:
             print 'Deletion in progress'

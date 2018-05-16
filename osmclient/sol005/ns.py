@@ -77,6 +77,8 @@ class Ns(object):
     def delete(self, name):
         ns = self.get(name)
         http_code, resp = self._http.delete_cmd('{}/{}'.format(self._apiBase,ns['_id']))
+        if resp:
+            resp = json.loads(resp)
         #print 'RESP: {}'.format(resp)
         if http_code == 202:
             print 'Deletion in progress'

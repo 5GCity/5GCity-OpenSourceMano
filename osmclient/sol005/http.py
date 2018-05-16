@@ -50,7 +50,7 @@ class Http(http.Http):
         curl_cmd.close()
         # TODO 202 accepted should be returned somehow
         if data.getvalue():
-            return http_code, json.loads(data.getvalue().decode())
+            return http_code, data.getvalue().decode()
         else:
             return http_code, None
 
