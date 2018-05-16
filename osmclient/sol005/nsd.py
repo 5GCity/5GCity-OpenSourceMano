@@ -90,9 +90,13 @@ class Nsd(object):
     def get_artifact(self, name, artifact, filename):
         self.get_thing(name, 'artifacts/{}'.format(artifact), filename)
 
-    def delete(self, name):
+    def delete(self, name, force=False):
         nsd = self.get(name)
-        http_code, resp = self._http.delete_cmd('{}/{}'.format(self._apiBase, nsd['_id']))
+        querystring = ''
+        if force:
+            querystring = '?FORCE=True'
+        http_code, resp = self._http.delete_cmd('{}/{}{}'.format(self._apiBase,
+                                         nsd['_id'], querystring))
         if resp:
             resp = json.loads(resp)
         #print 'RESP: {}'.format(resp)

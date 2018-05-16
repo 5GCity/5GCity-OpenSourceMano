@@ -74,9 +74,13 @@ class Ns(object):
             return resp
         raise NotFound("ns {} not found".format(name))
 
-    def delete(self, name):
+    def delete(self, name, force=False):
         ns = self.get(name)
-        http_code, resp = self._http.delete_cmd('{}/{}'.format(self._apiBase,ns['_id']))
+        querystring = ''
+        if force:
+            querystring = '?FORCE=True'
+        http_code, resp = self._http.delete_cmd('{}/{}{}'.format(self._apiBase,
+                                         ns['_id'], querystring))
         if resp:
             resp = json.loads(resp)
         #print 'RESP: {}'.format(resp)

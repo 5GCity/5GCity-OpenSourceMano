@@ -59,9 +59,13 @@ class SdnController(object):
         else:
             print resp['id']
 
-    def delete(self, name):
+    def delete(self, name, force=False):
         sdn_controller = self.get(name)
-        http_code, resp = self._http.delete_cmd('{}/{}'.format(self._apiBase,sdn_controller['_id']))
+        querystring = ''
+        if force:
+            querystring = '?FORCE=True'
+        http_code, resp = self._http.delete_cmd('{}/{}{}'.format(self._apiBase,
+                                         sdn_controller['_id'], querystring))
         if resp:
             resp = json.loads(resp)
         #print 'RESP: {}'.format(resp)

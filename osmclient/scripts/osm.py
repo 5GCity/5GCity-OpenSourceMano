@@ -687,9 +687,13 @@ def vnfd_update2(ctx, name, content):
 # DELETE operations
 ####################
 
-def nsd_delete(ctx, name):
+def nsd_delete(ctx, name, force):
     try:
-        ctx.obj.nsd.delete(name)
+        if not force:
+            ctx.obj.nsd.delete(name)
+        else:
+            check_client_version(ctx.obj, '--force')
+            ctx.obj.nsd.delete(name, force)
     except ClientException as inst:
         print(inst.message)
         exit(1)
@@ -697,29 +701,35 @@ def nsd_delete(ctx, name):
 
 @cli.command(name='nsd-delete', short_help='deletes a NSD/NSpkg')
 @click.argument('name')
+@click.option('--force', is_flag=True, help='forces the deletion bypassing pre-conditions')
 @click.pass_context
-def nsd_delete1(ctx, name):
+def nsd_delete1(ctx, name, force):
     '''deletes a NSD/NSpkg
 
     NAME: name or ID of the NSD/NSpkg to be deleted
     '''
-    nsd_delete(ctx, name)
+    nsd_delete(ctx, name, force)
 
 
 @cli.command(name='nspkg-delete', short_help='deletes a NSD/NSpkg')
 @click.argument('name')
+@click.option('--force', is_flag=True, help='forces the deletion bypassing pre-conditions')
 @click.pass_context
-def nsd_delete2(ctx, name):
+def nsd_delete2(ctx, name, force):
     '''deletes a NSD/NSpkg
 
     NAME: name or ID of the NSD/NSpkg to be deleted
     '''
-    nsd_delete(ctx, name)
+    nsd_delete(ctx, name, force)
 
 
-def vnfd_delete(ctx, name):
+def vnfd_delete(ctx, name, force):
     try:
-        ctx.obj.vnfd.delete(name)
+        if not force:
+            ctx.obj.vnfd.delete(name)
+        else:
+            check_client_version(ctx.obj, '--force')
+            ctx.obj.vnfd.delete(name, force)
     except ClientException as inst:
         print(inst.message)
         exit(1)
@@ -727,36 +737,43 @@ def vnfd_delete(ctx, name):
 
 @cli.command(name='vnfd-delete', short_help='deletes a VNFD/VNFpkg')
 @click.argument('name')
+@click.option('--force', is_flag=True, help='forces the deletion bypassing pre-conditions')
 @click.pass_context
-def vnfd_delete1(ctx, name):
+def vnfd_delete1(ctx, name, force):
     '''deletes a VNFD/VNFpkg
 
     NAME: name or ID of the VNFD/VNFpkg to be deleted
     '''
-    vnfd_delete(ctx, name)
+    vnfd_delete(ctx, name, force)
 
 
 @cli.command(name='vnfpkg-delete', short_help='deletes a VNFD/VNFpkg')
 @click.argument('name')
+@click.option('--force', is_flag=True, help='forces the deletion bypassing pre-conditions')
 @click.pass_context
-def vnfd_delete2(ctx, name):
+def vnfd_delete2(ctx, name, force):
     '''deletes a VNFD/VNFpkg
 
     NAME: name or ID of the VNFD/VNFpkg to be deleted
     '''
-    vnfd_delete(ctx, name)
+    vnfd_delete(ctx, name, force)
 
 
 @cli.command(name='ns-delete', short_help='deletes a NS instance')
 @click.argument('name')
+@click.option('--force', is_flag=True, help='forces the deletion bypassing pre-conditions')
 @click.pass_context
-def ns_delete(ctx, name):
+def ns_delete(ctx, name, force):
     '''deletes a NS instance
 
     NAME: name or ID of the NS instance to be deleted
     '''
     try:
-        ctx.obj.ns.delete(name)
+        if not force:
+            ctx.obj.ns.delete(name)
+        else:
+            check_client_version(ctx.obj, '--force')
+            ctx.obj.ns.delete(name, force)
     except ClientException as inst:
         print(inst.message)
         exit(1)
@@ -865,14 +882,19 @@ def vim_update(ctx,
 
 @cli.command(name='vim-delete')
 @click.argument('name')
+@click.option('--force', is_flag=True, help='forces the deletion bypassing pre-conditions')
 @click.pass_context
-def vim_delete(ctx, name):
+def vim_delete(ctx, name, force):
     '''deletes a VIM account
 
     NAME: name or ID of the VIM account to be deleted
     '''
     try:
-        ctx.obj.vim.delete(name)
+        if not force:
+            ctx.obj.vim.delete(name)
+        else:
+            check_client_version(ctx.obj, '--force')
+            ctx.obj.vim.delete(name, force)
     except ClientException as inst:
         print(inst.message)
         exit(1)
@@ -1047,15 +1069,16 @@ def sdnc_update(ctx,
 
 @cli.command(name='sdnc-delete')
 @click.argument('name')
+@click.option('--force', is_flag=True, help='forces the deletion bypassing pre-conditions')
 @click.pass_context
-def sdnc_delete(ctx, name):
+def sdnc_delete(ctx, name, force):
     '''deletes an SDN controller
 
     NAME: name or ID of the SDN controller to be deleted
     '''
     try:
         check_client_version(ctx.obj, ctx.command.name)
-        ctx.obj.sdnc.delete(name)
+        ctx.obj.sdnc.delete(name, force)
     except ClientException as inst:
         print(inst.message)
         exit(1)

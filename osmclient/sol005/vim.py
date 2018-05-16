@@ -90,11 +90,15 @@ class Vim(object):
                 return vim['uuid']
         raise NotFound("vim {} not found".format(name))
 
-    def delete(self, vim_name):
+    def delete(self, vim_name, force=False):
         vim_id = vim_name
         if not utils.validate_uuid4(vim_name):
             vim_id = self.get_id(vim_name)
-        http_code, resp = self._http.delete_cmd('{}/{}'.format(self._apiBase,vim_id))
+        querystring = ''
+        if force:
+            querystring = '?FORCE=True'
+        http_code, resp = self._http.delete_cmd('{}/{}{}'.format(self._apiBase,
+                                         vim_id, querystring))
         if resp:
             resp = json.loads(resp)
         #print 'RESP: {}'.format(resp)
