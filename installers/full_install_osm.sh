@@ -33,7 +33,10 @@ function usage(){
     echo -e "     -p <path>:      use specified repository path for lxd images"
     echo -e "     --lightweight:  install lightweight build of OSM (default installation)"
     echo -e "     --soui:         install classic build of OSM (Rel THREE v3.1, based on LXD containers, with SO and UI)"
-    echo -e "     --vimemu:       additionally fetch, build, and deploy the VIM emulator as a docker container"
+    echo -e "     --vimemu:       additionally deploy the VIM emulator as a docker container"
+    echo -e "     --elk_stack:    additionally deploy an ELK docker stack for event logging"
+    echo -e "     --pm_stack:     additionally deploy a Prometheus+Grafana stack for performance monitoring (PM)"
+    echo -e "     -o <ADDON>:     do not install OSM, but ONLY one of the addons (vimemu, elk_stack, pm_stack) (assumes OSM is already installed)"
     echo -e "     --develop:      (deprecated, use '-b master') install OSM from source code using the master branch"
 #    echo -e "     --reconfigure:  reconfigure the modules (DO NOT change NAT rules)"
     echo -e "     --nat:          install only NAT rules"
@@ -593,6 +596,56 @@ EONG
     echo "Finished deployment of lightweight build"
 }
 
+function deploy_elk() {
+    echo "Deploying ELK stack"
+    sg docker -c "docker stack deploy -c ${OSM_DEVOPS}/installers/docker/osm_elk/docker-compose.yml osm_elk"
+    echo "Waiting for ELK stack to be up and running"
+    time=0
+    step=2
+    timelength=20
+    elk_is_up=1
+    while [ $time -le $timelength ]; do
+        if [[ $(curl -XGET http://localhost:5601/status -I | grep "HTTP/1.1 200 OK" | wc -l ) -eq 1 ]]; then
+            elk_is_up=0
+            break
+        fi
+        sleep $step
+        time=$((time+step))
+    done
+    if [ $elk_is_up -eq 0 ]; then
+        echo "ELK is up and running. Trying to create index pattern..."
+        #Create index pattern
+        curl -f -XPOST -H "Content-Type: application/json" -H "kbn-xsrf: anything" \
+          "http://localhost:5601/api/saved_objects/index-pattern/logstash-*" \
+          -d"{\"attributes\":{\"title\":\"logstash-*\",\"timeFieldName\":\"@timestamp\"}}"
+        #Make it the default index
+        curl -XPOST -H "Content-Type: application/json" -H "kbn-xsrf: anything" \
+          "http://localhost:5601/api/kibana/settings/defaultIndex" \
+          -d"{\"value\":\"logstash-*\"}"
+    else
+        echo "Cannot connect to Kibana to create index pattern."
+        echo "Once Kibana is running, you can use the following instructions to create index pattern:"
+        echo 'curl -f -XPOST -H "Content-Type: application/json" -H "kbn-xsrf: anything" \
+          "http://localhost:5601/api/saved_objects/index-pattern/logstash-*" \
+          -d"{\"attributes\":{\"title\":\"logstash-*\",\"timeFieldName\":\"@timestamp\"}}"'
+        echo 'curl -XPOST -H "Content-Type: application/json" -H "kbn-xsrf: anything" \
+          "http://localhost:5601/api/kibana/settings/defaultIndex" \
+          -d"{\"value\":\"logstash-*\"}"'
+    fi
+    echo "Finished deployment of ELK stack"
+    return 0
+}
+
+function deploy_perfmon() {
+    echo "Generating osm/kafka-exporter docker image"
+    sg docker -c "docker build ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter -f ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter/Dockerfile -t osm/kafka-exporter || ! echo 'cannot build kafka-exporter docker image' >&2"
+    echo "Finished generation of osm/kafka-exporter docker image"
+    echo "Deploying PM stack (Kafka exporter + Prometheus + Grafana)"
+    sg docker -c "docker stack deploy -c ${OSM_DEVOPS}/installers/docker/osm_metrics/docker-compose.yml osm_metrics"
+    echo "Finished deployment of PM stack"
+    return 0
+}
+
 function install_lightweight() {
     echo "Installing lightweight build of OSM"
     LWTEMPDIR="$(mktemp -d -q --tmpdir "installosmlight.XXXXXX")"
@@ -611,13 +664,22 @@ function install_lightweight() {
       || sudo apt-get install -y $need_packages_lw \
       || FATAL "failed to install $need_packages_lw"
     install_juju
+    track juju
     install_docker_ce
+    track docker_ce
     #install_docker_compose
     generate_docker_images
+    track docker_build
     generate_docker_env_files
     deploy_lightweight
-    [ -n "$INSTALL_VIMEMU" ] && install_vimemu
+    track docker_deploy
+    [ -n "$INSTALL_VIMEMU" ] && install_vimemu && track vimemu
+    [ -n "$INSTALL_ELK" ] && deploy_elk && track elk
+    [ -n "$INSTALL_PERFMON" ] && deploy_perfmon && track perfmon
     install_osmclient
+    track osmclient
+    wget -q -O- https://osm-download.etsi.org/ftp/osm-4.0-four/README2.txt &> /dev/null
+    track end
     return 0
 }
 
@@ -665,6 +727,9 @@ function dump_vars(){
     echo "LXD_REPOSITORY_BASE=$LXD_REPOSITORY_BASE"
     echo "LXD_REPOSITORY_PATH=$LXD_REPOSITORY_PATH"
     echo "INSTALL_LIGHTWEIGHT=$INSTALL_LIGHTWEIGHT"
+    echo "INSTALL_ONLY=$INSTALL_ONLY"
+    echo "INSTALL_ELK=$INSTALL_ELK"
+    echo "INSTALL_PERFMON=$INSTALL_PERFMON"
     echo "RELEASE=$RELEASE"
     echo "REPOSITORY=$REPOSITORY"
     echo "REPOSITORY_BASE=$REPOSITORY_BASE"
@@ -680,8 +745,9 @@ function track(){
     url="http://www.woopra.com/track/ce?project=osm.etsi.org&cookie=${SESSION_ID}"
     #url="${url}&ce_campaign_name=${CAMPAIGN_NAME}"
     event_name="bin"
-    [ -n "$INSTALL_FROM_SOURCE" ] && event_name="src"
-    [ -n "$INSTALL_FROM_LXDIMAGES" ] && event_name="lxd"
+    [ -z "$INSTALL_LIGHTWEIGHT" ] && [ -n "$INSTALL_FROM_SOURCE" ] && event_name="binsrc"
+    [ -z "$INSTALL_LIGHTWEIGHT" ] && [ -n "$INSTALL_FROM_LXDIMAGES" ] && event_name="lxd"
+    [ -n "$INSTALL_LIGHTWEIGHT" ] && event_name="lw"
     event_name="${event_name}_$1"
     url="${url}&event=${event_name}&ce_duration=${duration}"
     wget -q -O /dev/null $url
@@ -705,12 +771,15 @@ INSTALL_FROM_LXDIMAGES=""
 LXD_REPOSITORY_BASE="https://osm-download.etsi.org/repository/osm/lxd"
 LXD_REPOSITORY_PATH=""
 INSTALL_LIGHTWEIGHT="y"
+INSTALL_ONLY=""
+INSTALL_ELK=""
+INSTALL_PERFMON=""
 NOCONFIGURE=""
 RELEASE_DAILY=""
 SESSION_ID=`date +%s`
 OSM_DEVOPS=
 
-while getopts ":hy-:b:r:k:u:R:l:p:D:" o; do
+while getopts ":hy-:b:r:k:u:R:l:p:D:o:" o; do
     case "${o}" in
         h)
             usage && exit 0
@@ -739,6 +808,12 @@ while getopts ":hy-:b:r:k:u:R:l:p:D:" o; do
         D)
             OSM_DEVOPS="${OPTARG}"
             ;;
+        o)
+            INSTALL_ONLY="y"
+            [ "${OPTARG}" == "vimemu" ] && INSTALL_VIMEMU="y" && continue
+            [ "${OPTARG}" == "elk_stack" ] && INSTALL_ELK="y" && continue
+            [ "${OPTARG}" == "pm_stack" ] && INSTALL_PERFMON="y" && continue
+            ;;
         -)
             [ "${OPTARG}" == "help" ] && usage && exit 0
             [ "${OPTARG}" == "source" ] && INSTALL_FROM_SOURCE="y" && continue
@@ -753,6 +828,8 @@ while getopts ":hy-:b:r:k:u:R:l:p:D:" o; do
             [ "${OPTARG}" == "lightweight" ] && INSTALL_LIGHTWEIGHT="y" && continue
             [ "${OPTARG}" == "soui" ] && INSTALL_LIGHTWEIGHT="" && RELEASE="-R ReleaseTHREE-Classic" && REPOSITORY="-r testing" && continue
             [ "${OPTARG}" == "vimemu" ] && INSTALL_VIMEMU="y" && continue
+            [ "${OPTARG}" == "elk_stack" ] && INSTALL_ELK="y" && continue
+            [ "${OPTARG}" == "pm_stack" ] && INSTALL_PERFMON="y" && continue
             [ "${OPTARG}" == "noconfigure" ] && NOCONFIGURE="y" && continue
             [ "${OPTARG}" == "showopts" ] && SHOWOPTS="y" && continue
             [ "${OPTARG}" == "daily" ] && RELEASE_DAILY="y" && continue
@@ -771,6 +848,8 @@ while getopts ":hy-:b:r:k:u:R:l:p:D:" o; do
             ;;
     esac
 done
+
+[ -n "$INSTALL_FROM_LXDIMAGES" ] && [ -n "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible options: --lxd can only be used with --soui"
 
 if [ -n "$SHOWOPTS" ]; then
     dump_vars
@@ -837,8 +916,15 @@ OSM_JENKINS="$OSM_DEVOPS/jenkins"
 [ -n "$NAT" ] && nat && echo -e "\nDONE" && exit 0
 [ -n "$UPDATE" ] && update && echo -e "\nDONE" && exit 0
 [ -n "$RECONFIGURE" ] && configure && echo -e "\nDONE" && exit 0
+[ -n "$INSTALL_ONLY" ] && [ -n "$INSTALL_ELK" ] && deploy_elk
+[ -n "$INSTALL_ONLY" ] && [ -n "$INSTALL_PERFMON" ] && deploy_perfmon
+[ -n "$INSTALL_ONLY" ] && [ -n "$INSTALL_VIMEMU" ] && install_vimemu
+[ -n "$INSTALL_ONLY" ] && echo -e "\nDONE" && exit 0
 
 #Installation starts here
+wget -q -O- https://osm-download.etsi.org/ftp/osm-4.0-four/README.txt &> /dev/null
+track start
+
 [ -n "$INSTALL_LIGHTWEIGHT" ] && install_lightweight && echo -e "\nDONE" && exit 0
 echo -e "\nInstalling OSM from refspec: $COMMIT_ID"
 if [ -n "$INSTALL_FROM_SOURCE" ] && [ -z "$ASSUME_YES" ]; then
@@ -848,9 +934,6 @@ fi
 echo -e "Checking required packages: lxd"
 lxd --version &>/dev/null || FATAL "lxd not present, exiting."
 [ -n "$INSTALL_LXD" ] && echo -e "\nInstalling and configuring lxd" && install_lxd
-
-wget -q -O- https://osm-download.etsi.org/ftp/osm-4.0-four/README.txt &> /dev/null
-track start
 
 # use local devops for containers
 export OSM_USE_LOCAL_DEVOPS=true
