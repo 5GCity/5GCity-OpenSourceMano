@@ -62,5 +62,9 @@ ENV OSMLCM_MESSAGE_DRIVER  kafka
 ENV OSMLCM_MESSAGE_HOST    kafka
 ENV OSMLCM_MESSAGE_PORT    9092
 
+# logs
+ENV OSMLCM_GLOBAL_LOGFILE  /app/log/lcm.log
+ENV OSMLCM_GLOBAL_LOGLEVEL DEBUG
+
 # Run app.py when the container launches
 CMD ["python3", "lcm.py"]

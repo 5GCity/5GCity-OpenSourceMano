@@ -4,27 +4,29 @@
 import asyncio
 import yaml
 import ROclient
+import logging
+import logging.handlers
+import getopt
+import functools
+import sys
 from osm_common import dbmemory
 from osm_common import dbmongo
 from osm_common import fslocal
 from osm_common import msglocal
 from osm_common import msgkafka
-import logging
-import functools
-import sys
 from osm_common.dbbase import DbException
 from osm_common.fsbase import FsException
 from osm_common.msgbase import MsgException
-from os import environ
-# from vca import DeployApplication, RemoveApplication
+from os import environ, path
 from n2vc.vnf import N2VC
 from n2vc import version as N2VC_version
-# import os.path
-# import time
 
 from copy import deepcopy
 from http import HTTPStatus
 from time import time
+
+
+__author__ = "Alfonso Tierno"
 
 
 class LcmException(Exception):
@@ -466,7 +468,7 @@ class Lcm:
             if ci_file:
                 ci_file.close()
 
-    def n2vc_callback(self, model_name, application_name, status, message, db_nsr, db_nslcmop, vnf_member_index, task=None):
+    def n2vc_callback(self, model_name, application_name, status, message, db_nsr, db_nslcmop, member_vnf_index, task=None):
         """
         Callback both for charm status change and task completion
         :param model_name: Charm model name
@@ -483,7 +485,7 @@ class Lcm:
         :param message: detailed message error
         :param db_nsr: nsr database content
         :param db_nslcmop: nslcmop database content
-        :param vnf_member_index: NSD vnf-member-index
+        :param member_vnf_index: NSD member-vnf-index
         :param task: None for charm status change, or task for completion task callback
         :return:
         """
@@ -496,7 +498,7 @@ class Lcm:
             nsr_lcm = db_nsr["_admin"]["deployed"]
             ns_action = db_nslcmop["lcmOperationType"]
             logging_text = "Task ns={} {}={} [n2vc_callback] vnf_index={}".format(nsr_id, ns_action, nslcmop_id,
-                                                                                  vnf_member_index)
+                                                                                  member_vnf_index)
 
             if task:
                 if task.cancelled():
@@ -509,8 +511,8 @@ class Lcm:
                     if exc:
                         self.logger.error(logging_text + " task Exception={}".format(exc))
                         if ns_action in ("instantiate", "terminate"):
-                            nsr_lcm["VCA"][vnf_member_index]['operational-status'] = "error"
-                            nsr_lcm["VCA"][vnf_member_index]['detailed-status'] = str(exc)
+                            nsr_lcm["VCA"][member_vnf_index]['operational-status'] = "error"
+                            nsr_lcm["VCA"][member_vnf_index]['detailed-status'] = str(exc)
                         elif ns_action == "action":
                             db_nslcmop["operationState"] = "FAILED"
                             db_nslcmop["detailed-status"] = str(exc)
@@ -530,10 +532,10 @@ class Lcm:
                         return
             elif status:
                 self.logger.debug(logging_text + " Enter status={}".format(status))
-                if nsr_lcm["VCA"][vnf_member_index]['operational-status'] == status:
+                if nsr_lcm["VCA"][member_vnf_index]['operational-status'] == status:
                     return  # same status, ignore
-                nsr_lcm["VCA"][vnf_member_index]['operational-status'] = status
-                nsr_lcm["VCA"][vnf_member_index]['detailed-status'] = str(message)
+                nsr_lcm["VCA"][member_vnf_index]['operational-status'] = status
+                nsr_lcm["VCA"][member_vnf_index]['detailed-status'] = str(message)
             else:
                 self.logger.critical(logging_text + " Enter with bad parameters", exc_info=True)
                 return
@@ -551,11 +553,11 @@ class Lcm:
                 if vca_status != "active":
                     all_active = False
                 elif vca_status in ("error", "blocked"):
-                    n2vc_error_text.append("member_vnf_index={} {}: {}".format(vnf_member_index, vca_status,
+                    n2vc_error_text.append("member_vnf_index={} {}: {}".format(member_vnf_index, vca_status,
                                                                            vca_info["detailed-status"]))
 
             if all_active:
-                self.logger.debug("[n2vc_callback] ns_instantiate={} vnf_index={} All active".format(nsr_id, vnf_member_index))
+                self.logger.debug("[n2vc_callback] ns_instantiate={} vnf_index={} All active".format(nsr_id, member_vnf_index))
                 db_nsr["config-status"] = "configured"
                 db_nsr["detailed-status"] = "done"
                 db_nslcmop["operationState"] = "COMPLETED"
@@ -580,7 +582,7 @@ class Lcm:
             update_nsr = update_nslcmop = True
 
         except Exception as e:
-            self.logger.critical("[n2vc_callback] vnf_index={} Exception {}".format(vnf_member_index, e), exc_info=True)
+            self.logger.critical("[n2vc_callback] vnf_index={} Exception {}".format(member_vnf_index, e), exc_info=True)
         finally:
             try:
                 if update_nslcmop:
@@ -589,7 +591,7 @@ class Lcm:
                     self.update_db("nsrs", nsr_id, db_nsr)
             except Exception as e:
                 self.logger.critical("[n2vc_callback] vnf_index={} Update database Exception {}".format(
-                    vnf_member_index, e), exc_info=True)
+                    member_vnf_index, e), exc_info=True)
 
     def ns_params_2_RO(self, ns_params):
         """
@@ -785,15 +787,20 @@ class Lcm:
                 if ns_status == "ERROR":
                     raise ROclient.ROClientException(ns_status_info)
                 elif ns_status == "BUILD":
+                    db_nsr_detailed_status_old = db_nsr["detailed-status"]
                     db_nsr["detailed-status"] = ns_status_detailed + "; {}".format(ns_status_info)
-                    self.update_db("nsrs", nsr_id, db_nsr)
+                    if db_nsr_detailed_status_old != db_nsr["detailed-status"]:
+                        self.update_db("nsrs", nsr_id, db_nsr)
                 elif ns_status == "ACTIVE":
-                    step = "Getting ns VIM information"
-                    ns_RO_info = nsr_lcm["nsr_ip"] = RO.get_ns_vnf_info(desc)
-                    break
+                    step = "Waiting for management IP address from VIM"
+                    try:
+                        ns_RO_info = nsr_lcm["nsr_ip"] = RO.get_ns_vnf_info(desc)
+                        break
+                    except ROclient.ROClientException as e:
+                        if e.http_code != 409:  # IP address is not ready return code is 409 CONFLICT
+                            raise e
                 else:
                     assert False, "ROclient.check_ns_status returns unknown {}".format(ns_status)
-
                 await asyncio.sleep(5, loop=self.loop)
                 deployment_timeout -= 5
             if deployment_timeout <= 0:
@@ -1144,18 +1151,18 @@ class Lcm:
             db_nslcmop = self.db.get_one("nslcmops", {"_id": nslcmop_id})
             db_nsr = self.db.get_one("nsrs", {"_id": nsr_id})
             nsr_lcm = db_nsr["_admin"].get("deployed")
-            vnf_index = db_nslcmop["operationParams"]["vnf_member_index"]
+            vnf_index = db_nslcmop["operationParams"]["member_vnf_index"]
 
             #TODO check if ns is in a proper status
             vca_deployed = nsr_lcm["VCA"].get(vnf_index)
             if not vca_deployed:
-                raise LcmException("charm for vnf_member_index={} is not deployed".format(vnf_index))
+                raise LcmException("charm for member_vnf_index={} is not deployed".format(vnf_index))
             model_name = vca_deployed.get("model")
             application_name = vca_deployed.get("application")
             if not model_name or not application_name:
-                raise LcmException("charm for vnf_member_index={} is not properly deployed".format(vnf_index))
+                raise LcmException("charm for member_vnf_index={} is not properly deployed".format(vnf_index))
             if vca_deployed["operational-status"] != "active":
-                raise LcmException("charm for vnf_member_index={} operational_status={} not 'active'".format(
+                raise LcmException("charm for member_vnf_index={} operational_status={} not 'active'".format(
                     vnf_index, vca_deployed["operational-status"]))
             primitive = db_nslcmop["operationParams"]["primitive"]
             primitive_params = db_nslcmop["operationParams"]["primitive_params"]
@@ -1442,7 +1449,6 @@ class Lcm:
         if self.fs:
             self.fs.fs_disconnect()
 
-
     def read_config_file(self, config_file):
         # TODO make a [ini] + yaml inside parser
         # the configparser library is not suitable, because it does not admit comments at the end of line,
@@ -1474,9 +1480,49 @@ class Lcm:
             exit(1)
 
 
+def usage():
+    print("""Usage: {} [options]
+        -c|--config [configuration_file]: loads the configuration file (default: ./nbi.cfg)
+        -h|--help: shows this help
+        """.format(sys.argv[0]))
+        # --log-socket-host HOST: send logs to this host")
+        # --log-socket-port PORT: send logs using this port (default: 9022)")
+
+
 if __name__ == '__main__':
-
-    config_file = "lcm.cfg"
-    lcm = Lcm(config_file)
-
-    lcm.start()
+    try:
+        # load parameters and configuration
+        opts, args = getopt.getopt(sys.argv[1:], "hc:", ["config=", "help"])
+        # TODO add  "log-socket-host=", "log-socket-port=", "log-file="
+        config_file = None
+        for o, a in opts:
+            if o in ("-h", "--help"):
+                usage()
+                sys.exit()
+            elif o in ("-c", "--config"):
+                config_file = a
+            # elif o == "--log-socket-port":
+            #     log_socket_port = a
+            # elif o == "--log-socket-host":
+            #     log_socket_host = a
+            # elif o == "--log-file":
+            #     log_file = a
+            else:
+                assert False, "Unhandled option"
+        if config_file:
+            if not path.isfile(config_file):
+                print("configuration file '{}' that not exist".format(config_file), file=sys.stderr)
+                exit(1)
+        else:
+            for config_file in (__file__[:__file__.rfind(".")] + ".cfg", "./lcm.cfg", "/etc/osm/lcm.cfg"):
+                if path.isfile(config_file):
+                    break
+            else:
+                print("No configuration file 'nbi.cfg' found neither at local folder nor at /etc/osm/", file=sys.stderr)
+                exit(1)
+        lcm = Lcm(config_file)
+        lcm.start()
+    except getopt.GetoptError as e:
+        print(str(e), file=sys.stderr)
+        # usage()
+        exit(1)

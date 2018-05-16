@@ -28,7 +28,6 @@ asyncio RO python client to interact with RO-server
 
 import asyncio
 import aiohttp
-
 import json
 import yaml
 import logging
@@ -37,10 +36,10 @@ from urllib.parse import quote
 from uuid import UUID
 from copy import deepcopy
 
-__author__ = "Alfonso Tierno, Pablo Montes"
+__author__ = "Alfonso Tierno"
 __date__ = "$09-Jan-2018 09:09:48$"
-__version__ = "0.1.0-r470"
-version_date = "Jan 2018"
+__version__ = "0.1.2"
+version_date = "2018-05-16"
 requests = None
 
 class ROClientException(Exception):
@@ -308,8 +307,8 @@ class ROClient:
         ns_info = {}
         for vnf in ns_descriptor["vnfs"]:
             if not vnf.get("ip_address"):
-                raise ROClientException("No ip_address returned for ns member_vnf_index '{}'".format(
-                    vnf["member_vnf_index"]), http_code=500)
+                raise ROClientException("ns member_vnf_index '{}' has no IP address".format(
+                    vnf["member_vnf_index"]), http_code=409)
             vnfr_info = {
                 "ip_address": vnf.get("ip_address"),
                 "vdur": {}
@@ -319,6 +318,11 @@ class ROClient:
                     "vim_id": vm.get("vim_vm_id"),
                     "ip_address": vm.get("ip_address")
                 }
+                for iface in vm["interfaces"]:
+                    if iface.get("type") == "mgmt" and not iface.get("ip_address"):
+                        raise ROClientException("ns member_vnf_index '{}' vm '{}' management interface '{}' has no IP "
+                                                "address".format(vnf["member_vnf_index"], vm["vdu_osm_id"],
+                                                                 iface["external_name"]), http_code=409)
                 vnfr_info["vdur"][vm["vdu_osm_id"]] = vdur
             ns_info[str(vnf["member_vnf_index"])] = vnfr_info
         return ns_info
