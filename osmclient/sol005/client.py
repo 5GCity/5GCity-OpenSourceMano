@@ -58,9 +58,9 @@ class Client(object):
 
         if ro_host is None:
             ro_host = host
-        ro_http_client = http.Http('http://{}:{}/'.format(ro_host, ro_port))
+        ro_http_client = http.Http('http://{}:{}/openmano'.format(ro_host, ro_port))
         ro_http_client.set_http_header(
-            ['Accept: application/vnd.yand.data+json',
+            ['Accept: application/json',
              'Content-Type: application/json'])
 
         self._http_client = http.Http(

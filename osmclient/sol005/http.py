@@ -60,11 +60,10 @@ class Http(http.Http):
         data = BytesIO()
         curl_cmd = self._get_curl_cmd(endpoint)
         if put_method:
-            curl_cmd.setopt(pycurl.PUT, 1)
+            curl_cmd.setopt(pycurl.CUSTOMREQUEST, "PUT")
         elif patch_method:
             curl_cmd.setopt(pycurl.CUSTOMREQUEST, "PATCH")
-        else:
-            curl_cmd.setopt(pycurl.POST, 1)
+        curl_cmd.setopt(pycurl.POST, 1)
         curl_cmd.setopt(pycurl.WRITEFUNCTION, data.write)
 
         if postfields_dict is not None:

@@ -48,7 +48,7 @@ class SdnController(object):
 
     def update(self, name, sdn_controller):
         sdnc = self.get(name)
-        http_code, resp = self._http.patch_cmd(endpoint='{}/{}'.format(self._apiBase,sdnc['_id']),
+        http_code, resp = self._http.put_cmd(endpoint='{}/{}'.format(self._apiBase,sdnc['_id']),
                                        postfields_dict=sdn_controller)
         if resp:
             resp = json.loads(resp)

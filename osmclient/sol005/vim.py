@@ -34,24 +34,32 @@ class Vim(object):
         self._apiResource = '/vims'
         self._apiBase = '{}{}{}'.format(self._apiName,
                                         self._apiVersion, self._apiResource)
-    def create(self, name, vim_access):
+    def create(self, name, vim_access, sdn_controller, sdn_port_mapping):
         if 'vim-type' not in vim_access:
             #'openstack' not in vim_access['vim-type']):
             raise Exception("vim type not provided")
 
         vim_account = {}
-        vim_config = {'hello': 'hello'}
         vim_account['name'] = name
         vim_account = self.update_vim_account_dict(vim_account, vim_access)
 
         vim_config = {}
         if 'config' in vim_access and vim_access['config'] is not None:
-           vim_config = yaml.load(vim_access['config'])
-
-        vim_account['config'] = vim_config
+            vim_config = json.loads(vim_access['config'])
+        if sdn_controller:
+            sdnc = self._client.sdnc.get(sdn_controller)
+            vim_config['sdn-controller'] = sdnc['_id']
+        if sdn_port_mapping:
+            with open(sdn_port_mapping, 'r') as f:
+                vim_config['sdn-port-mapping'] = yaml.safe_load(f.read())
+        if vim_config:
+            vim_account['config'] = vim_config
+            #vim_account['config'] = json.dumps(vim_config)
 
         http_code, resp = self._http.post_cmd(endpoint=self._apiBase,
                                        postfields_dict=vim_account)
+        #print 'HTTP CODE: {}'.format(http_code)
+        #print 'RESP: {}'.format(resp)
         if resp:
             resp = json.loads(resp)
         if not resp or 'id' not in resp:
@@ -60,14 +68,31 @@ class Vim(object):
         else:
             print resp['id']
 
-    def update(self, vim_name, vim_account):
+    def update(self, vim_name, vim_account, sdn_controller, sdn_port_mapping):
         vim = self.get(vim_name)
-        #http_code, resp = self._http.put_cmd(endpoint='{}/{}'.format(self._apiBase,vim['_id']),
-        http_code, resp = self._http.patch_cmd(endpoint='{}/{}'.format(self._apiBase,vim['_id']),
+
+        vim_config = {}
+        if 'config' in vim_account:
+            if config=="" and (sdncontroller or sdn_port_mapping):
+                raise ClientException("clearing config is incompatible with updating SDN info")
+            if config=="":
+                vim_config = None
+            else:
+                vim_config = json.loads(vim_account['config'])
+        if sdn_controller:
+            sdnc = self._client.sdnc.get(sdn_controller)
+            vim_config['sdn-controller'] = sdnc['_id']
+        if sdn_port_mapping:
+            with open(sdn_port_mapping, 'r') as f:
+                vim_config['sdn-port-mapping'] = yaml.safe_load(f.read())
+        vim_account['config'] = vim_config
+        #vim_account['config'] = json.dumps(vim_config)
+        http_code, resp = self._http.put_cmd(endpoint='{}/{}'.format(self._apiBase,vim['_id']),
                                        postfields_dict=vim_account)
+        #print 'HTTP CODE: {}'.format(http_code)
+        #print 'RESP: {}'.format(resp)
         if resp:
             resp = json.loads(resp)
-        #print 'RESP: {}'.format(resp)
         if not resp or 'id' not in resp:
             raise ClientException('failed to update vim: '.format(resp))
         else:
