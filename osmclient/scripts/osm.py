@@ -217,12 +217,16 @@ def vnfd_list2(ctx, filter):
 
 
 @cli.command(name='vnf-list')
+@click.option('--ns', default=None, help='NS instance id or name to restrict the VNF list')
 @click.pass_context
-def vnf_list(ctx):
+def vnf_list(ctx, ns):
     ''' list all VNF instances'''
     try:
-        check_client_version(ctx.obj, ctx.command.name, 'v1')
-        resp = ctx.obj.vnf.list()
+        if ns:
+            check_client_version(ctx.obj, '--ns')
+            resp = ctx.obj.vnf.list(ns)
+        else:
+            resp = ctx.obj.vnf.list()
     except ClientException as inst:
         print(inst.message)
         exit(1)
@@ -409,7 +413,7 @@ def vnf_show(ctx, name, literal, filter):
     NAME: name or ID of the VNF instance
     '''
     try:
-        check_client_version(ctx.obj, ctx.command.name, 'v1')
+        check_client_version(ctx.obj, ctx.command.name)
         resp = ctx.obj.vnf.get(name)
     except ClientException as inst:
         print(inst.message)
