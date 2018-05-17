@@ -144,11 +144,19 @@ class TestAlarmKeys(unittest.TestCase):
         # Mock a message with config alarm key and value
         message = Message()
         message.key = 'create_alarm_request'
-        message.value = json.dumps({'alarm_create_request': {'correlation_id': 1}})
+        message.value = json.dumps({'alarm_create_request': {'correlation_id': 1, 'threshold_value': 50,
+                                                             'operation': 'GT', 'metric_name': 'cpu_utilization',
+                                                             'vdu_name': 'vdu',
+                                                             'vnf_member_index': '1',
+                                                             'ns_id': '1'}})
 
         get_creds.return_value = mock_creds
 
         # Call alarming functionality and check config alarm call
         config_alarm.return_value = 'my_alarm_id', True
         self.alarming.alarming(message, 'test_id')
-        config_alarm.assert_called_with(mock.ANY, mock.ANY, mock.ANY, {'correlation_id': 1}, {})
+        config_alarm.assert_called_with(mock.ANY, mock.ANY, mock.ANY, {'correlation_id': 1, 'threshold_value': 50,
+                                                                       'operation': 'GT',
+                                                                       'metric_name': 'cpu_utilization',
+                                                                       'vdu_name': 'vdu',
+                                                                       'vnf_member_index': '1', 'ns_id': '1'}, {})

@@ -161,8 +161,12 @@ class OpenStack_Response(object):
                              "schema_type": "notify_alarm",
                              "notify_details": {
                                  "alarm_uuid": kwargs['a_id'],
-                                 "resource_uuid": kwargs['r_id'],
-                                 "vim_type": kwargs['vim_type'],
+                                 "vdu_name": kwargs['vdu_name'],
+                                 "vnf_member_index": kwargs['vnf_member_index'],
+                                 "ns_id": kwargs['ns_id'],
+                                 "metric_name": kwargs['metric_name'],
+                                 "threshold_value": kwargs['threshold_value'],
+                                 "operation": kwargs['operation'],
                                  "severity": kwargs['sev'],
                                  "status": kwargs['state'],
                                  "start_date": kwargs['date']}}

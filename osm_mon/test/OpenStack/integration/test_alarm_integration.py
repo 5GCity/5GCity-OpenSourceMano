@@ -63,6 +63,10 @@ class AlarmIntegrationTest(unittest.TestCase):
         self.alarms = alarming.Alarming()
         self.openstack_auth = Common()
 
+    def tearDown(self):
+        self.producer.close()
+        self.req_consumer.close()
+
     @mock.patch.object(Common, "get_auth_token", mock.Mock())
     @mock.patch.object(Common, "get_endpoint", mock.Mock())
     @mock.patch.object(AuthManager, 'get_credentials')
@@ -113,7 +117,12 @@ class AlarmIntegrationTest(unittest.TestCase):
                         "alarm_name": "my_alarm",
                         "metric_name": "my_metric",
                         "resource_uuid": "my_resource",
-                        "severity": "WARNING"}}
+                        "severity": "WARNING",
+                        "threshold_value": 60,
+                        "operation": "GT",
+                        "vdu_name": "vdu",
+                        "vnf_member_index": "1",
+                        "ns_id": "1"}}
 
         get_creds.return_value = mock_creds
 
@@ -217,10 +226,12 @@ class AlarmIntegrationTest(unittest.TestCase):
                            value=json.dumps(payload))
 
         get_creds.return_value = mock_creds
+        ack_alarm.return_value = True
 
         for message in self.req_consumer:
             if message.key == "acknowledge_alarm":
                 self.alarms.alarming(message, 'test_id')
+                ack_alarm.assert_called_with(mock.ANY, mock.ANY, 'alarm_id')
                 return
 
         self.fail("No message received in consumer")

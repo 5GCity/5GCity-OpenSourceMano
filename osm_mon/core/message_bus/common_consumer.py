@@ -126,15 +126,16 @@ def main():
                 # TODO: Standardize all message models to avoid the need of figuring out where are certain fields
                 contains_list = False
                 list_index = None
-                ns_id = None
                 for k, v in six.iteritems(values):
                     if isinstance(v, dict):
                         if 'ns_id' in v:
-                            ns_id = v['ns_id']
                             contains_list = True
                             list_index = k
+                            break
                 if not contains_list and 'ns_id' in values:
                     ns_id = values['ns_id']
+                else:
+                    ns_id = values[list_index]['ns_id']
 
                 vnf_index = values[list_index]['vnf_member_index'] if contains_list else values['vnf_member_index']
 

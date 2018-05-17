@@ -58,7 +58,7 @@ apt-get update  # To get the latest package lists
 [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && easy_install -U bottle
 
 #required for vmware connector TODO move that to separete opt in install script
-pip install --upgrade pip
+pip install pip==9.0.3
 pip install cherrypy
 
 echo '

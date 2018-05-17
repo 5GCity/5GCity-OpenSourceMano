@@ -31,22 +31,11 @@ from osm_mon.core.auth import AuthManager
 from osm_mon.core.database import DatabaseManager
 from osm_mon.core.message_bus.producer import KafkaProducer
 from osm_mon.core.settings import Config
+from osm_mon.plugins.OpenStack.Gnocchi.metrics import METRIC_MAPPINGS
 from osm_mon.plugins.OpenStack.common import Common
 from osm_mon.plugins.OpenStack.response import OpenStack_Response
 
 log = logging.getLogger(__name__)
-
-METRIC_MAPPINGS = {
-    "average_memory_utilization": "memory.percent",
-    "disk_read_ops": "disk.read.requests",
-    "disk_write_ops": "disk.write.requests",
-    "disk_read_bytes": "disk.read.bytes",
-    "disk_write_bytes": "disk.write.bytes",
-    "packets_dropped": "interface.if_dropped",
-    "packets_received": "interface.if_packets",
-    "packets_sent": "interface.if_packets",
-    "cpu_utilization": "cpu_util",
-}
 
 SEVERITIES = {
     "warning": "low",
@@ -142,7 +131,15 @@ class Alarming(object):
             # Generate a valid response message, send via producer
             if alarm_status is True:
                 log.info("Alarm successfully created")
-                self._database_manager.save_alarm(alarm_id, vim_uuid)
+                self._database_manager.save_alarm(alarm_id,
+                                                  vim_uuid,
+                                                  alarm_details['threshold_value'],
+                                                  alarm_details['operation'].lower(),
+                                                  alarm_details['metric_name'].lower(),
+                                                  alarm_details['vdu_name'].lower(),
+                                                  alarm_details['vnf_member_index'].lower(),
+                                                  alarm_details['ns_id'].lower()
+                                                  )
             try:
                 resp_message = self._response.generate_response(
                     'create_alarm_response', status=alarm_status,

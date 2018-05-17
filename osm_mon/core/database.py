@@ -54,6 +54,12 @@ class VimCredentials(BaseModel):
 
 class Alarm(BaseModel):
     alarm_id = CharField()
+    threshold = FloatField()
+    operation = CharField()
+    metric_name = CharField()
+    vdu_name = CharField()
+    vnf_member_index = CharField()
+    ns_id = CharField()
     credentials = ForeignKeyField(VimCredentials, backref='alarms')
 
 
@@ -83,12 +89,26 @@ class DatabaseManager:
             .where(VimCredentials.type == vim_type).get()
         return alarm.credentials
 
-    def save_alarm(self, alarm_id, vim_uuid):
+    def get_alarm(self, alarm_id, vim_type):
+        alarm = Alarm.select() \
+            .where(Alarm.alarm_id == alarm_id) \
+            .join(VimCredentials) \
+            .where(VimCredentials.type == vim_type).get()
+        return alarm
+
+    def save_alarm(self, alarm_id, vim_uuid, threshold=None, operation=None, metric_name=None, vdu_name=None,
+                   vnf_member_index=None, ns_id=None):
         """Saves alarm. If a record with same id and vim_uuid exists, overwrite it."""
         alarm = Alarm()
         alarm.alarm_id = alarm_id
         creds = VimCredentials.get(VimCredentials.uuid == vim_uuid)
         alarm.credentials = creds
+        alarm.threshold = threshold
+        alarm.operation = operation
+        alarm.metric_name = metric_name
+        alarm.vdu_name = vdu_name
+        alarm.vnf_member_index = vnf_member_index
+        alarm.ns_id = ns_id
         exists = Alarm.select(Alarm.alarm_id == alarm.alarm_id) \
             .join(VimCredentials) \
             .where(VimCredentials.uuid == vim_uuid)

@@ -26,7 +26,7 @@ LABEL authors="Guillermo Calvino"
 
 RUN apt-get --yes update \
  && apt-get --yes install git python python-pip python3 python3-pip libmysqlclient-dev libssl-dev libffi-dev \
- && pip install pip==9.0.3
+ && pip3 install pip==9.0.3
 
 COPY requirements.txt /mon/requirements.txt
 
