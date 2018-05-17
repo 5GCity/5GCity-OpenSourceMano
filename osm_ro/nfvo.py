@@ -4358,21 +4358,31 @@ def delete_tenant(mydb, tenant):
 
 def new_datacenter(mydb, datacenter_descriptor):
     if "config" in datacenter_descriptor:
-        datacenter_descriptor["config"]=yaml.safe_dump(datacenter_descriptor["config"],default_flow_style=True,width=256)
-    #Check that datacenter-type is correct
+        sdn_port_mapping = datacenter_descriptor["config"].pop("sdn-port-mapping", None)
+        datacenter_descriptor["config"] = yaml.safe_dump(datacenter_descriptor["config"], default_flow_style=True,
+                                                         width=256)
+    # Check that datacenter-type is correct
     datacenter_type = datacenter_descriptor.get("type", "openvim");
-    module_info = None
+    # module_info = None
     try:
         module = "vimconn_" + datacenter_type
         pkg = __import__("osm_ro." + module)
-        vim_conn = getattr(pkg, module)
+        # vim_conn = getattr(pkg, module)
         # module_info = imp.find_module(module, [__file__[:__file__.rfind("/")]])
     except (IOError, ImportError):
         # if module_info and module_info[0]:
         #    file.close(module_info[0])
-        raise NfvoException("Incorrect datacenter type '{}'. Plugin '{}.py' not installed".format(datacenter_type, module), HTTP_Bad_Request)
+        raise NfvoException("Incorrect datacenter type '{}'. Plugin '{}.py' not installed".format(datacenter_type,
+                                                                                                  module),
+                            HTTP_Bad_Request)
 
     datacenter_id = mydb.new_row("datacenters", datacenter_descriptor, add_uuid=True, confidential_data=True)
+    if sdn_port_mapping:
+        try:
+            datacenter_sdn_port_mapping_set(mydb, None, datacenter_id, sdn_port_mapping)
+        except Exception as e:
+            mydb.delete_row_by_id("datacenters", datacenter_id)   # Rollback
+            raise e
     return datacenter_id
 
 
@@ -4384,10 +4394,14 @@ def edit_datacenter(mydb, datacenter_id_name, datacenter_descriptor):
     datacenter_id = datacenter['uuid']
     where={'uuid': datacenter['uuid']}
     remove_port_mapping = False
+    new_sdn_port_mapping = None
     if "config" in datacenter_descriptor:
         if datacenter_descriptor['config'] != None:
             try:
                 new_config_dict = datacenter_descriptor["config"]
+                if "sdn-port-mapping" in new_config_dict:
+                    remove_port_mapping = True
+                    new_sdn_port_mapping = new_config_dict.pop("sdn-port-mapping")
                 #delete null fields
                 to_delete=[]
                 for k in new_config_dict:
@@ -4417,6 +4431,11 @@ def edit_datacenter(mydb, datacenter_id_name, datacenter_descriptor):
                 logger.error("Error deleting datacenter-port-mapping " + str(e))
 
     mydb.update_rows('datacenters', datacenter_descriptor, where)
+    if new_sdn_port_mapping:
+        try:
+            datacenter_sdn_port_mapping_set(mydb, None, datacenter_id, new_sdn_port_mapping)
+        except ovimException as e:
+            logger.error("Error adding datacenter-port-mapping " + str(e))
     return datacenter_id
 
 
