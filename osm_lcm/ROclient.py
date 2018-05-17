@@ -640,6 +640,8 @@ class ROClient:
                     _all_tenants = True
                 item_id = await self._get_item_uuid(session, self.client_to_RO[item], item_id_name,
                                                     all_tenants=_all_tenants)
+                if item == 'vim':
+                    _all_tenants = None
                 # await self._get_tenant(session)
                 outdata = await self._edit_item(session, self.client_to_RO[item], item_id, create_desc,
                                                 all_tenants=_all_tenants)

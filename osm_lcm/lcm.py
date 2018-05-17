@@ -163,14 +163,24 @@ class Lcm:
         self.logger.debug(logging_text + "Enter")
         db_vim = None
         exc = None
+        RO_sdn_id = None
+        RO_sdn_port_mapping = None
         try:
-            step = "Getting vim from db"
+            step = "Getting vim-id='{}' from db".format(vim_id)
             db_vim = self.db.get_one("vim_accounts", {"_id": vim_id})
             if "_admin" not in db_vim:
                 db_vim["_admin"] = {}
             if "deployed" not in db_vim["_admin"]:
                 db_vim["_admin"]["deployed"] = {}
             db_vim["_admin"]["deployed"]["RO"] = None
+            if vim_content.get("config") and vim_content["config"].get("sdn-controller"):
+                step = "Getting sdn-controller-id='{}' from db".format(vim_content["config"]["sdn-controller"])
+                db_sdn = self.db.get_one("sdns", {"_id": vim_content["config"]["sdn-controller"]})
+                if db_sdn.get("_admin") and db_sdn["_admin"].get("deployed") and db_sdn["_admin"]["deployed"].get("RO"):
+                    RO_sdn_id = db_sdn["_admin"]["deployed"]["RO"]
+                else:
+                    raise LcmException("sdn-controller={} is not available. Not deployed at RO".format(
+                        vim_content["config"]["sdn-controller"]))
 
             step = "Creating vim at RO"
             RO = ROclient.ROClient(self.loop, **self.ro_config)
@@ -183,18 +193,25 @@ class Lcm:
             vim_RO["type"] = vim_RO.pop("vim_type")
             vim_RO.pop("vim_user", None)
             vim_RO.pop("vim_password", None)
+            if RO_sdn_id:
+                vim_RO["config"]["sdn-controller"] = RO_sdn_id
             desc = await RO.create("vim", descriptor=vim_RO)
             RO_vim_id = desc["uuid"]
             db_vim["_admin"]["deployed"]["RO"] = RO_vim_id
             self.update_db("vim_accounts", vim_id, db_vim)
 
-            step = "Attach vim to RO tenant"
-            vim_RO = {"vim_tenant_name": vim_content["vim_tenant_name"],
-                      "vim_username": vim_content["vim_user"],
-                      "vim_password": vim_content["vim_password"],
-                      "config": vim_content["config"]
-                      }
-            desc = await RO.attach_datacenter(RO_vim_id, descriptor=vim_RO)
+            step = "Creating vim_account at RO"
+            vim_account_RO = {"vim_tenant_name": vim_content["vim_tenant_name"],
+                              "vim_username": vim_content["vim_user"],
+                              "vim_password": vim_content["vim_password"]
+                              }
+            if vim_RO.get("config"):
+                vim_account_RO["config"] = vim_RO["config"]
+                if "sdn-controller" in vim_account_RO["config"]:
+                    del vim_account_RO["config"]["sdn-controller"]
+                if "sdn-port-mapping" in vim_account_RO["config"]:
+                    del vim_account_RO["config"]["sdn-port-mapping"]
+            await RO.attach_datacenter(RO_vim_id, descriptor=vim_account_RO)
             db_vim["_admin"]["operationalState"] = "ENABLED"
             self.update_db("vim_accounts", vim_id, db_vim)
 
@@ -219,10 +236,21 @@ class Lcm:
         self.logger.debug(logging_text + "Enter")
         db_vim = None
         exc = None
-        step = "Getting vim from db"
+        RO_sdn_id = None
+        step = "Getting vim-id='{}' from db".format(vim_id)
         try:
             db_vim = self.db.get_one("vim_accounts", {"_id": vim_id})
             if db_vim.get("_admin") and db_vim["_admin"].get("deployed") and db_vim["_admin"]["deployed"].get("RO"):
+                if vim_content.get("config") and vim_content["config"].get("sdn-controller"):
+                    step = "Getting sdn-controller-id='{}' from db".format(vim_content["config"]["sdn-controller"])
+                    db_sdn = self.db.get_one("sdns", {"_id": vim_content["config"]["sdn-controller"]})
+                    if db_sdn.get("_admin") and db_sdn["_admin"].get("deployed") and db_sdn["_admin"]["deployed"].get(
+                            "RO"):
+                        RO_sdn_id = db_sdn["_admin"]["deployed"]["RO"]
+                    else:
+                        raise LcmException("sdn-controller={} is not available. Not deployed at RO".format(
+                            vim_content["config"]["sdn-controller"]))
+
                 RO_vim_id = db_vim["_admin"]["deployed"]["RO"]
                 step = "Editing vim at RO"
                 RO = ROclient.ROClient(self.loop, **self.ro_config)
@@ -232,21 +260,32 @@ class Lcm:
                 vim_RO.pop("schema_version", None)
                 vim_RO.pop("schema_type", None)
                 vim_RO.pop("vim_tenant_name", None)
-                vim_RO["type"] = vim_RO.pop("vim_type")
+                if "vim_type" in vim_RO:
+                    vim_RO["type"] = vim_RO.pop("vim_type")
                 vim_RO.pop("vim_user", None)
                 vim_RO.pop("vim_password", None)
+                if RO_sdn_id:
+                    vim_RO["config"]["sdn-controller"] = RO_sdn_id
+                # TODO make a deep update of sdn-port-mapping 
                 if vim_RO:
                     await RO.edit("vim", RO_vim_id, descriptor=vim_RO)
 
                 step = "Editing vim-account at RO tenant"
-                vim_RO = {}
+                vim_account_RO = {}
+                if "config" in vim_content:
+                    if "sdn-controller" in vim_content["config"]:
+                        del vim_content["config"]["sdn-controller"]
+                    if "sdn-port-mapping" in vim_content["config"]:
+                        del vim_content["config"]["sdn-port-mapping"]
+                    if not vim_content["config"]:
+                        del vim_content["config"]
                 for k in ("vim_tenant_name", "vim_password", "config"):
                     if k in vim_content:
-                        vim_RO[k] = vim_content[k]
+                        vim_account_RO[k] = vim_content[k]
                 if "vim_user" in vim_content:
                     vim_content["vim_username"] = vim_content["vim_user"]
-                if vim_RO:
-                    await RO.edit("vim_account", RO_vim_id, descriptor=vim_RO)
+                if vim_account_RO:
+                    await RO.edit("vim_account", RO_vim_id, descriptor=vim_account_RO)
                 db_vim["_admin"]["operationalState"] = "ENABLED"
                 self.update_db("vim_accounts", vim_id, db_vim)
 
@@ -1387,7 +1426,7 @@ class Lcm:
                         sys.stdout.flush()
                         continue
                     elif command == "edit":
-                        task = asyncio.ensure_future(self.vim_edit(vim_id, order_id))
+                        task = asyncio.ensure_future(self.vim_edit(params, order_id))
                         if vim_id not in self.lcm_vim_tasks:
                             self.lcm_vim_tasks[vim_id] = {}
                         self.lcm_vim_tasks[vim_id][order_id] = {"vim_edit": task}
@@ -1408,7 +1447,7 @@ class Lcm:
                         self.lcm_sdn_tasks[_sdn_id][order_id] = {"sdn_delete": task}
                         continue
                     elif command == "edit":
-                        task = asyncio.ensure_future(self.sdn_edit(_sdn_id, order_id))
+                        task = asyncio.ensure_future(self.sdn_edit(params, order_id))
                         if _sdn_id not in self.lcm_sdn_tasks:
                             self.lcm_sdn_tasks[_sdn_id] = {}
                         self.lcm_sdn_tasks[_sdn_id][order_id] = {"sdn_edit": task}
