@@ -3,25 +3,25 @@
         <div class="row">
             <label for="aws_sdn_ctrl" class="col-sm-4 control-label">SDN Controller</label>
             <div class="col-sm-6 input-group input-group-sm">
-                <p id="aws_sdn_ctrl"> {{ datacenter.sdn_ctrl||default:"---" }}</p>
+                <p id="aws_sdn_ctrl"> {{ datacenter.sdn_ctrl|default:"---" }}</p>
             </div>
         </div>
         <div class="row">
             <label for="aws_sdn_port_map" class="col-sm-4 control-label">SDN Port Mapping</label>
             <div class="col-sm-6 input-group input-group-sm">
-                <p id="aws_sdn_port_map"> {{ datacenter.sdn_port_map||default:"---" }}</p>
+                <p id="aws_sdn_port_map"> {{ datacenter.sdn_port_map|default:"---" }}</p>
             </div>
         </div>
         <div class="row">
             <label for="aws_region_name" class="col-sm-4 control-label">Region name</label>
             <div class="col-sm-6 input-group input-group-sm">
-                <p id="aws_region_name"> {{ datacenter.region_name||default:"---" }}</p>
+                <p id="aws_region_name"> {{ datacenter.region_name|default:"---" }}</p>
             </div>
         </div>
         <div class="row">
             <label for="vpc_cidr_block" class="col-sm-4 control-label">VPC cidr block</label>
             <div class="col-sm-6 input-group input-group-sm">
-                <p id="vpc_cidr_block"> {{ datacenter.vpc_cidr_block||default:"---" }}</p>
+                <p id="vpc_cidr_block"> {{ datacenter.vpc_cidr_block|default:"---" }}</p>
             </div>
         </div>
 
@@ -31,19 +31,19 @@
         <div class="row">
             <label for="aws_security_groups" class="col-sm-4 control-label">Security groups</label>
             <div class="col-sm-6 input-group input-group-sm">
-                <p id="aws_security_groups"> {{ datacenter.security_groups||default:"---" }}</p>
+                <p id="aws_security_groups"> {{ datacenter.security_groups|default:"---" }}</p>
             </div>
         </div>
         <div class="row">
             <label for="aws_key_pair" class="col-sm-4 control-label">Key pair</label>
             <div class="col-sm-6 input-group input-group-sm">
-                <p id="aws_key_pair"> {{ datacenter.key_pair||default:"---" }}</p>
+                <p id="aws_key_pair"> {{ datacenter.key_pair|default:"---" }}</p>
             </div>
         </div>
         <div class="row">
             <label for="aws_flavor_info" class="col-sm-4 control-label">Flavor info</label>
             <div class="col-sm-6 input-group input-group-sm">
-                <p id="aws_flavor_info"> {{ datacenter.flavor_info||default:"---" }}</p>
+                <p id="aws_flavor_info"> {{ datacenter.flavor_info|default:"---" }}</p>
             </div>
         </div>
     </div>
