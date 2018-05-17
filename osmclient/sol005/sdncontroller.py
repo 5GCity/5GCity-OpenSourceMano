@@ -52,7 +52,7 @@ class SdnController(object):
                                        postfields_dict=sdn_controller)
         if resp:
             resp = json.loads(resp)
-        print 'RESP: {}'.format(resp)
+        #print 'RESP: {}'.format(resp)
         if not resp or 'id' not in resp:
             raise ClientException('failed to update SDN controller: '.format(
                                   resp))

@@ -839,14 +839,16 @@ def vim_create(ctx,
 
 @cli.command(name='vim-update', short_help='updates a VIM account')
 @click.argument('name')
-@click.option('--newname', default=None, help='New name for the VIM account')
-@click.option('--user', default=None, help='VIM username')
-@click.option('--password', default=None, help='VIM password')
-@click.option('--auth_url', default=None, help='VIM url')
-@click.option('--tenant', default=None, help='VIM tenant name')
-@click.option('--config', default=None, help='VIM specific config parameters')
-@click.option('--account_type', default=None, help='VIM type')
-@click.option('--description',  default=None, help='human readable description')
+@click.option('--newname', help='New name for the VIM account')
+@click.option('--user', help='VIM username')
+@click.option('--password', help='VIM password')
+@click.option('--auth_url', help='VIM url')
+@click.option('--tenant', help='VIM tenant name')
+@click.option('--config', help='VIM specific config parameters')
+@click.option('--account_type', help='VIM type')
+@click.option('--sdn_controller', help='Name or id of the SDN controller associated to this VIM account')
+@click.option('--sdn_port_mapping', default=None, help="File describing the port mapping between compute nodes' ports and switch ports")
+@click.option('--description', help='human readable description')
 @click.pass_context
 def vim_update(ctx,
                name,
@@ -863,15 +865,27 @@ def vim_update(ctx,
     NAME: name or ID of the VIM account
     '''
     vim = {}
-    if newname:
-        vim['name'] = newname
-    vim['vim_user'] = user
-    vim['vim_password'] = password
-    vim['vim_url'] = auth_url
-    vim['vim-tenant-name'] = tenant
-    vim['config'] = config
-    vim['vim_type'] = account_type
-    vim['description'] = description
+    if newname: vim['name'] = newname
+    if user: vim['vim_user'] = user
+    if password: vim['vim_password'] = password
+    if auth_url: vim['vim_url'] = auth_url
+    if tenant: vim['vim-tenant-name'] = tenant
+    if account_type: vim['vim_type'] = account_type
+    if description: vim['description'] = description
+    config_dict = {}
+    if config is not None:
+        if config=="" and (sdncontroller or sdn_port_mapping):
+            raise ClientException("clearing config is incompatible with updating SDN info")
+        if config=="":
+            vim['config'] = None
+        else:
+            config_dict = yaml.safe_load(config)
+    if sdn_controller: config_dict['sdn_controller'] = sdn_controller
+    if sdn_port_mapping:
+        with open(sdn_port_mapping, 'r') as f:
+            config_dict['sdn_port_mapping'] = yaml.safe_load(f.read())
+    if 'config' not in vim and config_dict:
+        vim['config'] = yaml.safe_dump(config_dict)
     try:
         check_client_version(ctx.obj, ctx.command.name)
         ctx.obj.vim.update(name, vim)
