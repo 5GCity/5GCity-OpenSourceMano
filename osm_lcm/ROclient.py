@@ -31,7 +31,6 @@ import aiohttp
 import json
 import yaml
 import logging
-import sys
 from urllib.parse import quote
 from uuid import UUID
 from copy import deepcopy
@@ -42,11 +41,12 @@ __version__ = "0.1.2"
 version_date = "2018-05-16"
 requests = None
 
+
 class ROClientException(Exception):
     def __init__(self, message, http_code=400):
+        """Common Exception for all RO client exceptions"""
         self.http_code = http_code
         Exception.__init__(self, message)
-    """Common Exception for all openmano client exceptions"""
 
 
 def remove_envelop(item, indata=None):
@@ -142,9 +142,9 @@ class ROClient:
         elif index == 'endpoint_url':
             return self.endpoint_url
         else:
-            raise KeyError("Invalid key '%s'" %str(index))
+            raise KeyError("Invalid key '{}'".format(index))
         
-    def __setitem__(self,index, value):
+    def __setitem__(self, index, value):
         if index == 'tenant':
             self.tenant_id_name = value
         elif index == 'datacenter' or index == 'vim':
@@ -159,11 +159,10 @@ class ROClient:
             raise KeyError("Invalid key '{}'".format(index))
         self.tenant = None      # force to reload tenant with different credentials
         self.datacenter = None  # force to reload datacenter with different credentials
-    
+
     def _parse(self, descriptor, descriptor_format, response=False):
-        #try yaml
         if descriptor_format and descriptor_format != "json" and descriptor_format != "yaml":
-            raise  ROClientException("'descriptor_format' must be a 'json' or 'yaml' text")
+            raise ROClientException("'descriptor_format' must be a 'json' or 'yaml' text")
         if descriptor_format != "json":
             try:
                 return yaml.load(descriptor)
@@ -171,18 +170,18 @@ class ROClient:
                 error_pos = ""
                 if hasattr(exc, 'problem_mark'):
                     mark = exc.problem_mark
-                    error_pos = " at line:{} column:{}s".format(mark.line+1, mark.column+1)
+                    error_pos = " at line:{} column:{}s".format(mark.line + 1, mark.column + 1)
                 error_text = "yaml format error" + error_pos
         elif descriptor_format != "yaml":
             try:
-                return json.loads(descriptor) 
+                return json.loads(descriptor)
             except Exception as e:
                 if response:
                     error_text = "json format error" + str(e)
 
         if response:
             raise ROClientException(error_text)
-        raise  ROClientException(error_text)
+        raise ROClientException(error_text)
     
     def _parse_yaml(self, descriptor, response=False):
         try:
@@ -191,11 +190,11 @@ class ROClient:
             error_pos = ""
             if hasattr(exc, 'problem_mark'):
                 mark = exc.problem_mark
-                error_pos = " at line:{} column:{}s".format(mark.line+1, mark.column+1)
+                error_pos = " at line:{} column:{}s".format(mark.line + 1, mark.column + 1)
             error_text = "yaml format error" + error_pos
             if response:
                 raise ROClientException(error_text)
-            raise  ROClientException(error_text)
+            raise ROClientException(error_text)
 
     @staticmethod
     def check_if_uuid(uuid_text):
@@ -327,7 +326,6 @@ class ROClient:
             ns_info[str(vnf["member_vnf_index"])] = vnfr_info
         return ns_info
 
-
     async def _get_item_uuid(self, session, item, item_id_name, all_tenants=False):
         if all_tenants:
             tenant_text = "/any"
@@ -345,14 +343,14 @@ class ROClient:
             url += "/" + item_id_name
         elif item_id_name and item_id_name.startswith("'") and item_id_name.endswith("'"):
             item_id_name = item_id_name[1:-1]
-        self.logger.debug("openmano GET %s", url)
+        self.logger.debug("RO GET %s", url)
         with aiohttp.Timeout(self.timeout_short):
             async with session.get(url, headers=self.headers_req) as response:
                 response_text = await response.read()
                 self.logger.debug("GET {} [{}] {}".format(url, response.status, response_text[:100]))
                 if response.status == 404:  # NOT_FOUND
                     raise ROClientException("No {} found with id '{}'".format(item[:-1], item_id_name),
-                                                    http_code=404)
+                                            http_code=404)
                 if response.status >= 300:
                     raise ROClientException(response_text, http_code=response.status)
             content = self._parse_yaml(response_text, response=True)
@@ -389,9 +387,9 @@ class ROClient:
         else:
             # check that exist
             uuid = await self._get_item_uuid(session, item, item_id_name, all_tenants)
-        
+
         url = "{}{}/{}/{}".format(self.endpoint_url, tenant_text, item, uuid)
-        self.logger.debug("GET %s", url )
+        self.logger.debug("GET %s", url)
         with aiohttp.Timeout(self.timeout_short):
             async with session.get(url, headers=self.headers_req) as response:
                 response_text = await response.read()
@@ -423,7 +421,7 @@ class ROClient:
                 await self._get_tenant(session)
             tenant_text = "/" + self.tenant
         payload_req = yaml.safe_dump(descriptor)
-        #print payload_req
+        # print payload_req
 
         api_version_text = ""
         if item == "vnfs":
@@ -436,7 +434,7 @@ class ROClient:
             item = "nsd"
 
         if not item_id_name:
-            uuid=""
+            uuid = ""
         elif self.check_if_uuid(item_id_name):
             uuid = "/{}".format(item_id_name)
         else:
@@ -448,9 +446,9 @@ class ROClient:
         else:
             action = "/".format(action)
 
-        url = "{}{apiver}{tenant}/{item}{id}{action}".format(self.endpoint_url, apiver=api_version_text, tenant=tenant_text,
-                                                        item=item, id=uuid, action=action)
-        self.logger.debug("openmano POST %s %s", url, payload_req)
+        url = "{}{apiver}{tenant}/{item}{id}{action}".format(self.endpoint_url, apiver=api_version_text,
+                                                             tenant=tenant_text, item=item, id=uuid, action=action)
+        self.logger.debug("RO POST %s %s", url, payload_req)
         with aiohttp.Timeout(self.timeout_large):
             async with session.post(url, headers=self.headers_req, data=payload_req) as response:
                 response_text = await response.read()
@@ -477,7 +475,7 @@ class ROClient:
             uuid = await self._get_item_uuid(session, item, item_id_name, all_tenants=_all_tenants)
         else:
             uuid = item_id_name
-        
+
         url = "{}{}/{}/{}".format(self.endpoint_url, tenant_text, item, uuid)
         self.logger.debug("DELETE %s", url)
         with aiohttp.Timeout(self.timeout_short):
@@ -497,14 +495,14 @@ class ROClient:
             if not self.tenant:
                 await self._get_tenant(session)
             tenant_text = "/" + self.tenant
-        
+
         url = "{}{}/{}".format(self.endpoint_url, tenant_text, item)
         separator = "?"
         if filter_dict:
             for k in filter_dict:
-                url += separator + quote(str(k)) + "=" + quote(str(filter_dict[k])) 
+                url += separator + quote(str(k)) + "=" + quote(str(filter_dict[k]))
                 separator = "&"
-        self.logger.debug("openmano GET %s", url)
+        self.logger.debug("RO GET %s", url)
         with aiohttp.Timeout(self.timeout_short):
             async with session.get(url, headers=self.headers_req) as response:
                 response_text = await response.read()
@@ -525,10 +523,9 @@ class ROClient:
 
         payload_req = yaml.safe_dump(descriptor)
             
-        #print payload_req
-            
+        # print payload_req
         url = "{}{}/{}/{}".format(self.endpoint_url, tenant_text, item, item_id)
-        self.logger.debug("openmano PUT %s %s", url, payload_req)
+        self.logger.debug("RO PUT %s %s", url, payload_req)
         with aiohttp.Timeout(self.timeout_large):
             async with session.put(url, headers=self.headers_req, data=payload_req) as response:
                 response_text = await response.read()
@@ -641,9 +638,11 @@ class ROClient:
                 _all_tenants = all_tenants
                 if item == 'vim':
                     _all_tenants = True
-                item_id = await self._get_item_uuid(session, self.client_to_RO[item], item_id_name, all_tenants=_all_tenants)
+                item_id = await self._get_item_uuid(session, self.client_to_RO[item], item_id_name,
+                                                    all_tenants=_all_tenants)
                 # await self._get_tenant(session)
-                outdata = await self._edit_item(session, self.client_to_RO[item], item_id, create_desc, all_tenants=all_tenants)
+                outdata = await self._edit_item(session, self.client_to_RO[item], item_id, create_desc,
+                                                all_tenants=_all_tenants)
                 return remove_envelop(item, outdata)
         except aiohttp.errors.ClientOSError as e:
             raise ROClientException(e, http_code=504)
@@ -717,8 +716,8 @@ class ROClient:
             await self._get_tenant(session)
 
             url = "{}/{tenant}/datacenters/{datacenter}".format(self.endpoint_url, tenant=self.tenant,
-                                                     datacenter=item_id)
-            self.logger.debug("openmano POST %s %s", url, payload_req)
+                                                                datacenter=item_id)
+            self.logger.debug("RO POST %s %s", url, payload_req)
             with aiohttp.Timeout(self.timeout_large):
                 async with session.post(url, headers=self.headers_req, data=payload_req) as response:
                     response_text = await response.read()
@@ -727,19 +726,19 @@ class ROClient:
                         raise ROClientException(response_text, http_code=response.status)
 
             response_desc = self._parse_yaml(response_text, response=True)
-            desc  = remove_envelop("vim", response_desc)
+            desc = remove_envelop("vim", response_desc)
             return desc
 
     async def detach_datacenter(self, datacenter=None):
-        #TODO replace the code with delete_item(vim_account,...)
+        # TODO replace the code with delete_item(vim_account,...)
         with aiohttp.ClientSession(loop=self.loop) as session:
             # check that exist
             item_id = await self._get_item_uuid(session, "datacenters", datacenter, all_tenants=False)
             tenant = await self._get_tenant(session)
 
             url = "{}/{tenant}/datacenters/{datacenter}".format(self.endpoint_url, tenant=tenant,
-                                                     datacenter=item_id)
-            self.logger.debug("openmano DELETE %s", url)
+                                                                datacenter=item_id)
+            self.logger.debug("RO DELETE %s", url)
             with aiohttp.Timeout(self.timeout_large):
                 async with session.delete(url, headers=self.headers_req) as response:
                     response_text = await response.read()
@@ -751,12 +750,11 @@ class ROClient:
             desc = remove_envelop("vim", response_desc)
             return desc
 
-
     # TODO convert to asyncio
+    # DATACENTERS
 
-    #DATACENTERS
-
-    def edit_datacenter(self, uuid=None, name=None, descriptor=None, descriptor_format=None, all_tenants=False, **kwargs):
+    def edit_datacenter(self, uuid=None, name=None, descriptor=None, descriptor_format=None, all_tenants=False,
+                        **kwargs):
         """Edit the parameters of a datacenter
         Params: must supply a descriptor or/and a parameter to change
             uuid or/and name. If only name is supplied, there must be only one or an exception is raised
@@ -778,19 +776,18 @@ class ROClient:
         elif descriptor:
             pass
         elif kwargs:
-            descriptor={"datacenter": {}}
+            descriptor = {"datacenter": {}}
         else:
             raise ROClientException("Missing descriptor")
 
-        if 'datacenter' not in descriptor or len(descriptor)!=1:
+        if 'datacenter' not in descriptor or len(descriptor) != 1:
             raise ROClientException("Descriptor must contain only one 'datacenter' field")
         for param in kwargs:
-            if param=='new_name':
+            if param == 'new_name':
                 descriptor['datacenter']['name'] = kwargs[param]
             else:
                 descriptor['datacenter'][param] = kwargs[param]
         return self._edit_item("datacenters", descriptor, uuid, name, all_tenants=None)
-    
 
     def edit_scenario(self, uuid=None, name=None, descriptor=None, descriptor_format=None, all_tenants=False, **kwargs):
         """Edit the parameters of a scenario
@@ -812,114 +809,115 @@ class ROClient:
         elif descriptor:
             pass
         elif kwargs:
-            descriptor={"scenario": {}}
+            descriptor = {"scenario": {}}
         else:
             raise ROClientException("Missing descriptor")
 
-        if 'scenario' not in descriptor or len(descriptor)>2:
+        if 'scenario' not in descriptor or len(descriptor) > 2:
             raise ROClientException("Descriptor must contain only one 'scenario' field")
         for param in kwargs:
-            if param=='new_name':
+            if param == 'new_name':
                 descriptor['scenario']['name'] = kwargs[param]
             else:
                 descriptor['scenario'][param] = kwargs[param]
         return self._edit_item("scenarios", descriptor, uuid, name, all_tenants=None)
 
-    #VIM ACTIONS
+    # VIM ACTIONS
     def vim_action(self, action, item, uuid=None, all_tenants=False, **kwargs):
         """Perform an action over a vim
-        Params: 
+        Params:
             action: can be 'list', 'get'/'show', 'delete' or 'create'
             item: can be 'tenants' or 'networks'
             uuid: uuid of the tenant/net to show or to delete. Ignore otherwise
             other parameters:
-                datacenter_name, datacenter_id: datacenters to act on, if missing uses classes store datacenter 
-                descriptor, descriptor_format: descriptor needed on creation, can be a dict or a yaml/json str 
+                datacenter_name, datacenter_id: datacenters to act on, if missing uses classes store datacenter
+                descriptor, descriptor_format: descriptor needed on creation, can be a dict or a yaml/json str
                     must be a dictionary or a json/yaml text.
                 name: for created tenant/net Overwrite descriptor name if any
                 description: tenant descriptor. Overwrite descriptor description if any
-                
+
         Return: Raises an exception on error
                 Obtain a dictionary with format {'tenant':{new_tenant_info}}
         """
+        session = None  # TODO remove when changed to asyncio
         if item not in ("tenants", "networks", "images"):
             raise ROClientException("Unknown value for item '{}', must be 'tenants', 'nets' or "
-                                             "images".format(str(item)))
+                                    "images".format(str(item)))
 
-        image_actions = ['list','get','show','delete']
+        image_actions = ['list', 'get', 'show', 'delete']
         if item == "images" and action not in image_actions:
             raise ROClientException("Only available actions for item '{}' are {}\n"
-                                             "Requested action was '{}'".format(item, ', '.join(image_actions), action))
+                                    "Requested action was '{}'".format(item, ', '.join(image_actions), action))
         if all_tenants:
             tenant_text = "/any"
         else:
-            tenant_text = "/"+self._get_tenant()
-        
+            tenant_text = "/" + self._get_tenant()
+
         if "datacenter_id" in kwargs or "datacenter_name" in kwargs:
             datacenter = self._get_item_uuid(session, "datacenters", kwargs.get("datacenter"), all_tenants=all_tenants)
         else:
             datacenter = self.get_datacenter(session)
 
-        if action=="list":
+        if action == "list":
             url = "{}{}/vim/{}/{}".format(self.endpoint_url, tenant_text, datacenter, item)
-            self.logger.debug("GET %s", url )
+            self.logger.debug("GET %s", url)
             mano_response = requests.get(url, headers=self.headers_req)
-            self.logger.debug("openmano response: %s", mano_response.text )
+            self.logger.debug("RO response: %s", mano_response.text)
             content = self._parse_yaml(mano_response.text, response=True)            
-            if mano_response.status_code==200:
+            if mano_response.status_code == 200:
                 return content
             else:
                 raise ROClientException(str(content), http_code=mano_response.status)        
-        elif action=="get" or action=="show":
+        elif action == "get" or action == "show":
             url = "{}{}/vim/{}/{}/{}".format(self.endpoint_url, tenant_text, datacenter, item, uuid)
-            self.logger.debug("GET %s", url )
+            self.logger.debug("GET %s", url)
             mano_response = requests.get(url, headers=self.headers_req)
-            self.logger.debug("openmano response: %s", mano_response.text )
+            self.logger.debug("RO response: %s", mano_response.text)
             content = self._parse_yaml(mano_response.text, response=True)            
-            if mano_response.status_code==200:
+            if mano_response.status_code == 200:
                 return content
             else:
                 raise ROClientException(str(content), http_code=mano_response.status)        
-        elif action=="delete":
+        elif action == "delete":
             url = "{}{}/vim/{}/{}/{}".format(self.endpoint_url, tenant_text, datacenter, item, uuid)
-            self.logger.debug("DELETE %s", url )
+            self.logger.debug("DELETE %s", url)
             mano_response = requests.delete(url, headers=self.headers_req)
-            self.logger.debug("openmano response: %s", mano_response.text )
+            self.logger.debug("RO response: %s", mano_response.text)
             content = self._parse_yaml(mano_response.text, response=True)            
-            if mano_response.status_code==200:
+            if mano_response.status_code == 200:
                 return content
             else:
                 raise ROClientException(str(content), http_code=mano_response.status)        
-        elif action=="create":
+        elif action == "create":
             if "descriptor" in kwargs:
                 if isinstance(kwargs["descriptor"], str):
-                    descriptor = self._parse(kwargs["descriptor"], kwargs.get("descriptor_format") )
+                    descriptor = self._parse(kwargs["descriptor"], kwargs.get("descriptor_format"))
                 else:
                     descriptor = kwargs["descriptor"]
             elif "name" in kwargs:
-                descriptor={item[:-1]: {"name": kwargs["name"]}}
+                descriptor = {item[:-1]: {"name": kwargs["name"]}}
             else:
                 raise ROClientException("Missing descriptor")
         
-            if item[:-1] not in descriptor or len(descriptor)!=1:
+            if item[:-1] not in descriptor or len(descriptor) != 1:
                 raise ROClientException("Descriptor must contain only one 'tenant' field")
             if "name" in kwargs:
-                descriptor[ item[:-1] ]['name'] = kwargs["name"]
+                descriptor[item[:-1]]['name'] = kwargs["name"]
             if "description" in kwargs:
-                descriptor[ item[:-1] ]['description'] = kwargs["description"]
+                descriptor[item[:-1]]['description'] = kwargs["description"]
             payload_req = yaml.safe_dump(descriptor)
-            #print payload_req
+            # print payload_req
             url = "{}{}/vim/{}/{}".format(self.endpoint_url, tenant_text, datacenter, item)
-            self.logger.debug("openmano POST %s %s", url, payload_req)
-            mano_response = requests.post(url, headers = self.headers_req, data=payload_req)
-            self.logger.debug("openmano response: %s", mano_response.text )
+            self.logger.debug("RO POST %s %s", url, payload_req)
+            mano_response = requests.post(url, headers=self.headers_req, data=payload_req)
+            self.logger.debug("RO response: %s", mano_response.text)
             content = self._parse_yaml(mano_response.text, response=True)
-            if mano_response.status_code==200:
+            if mano_response.status_code == 200:
                 return content
             else:
                 raise ROClientException(str(content), http_code=mano_response.status)
         else:
-            raise ROClientException("Unknown value for action '{}".format(str(action))) 
+            raise ROClientException("Unknown value for action '{}".format(str(action)))
 
 
 if __name__ == '__main__':
@@ -950,20 +948,20 @@ if __name__ == '__main__':
         tenant_id = True
         content = loop.run_until_complete(myClient.show("tenant", TEST_TENANT))
         print("tenant", TEST_TENANT, content)
-        content = loop.run_until_complete(myClient.edit("tenant", TEST_TENANT,  description="another description"))
+        content = loop.run_until_complete(myClient.edit("tenant", TEST_TENANT, description="another description"))
         content = loop.run_until_complete(myClient.show("tenant", TEST_TENANT))
         print("tenant edited", TEST_TENANT, content)
         myClient["tenant"] = TEST_TENANT
 
-
         # test VIM
-        content = loop.run_until_complete(myClient.create("vim", name=TEST_VIM1, type=TEST_TYPE1, vim_url=TEST_URL1, config=TEST_CONFIG1))
+        content = loop.run_until_complete(myClient.create("vim", name=TEST_VIM1, type=TEST_TYPE1, vim_url=TEST_URL1,
+                                                          config=TEST_CONFIG1))
         vim_id = True
         content = loop.run_until_complete(myClient.get_list("vim"))
         print("vim", content)
         content = loop.run_until_complete(myClient.show("vim", TEST_VIM1))
         print("vim", TEST_VIM1, content)
-        content = loop.run_until_complete(myClient.edit("vim", TEST_VIM1,  description="another description",
+        content = loop.run_until_complete(myClient.edit("vim", TEST_VIM1, description="another description",
                                                         name=TEST_VIM2, type=TEST_TYPE2, vim_url=TEST_URL2,
                                                         config=TEST_CONFIG2))
         content = loop.run_until_complete(myClient.show("vim", TEST_VIM2))
@@ -971,14 +969,16 @@ if __name__ == '__main__':
 
         # test VIM_ACCOUNT
         content = loop.run_until_complete(myClient.attach_datacenter(TEST_VIM2, vim_username='user',
-                                                          vim_password='pass', vim_tenant_name='vimtenant1', config=TEST_CONFIG1))
+                                                                     vim_password='pass', vim_tenant_name='vimtenant1',
+                                                                     config=TEST_CONFIG1))
         vim_id = True
         content = loop.run_until_complete(myClient.get_list("vim_account"))
         print("vim_account", content)
         content = loop.run_until_complete(myClient.show("vim_account", TEST_VIM2))
         print("vim_account", TEST_VIM2, content)
-        content = loop.run_until_complete(myClient.edit("vim_account", TEST_VIM2,  vim_username='user2', vim_password='pass2',
-                                                        vim_tenant_name="vimtenant2", config=TEST_CONFIG2))
+        content = loop.run_until_complete(myClient.edit("vim_account", TEST_VIM2, vim_username='user2',
+                                                        vim_password='pass2', vim_tenant_name="vimtenant2",
+                                                        config=TEST_CONFIG2))
         content = loop.run_until_complete(myClient.show("vim_account", TEST_VIM2))
         print("vim_account edited", TEST_VIM2, content)
 
@@ -1000,5 +1000,3 @@ if __name__ == '__main__':
                 logger.error("Error {}".format(e), exc_info=True)
 
     loop.close()
-
-

@@ -1,2 +1,3 @@
 #!/bin/sh
-#tox
+tox -e flake8
+

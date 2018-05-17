@@ -43,4 +43,3 @@ setup(
     #     osm=osm_lcm.lcm:lcm
     #     ''',
 )
-

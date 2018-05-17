@@ -56,9 +56,9 @@ class Lcm:
         # load configuration
         config = self.read_config_file(config_file)
         self.config = config
-        self.ro_config={
+        self.ro_config = {
             "endpoint_url": "http://{}:{}/openmano".format(config["RO"]["host"], config["RO"]["port"]),
-            "tenant":  config.get("tenant", "osm"),
+            "tenant": config.get("tenant", "osm"),
             "logger_name": "lcm.ROclient",
             "loglevel": "ERROR",
         }
@@ -190,11 +190,11 @@ class Lcm:
 
             step = "Attach vim to RO tenant"
             vim_RO = {"vim_tenant_name": vim_content["vim_tenant_name"],
-                "vim_username": vim_content["vim_user"],
-                "vim_password": vim_content["vim_password"],
-                "config": vim_content["config"]
-            }
-            desc = await RO.attach_datacenter(RO_vim_id , descriptor=vim_RO)
+                      "vim_username": vim_content["vim_user"],
+                      "vim_password": vim_content["vim_password"],
+                      "config": vim_content["config"]
+                      }
+            desc = await RO.attach_datacenter(RO_vim_id, descriptor=vim_RO)
             db_vim["_admin"]["operationalState"] = "ENABLED"
             self.update_db("vim_accounts", vim_id, db_vim)
 
@@ -210,7 +210,7 @@ class Lcm:
         finally:
             if exc and db_vim:
                 db_vim["_admin"]["operationalState"] = "ERROR"
-                db_vim["_admin"]["detailed-status"] = "ERROR {}: {}".format(step , exc)
+                db_vim["_admin"]["detailed-status"] = "ERROR {}: {}".format(step, exc)
                 self.update_db("vim_accounts", vim_id, db_vim)
 
     async def vim_edit(self, vim_content, order_id):
@@ -236,7 +236,7 @@ class Lcm:
                 vim_RO.pop("vim_user", None)
                 vim_RO.pop("vim_password", None)
                 if vim_RO:
-                    desc = await RO.edit("vim", RO_vim_id, descriptor=vim_RO)
+                    await RO.edit("vim", RO_vim_id, descriptor=vim_RO)
 
                 step = "Editing vim-account at RO tenant"
                 vim_RO = {}
@@ -246,7 +246,7 @@ class Lcm:
                 if "vim_user" in vim_content:
                     vim_content["vim_username"] = vim_content["vim_user"]
                 if vim_RO:
-                    desc = await RO.edit("vim_account", RO_vim_id, descriptor=vim_RO)
+                    await RO.edit("vim_account", RO_vim_id, descriptor=vim_RO)
                 db_vim["_admin"]["operationalState"] = "ENABLED"
                 self.update_db("vim_accounts", vim_id, db_vim)
 
@@ -262,7 +262,7 @@ class Lcm:
         finally:
             if exc and db_vim:
                 db_vim["_admin"]["operationalState"] = "ERROR"
-                db_vim["_admin"]["detailed-status"] = "ERROR {}: {}".format(step , exc)
+                db_vim["_admin"]["detailed-status"] = "ERROR {}: {}".format(step, exc)
                 self.update_db("vim_accounts", vim_id, db_vim)
 
     async def vim_delete(self, vim_id, order_id):
@@ -309,7 +309,7 @@ class Lcm:
         finally:
             if exc and db_vim:
                 db_vim["_admin"]["operationalState"] = "ERROR"
-                db_vim["_admin"]["detailed-status"] = "ERROR {}: {}".format(step , exc)
+                db_vim["_admin"]["detailed-status"] = "ERROR {}: {}".format(step, exc)
                 self.update_db("vim_accounts", vim_id, db_vim)
 
     async def sdn_create(self, sdn_content, order_id):
@@ -325,7 +325,7 @@ class Lcm:
                 db_sdn["_admin"] = {}
             if "deployed" not in db_sdn["_admin"]:
                 db_sdn["_admin"]["deployed"] = {}
-            db_sdn["_admin"]["deployed"]["RO"] =  None
+            db_sdn["_admin"]["deployed"]["RO"] = None
 
             step = "Creating sdn at RO"
             RO = ROclient.ROClient(self.loop, **self.ro_config)
@@ -352,7 +352,7 @@ class Lcm:
         finally:
             if exc and db_sdn:
                 db_sdn["_admin"]["operationalState"] = "ERROR"
-                db_sdn["_admin"]["detailed-status"] = "ERROR {}: {}".format(step , exc)
+                db_sdn["_admin"]["detailed-status"] = "ERROR {}: {}".format(step, exc)
                 self.update_db("sdns", sdn_id, db_sdn)
 
     async def sdn_edit(self, sdn_content, order_id):
@@ -375,7 +375,7 @@ class Lcm:
                 sdn_RO.pop("schema_type", None)
                 sdn_RO.pop("description", None)
                 if sdn_RO:
-                    desc = await RO.edit("sdn", RO_sdn_id, descriptor=sdn_RO)
+                    await RO.edit("sdn", RO_sdn_id, descriptor=sdn_RO)
                 db_sdn["_admin"]["operationalState"] = "ENABLED"
                 self.update_db("sdns", sdn_id, db_sdn)
 
@@ -391,7 +391,7 @@ class Lcm:
         finally:
             if exc and db_sdn:
                 db_sdn["_admin"]["operationalState"] = "ERROR"
-                db_sdn["_admin"]["detailed-status"] = "ERROR {}: {}".format(step , exc)
+                db_sdn["_admin"]["detailed-status"] = "ERROR {}: {}".format(step, exc)
                 self.update_db("sdns", sdn_id, db_sdn)
 
     async def sdn_delete(self, sdn_id, order_id):
@@ -429,7 +429,7 @@ class Lcm:
         finally:
             if exc and db_sdn:
                 db_sdn["_admin"]["operationalState"] = "ERROR"
-                db_sdn["_admin"]["detailed-status"] = "ERROR {}: {}".format(step , exc)
+                db_sdn["_admin"]["detailed-status"] = "ERROR {}: {}".format(step, exc)
                 self.update_db("sdns", sdn_id, db_sdn)
 
     def vnfd2RO(self, vnfd, new_id=None):
@@ -455,7 +455,8 @@ class Lcm:
                         vdu["cloud-init-file"]
                     )
                     ci_file = self.fs.file_open(clout_init_file, "r")
-                    # TODO: detect if binary or text. Propose to read as binary and try to decode to utf8. If fails convert to base 64 or similar
+                    # TODO: detect if binary or text. Propose to read as binary and try to decode to utf8. If fails
+                    #  convert to base 64 or similar
                     clout_init_content = ci_file.read()
                     ci_file.close()
                     ci_file = None
@@ -468,7 +469,8 @@ class Lcm:
             if ci_file:
                 ci_file.close()
 
-    def n2vc_callback(self, model_name, application_name, status, message, db_nsr, db_nslcmop, member_vnf_index, task=None):
+    def n2vc_callback(self, model_name, application_name, status, message, db_nsr, db_nslcmop, member_vnf_index,
+                      task=None):
         """
         Callback both for charm status change and task completion
         :param model_name: Charm model name
@@ -554,10 +556,11 @@ class Lcm:
                     all_active = False
                 elif vca_status in ("error", "blocked"):
                     n2vc_error_text.append("member_vnf_index={} {}: {}".format(member_vnf_index, vca_status,
-                                                                           vca_info["detailed-status"]))
+                                                                               vca_info["detailed-status"]))
 
             if all_active:
-                self.logger.debug("[n2vc_callback] ns_instantiate={} vnf_index={} All active".format(nsr_id, member_vnf_index))
+                self.logger.debug("[n2vc_callback] ns_instantiate={} vnf_index={} All active".format(nsr_id,
+                                                                                                     member_vnf_index))
                 db_nsr["config-status"] = "configured"
                 db_nsr["detailed-status"] = "done"
                 db_nslcmop["operationState"] = "COMPLETED"
@@ -600,6 +603,7 @@ class Lcm:
         :return: The RO ns descriptor
         """
         vim_2_RO = {}
+
         def vim_account_2_RO(vim_account):
             if vim_account in vim_2_RO:
                 return vim_2_RO[vim_account]
@@ -645,8 +649,8 @@ class Lcm:
                                 "netmap-use": vim_net,
                                 "datacenter": vim_account_2_RO(vim_account)
                             })
-                    else:  #isinstance str
-                        RO_vld["sites"].append({"netmap-use":  vld["vim-network-name"]})
+                    else:  # isinstance str
+                        RO_vld["sites"].append({"netmap-use": vld["vim-network-name"]})
                 if RO_vld:
                     RO_ns_params["networks"][vld["name"]] = RO_vld
         return RO_ns_params
@@ -779,7 +783,7 @@ class Lcm:
             step = ns_status_detailed = "Waiting ns ready at RO"
             db_nsr["detailed-status"] = ns_status_detailed
             self.logger.debug(logging_text + step + " RO_ns_id={}".format(RO_nsr_id))
-            deployment_timeout = 2*3600   # Two hours
+            deployment_timeout = 2 * 3600   # Two hours
             while deployment_timeout > 0:
                 desc = await RO.show("ns", RO_nsr_id)
                 ns_status, ns_status_info = RO.check_ns_status(desc)
@@ -834,7 +838,7 @@ class Lcm:
                 #     yield from asyncio.wait_for(task, 30.0)
                 #     self.logger.debug("Logged into N2VC!")
 
-                ## await self.n2vc.login()
+                # # await self.n2vc.login()
 
                 # Note: The charm needs to exist on disk at the location
                 # specified by charm_path.
@@ -867,7 +871,8 @@ class Lcm:
                     "vnfd_id": vnfd_id,
                 }
 
-                self.logger.debug("Task create_ns={} Passing artifacts path '{}' for {}".format(nsr_id, charm_path, proxy_charm))
+                self.logger.debug("Task create_ns={} Passing artifacts path '{}' for {}".format(nsr_id, charm_path,
+                                                                                                proxy_charm))
                 task = asyncio.ensure_future(
                     self.n2vc.DeployCharms(
                         model_name,          # The network service name
@@ -1022,7 +1027,7 @@ class Lcm:
                 try:
                     step = db_nsr["detailed-status"] = "Deleting ns at RO"
                     self.logger.debug(logging_text + step)
-                    desc = await RO.delete("ns", RO_nsr_id)
+                    await RO.delete("ns", RO_nsr_id)
                     nsr_lcm["RO"]["nsr_id"] = None
                     nsr_lcm["RO"]["nsr_status"] = "DELETED"
                 except ROclient.ROClientException as e:
@@ -1030,7 +1035,7 @@ class Lcm:
                         nsr_lcm["RO"]["nsr_id"] = None
                         nsr_lcm["RO"]["nsr_status"] = "DELETED"
                         self.logger.debug(logging_text + "RO_ns_id={} already deleted".format(RO_nsr_id))
-                    elif e.http_code == 409:   #conflict
+                    elif e.http_code == 409:   # conflict
                         failed_detail.append("RO_ns_id={} delete conflict: {}".format(RO_nsr_id, e))
                         self.logger.debug(logging_text + failed_detail[-1])
                     else:
@@ -1042,14 +1047,14 @@ class Lcm:
             if RO_nsd_id:
                 try:
                     step = db_nsr["detailed-status"] = "Deleting nsd at RO"
-                    desc = await RO.delete("nsd", RO_nsd_id)
+                    await RO.delete("nsd", RO_nsd_id)
                     self.logger.debug(logging_text + "RO_nsd_id={} deleted".format(RO_nsd_id))
                     nsr_lcm["RO"]["nsd_id"] = None
                 except ROclient.ROClientException as e:
                     if e.http_code == 404:  # not found
                         nsr_lcm["RO"]["nsd_id"] = None
                         self.logger.debug(logging_text + "RO_nsd_id={} already deleted".format(RO_nsd_id))
-                    elif e.http_code == 409:   #conflict
+                    elif e.http_code == 409:   # conflict
                         failed_detail.append("RO_nsd_id={} delete conflict: {}".format(RO_nsd_id, e))
                         self.logger.debug(logging_text + failed_detail[-1])
                     else:
@@ -1061,14 +1066,14 @@ class Lcm:
                     continue
                 try:
                     step = db_nsr["detailed-status"] = "Deleting vnfd={} at RO".format(vnf_id)
-                    desc = await RO.delete("vnfd", RO_vnfd_id)
+                    await RO.delete("vnfd", RO_vnfd_id)
                     self.logger.debug(logging_text + "RO_vnfd_id={} deleted".format(RO_vnfd_id))
                     nsr_lcm["RO"]["vnfd_id"][vnf_id] = None
                 except ROclient.ROClientException as e:
                     if e.http_code == 404:  # not found
                         nsr_lcm["RO"]["vnfd_id"][vnf_id] = None
                         self.logger.debug(logging_text + "RO_vnfd_id={} already deleted ".format(RO_vnfd_id))
-                    elif e.http_code == 409:   #conflict
+                    elif e.http_code == 409:   # conflict
                         failed_detail.append("RO_vnfd_id={} delete conflict: {}".format(RO_vnfd_id, e))
                         self.logger.debug(logging_text + failed_detail[-1])
                     else:
@@ -1153,7 +1158,7 @@ class Lcm:
             nsr_lcm = db_nsr["_admin"].get("deployed")
             vnf_index = db_nslcmop["operationParams"]["member_vnf_index"]
 
-            #TODO check if ns is in a proper status
+            # TODO check if ns is in a proper status
             vca_deployed = nsr_lcm["VCA"].get(vnf_index)
             if not vca_deployed:
                 raise LcmException("charm for member_vnf_index={} is not deployed".format(vnf_index))
@@ -1238,9 +1243,9 @@ class Lcm:
         """
         if topic == "ns":
             lcm_tasks = self.lcm_ns_tasks
-        elif topic== "vim_account":
+        elif topic == "vim_account":
             lcm_tasks = self.lcm_vim_tasks
-        elif topic== "sdn":
+        elif topic == "sdn":
             lcm_tasks = self.lcm_sdn_tasks
 
         if not lcm_tasks.get(_id):
@@ -1260,7 +1265,7 @@ class Lcm:
         self.pings_not_received = 1
         while True:
             try:
-                await self.msg.aiowrite("admin", "ping", {"from": "lcm", "to": "lcm"},  self.loop)
+                await self.msg.aiowrite("admin", "ping", {"from": "lcm", "to": "lcm"}, self.loop)
                 # time between pings are low when it is not received and at starting
                 wait_time = 5 if not kafka_has_received else 120
                 if not self.pings_not_received:
@@ -1351,12 +1356,11 @@ class Lcm:
                     elif command == "show":
                         try:
                             db_nsr = self.db.get_one("nsrs", {"_id": nsr_id})
-                            print(
-                            "nsr:\n    _id={}\n    operational-status: {}\n    config-status: {}\n    detailed-status: "
-                            "{}\n    deploy: {}\n    tasks: {}".format(
-                                nsr_id, db_nsr["operational-status"],
-                                db_nsr["config-status"], db_nsr["detailed-status"],
-                                db_nsr["_admin"]["deployed"], self.lcm_ns_tasks.get(nsr_id)))
+                            print("nsr:\n    _id={}\n    operational-status: {}\n    config-status: {}"
+                                  "\n    detailed-status: {}\n    deploy: {}\n    tasks: {}"
+                                  "".format(nsr_id, db_nsr["operational-status"], db_nsr["config-status"],
+                                            db_nsr["detailed-status"],
+                                            db_nsr["_admin"]["deployed"], self.lcm_ns_tasks.get(nsr_id)))
                         except Exception as e:
                             print("nsr {} not found: {}".format(nsr_id, e))
                         sys.stdout.flush()
@@ -1485,8 +1489,8 @@ def usage():
         -c|--config [configuration_file]: loads the configuration file (default: ./nbi.cfg)
         -h|--help: shows this help
         """.format(sys.argv[0]))
-        # --log-socket-host HOST: send logs to this host")
-        # --log-socket-port PORT: send logs using this port (default: 9022)")
+    # --log-socket-host HOST: send logs to this host")
+    # --log-socket-port PORT: send logs using this port (default: 9022)")
 
 
 if __name__ == '__main__':
