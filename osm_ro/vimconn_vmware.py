@@ -2269,7 +2269,9 @@ class vimconnector(vimconn.vimconnector):
                                 if vm_mac is not None:
                                     vm_ip = self.get_ipaddr_from_NSXedge(nsx_edge_list, vm_mac)
 
-                            network_name = vm.NetworkConnectionSection.NetworkConnection.get('network')
+                            net_s = re.search('network="(.*?)"',network)
+                            network_name = net_s.group(1) if net_s else None
+
                             vm_net_id = self.get_network_id_by_name(network_name)
                             interface = {"mac_address": vm_mac,
                                          "vim_net_id": vm_net_id,
