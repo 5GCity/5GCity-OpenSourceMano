@@ -51,5 +51,6 @@ function cache() {
     lxc delete $container -f || true
 }
 
-cache trusty "$TRUSTY_PACKAGES"
+# Cache the image for the Ubuntu series or series to support
+# cache trusty "$TRUSTY_PACKAGES"
 cache xenial "$XENIAL_PACKAGES"
