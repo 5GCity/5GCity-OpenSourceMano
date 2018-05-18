@@ -541,7 +541,7 @@ function install_juju() {
     echo "Installing juju"
     sudo snap install juju --classic
     sudo dpkg-reconfigure -p medium lxd
-    sg lxd -c "juju bootstrap localhost osm"
+    sg lxd -c "juju bootstrap --bootstrap-series=xenial localhost osm"
     [ $(juju status |grep "osm" |wc -l) -eq 1 ] || FATAL "Juju installation failed"
     echo "Finished installation of juju"
 }
