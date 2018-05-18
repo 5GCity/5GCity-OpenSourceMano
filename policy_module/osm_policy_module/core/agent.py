@@ -95,7 +95,21 @@ class PolicyModuleAgent:
                 if message.key == 'notify_alarm':
                     content = json.loads(message.value)
                     alarm_id = content['notify_details']['alarm_uuid']
-                    log.info("Received alarm notification for alarm %s", alarm_id)
+                    metric_name = content['notify_details']['metric_name']
+                    operation = content['notify_details']['operation']
+                    threshold = content['notify_details']['threshold_value']
+                    vdu_name = content['notify_details']['vdu_name']
+                    vnf_member_index = content['notify_details']['vnf_member_index']
+                    ns_id = content['notify_details']['ns_id']
+                    log.info(
+                        "Received alarm notification for alarm %s, \
+                        metric %s, \
+                        operation %s, \
+                        threshold %s, \
+                        vdu_name %s, \
+                        vnf_member_index %s, \
+                        ns_id %s ",
+                        alarm_id, metric_name, operation, threshold, vdu_name, vnf_member_index, ns_id)
                     try:
                         alarm = ScalingAlarm.select().where(ScalingAlarm.alarm_id == alarm_id).get()
                         lcm_client = LcmClient()
