@@ -650,6 +650,7 @@ function deploy_perfmon() {
 }
 
 function install_lightweight() {
+    [ "$USER" == "root" ] && FATAL "You are running the installer as root. The installer is prepared to be executed as a normal user with sudo privileges."
     echo "Installing lightweight build of OSM"
     LWTEMPDIR="$(mktemp -d -q --tmpdir "installosmlight.XXXXXX")"
     trap 'rm -rf "${LWTEMPDIR}"' EXIT
