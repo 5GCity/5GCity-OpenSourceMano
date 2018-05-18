@@ -1,7 +1,7 @@
 #!/bin/bash
 REPOSITORY_BASE=https://osm-download.etsi.org/repository/osm/debian
 RELEASE=ReleaseFOUR
-REPOSITORY=testing
+REPOSITORY=stable
 
 add_repo() {
   REPO_CHECK="^$1"

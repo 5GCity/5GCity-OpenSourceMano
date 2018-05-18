@@ -17,8 +17,6 @@ function usage(){
     echo -e "usage: $0 [OPTIONS]"
     echo -e "Install OSM from binaries or source code (by default, from binaries)"
     echo -e "  OPTIONS"
-    echo -e "     --uninstall:    uninstall OSM: remove the containers and delete NAT rules"
-    echo -e "     --source:       install OSM from source code using the latest stable tag"
     echo -e "     -r <repo>:      use specified repository name for osm packages"
     echo -e "     -R <release>:   use specified release for osm binaries (deb packages, lxd images, ...)"
     echo -e "     -u <repo base>: use specified repository url for osm packages"
@@ -28,15 +26,17 @@ function usage(){
     echo -e "                     -b v2.0            (v2.0 branch)"
     echo -e "                     -b tags/v1.1.0     (a specific tag)"
     echo -e "                     ..."
-    echo -e "     --lxdimages:    download lxd images from OSM repository instead of creating them from scratch"
-    echo -e "     -l <lxd_repo>:  use specified repository url for lxd images"
-    echo -e "     -p <path>:      use specified repository path for lxd images"
-    echo -e "     --lightweight:  install lightweight build of OSM (default installation)"
-    echo -e "     --soui:         install classic build of OSM (Rel THREE v3.1, based on LXD containers, with SO and UI)"
     echo -e "     --vimemu:       additionally deploy the VIM emulator as a docker container"
     echo -e "     --elk_stack:    additionally deploy an ELK docker stack for event logging"
     echo -e "     --pm_stack:     additionally deploy a Prometheus+Grafana stack for performance monitoring (PM)"
     echo -e "     -o <ADDON>:     do not install OSM, but ONLY one of the addons (vimemu, elk_stack, pm_stack) (assumes OSM is already installed)"
+    echo -e "     -D <devops path> use local devops installation path"
+    echo -e "     --uninstall:    uninstall OSM: remove the containers and delete NAT rules"
+    echo -e "     --source:       install OSM from source code using the latest stable tag"
+    echo -e "     --lxdimages:    download lxd images from OSM repository instead of creating them from scratch"
+    echo -e "     -l <lxd_repo>:  use specified repository url for lxd images"
+    echo -e "     -p <path>:      use specified repository path for lxd images"
+    echo -e "     --soui:         install classic build of OSM (Rel THREE v3.1, based on LXD containers, with SO and UI)"
     echo -e "     --develop:      (deprecated, use '-b master') install OSM from source code using the master branch"
 #    echo -e "     --reconfigure:  reconfigure the modules (DO NOT change NAT rules)"
     echo -e "     --nat:          install only NAT rules"
@@ -44,7 +44,6 @@ function usage(){
 #    echo -e "     --update:       update to the latest stable release or to the latest commit if using a specific branch"
     echo -e "     --showopts:     print chosen options and exit (only for debugging)"
     echo -e "     -y:             do not prompt for confirmation, assumes yes"
-    echo -e "     -D <devops path> use local devops installation path"
     echo -e "     -h / --help:    print this help"
 }
 
@@ -75,7 +74,7 @@ function uninstall_lightweight(){
     echo -e "\nUninstalling lightweight OSM"
     docker stack rm osm
     COUNTER=0
-    result=11
+    result=1
     while [ ${COUNTER} -lt 30 ]; do
         sleep 1
         result=$(docker stack ps osm | wc -l)
@@ -553,18 +552,23 @@ function generate_docker_images() {
     docker pull wurstmeister/zookeeper
     docker pull mongo
     docker pull mysql:5
+EONG
     git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/MON
+    git -C ${LWTEMPDIR}/MON checkout ${COMMIT_ID}
+    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/NBI
+    git -C ${LWTEMPDIR}/NBI checkout ${COMMIT_ID}
+    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/RO
+    git -C ${LWTEMPDIR}/RO checkout ${COMMIT_ID}
+    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/LCM
+    git -C ${LWTEMPDIR}/LCM checkout ${COMMIT_ID}
+    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/LW-UI
+    git -C ${LWTEMPDIR}/LW-UI checkout ${COMMIT_ID}
+    newgrp docker << EONG
     docker build ${LWTEMPDIR}/MON -f ${LWTEMPDIR}/MON/docker/Dockerfile -t osm/mon || ! echo "cannot build MON docker image" >&2
     docker build ${LWTEMPDIR}/MON/policy_module -f ${LWTEMPDIR}/MON/policy_module/Dockerfile -t osm/pm || ! echo "cannot build PM docker image" >&2
-    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/NBI
     docker build ${LWTEMPDIR}/NBI -f ${LWTEMPDIR}/NBI/Dockerfile.local -t osm/nbi || ! echo "cannot build NBI docker image" >&2
-    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/RO
     docker build ${LWTEMPDIR}/RO -f ${LWTEMPDIR}/RO/docker/Dockerfile-local -t osm/ro || ! echo "cannot build RO docker image" >&2
-    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/LCM
     docker build ${LWTEMPDIR}/LCM -f ${LWTEMPDIR}/LCM/Dockerfile.local -t osm/lcm || ! echo "cannot build LCM docker image" >&2
-#    git -C ${LWTEMPDIR} clone https://github.com/superfluidity/osm-light-ui.git
-#    docker build ${LWTEMPDIR}/osm-light-ui -t osm/light-ui -f ${LWTEMPDIR}/osm-light-ui/code/docker/Dockerfile
-    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/LW-UI
     docker build ${LWTEMPDIR}/LW-UI -t osm/light-ui -f ${LWTEMPDIR}/LW-UI/Dockerfile
 EONG
     echo "Finished generation of docker images"
@@ -830,7 +834,7 @@ while getopts ":hy-:b:r:k:u:R:l:p:D:o:" o; do
             [ "${OPTARG}" == "lxdinstall" ] && INSTALL_LXD="y" && continue
             [ "${OPTARG}" == "lxdimages" ] && INSTALL_FROM_LXDIMAGES="y" && continue
             [ "${OPTARG}" == "lightweight" ] && INSTALL_LIGHTWEIGHT="y" && continue
-            [ "${OPTARG}" == "soui" ] && INSTALL_LIGHTWEIGHT="" && RELEASE="-R ReleaseTHREE-Classic" && REPOSITORY="-r testing" && continue
+            [ "${OPTARG}" == "soui" ] && INSTALL_LIGHTWEIGHT="" && RELEASE="-R ReleaseTHREE" && REPOSITORY="-r stable" && continue
             [ "${OPTARG}" == "vimemu" ] && INSTALL_VIMEMU="y" && continue
             [ "${OPTARG}" == "elk_stack" ] && INSTALL_ELK="y" && continue
             [ "${OPTARG}" == "pm_stack" ] && INSTALL_PERFMON="y" && continue
@@ -854,6 +858,8 @@ while getopts ":hy-:b:r:k:u:R:l:p:D:o:" o; do
 done
 
 [ -n "$INSTALL_FROM_LXDIMAGES" ] && [ -n "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible options: --lxd can only be used with --soui"
+[ -n "$NAT" ] && [ -n "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible options: --nat can only be used with --soui"
+[ -n "$NOCONFIGURE" ] && [ -n "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible options: --noconfigure can only be used with --soui"
 
 if [ -n "$SHOWOPTS" ]; then
     dump_vars
