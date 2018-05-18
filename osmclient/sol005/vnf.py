@@ -41,6 +41,7 @@ class Vnf(object):
             ns_instance = self._client.ns.get(ns)
             filter_string = '?nsr-id-ref={}'.format(ns_instance['_id'])
         resp = self._http.get_cmd('{}{}'.format(self._apiBase,filter_string))
+        #print 'RESP: {}'.format(resp)
         if resp:
             return resp
         return list()
@@ -50,7 +51,7 @@ class Vnf(object):
         """
         if utils.validate_uuid4(name):
             for vnf in self.list():
-                if vnf == vnf['_id']:
+                if name == vnf['_id']:
                     return vnf
         else:
             for vnf in self.list():
@@ -66,6 +67,7 @@ class Vnf(object):
                     vnf_id = vnf['_id']
                     break
         resp = self._http.get_cmd('{}/{}'.format(self._apiBase, vnf_id))
+        #print 'RESP: {}'.format(resp)
         if resp:
             return resp
         raise NotFound("vnf {} not found".format(name))

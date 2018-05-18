@@ -230,20 +230,39 @@ def vnf_list(ctx, ns):
     except ClientException as inst:
         print(inst.message)
         exit(1)
-    table = PrettyTable(
-        ['vnf name',
-         'id',
-         'operational status',
-         'config status'])
-    for vnfr in resp:
-        if 'mgmt-interface' not in vnfr:
-            vnfr['mgmt-interface'] = {}
-            vnfr['mgmt-interface']['ip-address'] = None
-        table.add_row(
-            [vnfr['name'],
-             vnfr['id'],
-             vnfr['operational-status'],
-             vnfr['config-status']])
+    fullclassname = ctx.obj.__module__ + "." + ctx.obj.__class__.__name__
+    if fullclassname == 'osmclient.sol005.client.Client':
+        table = PrettyTable(
+            ['vnf id',
+             'name',
+             'ns id',
+             'vnf member index',
+             'vnfd name',
+             'ip address'])
+        for vnfr in resp:
+            name = vnfr['name'] if 'name' in vnfr else '-'
+            table.add_row(
+                [vnfr['_id'],
+                 name,
+                 vnfr['nsr-id-ref'],
+                 vnfr['member-vnf-index-ref'],
+                 vnfr['vnfd-ref'],
+                 vnfr['ip-address']])
+    else:
+        table = PrettyTable(
+            ['vnf name',
+             'id',
+             'operational status',
+             'config status'])
+        for vnfr in resp:
+            if 'mgmt-interface' not in vnfr:
+                vnfr['mgmt-interface'] = {}
+                vnfr['mgmt-interface']['ip-address'] = None
+            table.add_row(
+                [vnfr['name'],
+                 vnfr['id'],
+                 vnfr['operational-status'],
+                 vnfr['config-status']])
     table.align = 'l'
     print(table)
 
