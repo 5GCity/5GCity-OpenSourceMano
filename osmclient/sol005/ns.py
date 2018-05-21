@@ -81,15 +81,20 @@ class Ns(object):
             querystring = '?FORCE=True'
         http_code, resp = self._http.delete_cmd('{}/{}{}'.format(self._apiBase,
                                          ns['_id'], querystring))
-        if resp:
-            resp = json.loads(resp)
+        #print 'HTTP CODE: {}'.format(http_code)
         #print 'RESP: {}'.format(resp)
         if http_code == 202:
             print 'Deletion in progress'
         elif http_code == 204:
             print 'Deleted'
         else:
-            raise ClientException("failed to delete ns {}: {}".format(name, resp))
+            msg = ""
+            if resp:
+                try:
+                    msg = json.loads(resp)
+                except ValueError:
+                    msg = resp
+            raise ClientException("failed to delete ns {} - {}".format(name, msg))
 
     def create(self, nsd_name, nsr_name, account, config=None,
                ssh_keys=None, description='default description',
@@ -156,14 +161,23 @@ class Ns(object):
                                             self._apiVersion, self._apiResource)
             http_code, resp = self._http.post_cmd(endpoint=self._apiBase,
                                        postfields_dict=ns)
-            if resp:
-                resp = json.loads(resp)
+            #print 'HTTP CODE: {}'.format(http_code)
             #print 'RESP: {}'.format(resp)
-            if not resp or 'id' not in resp:
-                raise ClientException('unexpected response from server: '.format(
+            if http_code in (200, 201, 202, 204):
+                if resp:
+                    resp = json.loads(resp)
+                if not resp or 'id' not in resp:
+                    raise ClientException('unexpected response from server - {} '.format(
                                       resp))
-            else:
                 print resp['id']
+            else:
+                msg = ""
+                if resp:
+                    try:
+                        msg = json.loads(resp)
+                    except ValueError:
+                        msg = resp
+                raise ClientException(msg)
         except ClientException as exc:
             message="failed to create ns: {} nsd: {}\nerror:\n{}".format(
                     nsr_name,
@@ -182,15 +196,26 @@ class Ns(object):
             filter_string = ''
             if filter:
                 filter_string = '&{}'.format(filter)
-            http_code, resp = self._http.get2_cmd('{}?nsInstanceId={}'.format(self._apiBase, ns['_id'],
-                                                                  filter_string) )
-            resp = json.loads(resp)
+            http_code, resp = self._http.get2_cmd('{}?nsInstanceId={}'.format(
+                                                       self._apiBase, ns['_id'],
+                                                       filter_string) )
+            #print 'HTTP CODE: {}'.format(http_code)
             #print 'RESP: {}'.format(resp)
             if http_code == 200:
-                return resp
+                if resp:
+                    resp = json.loads(resp)
+                    return resp
+                else:
+                    raise ClientException('unexpected response from server')
             else:
-                raise ClientException('{}'.format(resp['detail']))
-
+                msg = ""
+                if resp:
+                    try:
+                        resp = json.loads(resp)
+                        msg = resp['detail']
+                    except ValueError:
+                        msg = resp
+                raise ClientException(msg)
         except ClientException as exc:
             message="failed to get operation list of NS {}:\nerror:\n{}".format(
                     name,
@@ -205,12 +230,23 @@ class Ns(object):
             self._apiBase = '{}{}{}'.format(self._apiName,
                                       self._apiVersion, self._apiResource)
             http_code, resp = self._http.get2_cmd('{}/{}'.format(self._apiBase, operationId))
-            resp = json.loads(resp)
+            #print 'HTTP CODE: {}'.format(http_code)
             #print 'RESP: {}'.format(resp)
             if http_code == 200:
-                return resp
+                if resp:
+                    resp = json.loads(resp)
+                    return resp
+                else:
+                    raise ClientException('unexpected response from server')
             else:
-                raise ClientException("{}".format(resp['detail']))
+                msg = ""
+                if resp:
+                    try:
+                        resp = json.loads(resp)
+                        msg = resp['detail']
+                    except ValueError:
+                        msg = resp
+                raise ClientException(msg)
         except ClientException as exc:
             message="failed to get status of operation {}:\nerror:\n{}".format(
                     operationId,
@@ -229,14 +265,23 @@ class Ns(object):
             #print 'OP_NAME: {}'.format(op_name)
             #print 'OP_DATA: {}'.format(json.dumps(op_data))
             http_code, resp = self._http.post_cmd(endpoint=endpoint, postfields_dict=op_data)
-            if resp:
-                resp = json.loads(resp)
+            #print 'HTTP CODE: {}'.format(http_code)
             #print 'RESP: {}'.format(resp)
-            if not resp or 'id' not in resp:
-                raise ClientException('unexpected response from server: '.format(
+            if http_code in (200, 201, 202, 204):
+                if resp:
+                    resp = json.loads(resp)
+                if not resp or 'id' not in resp:
+                    raise ClientException('unexpected response from server - {}'.format(
                                       resp))
-            else:
                 print resp['id']
+            else:
+                msg = ""
+                if resp:
+                    try:
+                        msg = json.loads(resp)
+                    except ValueError:
+                        msg = resp
+                raise ClientException(msg)
         except ClientException as exc:
             message="failed to exec operation {}:\nerror:\n{}".format(
                     name,
@@ -250,15 +295,22 @@ class Ns(object):
         try:
             http_code, resp = self._http.post_cmd(endpoint='/test/message/alarm_request',
                                        postfields_dict=data)
+            #print 'HTTP CODE: {}'.format(http_code)
+            #print 'RESP: {}'.format(resp)
             if http_code in (200, 201, 202, 204):
                 #resp = json.loads(resp)
-                #print 'RESP: {}'.format(resp)
                 print 'Alarm created'
             else:
-                raise ClientException('unexpected response from server: code: {}, resp: {}'.format(
-                                      http_code, resp))
+                msg = ""
+                if resp:
+                    try:
+                        msg = json.loads(resp)
+                    except ValueError:
+                        msg = resp
+                raise ClientException('error: code: {}, resp: {}'.format(
+                                      http_code, msg))
         except ClientException as exc:
-            message="failed to create alarm: alarm {}\nerror:\n{}".format(
+            message="failed to create alarm: alarm {}\n{}".format(
                     alarm,
                     exc.message)
             raise ClientException(message)
@@ -271,15 +323,22 @@ class Ns(object):
         try:
             http_code, resp = self._http.post_cmd(endpoint='/test/message/alarm_request',
                                        postfields_dict=data)
+            #print 'HTTP CODE: {}'.format(http_code)
+            #print 'RESP: {}'.format(resp)
             if http_code in (200, 201, 202, 204):
                 #resp = json.loads(resp)
-                #print 'RESP: {}'.format(resp)
                 print 'Alarm deleted'
             else:
-                raise ClientException('unexpected response from server: code: {}, resp: {}'.format(
-                                      http_code, resp))
+                msg = ""
+                if resp:
+                    try:
+                        msg = json.loads(resp)
+                    except ValueError:
+                        msg = resp
+                raise ClientException('error: code: {}, resp: {}'.format(
+                                      http_code, msg))
         except ClientException as exc:
-            message="failed to delete alarm: alarm {}\nerror:\n{}".format(
+            message="failed to delete alarm: alarm {}\n{}".format(
                     alarm,
                     exc.message)
             raise ClientException(message)
@@ -290,15 +349,22 @@ class Ns(object):
         try:
             http_code, resp = self._http.post_cmd(endpoint='/test/message/metric_request',
                                        postfields_dict=data)
+            #print 'HTTP CODE: {}'.format(http_code)
+            #print 'RESP: {}'.format(resp)
             if http_code in (200, 201, 202, 204):
                 #resp = json.loads(resp)
-                #print 'RESP: {}'.format(resp)
                 return 'Metric exported'
             else:
-                raise ClientException('unexpected response from server: code: {}, resp: {}'.format(
-                                      http_code, resp))
+                msg = ""
+                if resp:
+                    try:
+                        msg = json.loads(resp)
+                    except ValueError:
+                        msg = resp
+                raise ClientException('error: code: {}, resp: {}'.format(
+                                      http_code, msg))
         except ClientException as exc:
-            message="failed to export metric: metric {}\nerror:\n{}".format(
+            message="failed to export metric: metric {}\n{}".format(
                     metric,
                     exc.message)
             raise ClientException(message)

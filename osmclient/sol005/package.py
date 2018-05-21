@@ -59,12 +59,21 @@ class Package(object):
                       for (key,val) in headers.items()]
         self._http.set_http_header(http_header)
         http_code, resp = self._http.post_cmd(endpoint=endpoint, filename=filename)
-        if resp:
-            resp = json.loads(resp)
-        #print 'RESP: {}'.format(yaml.safe_dump(resp))
-        if not resp or 'id' not in resp:
-            raise ClientException("failed to upload package")
-        else:
+        #print 'HTTP CODE: {}'.format(http_code)
+        #print 'RESP: {}'.format(resp)
+        if http_code in (200, 201, 202, 204):
+            if resp:
+                resp = json.loads(resp)
+            if not resp or 'id' not in resp:
+                raise ClientException('unexpected response from server - {}'.format(
+                                      resp))
             print resp['id']
-
+        else:
+            msg = ""
+            if resp:
+                try:
+                     msg = json.loads(resp)
+                except ValueError:
+                    msg = resp
+            raise ClientException("failed to delete ns {} - {}".format(name, msg))
 

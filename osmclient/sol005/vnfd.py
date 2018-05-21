@@ -74,11 +74,20 @@ class Vnfd(object):
         headers = self._client._headers
         headers['Accept'] = 'application/binary'
         http_code, resp = self._http.get2_cmd('{}/{}/{}'.format(self._apiBase, vnfd['_id'], thing))
-        #print yaml.safe_dump(resp2)
-        if resp:
-            #store in a file
-            return resp
-        raise NotFound("vnfd {} not found".format(name))
+        #print 'HTTP CODE: {}'.format(http_code)
+        #print 'RESP: {}'.format(resp)
+        if http_code in (200, 201, 202, 204):
+            if resp:
+                #store in a file
+                return resp
+        else:
+            msg = ""
+            if resp:
+                try:
+                    msg = json.loads(resp)
+                except ValueError:
+                    msg = resp
+            raise ClientException("failed to get {} from {} - {}".format(thing, name, msg))
 
     def get_descriptor(self, name, filename):
         self.get_thing(name, 'vnfd', filename)
@@ -96,15 +105,20 @@ class Vnfd(object):
             querystring = '?FORCE=True'
         http_code, resp = self._http.delete_cmd('{}/{}{}'.format(self._apiBase,
                                          vnfd['_id'], querystring))
-        if resp:
-            resp = json.loads(resp)
+        #print 'HTTP CODE: {}'.format(http_code)
         #print 'RESP: {}'.format(resp)
         if http_code == 202:
             print 'Deletion in progress'
         elif http_code == 204:
             print 'Deleted'
         else:
-            raise ClientException("failed to delete vnfd {}: {}".format(name, resp))
+            msg = ""
+            if resp:
+                try:
+                    msg = json.loads(resp)
+                except ValueError:
+                    msg = resp
+            raise ClientException("failed to delete vnfd {} - {}".format(name, msg))
 
     def create(self, filename, overwrite=None, update_endpoint=None):
 	mime_type = magic.from_file(filename, mime=True)
@@ -141,13 +155,23 @@ class Vnfd(object):
                                             self._apiVersion, self._apiResource)
             endpoint = '{}{}'.format(self._apiBase,ow_string)
             http_code, resp = self._http.post_cmd(endpoint=endpoint, filename=filename)
-        if resp:
-            resp = json.loads(resp)
-        #print resp
-        if not resp or 'id' not in resp:
-            raise ClientException("failed to upload package")
-        else:
+        #print 'HTTP CODE: {}'.format(http_code)
+        #print 'RESP: {}'.format(resp)
+        if http_code in (200, 201, 202, 204):
+            if resp:
+                resp = json.loads(resp)
+            if not resp or 'id' not in resp:
+                raise ClientException('unexpected response from server: '.format(
+                                      resp))
             print resp['id']
+        else:
+            msg = ""
+            if resp:
+                try:
+                    msg = json.loads(resp)
+                except ValueError:
+                    msg = resp
+            raise ClientException("failed to create/update vnfd - {}".format(name, msg))
 
     def update(self, name, filename):
         vnfd = self.get(name)

@@ -37,27 +37,45 @@ class SdnController(object):
     def create(self, name, sdn_controller):
         http_code, resp = self._http.post_cmd(endpoint=self._apiBase,
                                        postfields_dict=sdn_controller)
-        if resp:
-            resp = json.loads(resp)
+        #print 'HTTP CODE: {}'.format(http_code)
         #print 'RESP: {}'.format(resp)
-        if not resp or 'id' not in resp:
-            raise ClientException('failed to create SDN controller: '.format(
-                                  resp))
-        else:
+        if http_code in (200, 201, 202, 204):
+            if resp:
+                resp = json.loads(resp)
+            if not resp or 'id' not in resp:
+                raise ClientException('unexpected response from server - {}'.format(
+                                      resp))
             print resp['id']
+        else:
+            msg = ""
+            if resp:
+                try:
+                    msg = json.loads(resp)
+                except ValueError:
+                    msg = resp
+            raise ClientException("failed to create SDN controller {} - {}".format(name, msg))
 
     def update(self, name, sdn_controller):
         sdnc = self.get(name)
         http_code, resp = self._http.put_cmd(endpoint='{}/{}'.format(self._apiBase,sdnc['_id']),
                                        postfields_dict=sdn_controller)
-        if resp:
-            resp = json.loads(resp)
+        #print 'HTTP CODE: {}'.format(http_code)
         #print 'RESP: {}'.format(resp)
-        if not resp or 'id' not in resp:
-            raise ClientException('failed to update SDN controller: '.format(
-                                  resp))
-        else:
+        if http_code in (200, 201, 202, 204):
+            if resp:
+                resp = json.loads(resp)
+            if not resp or 'id' not in resp:
+                raise ClientException('unexpected response from server - {}'.format(
+                                      resp))
             print resp['id']
+        else:
+            msg = ""
+            if resp:
+                try:
+                    msg = json.loads(resp)
+                except ValueError:
+                    msg = resp
+            raise ClientException("failed to update SDN controller {} - {}".format(name, msg))
 
     def delete(self, name, force=False):
         sdn_controller = self.get(name)
@@ -66,17 +84,22 @@ class SdnController(object):
             querystring = '?FORCE=True'
         http_code, resp = self._http.delete_cmd('{}/{}{}'.format(self._apiBase,
                                          sdn_controller['_id'], querystring))
-        if resp:
-            resp = json.loads(resp)
+        #print 'HTTP CODE: {}'.format(http_code)
         #print 'RESP: {}'.format(resp)
         if http_code == 202:
             print 'Deletion in progress'
         elif http_code == 204:
             print 'Deleted'
-        elif 'result' in resp:
+        elif resp and 'result' in resp:
             print 'Deleted'
         else:
-            raise ClientException("failed to delete vim {} - {}".format(name, resp))
+            msg = ""
+            if resp:
+                try:
+                    msg = json.loads(resp)
+                except ValueError:
+                    msg = resp
+            raise ClientException("failed to delete SDN controller {} - {}".format(name, msg))
 
     def list(self, filter=None):
         """Returns a list of SDN controllers

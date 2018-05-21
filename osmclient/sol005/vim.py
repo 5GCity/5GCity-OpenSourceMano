@@ -43,7 +43,7 @@ class Vim(object):
         vim_account['name'] = name
         vim_account = self.update_vim_account_dict(vim_account, vim_access)
 
-        vim_config = {'hello': 'hello'}
+        vim_config = {}
         if 'config' in vim_access and vim_access['config'] is not None:
             vim_config = yaml.safe_load(vim_access['config'])
         if sdn_controller:
@@ -60,13 +60,21 @@ class Vim(object):
                                        postfields_dict=vim_account)
         #print 'HTTP CODE: {}'.format(http_code)
         #print 'RESP: {}'.format(resp)
-        if resp:
-            resp = json.loads(resp)
-        if not resp or 'id' not in resp:
-            raise ClientException('failed to create vim {}: {}'.format(
-                                  name, resp))
-        else:
+        if http_code in (200, 201, 202, 204):
+            if resp:
+                resp = json.loads(resp)
+            if not resp or 'id' not in resp:
+                raise ClientException('unexpected response from server - {}'.format(
+                                      resp))
             print resp['id']
+        else:
+            msg = ""
+            if resp:
+                try:
+                    msg = json.loads(resp)
+                except ValueError:
+                    msg = resp
+            raise ClientException("failed to create vim {} - {}".format(name, msg))
 
     def update(self, vim_name, vim_account, sdn_controller, sdn_port_mapping):
         vim = self.get(vim_name)
@@ -91,12 +99,21 @@ class Vim(object):
                                        postfields_dict=vim_account)
         #print 'HTTP CODE: {}'.format(http_code)
         #print 'RESP: {}'.format(resp)
-        if resp:
-            resp = json.loads(resp)
-        if not resp or 'id' not in resp:
-            raise ClientException('failed to update vim: '.format(resp))
-        else:
+        if http_code in (200, 201, 202, 204):
+            if resp:
+                resp = json.loads(resp)
+            if not resp or 'id' not in resp:
+                raise ClientException('unexpected response from server - {}'.format(
+                                      resp))
             print resp['id']
+        else:
+            msg = ""
+            if resp:
+                try:
+                    msg = json.loads(resp)
+                except ValueError:
+                    msg = resp
+            raise ClientException("failed to update vim {} - {}".format(vim_name, msg))
 
     def update_vim_account_dict(self, vim_account, vim_access):
         vim_account['vim_type'] = vim_access['vim-type']
@@ -124,15 +141,20 @@ class Vim(object):
             querystring = '?FORCE=True'
         http_code, resp = self._http.delete_cmd('{}/{}{}'.format(self._apiBase,
                                          vim_id, querystring))
-        if resp:
-            resp = json.loads(resp)
+        #print 'HTTP CODE: {}'.format(http_code)
         #print 'RESP: {}'.format(resp)
         if http_code == 202:
             print 'Deletion in progress'
         elif http_code == 204:
             print 'Deleted'
         else:
-            raise ClientException("failed to delete vim {} - {}".format(vim_name, resp))
+            msg = ""
+            if resp:
+                try:
+                    msg = json.loads(resp)
+                except ValueError:
+                    msg = resp
+            raise ClientException("failed to delete vim {} - {}".format(vim_name, msg))
 
     def list(self, filter=None):
         """Returns a list of VIM accounts
