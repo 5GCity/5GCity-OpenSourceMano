@@ -4357,6 +4357,7 @@ def delete_tenant(mydb, tenant):
 
 
 def new_datacenter(mydb, datacenter_descriptor):
+    sdn_port_mapping = None
     if "config" in datacenter_descriptor:
         sdn_port_mapping = datacenter_descriptor["config"].pop("sdn-port-mapping", None)
         datacenter_descriptor["config"] = yaml.safe_dump(datacenter_descriptor["config"], default_flow_style=True,
