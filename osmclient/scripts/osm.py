@@ -861,7 +861,7 @@ def vim_create(ctx,
         vim['vim-tenant-name'] = tenant
         vim['vim-type'] = account_type
         vim['description'] = description
-        vim ['config'] = config
+        vim['config'] = config
         if sdn_controller or sdn_port_mapping:
             ctx.obj.vim.create(name, vim, sdn_controller, sdn_port_mapping)
         else:

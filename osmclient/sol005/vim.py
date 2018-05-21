@@ -31,10 +31,10 @@ class Vim(object):
         self._client = client
         self._apiName = '/admin'
         self._apiVersion = '/v1'
-        self._apiResource = '/vims'
+        self._apiResource = '/vim_accounts'
         self._apiBase = '{}{}{}'.format(self._apiName,
                                         self._apiVersion, self._apiResource)
-    def create(self, name, vim_access, sdn_controller, sdn_port_mapping):
+    def create(self, name, vim_access, sdn_controller=None, sdn_port_mapping=None):
         if 'vim-type' not in vim_access:
             #'openstack' not in vim_access['vim-type']):
             raise Exception("vim type not provided")
@@ -43,9 +43,9 @@ class Vim(object):
         vim_account['name'] = name
         vim_account = self.update_vim_account_dict(vim_account, vim_access)
 
-        vim_config = {}
+        vim_config = {'hello': 'hello'}
         if 'config' in vim_access and vim_access['config'] is not None:
-            vim_config = json.loads(vim_access['config'])
+            vim_config = yaml.safe_load(vim_access['config'])
         if sdn_controller:
             sdnc = self._client.sdnc.get(sdn_controller)
             vim_config['sdn-controller'] = sdnc['_id']
@@ -78,7 +78,7 @@ class Vim(object):
             if config=="":
                 vim_config = None
             else:
-                vim_config = json.loads(vim_account['config'])
+                vim_config = yaml.safe_load(vim_account['config'])
         if sdn_controller:
             sdnc = self._client.sdnc.get(sdn_controller)
             vim_config['sdn-controller'] = sdnc['_id']
