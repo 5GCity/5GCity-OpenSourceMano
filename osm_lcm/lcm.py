@@ -702,9 +702,10 @@ class Lcm:
         db_nslcmop = None
         db_vnfr = {}
         exc = None
-        step = "Getting nsr, nslcmop, RO_vims from db"
         try:
+            step = "Getting nslcmop={} from db".format(nslcmop_id)
             db_nslcmop = self.db.get_one("nslcmops", {"_id": nslcmop_id})
+            step = "Getting nsr={} from db".format(nsr_id)
             db_nsr = self.db.get_one("nsrs", {"_id": nsr_id})
             nsd = db_nsr["nsd"]
             nsr_name = db_nsr["name"]   # TODO short-name??
@@ -734,32 +735,34 @@ class Lcm:
             # get vnfds, instantiate at RO
             for vnfd_id, vnfd in needed_vnfd.items():
                 step = db_nsr["detailed-status"] = "Creating vnfd={} at RO".format(vnfd_id)
-                self.logger.debug(logging_text + step)
+                # self.logger.debug(logging_text + step)
                 vnfd_id_RO = nsr_id + "." + vnfd_id[:200]
 
                 # look if present
                 vnfd_list = await RO.get_list("vnfd", filter_by={"osm_id": vnfd_id_RO})
                 if vnfd_list:
                     nsr_lcm["RO"]["vnfd_id"][vnfd_id] = vnfd_list[0]["uuid"]
-                    self.logger.debug(logging_text + "RO vnfd={} exist. Using RO_id={}".format(
+                    self.logger.debug(logging_text + "vnfd={} exists at RO. Using RO_id={}".format(
                         vnfd_id, vnfd_list[0]["uuid"]))
                 else:
                     vnfd_RO = self.vnfd2RO(vnfd, vnfd_id_RO)
                     desc = await RO.create("vnfd", descriptor=vnfd_RO)
                     nsr_lcm["RO"]["vnfd_id"][vnfd_id] = desc["uuid"]
                     db_nsr["_admin"]["nsState"] = "INSTANTIATED"
+                    self.logger.debug(logging_text + "vnfd={} created at RO. RO_id={}".format(
+                        vnfd_id, desc["uuid"]))
                 self.update_db("nsrs", nsr_id, db_nsr)
 
             # create nsd at RO
             nsd_id = nsd["id"]
             step = db_nsr["detailed-status"] = "Creating nsd={} at RO".format(nsd_id)
-            self.logger.debug(logging_text + step)
+            # self.logger.debug(logging_text + step)
 
-            nsd_id_RO = nsd_id + "." + nsd_id[:200]
+            nsd_id_RO = nsr_id + "." + nsd_id[:200]
             nsd_list = await RO.get_list("nsd", filter_by={"osm_id": nsd_id_RO})
             if nsd_list:
                 nsr_lcm["RO"]["nsd_id"] = nsd_list[0]["uuid"]
-                self.logger.debug(logging_text + "RO nsd={} exist. Using RO_id={}".format(
+                self.logger.debug(logging_text + "nsd={} exists at RO. Using RO_id={}".format(
                     nsd_id, nsd_list[0]["uuid"]))
             else:
                 nsd_RO = deepcopy(nsd)
@@ -772,6 +775,7 @@ class Lcm:
                 desc = await RO.create("nsd", descriptor=nsd_RO)
                 db_nsr["_admin"]["nsState"] = "INSTANTIATED"
                 nsr_lcm["RO"]["nsd_id"] = desc["uuid"]
+                self.logger.debug(logging_text + "nsd={} created at RO. RO_id={}".format(nsd_id, desc["uuid"]))
             self.update_db("nsrs", nsr_id, db_nsr)
 
             # Crate ns at RO
@@ -780,7 +784,7 @@ class Lcm:
             if RO_nsr_id:
                 try:
                     step = db_nsr["detailed-status"] = "Looking for existing ns at RO"
-                    self.logger.debug(logging_text + step + " RO_ns_id={}".format(RO_nsr_id))
+                    # self.logger.debug(logging_text + step + " RO_ns_id={}".format(RO_nsr_id))
                     desc = await RO.show("ns", RO_nsr_id)
                 except ROclient.ROClientException as e:
                     if e.http_code != HTTPStatus.NOT_FOUND:
@@ -790,13 +794,13 @@ class Lcm:
                     ns_status, ns_status_info = RO.check_ns_status(desc)
                     nsr_lcm["RO"]["nsr_status"] = ns_status
                     if ns_status == "ERROR":
-                        step = db_nsr["detailed-status"] = "Deleting ns at RO"
-                        self.logger.debug(logging_text + step + " RO_ns_id={}".format(RO_nsr_id))
+                        step = db_nsr["detailed-status"] = "Deleting ns at RO. RO_ns_id={}".format(RO_nsr_id)
+                        self.logger.debug(logging_text + step)
                         await RO.delete("ns", RO_nsr_id)
                         RO_nsr_id = nsr_lcm["RO"]["nsr_id"] = None
             if not RO_nsr_id:
                 step = db_nsr["detailed-status"] = "Creating ns at RO"
-                self.logger.debug(logging_text + step)
+                # self.logger.debug(logging_text + step)
                 RO_ns_params = self.ns_params_2_RO(db_nsr.get("instantiate_params"))
                 desc = await RO.create("ns", descriptor=RO_ns_params,
                                        name=db_nsr["name"],
@@ -804,8 +808,9 @@ class Lcm:
                 RO_nsr_id = nsr_lcm["RO"]["nsr_id"] = desc["uuid"]
                 db_nsr["_admin"]["nsState"] = "INSTANTIATED"
                 nsr_lcm["RO"]["nsr_status"] = "BUILD"
-
+                self.logger.debug(logging_text + "ns created at RO. RO_id={}".format(desc["uuid"]))
             self.update_db("nsrs", nsr_id, db_nsr)
+
             # update VNFR vimAccount
             step = "Updating VNFR vimAcccount"
             for vnf_index, vnfr in db_vnfr.items():
@@ -819,9 +824,9 @@ class Lcm:
                 self.update_db("vnfrs", vnfr["_id"], vnfr)
 
             # wait until NS is ready
-            step = ns_status_detailed = "Waiting ns ready at RO"
+            step = ns_status_detailed = "Waiting ns ready at RO. RO_id={}".format(RO_nsr_id)
             db_nsr["detailed-status"] = ns_status_detailed
-            self.logger.debug(logging_text + step + " RO_ns_id={}".format(RO_nsr_id))
+            self.logger.debug(logging_text + step)
             deployment_timeout = 2 * 3600   # Two hours
             while deployment_timeout > 0:
                 desc = await RO.show("ns", RO_nsr_id)
@@ -848,6 +853,7 @@ class Lcm:
                 deployment_timeout -= 5
             if deployment_timeout <= 0:
                 raise ROclient.ROClientException("Timeout waiting ns to be ready")
+
             step = "Updating VNFRs"
             for vnf_index, vnfr_deployed in ns_RO_info.items():
                 vnfr = db_vnfr[vnf_index]
@@ -989,10 +995,11 @@ class Lcm:
             return nsr_lcm
 
         except (ROclient.ROClientException, DbException, LcmException) as e:
-            self.logger.error(logging_text + "Exit Exception {}".format(e))
+            self.logger.error(logging_text + "Exit Exception while '{}': {}".format(step, e))
             exc = e
         except Exception as e:
-            self.logger.critical(logging_text + "Exit Exception {} {}".format(type(e).__name__, e), exc_info=True)
+            self.logger.critical(logging_text + "Exit Exception {} while '{}': {}".format(type(e).__name__, step, e),
+                                 exc_info=True)
             exc = e
         finally:
             if exc:
@@ -1140,7 +1147,7 @@ class Lcm:
                 db_nsr_update = {
                     "operational-status": "failed",
                     "detailed-status": "Deletion errors " + "; ".join(failed_detail),
-                    "_admin": {"deployed": nsr_lcm, }
+                    "_admin.deployed": nsr_lcm
                 }
                 db_nslcmop_update = {
                     "detailed-status": "; ".join(failed_detail),
@@ -1155,7 +1162,8 @@ class Lcm:
                 db_nsr_update = {
                     "operational-status": "terminated",
                     "detailed-status": "Done",
-                    "_admin": {"deployed": nsr_lcm, "nsState": "NOT_INSTANTIATED"}
+                    "_admin.deployed": nsr_lcm,
+                    "_admin.nsState": "NOT_INSTANTIATED"
                 }
                 db_nslcmop_update = {
                     "detailed-status": "Done",
@@ -1338,7 +1346,8 @@ class Lcm:
             try:
                 topics = ("admin", "ns", "vim_account", "sdn")
                 topic, command, params = await self.msg.aioread(topics, self.loop)
-                self.logger.debug("Task kafka_read receives {} {}: {}".format(topic, command, params))
+                if topic != "admin" and command != "ping":
+                    self.logger.debug("Task kafka_read receives {} {}: {}".format(topic, command, params))
                 consecutive_errors = 0
                 first_start = False
                 order_id += 1
