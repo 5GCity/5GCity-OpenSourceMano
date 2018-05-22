@@ -72,12 +72,12 @@ function uninstall(){
 #Uninstall lightweight OSM: remove dockers
 function uninstall_lightweight(){
     echo -e "\nUninstalling lightweight OSM"
-    docker stack rm osm
+    sg docker -c "docker stack rm osm"
     COUNTER=0
     result=1
     while [ ${COUNTER} -lt 30 ]; do
         sleep 1
-        result=$(docker stack ps osm | wc -l)
+        result=$(sg docker -c "docker stack ps osm" | wc -l)
         #echo "Dockers running: $result"
         if [ "${result}" == "0" ]; then
             break
@@ -90,12 +90,19 @@ function uninstall_lightweight(){
         FATAL "Some dockers of the stack osm could not be removed. Could not uninstall OSM in single shot. Try to uninstall again"
     fi
     sleep 5
+    echo "Now osm docker images and volumes will be deleted"
+    newgrp docker << EONG
     docker image rm osm/ro
     docker image rm osm/lcm
     docker image rm osm/light-ui
     docker image rm osm/nbi
     docker image rm osm/mon
     docker image rm osm/pm
+    docker volume rm osm_mon_db
+    docker volume rm osm_mongo_db
+    docker volume rm osm_osm_packages
+    docker volume rm osm_ro_db
+EONG
     return 0
 }
 
@@ -564,12 +571,12 @@ EONG
     git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/LW-UI
     git -C ${LWTEMPDIR}/LW-UI checkout ${COMMIT_ID}
     newgrp docker << EONG
-    docker build ${LWTEMPDIR}/MON -f ${LWTEMPDIR}/MON/docker/Dockerfile -t osm/mon || ! echo "cannot build MON docker image" >&2
-    docker build ${LWTEMPDIR}/MON/policy_module -f ${LWTEMPDIR}/MON/policy_module/Dockerfile -t osm/pm || ! echo "cannot build PM docker image" >&2
-    docker build ${LWTEMPDIR}/NBI -f ${LWTEMPDIR}/NBI/Dockerfile.local -t osm/nbi || ! echo "cannot build NBI docker image" >&2
-    docker build ${LWTEMPDIR}/RO -f ${LWTEMPDIR}/RO/docker/Dockerfile-local -t osm/ro || ! echo "cannot build RO docker image" >&2
-    docker build ${LWTEMPDIR}/LCM -f ${LWTEMPDIR}/LCM/Dockerfile.local -t osm/lcm || ! echo "cannot build LCM docker image" >&2
-    docker build ${LWTEMPDIR}/LW-UI -t osm/light-ui -f ${LWTEMPDIR}/LW-UI/Dockerfile
+    docker build ${LWTEMPDIR}/MON -f ${LWTEMPDIR}/MON/docker/Dockerfile -t osm/mon --no-cache || ! echo "cannot build MON docker image" >&2
+    docker build ${LWTEMPDIR}/MON/policy_module -f ${LWTEMPDIR}/MON/policy_module/Dockerfile -t osm/pm --no-cache || ! echo "cannot build PM docker image" >&2
+    docker build ${LWTEMPDIR}/NBI -f ${LWTEMPDIR}/NBI/Dockerfile.local -t osm/nbi --no-cache || ! echo "cannot build NBI docker image" >&2
+    docker build ${LWTEMPDIR}/RO -f ${LWTEMPDIR}/RO/docker/Dockerfile-local -t osm/ro --no-cache || ! echo "cannot build RO docker image" >&2
+    docker build ${LWTEMPDIR}/LCM -f ${LWTEMPDIR}/LCM/Dockerfile.local -t osm/lcm --no-cache || ! echo "cannot build LCM docker image" >&2
+    docker build ${LWTEMPDIR}/LW-UI -t osm/light-ui -f ${LWTEMPDIR}/LW-UI/Dockerfile --no-cache || ! echo "cannot build LW-UI docker image" >&2
 EONG
     echo "Finished generation of docker images"
 }
