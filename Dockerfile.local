@@ -16,6 +16,8 @@ RUN apt-get update && apt-get install -y git python3 \
 
 RUN git clone https://osm.etsi.org/gerrit/osm/N2VC.git \
     && cd N2VC \
+    && pip3 install websockets==4.0.1 \
+    && pip3 install requests \
     && cd modules/libjuju && python3 setup.py develop && cd ../.. \
     && pip3 install -U -r requirements.txt \
     && python3 setup.py develop \
