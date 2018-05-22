@@ -432,30 +432,16 @@ class Alarming(object):
     def check_for_metric(self, auth_token, metric_endpoint, m_name, r_id):
         """Check for the alarm metric."""
         try:
-            url = "{}/v1/metric?sort=name:asc".format(metric_endpoint)
+            url = "{}/v1/resource/generic/{}".format(metric_endpoint, r_id)
             result = Common.perform_request(
                 url, auth_token, req_type="get")
-            metric_list = []
-            metrics_partial = json.loads(result.text)
-            for metric in metrics_partial:
-                metric_list.append(metric)
-
-            while len(json.loads(result.text)) > 0:
-                last_metric_id = metrics_partial[-1]['id']
-                url = "{}/v1/metric?sort=name:asc&marker={}".format(metric_endpoint, last_metric_id)
-                result = Common.perform_request(
-                    url, auth_token, req_type="get")
-                if len(json.loads(result.text)) > 0:
-                    metrics_partial = json.loads(result.text)
-                    for metric in metrics_partial:
-                        metric_list.append(metric)
-            metric_id = None
-            for metric in metric_list:
-                name = metric['name']
-                resource = metric['resource_id']
-                if name == METRIC_MAPPINGS[m_name] and resource == r_id:
-                    metric_id = metric['id']
-            log.info("The required metric exists, an alarm will be created.")
+            resource = json.loads(result.text)
+            metric_list = resource['metrics']
+            if metric_list.get(METRIC_MAPPINGS[m_name]):
+                metric_id = metric_list[METRIC_MAPPINGS[m_name]]
+            else:
+                metric_id = None
+                log.info("Desired Gnocchi metric not found")
             return metric_id
         except Exception as exc:
             log.info("Desired Gnocchi metric not found:%s", exc)

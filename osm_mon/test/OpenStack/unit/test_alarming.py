@@ -287,4 +287,4 @@ class TestAlarming(unittest.TestCase):
         self.alarming.check_for_metric(auth_token, metric_endpoint, "metric_name", "r_id")
 
         perf_req.assert_called_with(
-            "metric_endpoint/v1/metric?sort=name:asc", auth_token, req_type="get")
+            "metric_endpoint/v1/resource/generic/r_id", auth_token, req_type="get")
