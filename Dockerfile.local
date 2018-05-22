@@ -32,7 +32,7 @@ RUN mkdir -p /app/storage/kafka && mkdir -p /app/log
 
 
 LABEL Maintainer="alfonso.tiernosepulveda@telefonica.com" \
-      Description="This implements a north bound interface for OSM" \
+      Description="This implements the Life Cicle Management module of OSM" \
       Version="1.0" \
       Author="Alfonso Tierno"
 

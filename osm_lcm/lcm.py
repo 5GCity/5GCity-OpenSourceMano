@@ -164,7 +164,6 @@ class Lcm:
         db_vim = None
         exc = None
         RO_sdn_id = None
-        RO_sdn_port_mapping = None
         try:
             step = "Getting vim-id='{}' from db".format(vim_id)
             db_vim = self.db.get_one("vim_accounts", {"_id": vim_id})

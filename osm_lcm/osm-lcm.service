@@ -1,0 +1,10 @@
+[Unit]
+Description=LCM server (OSM LCM)
+
+[Service]
+ExecStart=/usr/bin/lcm.py -c /etc/osm/lcm.cfg --log-file=/var/log/osm/lcm.log
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+

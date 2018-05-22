@@ -27,6 +27,7 @@ setup(
     packages=[_name],
     include_package_data=True,
     data_files=[('/etc/osm/', ['osm_lcm/lcm.cfg']),
+                ('/etc/systemd/system/', ['osm_lcm/osm-lcm.service']),
                 ],
     dependency_links=[
         "git+https://osm.etsi.org/gerrit/osm/common.git@master#egg=osm-common-0.1.4"
