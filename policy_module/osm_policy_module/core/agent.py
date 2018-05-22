@@ -113,7 +113,7 @@ class PolicyModuleAgent:
                         log.info("Sending scaling action message for ns: %s", alarm_id)
                         lcm_client.scale(alarm.scaling_record.nsr_id, alarm.scaling_record.name, alarm.action)
                     except ScalingAlarm.DoesNotExist:
-                        log.info("There is no action configured for alarm %.", alarm_id)
+                        log.info("There is no action configured for alarm %s.", alarm_id)
             except Exception:
                 log.exception("Error consuming message: ")
 
