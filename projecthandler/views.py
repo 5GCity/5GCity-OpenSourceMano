@@ -265,20 +265,11 @@ def new_descriptor(request, project_id=None, descriptor_type=None):
     page = prj_token + '/descriptor/descriptor_new.html'
     if request.method == 'GET':
         request_id = request.GET.get('id', '')
-
-        json_template = projects[0].get_new_descriptor(descriptor_type, request_id)
-        print 'new descriptor GET', json_template
-
-        descriptor_string_yaml = Util.json2yaml(json_template)
-        descriptor_string_json = json.dumps(json_template)
-
         return render(request, page, {
             'project_id': project_id,
             'descriptor_type': descriptor_type,
             'descriptor_id': request_id,
-            'project_overview_data': project_overview,
-            'descriptor_strings': {'descriptor_string_yaml': descriptor_string_yaml,
-                                   'descriptor_string_json': descriptor_string_json}
+            'project_overview_data': project_overview
         })
     elif request.method == 'POST':
         csrf_token_value = get_token(request)
