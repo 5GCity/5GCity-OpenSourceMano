@@ -652,7 +652,7 @@ function deploy_elk() {
 
 function deploy_perfmon() {
     echo "Generating osm/kafka-exporter docker image"
-    sg docker -c "docker build ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter -f ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter/Dockerfile -t osm/kafka-exporter || ! echo 'cannot build kafka-exporter docker image' >&2"
+    sg docker -c "docker build ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter -f ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter/Dockerfile -t osm/kafka-exporter --no-cache || ! echo 'cannot build kafka-exporter docker image' >&2"
     echo "Finished generation of osm/kafka-exporter docker image"
     echo "Deploying PM stack (Kafka exporter + Prometheus + Grafana)"
     sg docker -c "docker stack deploy -c ${OSM_DEVOPS}/installers/docker/osm_metrics/docker-compose.yml osm_metrics"
@@ -707,7 +707,7 @@ function install_vimemu() {
     git clone https://osm.etsi.org/gerrit/osm/vim-emu.git $EMUTEMPDIR
     # build vim-emu docker
     echo "Building vim-emu Docker container..."
-    sudo docker build -t vim-emu-img -f $EMUTEMPDIR/Dockerfile $EMUTEMPDIR/
+    sudo docker build -t vim-emu-img -f $EMUTEMPDIR/Dockerfile --no-cache $EMUTEMPDIR/
     # start vim-emu container as daemon
     echo "Starting vim-emu Docker container 'vim-emu' ..."
     if [ -n "$INSTALL_LIGHTWEIGHT" ]; then
