@@ -179,9 +179,7 @@ class TestMetricCalls(unittest.TestCase):
         self.metrics.list_metrics(endpoint, auth_token, values)
 
         perf_req.assert_any_call(
-            "<ANY>/v1/metric?sort=name:asc", auth_token, req_type="get")
-        resp_list.assert_called_with(
-            [{u'id': u'test_id'}], resource="resource_id")
+            "<ANY>/v1/resource/generic/resource_id", auth_token, req_type="get")
 
     @mock.patch.object(metric_req.Metrics, "response_list")
     @mock.patch.object(Common, "perform_request")
@@ -209,10 +207,7 @@ class TestMetricCalls(unittest.TestCase):
         self.metrics.list_metrics(endpoint, auth_token, values)
 
         perf_req.assert_any_call(
-            "<ANY>/v1/metric?sort=name:asc", auth_token, req_type="get")
-        resp_list.assert_called_with(
-            [{u'id': u'test_id'}], resource="resource_id",
-            metric_name="packets_sent")
+            "<ANY>/v1/resource/generic/resource_id", auth_token, req_type="get")
 
     @mock.patch.object(Common, "perform_request")
     def test_get_metric_id(self, perf_req):

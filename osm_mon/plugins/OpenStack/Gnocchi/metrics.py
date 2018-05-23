@@ -289,9 +289,12 @@ class Metrics(object):
         # Check for a specified list
         try:
             # Check if the metric_name was specified for the list
-            metric_name = values['metric_name'].lower()
-            if metric_name not in METRIC_MAPPINGS.keys():
-                log.warning("This metric is not supported, won't be listed.")
+            if values['metric_name']:
+                metric_name = values['metric_name'].lower()
+                if metric_name not in METRIC_MAPPINGS.keys():
+                    log.warning("This metric is not supported, won't be listed.")
+                    metric_name = None
+            else:
                 metric_name = None
         except KeyError as exc:
             log.info("Metric name is not specified: %s", exc)
@@ -304,47 +307,73 @@ class Metrics(object):
             resource = None
 
         try:
-            url = "{}/v1/metric?sort=name:asc".format(endpoint)
-            result = Common.perform_request(
-                url, auth_token, req_type="get")
-            metrics = []
-            metrics_partial = json.loads(result.text)
-            for metric in metrics_partial:
-                metrics.append(metric)
-
-            while len(json.loads(result.text)) > 0:
-                last_metric_id = metrics_partial[-1]['id']
-                url = "{}/v1/metric?sort=name:asc&marker={}".format(endpoint, last_metric_id)
+            if resource:
+                url = "{}/v1/resource/generic/{}".format(endpoint, resource)
                 result = Common.perform_request(
                     url, auth_token, req_type="get")
-                if len(json.loads(result.text)) > 0:
-                    metrics_partial = json.loads(result.text)
-                    for metric in metrics_partial:
-                        metrics.append(metric)
+                resource_data = json.loads(result.text)
+                metrics = resource_data['metrics']
 
-            if metrics is not None:
-                # Format the list response
-                if metric_name is not None and resource is not None:
-                    metric_list = self.response_list(
-                        metrics, metric_name=metric_name, resource=resource)
-                    log.info("Returning an %s resource list for %s metrics",
-                             metric_name, resource)
-                elif metric_name is not None:
-                    metric_list = self.response_list(
-                        metrics, metric_name=metric_name)
-                    log.info("Returning a list of %s metrics", metric_name)
-                elif resource is not None:
-                    metric_list = self.response_list(
-                        metrics, resource=resource)
-                    log.info("Return a list of %s resource metrics", resource)
+                if metric_name:
+                    if metrics.get(METRIC_MAPPINGS[metric_name]):
+                        metric_id = metrics[METRIC_MAPPINGS[metric_name]]
+                        url = "{}/v1/metric/{}".format(endpoint, metric_id)
+                        result = Common.perform_request(
+                            url, auth_token, req_type="get")
+                        metric_list = json.loads(result.text)
+                        log.info("Returning an %s resource list for %s metrics",
+                                 metric_name, resource)
+                        return metric_list
+                    else:
+                        log.info("Metric {} not found for {} resource".format(metric_name, resource))
+                        return None
                 else:
-                    metric_list = self.response_list(metrics)
-                    log.info("Returning a complete list of metrics")
+                    metric_list = []
+                    for k, v in metrics.items():
+                        url = "{}/v1/metric/{}".format(endpoint, v)
+                        result = Common.perform_request(
+                            url, auth_token, req_type="get")
+                        metric = json.loads(result.text)
+                        metric_list.append(metric)
+                    if metric_list:
+                        log.info("Return a list of %s resource metrics", resource)
+                        return metric_list
 
-                return metric_list
+                    else:
+                        log.info("There are no metrics available")
+                        return []
             else:
-                log.info("There are no metrics available")
-                return []
+                url = "{}/v1/metric?sort=name:asc".format(endpoint)
+                result = Common.perform_request(
+                    url, auth_token, req_type="get")
+                metrics = []
+                metrics_partial = json.loads(result.text)
+                for metric in metrics_partial:
+                    metrics.append(metric)
+
+                while len(json.loads(result.text)) > 0:
+                    last_metric_id = metrics_partial[-1]['id']
+                    url = "{}/v1/metric?sort=name:asc&marker={}".format(endpoint, last_metric_id)
+                    result = Common.perform_request(
+                        url, auth_token, req_type="get")
+                    if len(json.loads(result.text)) > 0:
+                        metrics_partial = json.loads(result.text)
+                        for metric in metrics_partial:
+                            metrics.append(metric)
+
+                if metrics is not None:
+                    # Format the list response
+                    if metric_name is not None:
+                        metric_list = self.response_list(
+                            metrics, metric_name=metric_name)
+                        log.info("Returning a list of %s metrics", metric_name)
+                    else:
+                        metric_list = self.response_list(metrics)
+                        log.info("Returning a complete list of metrics")
+                    return metric_list
+                else:
+                    log.info("There are no metrics available")
+                    return []
         except Exception as exc:
             log.warning("Failed to generate any metric list. %s", exc)
         return None
