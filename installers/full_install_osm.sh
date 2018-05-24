@@ -548,7 +548,7 @@ function install_juju() {
     sudo snap install juju --classic
     sudo dpkg-reconfigure -p medium lxd
     sg lxd -c "juju bootstrap --bootstrap-series=xenial localhost osm"
-    [ $(juju status |grep "osm" |wc -l) -eq 1 ] || FATAL "Juju installation failed"
+    [ $(sg lxd -c "juju status" |grep "osm" |wc -l) -eq 1 ] || FATAL "Juju installation failed"
     echo "Finished installation of juju"
 }
 
@@ -590,7 +590,7 @@ function generate_config_log_folders() {
 
 function generate_docker_env_files() {
     echo "Generating docker env files"
-    OSMLCM_VCA_HOST=`juju show-controller|grep api-endpoints|awk -F\' '{print $2}'|awk -F\: '{print $1}'`
+    OSMLCM_VCA_HOST=`sg lxd -c "juju show-controller"|grep api-endpoints|awk -F\' '{print $2}'|awk -F\: '{print $1}'`
     OSMLCM_VCA_SECRET=`grep password ${HOME}/.local/share/juju/accounts.yaml |awk '{print $2}'`
     MYSQL_ROOT_PASSWORD=`date +%s | sha256sum | base64 | head -c 32`
     echo "OSMLCM_VCA_HOST=${OSMLCM_VCA_HOST}" |sudo tee ${OSM_DEVOPS}/installers/docker/lcm.env
