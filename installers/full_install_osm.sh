@@ -581,6 +581,13 @@ EONG
     echo "Finished generation of docker images"
 }
 
+function generate_config_log_folders() {
+    echo "Generating config and log folders"
+    sudo mkdir -p /etc/osm
+    sudo mkdir -p /var/log/osm
+    echo "Finished generation of config and log folders"
+}
+
 function generate_docker_env_files() {
     echo "Generating docker env files"
     OSMLCM_VCA_HOST=`juju show-controller|grep api-endpoints|awk -F\' '{print $2}'|awk -F\: '{print $1}'`
