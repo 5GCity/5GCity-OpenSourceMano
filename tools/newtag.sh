@@ -1,14 +1,18 @@
 #!/bin/bash
-if [ $# -ne 3 ]; then
-    echo "Usage $0 <repo> <tag> <user>"
+if [ $# -ne 4 ]; then
+    echo "Usage $0 <repo> <tag> <user> <release_name>"
+    echo "Example: $0 all v4.0.2 garciadeblas FOUR"
+    echo "Example: $0 devops v4.0.3 marchettim FIVE"
     exit 1
 fi
 
-USER=$3
 TAG="$2"
-tag_header="OSM Release THREE:" tag_message="$tag_header version $TAG"
+USER="$3"
+RELEASE_NAME="$4"
+tag_header="OSM Release $RELEASE_NAME:"
+tag_message="$tag_header version $TAG"
 
-modules="devops openvim RO SO UI IM osmclient"
+modules="common devops IM LCM LW-UI MON N2VC NBI openvim osmclient RO vim-emu"
 list=""
 for i in $modules; do
     if [ "$1" == "$i" -o "$1" == "all" ]; then
