@@ -69,27 +69,34 @@ function uninstall(){
     return 0
 }
 
-#Uninstall lightweight OSM: remove dockers
-function uninstall_lightweight(){
-    echo -e "\nUninstalling lightweight OSM"
-    sg docker -c "docker stack rm osm"
-    COUNTER=0
-    result=1
-    while [ ${COUNTER} -lt 30 ]; do
-        sleep 1
-        result=$(sg docker -c "docker stack ps osm" | wc -l)
-        #echo "Dockers running: $result"
+function remove_stack() {
+    stack=$1
+    if $(sg docker -c "docker stack ps ${stack}"); then
+        echo -e "\nRemoving stack ${stack}" && sg docker -c "docker stack rm ${stack}"
+        COUNTER=0
+        result=1
+        while [ ${COUNTER} -lt 30 ]; do
+            result=$(sg docker -c "docker stack ps ${stack}" | wc -l)
+            #echo "Dockers running: $result"
+            if [ "${result}" == "0" ]; then
+                break
+            fi
+            let COUNTER=COUNTER+1
+            sleep 1
+        done
         if [ "${result}" == "0" ]; then
-            break
+            echo "All dockers of the stack ${stack} were removed"
+        else
+            FATAL "Some dockers of the stack ${stack} could not be removed. Could not clean it."
         fi
-        let COUNTER=COUNTER+1
-    done
-    if [ "${result}" == "0" ]; then
-        echo "All dockers of the stack osm were removed"
-    else
-        FATAL "Some dockers of the stack osm could not be removed. Could not uninstall OSM in single shot. Try to uninstall again"
+        sleep 5
     fi
-    sleep 5
+}
+
+#Uninstall lightweight OSM: remove dockers
+function uninstall_lightweight() {
+    echo -e "\nUninstalling lightweight OSM"
+    remove_stack osm
     echo "Now osm docker images and volumes will be deleted"
     newgrp docker << EONG
     docker image rm osm/ro
@@ -581,9 +588,22 @@ EONG
     echo "Finished generation of docker images"
 }
 
+function cmp_overwrite() {
+    file1="$1"
+    file2="$2"
+    if ! $(cmp "${file1}" "${file2}" >/dev/null 2>&1); then
+        if [ -f "${file2}" ]; then
+            ask_user "The file ${file2} already exists. Overwrite (y/N)? " n && sudo cp -f ${file1} ${file2}
+        else
+            sudo cp ${file1} ${file2}
+        fi
+    fi
+}
+
 function generate_config_log_folders() {
     echo "Generating config and log folders"
-    sudo mkdir -p /etc/osm
+    sudo mkdir -p /etc/osm/docker
+    sudo cp ${DEVOPS}/installers/docker/docker-compose.yaml /etc/osm/docker/docker-compose.yaml
     sudo mkdir -p /var/log/osm
     echo "Finished generation of config and log folders"
 }
@@ -592,12 +612,17 @@ function generate_docker_env_files() {
     echo "Generating docker env files"
     OSMLCM_VCA_HOST=`sg lxd -c "juju show-controller"|grep api-endpoints|awk -F\' '{print $2}'|awk -F\: '{print $1}'`
     OSMLCM_VCA_SECRET=`grep password ${HOME}/.local/share/juju/accounts.yaml |awk '{print $2}'`
+    echo "OSMLCM_VCA_HOST=${OSMLCM_VCA_HOST}" |sudo tee /etc/osm/docker/lcm.env
+    echo "OSMLCM_VCA_SECRET=${OSMLCM_VCA_SECRET}" |sudo tee -a /etc/osm/docker/lcm.env
     MYSQL_ROOT_PASSWORD=`date +%s | sha256sum | base64 | head -c 32`
-    echo "OSMLCM_VCA_HOST=${OSMLCM_VCA_HOST}" |sudo tee ${OSM_DEVOPS}/installers/docker/lcm.env
-    echo "OSMLCM_VCA_SECRET=${OSMLCM_VCA_SECRET}" |sudo tee -a ${OSM_DEVOPS}/installers/docker/lcm.env
-    echo "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}" |sudo tee ${OSM_DEVOPS}/installers/docker/ro-db.env
-    echo "RO_DB_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}" |sudo tee ${OSM_DEVOPS}/installers/docker/ro.env
+    if [ ! -f /etc/osm/docker/ro-db.env ]; then
+        echo "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}" |sudo tee /etc/osm/docker/ro-db.env
+    fi
+    if [ ! -f /etc/osm/docker/ro.env ]; then
+        echo "RO_DB_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}" |sudo tee /etc/osm/docker/ro.env
+    fi
     echo "OS_NOTIFIER_URI=http://${DEFAULT_IP}:8662" |sudo tee ${OSM_DEVOPS}/installers/docker/mon.env
+    cmp_overwrite ${DEVOPS}/installers/docker/mon.env /etc/osm/docker/mon.env
     echo "Finished generation of docker env files"
 }
 
@@ -608,25 +633,27 @@ function deploy_lightweight() {
       DOCKER_GW_NET=`sg docker -c "docker network inspect ${DOCKER_NETS}" | grep Subnet | awk -F\" '{print $4}' | egrep "^172" | sort -u | tail -1 |  awk -F\. '{if ($2 != 255) print $1"."$2+1"."$3"."$4; else print "-1";}'`
       sg docker -c "docker network create --subnet ${DOCKER_GW_NET} --opt com.docker.network.bridge.name=docker_gwbridge --opt com.docker.network.bridge.enable_icc=false --opt com.docker.network.bridge.enable_ip_masquerade=true --opt com.docker.network.driver.mtu=${DEFAULT_MTU} docker_gwbridge"
     fi
-    newgrp docker << EONG
-    docker swarm init --advertise-addr ${DEFAULT_IP}
-    docker network create --driver=overlay --attachable --opt com.docker.network.driver.mtu=${DEFAULT_MTU} netOSM
-    docker stack deploy -c ${OSM_DEVOPS}/installers/docker/docker-compose.yaml osm
-    #docker-compose -f /usr/share/osm-devops/installers/docker/docker-compose.yaml up -d
-EONG
+    sg docker -c "docker swarm init --advertise-addr ${DEFAULT_IP}"
+    sg docker -c "docker network create --driver=overlay --attachable --opt com.docker.network.driver.mtu=${DEFAULT_MTU} netOSM"
+    remove_stack osm
+    sg docker -c "docker stack deploy -c /etc/osm/docker/docker-compose.yaml osm"
+    #docker-compose -f /etc/osm/docker/docker-compose.yaml up -d
     echo "Finished deployment of lightweight build"
 }
 
 function deploy_elk() {
+    sudo mkdir -p /etc/osm/docker/osm_elk
+    #TODO: copy files to osm_elk folder
+    remove_stack osm_elk
     echo "Deploying ELK stack"
-    sg docker -c "docker stack deploy -c ${OSM_DEVOPS}/installers/docker/osm_elk/docker-compose.yml osm_elk"
+    sg docker -c "docker stack deploy -c /etc/osm/docker/osm_elk/docker-compose.yml osm_elk"
     echo "Waiting for ELK stack to be up and running"
     time=0
     step=2
     timelength=20
     elk_is_up=1
     while [ $time -le $timelength ]; do
-        if [[ $(curl -XGET http://localhost:5601/status -I | grep "HTTP/1.1 200 OK" | wc -l ) -eq 1 ]]; then
+        if [[ $(curl -XGET http://127.0.0.1:5601/status -I | grep "HTTP/1.1 200 OK" | wc -l ) -eq 1 ]]; then
             elk_is_up=0
             break
         fi
@@ -637,20 +664,20 @@ function deploy_elk() {
         echo "ELK is up and running. Trying to create index pattern..."
         #Create index pattern
         curl -f -XPOST -H "Content-Type: application/json" -H "kbn-xsrf: anything" \
-          "http://localhost:5601/api/saved_objects/index-pattern/logstash-*" \
+          "http://127.0.0.1:5601/api/saved_objects/index-pattern/logstash-*" \
           -d"{\"attributes\":{\"title\":\"logstash-*\",\"timeFieldName\":\"@timestamp\"}}"
         #Make it the default index
         curl -XPOST -H "Content-Type: application/json" -H "kbn-xsrf: anything" \
-          "http://localhost:5601/api/kibana/settings/defaultIndex" \
+          "http://127.0.0.1:5601/api/kibana/settings/defaultIndex" \
           -d"{\"value\":\"logstash-*\"}"
     else
         echo "Cannot connect to Kibana to create index pattern."
         echo "Once Kibana is running, you can use the following instructions to create index pattern:"
         echo 'curl -f -XPOST -H "Content-Type: application/json" -H "kbn-xsrf: anything" \
-          "http://localhost:5601/api/saved_objects/index-pattern/logstash-*" \
+          "http://127.0.0.1:5601/api/saved_objects/index-pattern/logstash-*" \
           -d"{\"attributes\":{\"title\":\"logstash-*\",\"timeFieldName\":\"@timestamp\"}}"'
         echo 'curl -XPOST -H "Content-Type: application/json" -H "kbn-xsrf: anything" \
-          "http://localhost:5601/api/kibana/settings/defaultIndex" \
+          "http://127.0.0.1:5601/api/kibana/settings/defaultIndex" \
           -d"{\"value\":\"logstash-*\"}"'
     fi
     echo "Finished deployment of ELK stack"
@@ -661,8 +688,11 @@ function deploy_perfmon() {
     echo "Generating osm/kafka-exporter docker image"
     sg docker -c "docker build ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter -f ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter/Dockerfile -t osm/kafka-exporter --no-cache || ! echo 'cannot build kafka-exporter docker image' >&2"
     echo "Finished generation of osm/kafka-exporter docker image"
+    sudo mkdir -p /etc/osm/docker/osm_metrics
+    #TODO: copy files to osm_metrics folder
+    remove_stack osm_metrics
     echo "Deploying PM stack (Kafka exporter + Prometheus + Grafana)"
-    sg docker -c "docker stack deploy -c ${OSM_DEVOPS}/installers/docker/osm_metrics/docker-compose.yml osm_metrics"
+    sg docker -c "docker stack deploy -c /etc/osm/docker/osm_metrics/docker-compose.yml osm_metrics"
     echo "Finished deployment of PM stack"
     return 0
 }
