@@ -1,10 +1,10 @@
-FROM python:2.7
+FROM ubuntu:16.04
 
 WORKDIR /usr/src/app
 COPY . /usr/src/app
 
 RUN apt-get update
-RUN apt-get -y install npm
+RUN apt-get install -y npm git python-pip
 RUN npm install -g bower
 RUN ln -s /usr/bin/nodejs /usr/bin/node
 RUN bower install --allow-root
