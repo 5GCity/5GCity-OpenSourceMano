@@ -95,7 +95,7 @@ def action(request, project_id=None, instance_id=None, type=None):
     }
 
     result = client.ns_action(instance_id, action_payload)
-    return __response_handler(request, result, None, to_redirect=False, status=result['status'] )
+    return __response_handler(request, result, None, to_redirect=False, status=result['status'] if 'status' in result else None )
 
 
 @login_required

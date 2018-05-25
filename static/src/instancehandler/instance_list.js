@@ -124,6 +124,10 @@ $(document).ready(function () {
             processData: false
         }).done(function (response,textStatus, jqXHR) {
             $('#modal_instance_new_action').modal('hide');
+            bootbox.alert({
+                    title: "Action",
+                    message: "Action received."
+                });
         }).fail(function(result){
             var data  = result.responseJSON;
             var title = "Error " + (data.code ? data.code: 'unknown');
