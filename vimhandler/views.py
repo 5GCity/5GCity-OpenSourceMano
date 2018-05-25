@@ -18,7 +18,7 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required, permission_required
 from django.http import HttpResponse, JsonResponse
 from lib.osm.osmclient.client import Client
-import json
+import yaml
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
@@ -59,13 +59,12 @@ def create(request):
                 vim_data['config'][config_key] = v
         if 'additional_conf' in new_vim_dict:
             try:
-                additional_conf_dict = json.loads(new_vim_dict['additional_conf'])
+                additional_conf_dict = yaml.safe_load(new_vim_dict['additional_conf'])
                 for k,v in additional_conf_dict.items():
                     vim_data['config'][k] = v
             except Exception as e:
                 # TODO return error on json.loads exception
                 print e
-
         result = client.vim_create(vim_data)
         # TODO  'vim:show', to_redirect=True, vim_id=vim_id
         return __response_handler(request, result, 'vim:list', to_redirect=True)
