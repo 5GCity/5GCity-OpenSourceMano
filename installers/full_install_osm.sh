@@ -31,16 +31,17 @@ function usage(){
     echo -e "     --pm_stack:     additionally deploy a Prometheus+Grafana stack for performance monitoring (PM)"
     echo -e "     -o <ADDON>:     do not install OSM, but ONLY one of the addons (vimemu, elk_stack, pm_stack) (assumes OSM is already installed)"
     echo -e "     -D <devops path> use local devops installation path"
+    echo -e "     --nolxd:        do not install and configure LXD, allowing unattended installations (assumes LXD is already installed and confifured)"
     echo -e "     --uninstall:    uninstall OSM: remove the containers and delete NAT rules"
     echo -e "     --source:       install OSM from source code using the latest stable tag"
-    echo -e "     --lxdimages:    download lxd images from OSM repository instead of creating them from scratch"
-    echo -e "     -l <lxd_repo>:  use specified repository url for lxd images"
-    echo -e "     -p <path>:      use specified repository path for lxd images"
-    echo -e "     --soui:         install classic build of OSM (Rel THREE v3.1, based on LXD containers, with SO and UI)"
     echo -e "     --develop:      (deprecated, use '-b master') install OSM from source code using the master branch"
+    echo -e "     --soui:         install classic build of OSM (Rel THREE v3.1, based on LXD containers, with SO and UI)"
+    echo -e "     --lxdimages:    (only for Rel THREE with --soui) download lxd images from OSM repository instead of creating them from scratch"
+    echo -e "     -l <lxd_repo>:  (only for Rel THREE with --soui) use specified repository url for lxd images"
+    echo -e "     -p <path>:      (only for Rel THREE with --soui) use specified repository path for lxd images"
 #    echo -e "     --reconfigure:  reconfigure the modules (DO NOT change NAT rules)"
-    echo -e "     --nat:          install only NAT rules"
-    echo -e "     --noconfigure:  DO NOT install osmclient, DO NOT install NAT rules, DO NOT configure modules"
+    echo -e "     --nat:          (only for Rel THREE with --soui) install only NAT rules"
+    echo -e "     --noconfigure:  (only for Rel THREE with --soui) DO NOT install osmclient, DO NOT install NAT rules, DO NOT configure modules"
 #    echo -e "     --update:       update to the latest stable release or to the latest commit if using a specific branch"
     echo -e "     --showopts:     print chosen options and exit (only for debugging)"
     echo -e "     -y:             do not prompt for confirmation, assumes yes"
@@ -553,7 +554,7 @@ function install_docker_compose() {
 function install_juju() {
     echo "Installing juju"
     sudo snap install juju --classic
-    sudo dpkg-reconfigure -p medium lxd
+    [ -z "$INSTALL_NOLXD" ] && sudo dpkg-reconfigure -p medium lxd
     sg lxd -c "juju bootstrap --bootstrap-series=xenial localhost osm"
     [ $(sg lxd -c "juju status" |grep "osm" |wc -l) -eq 1 ] || FATAL "Juju installation failed"
     echo "Finished installation of juju"
@@ -704,16 +705,18 @@ function install_lightweight() {
     DEFAULT_IF=`route -n |awk '$1~/^0.0.0.0/ {print $8}'`
     DEFAULT_IP=`ip -o -4 a |grep ${DEFAULT_IF}|awk '{split($4,a,"/"); print a[1]}'`
     DEFAULT_MTU=$(ip addr show ${DEFAULT_IF} | perl -ne 'if (/mtu\s(\d+)/) {print $1;}')
-    need_packages_lw="lxd"
-    echo -e "Checking required packages: $need_packages_lw"
-    dpkg -l $need_packages_lw &>/dev/null \
-      || ! echo -e "One or several required packages are not installed. Updating apt cache requires root privileges." \
-      || sudo apt-get update \
-      || FATAL "failed to run apt-get update"
-    dpkg -l $need_packages_lw &>/dev/null \
-      || ! echo -e "Installing $need_packages_lw requires root privileges." \
-      || sudo apt-get install -y $need_packages_lw \
-      || FATAL "failed to install $need_packages_lw"
+    if [ -z "$INSTALL_NOLXD" ]; then
+        need_packages_lw="lxd"
+        echo -e "Checking required packages: $need_packages_lw"
+        dpkg -l $need_packages_lw &>/dev/null \
+          || ! echo -e "One or several required packages are not installed. Updating apt cache requires root privileges." \
+          || sudo apt-get update \
+          || FATAL "failed to run apt-get update"
+        dpkg -l $need_packages_lw &>/dev/null \
+          || ! echo -e "Installing $need_packages_lw requires root privileges." \
+          || sudo apt-get install -y $need_packages_lw \
+          || FATAL "failed to install $need_packages_lw"
+    fi
     install_juju
     track juju
     install_docker_ce
@@ -781,6 +784,7 @@ function dump_vars(){
     echo "INSTALL_ONLY=$INSTALL_ONLY"
     echo "INSTALL_ELK=$INSTALL_ELK"
     echo "INSTALL_PERFMON=$INSTALL_PERFMON"
+    echo "INSTALL_NOLXD=$INSTALL_NOLXD"
     echo "RELEASE=$RELEASE"
     echo "REPOSITORY=$REPOSITORY"
     echo "REPOSITORY_BASE=$REPOSITORY_BASE"
@@ -825,6 +829,7 @@ INSTALL_LIGHTWEIGHT="y"
 INSTALL_ONLY=""
 INSTALL_ELK=""
 INSTALL_PERFMON=""
+INSTALL_NOLXD=""
 NOCONFIGURE=""
 RELEASE_DAILY=""
 SESSION_ID=`date +%s`
@@ -875,6 +880,7 @@ while getopts ":hy-:b:r:k:u:R:l:p:D:o:" o; do
             [ "${OPTARG}" == "reconfigure" ] && RECONFIGURE="y" && continue
             [ "${OPTARG}" == "test" ] && TEST_INSTALLER="y" && continue
             [ "${OPTARG}" == "lxdinstall" ] && INSTALL_LXD="y" && continue
+            [ "${OPTARG}" == "nolxd" ] && INSTALL_NOLXD="y" && continue
             [ "${OPTARG}" == "lxdimages" ] && INSTALL_FROM_LXDIMAGES="y" && continue
             [ "${OPTARG}" == "lightweight" ] && INSTALL_LIGHTWEIGHT="y" && continue
             [ "${OPTARG}" == "soui" ] && INSTALL_LIGHTWEIGHT="" && RELEASE="-R ReleaseTHREE" && REPOSITORY="-r stable" && continue
@@ -903,6 +909,7 @@ done
 [ -n "$INSTALL_FROM_LXDIMAGES" ] && [ -n "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible options: --lxd can only be used with --soui"
 [ -n "$NAT" ] && [ -n "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible options: --nat can only be used with --soui"
 [ -n "$NOCONFIGURE" ] && [ -n "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible options: --noconfigure can only be used with --soui"
+[ -n "$INSTALL_NOLXD" ] && [ -z "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible option: --nolxd cannot be used with --soui"
 
 if [ -n "$SHOWOPTS" ]; then
     dump_vars
