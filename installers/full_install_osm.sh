@@ -643,7 +643,7 @@ function deploy_lightweight() {
 
 function deploy_elk() {
     sudo mkdir -p /etc/osm/docker/osm_elk
-    #TODO: copy files to osm_elk folder
+    sudo cp ${DEVOPS}/installers/docker/osm_elk/* /etc/osm/docker/osm_elk
     remove_stack osm_elk
     echo "Deploying ELK stack"
     sg docker -c "docker stack deploy -c /etc/osm/docker/osm_elk/docker-compose.yml osm_elk"
@@ -689,7 +689,8 @@ function deploy_perfmon() {
     sg docker -c "docker build ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter -f ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter/Dockerfile -t osm/kafka-exporter --no-cache || ! echo 'cannot build kafka-exporter docker image' >&2"
     echo "Finished generation of osm/kafka-exporter docker image"
     sudo mkdir -p /etc/osm/docker/osm_metrics
-    #TODO: copy files to osm_metrics folder
+    sudo cp ${DEVOPS}/installers/docker/osm_metrics/*.yml /etc/osm/docker/osm_metrics
+    sudo cp ${DEVOPS}/installers/docker/osm_metrics/*.json /etc/osm/docker/osm_metrics
     remove_stack osm_metrics
     echo "Deploying PM stack (Kafka exporter + Prometheus + Grafana)"
     sg docker -c "docker stack deploy -c /etc/osm/docker/osm_metrics/docker-compose.yml osm_metrics"
