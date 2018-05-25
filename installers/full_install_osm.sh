@@ -111,6 +111,9 @@ function uninstall_lightweight() {
     docker volume rm osm_osm_packages
     docker volume rm osm_ro_db
 EONG
+    echo "Removing /etc/osm and /var/log/osm files"
+    rm -rf /etc/osm
+    rm -rf /var/log/osm
     return 0
 }
 
@@ -592,9 +595,9 @@ function cmp_overwrite() {
     file2="$2"
     if ! $(cmp "${file1}" "${file2}" >/dev/null 2>&1); then
         if [ -f "${file2}" ]; then
-            ask_user "The file ${file2} already exists. Overwrite (y/N)? " n && sudo cp -f ${file1} ${file2}
+            ask_user "The file ${file2} already exists. Overwrite (y/N)? " n && sudo cp -b ${file1} ${file2}
         else
-            sudo cp ${file1} ${file2}
+            sudo cp -b ${file1} ${file2}
         fi
     fi
 }
@@ -602,15 +605,13 @@ function cmp_overwrite() {
 function generate_config_log_folders() {
     echo "Generating config and log folders"
     sudo mkdir -p /etc/osm/docker
-    sudo cp ${DEVOPS}/installers/docker/docker-compose.yaml /etc/osm/docker/docker-compose.yaml
+    sudo cp -b ${DEVOPS}/installers/docker/docker-compose.yaml /etc/osm/docker/docker-compose.yaml
     sudo mkdir -p /var/log/osm
     echo "Finished generation of config and log folders"
 }
 
 function generate_docker_env_files() {
     echo "Generating docker env files"
-    OSMLCM_VCA_HOST=`sg lxd -c "juju show-controller"|grep api-endpoints|awk -F\' '{print $2}'|awk -F\: '{print $1}'`
-    OSMLCM_VCA_SECRET=`grep password ${HOME}/.local/share/juju/accounts.yaml |awk '{print $2}'`
     echo "OSMLCM_VCA_HOST=${OSMLCM_VCA_HOST}" |sudo tee /etc/osm/docker/lcm.env
     echo "OSMLCM_VCA_SECRET=${OSMLCM_VCA_SECRET}" |sudo tee -a /etc/osm/docker/lcm.env
     MYSQL_ROOT_PASSWORD=`date +%s | sha256sum | base64 | head -c 32`
@@ -642,7 +643,7 @@ function deploy_lightweight() {
 
 function deploy_elk() {
     sudo mkdir -p /etc/osm/docker/osm_elk
-    sudo cp ${DEVOPS}/installers/docker/osm_elk/* /etc/osm/docker/osm_elk
+    sudo cp -b ${DEVOPS}/installers/docker/osm_elk/* /etc/osm/docker/osm_elk
     remove_stack osm_elk
     echo "Deploying ELK stack"
     sg docker -c "docker stack deploy -c /etc/osm/docker/osm_elk/docker-compose.yml osm_elk"
@@ -688,8 +689,8 @@ function deploy_perfmon() {
     sg docker -c "docker build ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter -f ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter/Dockerfile -t osm/kafka-exporter --no-cache" || FATAL "cannot build kafka-exporter docker image"
     echo "Finished generation of osm/kafka-exporter docker image"
     sudo mkdir -p /etc/osm/docker/osm_metrics
-    sudo cp ${DEVOPS}/installers/docker/osm_metrics/*.yml /etc/osm/docker/osm_metrics
-    sudo cp ${DEVOPS}/installers/docker/osm_metrics/*.json /etc/osm/docker/osm_metrics
+    sudo cp -b ${DEVOPS}/installers/docker/osm_metrics/*.yml /etc/osm/docker/osm_metrics
+    sudo cp -b ${DEVOPS}/installers/docker/osm_metrics/*.json /etc/osm/docker/osm_metrics
     remove_stack osm_metrics
     echo "Deploying PM stack (Kafka exporter + Prometheus + Grafana)"
     sg docker -c "docker stack deploy -c /etc/osm/docker/osm_metrics/docker-compose.yml osm_metrics"
@@ -718,6 +719,10 @@ function install_lightweight() {
           || FATAL "failed to install $need_packages_lw"
     fi
     install_juju
+    OSMLCM_VCA_HOST=`sg lxd -c "juju show-controller"|grep api-endpoints|awk -F\' '{print $2}'|awk -F\: '{print $1}'`
+    OSMLCM_VCA_SECRET=`grep password ${HOME}/.local/share/juju/accounts.yaml |awk '{print $2}'`
+    [ -z "$OSMLCM_VCA_HOST" ] && FATAL "Cannot obtain juju controller IP address"
+    [ -z "$OSMLCM_VCA_SECRET" ] && FATAL "Cannot obtain juju secret"
     track juju
     install_docker_ce
     track docker_ce
