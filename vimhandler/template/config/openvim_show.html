@@ -14,5 +14,11 @@
                 <p id="ov_sdn_port_map"> {{ datacenter.sdn_port_map|default:"---" }}</p>
             </div>
         </div>
+        <div class="row">
+            <label for="ov_vim_network_name" class="col-sm-4 control-label">VIM network name</label>
+            <div class="col-sm-6 input-group input-group-sm">
+                <p id="ov_vim_network_name"> {{ datacenter.config.vim_network_name|default:"---" }}</p>
+            </div>
+        </div>
     </div>
 </div>

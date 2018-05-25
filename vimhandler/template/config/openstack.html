@@ -23,6 +23,16 @@
         </div>
         <div class="row">
             <div class="form-group">
+                <label for="ostack_vim_network_name" class="col-sm-4 control-label">VIM network name</label>
+                <div class="col-sm-6 input-group input-group-sm">
+                    <input disabled class="form-control config-input" id="ostack_vim_network_name"
+                           name="config_vim_network_name"
+                           placeholder="vim_network_name">
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="form-group">
                 <label for="ostack_vim_type" class="col-sm-4 control-label">VIM type</label>
                 <div class="col-sm-6 input-group input-group-sm">
                     <input disabled class="form-control config-input" id="ostack_vim_type" name="config_vim_type"
@@ -95,7 +105,11 @@
                 </div>
             </div>
         </div>
-        <div class="row">
+
+
+    </div>
+    <div class="col-lg-6">
+         <div class="row">
             <div class="form-group">
                 <label for="APIversion" class="col-sm-4 control-label">API version</label>
                 <div class="col-sm-6 input-group input-group-sm">
@@ -104,9 +118,6 @@
                 </div>
             </div>
         </div>
-
-    </div>
-    <div class="col-lg-6">
         <div class="row">
             <div class="form-group">
                 <label for="project_domain_id" class="col-sm-4 control-label">Project domain id</label>

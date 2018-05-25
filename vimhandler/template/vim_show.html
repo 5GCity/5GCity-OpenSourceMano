@@ -36,7 +36,7 @@
 
 {% block breadcrumb_body %}
     {{ block.super }}
-    <li><a href="{% url 'vim:list' %}">Vims</a></li>
+    <li><a href="{% url 'vim:list' %}">VIMS</a></li>
 {% endblock %}
 
 {% block content_body %}
@@ -63,13 +63,13 @@
                             </div>
                         </div>
                         <div class="row">
-                            <label for="vim_user" class="col-sm-3 control-label">Vim Username</label>
+                            <label for="vim_user" class="col-sm-3 control-label">VIM Username</label>
                             <div class="col-sm-6 input-group input-group-sm">
                                 <p id="vim_user"> {{datacenter.vim_user|default:"---" }}</p>
                             </div>
                         </div>
                         <div class="row">
-                            <label for="vim_url" class="col-sm-3 control-label">Vim URL</label>
+                            <label for="vim_url" class="col-sm-3 control-label">VIM URL</label>
                             <div class="col-sm-6 input-group input-group-sm">
                                 <p id="vim_url"> {{datacenter.vim_url|default:"---" }}</p>
                             </div>
