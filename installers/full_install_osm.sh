@@ -577,14 +577,12 @@ EONG
     git -C ${LWTEMPDIR}/LCM checkout ${COMMIT_ID}
     git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/LW-UI
     git -C ${LWTEMPDIR}/LW-UI checkout ${COMMIT_ID}
-    newgrp docker << EONG
-    docker build ${LWTEMPDIR}/MON -f ${LWTEMPDIR}/MON/docker/Dockerfile -t osm/mon --no-cache || ! echo "cannot build MON docker image" >&2
-    docker build ${LWTEMPDIR}/MON/policy_module -f ${LWTEMPDIR}/MON/policy_module/Dockerfile -t osm/pm --no-cache || ! echo "cannot build PM docker image" >&2
-    docker build ${LWTEMPDIR}/NBI -f ${LWTEMPDIR}/NBI/Dockerfile.local -t osm/nbi --no-cache || ! echo "cannot build NBI docker image" >&2
-    docker build ${LWTEMPDIR}/RO -f ${LWTEMPDIR}/RO/docker/Dockerfile-local -t osm/ro --no-cache || ! echo "cannot build RO docker image" >&2
-    docker build ${LWTEMPDIR}/LCM -f ${LWTEMPDIR}/LCM/Dockerfile.local -t osm/lcm --no-cache || ! echo "cannot build LCM docker image" >&2
-    docker build ${LWTEMPDIR}/LW-UI -t osm/light-ui -f ${LWTEMPDIR}/LW-UI/Dockerfile --no-cache || ! echo "cannot build LW-UI docker image" >&2
-EONG
+    sg docker -c "docker build ${LWTEMPDIR}/MON -f ${LWTEMPDIR}/MON/docker/Dockerfile -t osm/mon --no-cache" || FATAL "cannot build MON docker image"
+    sg docker -c "docker build ${LWTEMPDIR}/MON/policy_module -f ${LWTEMPDIR}/MON/policy_module/Dockerfile -t osm/pm --no-cache" || FATAL "cannot build PM docker image"
+    sg docker -c "docker build ${LWTEMPDIR}/NBI -f ${LWTEMPDIR}/NBI/Dockerfile.local -t osm/nbi --no-cache" || FATAL "cannot build NBI docker image"
+    sg docker -c "docker build ${LWTEMPDIR}/RO -f ${LWTEMPDIR}/RO/docker/Dockerfile-local -t osm/ro --no-cache" || FATAL "cannot build RO docker image"
+    sg docker -c "docker build ${LWTEMPDIR}/LCM -f ${LWTEMPDIR}/LCM/Dockerfile.local -t osm/lcm --no-cache" || FATAL "cannot build LCM docker image"
+    sg docker -c "docker build ${LWTEMPDIR}/LW-UI -t osm/light-ui -f ${LWTEMPDIR}/LW-UI/Dockerfile --no-cache" || FATAL "cannot build LW-UI docker image"
     echo "Finished generation of docker images"
 }
 
@@ -686,7 +684,7 @@ function deploy_elk() {
 
 function deploy_perfmon() {
     echo "Generating osm/kafka-exporter docker image"
-    sg docker -c "docker build ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter -f ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter/Dockerfile -t osm/kafka-exporter --no-cache || ! echo 'cannot build kafka-exporter docker image' >&2"
+    sg docker -c "docker build ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter -f ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter/Dockerfile -t osm/kafka-exporter --no-cache" || FATAL "cannot build kafka-exporter docker image"
     echo "Finished generation of osm/kafka-exporter docker image"
     sudo mkdir -p /etc/osm/docker/osm_metrics
     sudo cp ${DEVOPS}/installers/docker/osm_metrics/*.yml /etc/osm/docker/osm_metrics
@@ -745,7 +743,7 @@ function install_vimemu() {
     git clone https://osm.etsi.org/gerrit/osm/vim-emu.git $EMUTEMPDIR
     # build vim-emu docker
     echo "Building vim-emu Docker container..."
-    sudo docker build -t vim-emu-img -f $EMUTEMPDIR/Dockerfile --no-cache $EMUTEMPDIR/
+    sudo docker build -t vim-emu-img -f $EMUTEMPDIR/Dockerfile --no-cache $EMUTEMPDIR/ || FATAL "cannot build vim-emu-img docker image"
     # start vim-emu container as daemon
     echo "Starting vim-emu Docker container 'vim-emu' ..."
     if [ -n "$INSTALL_LIGHTWEIGHT" ]; then
