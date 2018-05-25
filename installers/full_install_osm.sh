@@ -819,7 +819,7 @@ SHOWOPTS=""
 COMMIT_ID=""
 ASSUME_YES=""
 INSTALL_FROM_SOURCE=""
-RELEASE="-R ReleaseTHREE"
+RELEASE="-R ReleaseFOUR"
 REPOSITORY="-r stable"
 INSTALL_VIMEMU=""
 INSTALL_FROM_LXDIMAGES=""
@@ -909,6 +909,7 @@ done
 [ -n "$INSTALL_FROM_LXDIMAGES" ] && [ -n "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible options: --lxd can only be used with --soui"
 [ -n "$NAT" ] && [ -n "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible options: --nat can only be used with --soui"
 [ -n "$NOCONFIGURE" ] && [ -n "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible options: --noconfigure can only be used with --soui"
+[ -n "$RELEASE_DAILY" ] && [ -n "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible options: --daily can only be used with --soui"
 [ -n "$INSTALL_NOLXD" ] && [ -z "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible option: --nolxd cannot be used with --soui"
 
 if [ -n "$SHOWOPTS" ]; then
