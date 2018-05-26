@@ -1,0 +1,95 @@
+{% load get %}
+<div class="box">
+    <div class="box-header with-border">
+        <h3 class="box-title">{{ type|upper }} Instances</h3>
+
+        <div class="box-tools">
+
+            <button type="button" class="btn btn-default" data-container="body"
+                    data-toggle="tooltip" data-placement="top" title="Instantiate NS"
+                    onclick="javascript:openModalCreateNS({ 'project_id':'{{ project_id }}','vim_list_url': '{% url "vim:list" %}', 'nsd_list_url': '{% url "projects:list_descriptors" project_id=project_id descriptor_type='nsd' %}'})">
+                <i class="fa fa-paper-plane"></i> <span> New NS</span></button>
+
+        </div>
+
+    </div>
+    <div class="box-body">
+        <table id="instances_table" class="table table-bordered table-striped">
+            <thead>
+            <tr>
+                <th>Id</th>
+                <th>Name</th>
+                <th>Nsd name</th>
+                <th style="width:5%">Operational Status</th>
+                <th style="width:5%">Config Status</th>
+                <th>Detailed Status</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for i in instances %}
+                <tr>
+
+                    <td>{{ i|get:"_id" }}</td>
+                    <td>{{ i|get:"short-name" }}</td>
+                    <td>{{ i|get:"nsd-name-ref" }}</td>
+
+                    {% if i|get:"operational-status" == 'failed' %}
+                        <td><span class="label label-danger">{{ i|get:"operational-status" }}</span></td>
+                    {% elif i|get:"operational-status" == 'init' %}
+                        <td><span class="label label-warning">{{ i|get:"operational-status" }}</span></td>
+                    {% elif i|get:"operational-status" == 'running' %}
+                        <td><span class="label label-success">{{ i|get:"operational-status" }}</span></td>
+                    {% else %}
+                        <td>{{ i|get:"operational-status" }}</td>
+                    {% endif %}
+                    {% if i|get:"config-status" == 'failed' %}
+                        <td><span class="label label-danger">{{ i|get:"config-status" }}</span></td>
+                    {% elif i|get:"config-status" == 'init' %}
+                        <td><span class="label label-warning">{{ i|get:"config-status" }}</span></td>
+                    {% elif i|get:"config-status" == 'running' %}
+                        <td><span class="label label-success">{{ i|get:"config-status" }}</span></td>
+                    {% elif i|get:"config-status" == 'configured' %}
+                        <td><span class="label label-success">{{ i|get:"config-status" }}</span></td>
+                    {% else %}
+                        <td>{{ i|get:"config-status" }}</td>
+                    {% endif %}
+                    <td class="ellipsis" data-text="{{ i|get:"detailed-status" }}">{{ i|get:"detailed-status" }}</td>
+                    <td>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-default"
+                                    onclick="javascript:showInstanceDetails('{% url 'projects:instances:show' instance_id=i|get:'_id' project_id=project_id type=type %}')"
+                                    data-toggle="tooltip" data-placement="top" data-container="body" title="Show Info">
+                                <i
+                                        class="fa fa-info"></i>
+                            </button>
+
+                            <button type="button" class="btn btn-default"
+                                    onclick="javascript:deleteNs('{% url 'projects:instances:delete' instance_id=i|get:'_id' project_id=project_id type=type %}')"
+                                    data-toggle="tooltip" data-placement="top" data-container="body" title="Delete"><i
+                                    class="fa fa-trash-o"></i></button>
+
+                            <button type="button" class="btn btn-default dropdown-toggle"
+                                    data-toggle="dropdown" aria-expanded="false">Actions
+                                <span class="fa fa-caret-down"></span></button>
+                            <ul class="dropdown-menu">
+                                <li><a href="#"
+                                       onclick="javascript:performAction('{% url 'projects:instances:action' instance_id=i|get:'_id' project_id=project_id type=type %}')">
+                                    <i class="fa fa-magic"></i>Exec NS Primitive</a></li>
+                                <li>
+                                    <a href="{% url 'projects:instances:ns_operations' project_id=project_id type=type instance_id=i|get:'_id' %}">
+                                        <i class="fa fa-list"></i>Active operations</a></li>
+                            </ul>
+
+
+                        </div>
+
+                    </td>
+
+
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

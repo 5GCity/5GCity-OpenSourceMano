@@ -66,7 +66,7 @@ function showInstanceDetails(url_info) {
         },
         error: function (result) {
             dialog.modal('hide');
-            bootbox.alert("An error occurred while retrieving the information for the NS");
+            bootbox.alert("An error occurred while retrieving the information.");
         }
     });
 }

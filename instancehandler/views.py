@@ -27,8 +27,10 @@ def list(request, project_id=None, type=None):
     client = Client()
     if type == 'ns':
         result = client.ns_list()
+    elif type == 'vnf':
+        result = client.vnf_list()
 
-    return __response_handler(request, {'instances': result, 'type': 'ns', 'project_id': project_id}, 'instance_list.html')
+    return __response_handler(request, {'instances': result, 'type': type, 'project_id': project_id}, 'instance_list.html')
 
 
 @login_required
@@ -111,7 +113,10 @@ def delete(request, project_id=None, instance_id=None, type=None):
 def show(request, project_id=None, instance_id=None, type=None):
     # result = {}
     client = Client()
-    result = client.ns_get(instance_id)
+    if type == 'ns':
+        result = client.ns_get(instance_id)
+    elif type == 'vnf':
+        result = client.vnf_get(instance_id)
     print result
     return __response_handler(request, result)
 

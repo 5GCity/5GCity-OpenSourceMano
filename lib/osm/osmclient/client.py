@@ -325,12 +325,33 @@ class Client(object):
             return self._send_post(_url, headers=headers,
                                    data=open('/tmp/' + package.name, 'rb'))
         return None
+
     def vnf_packages_artifacts(self, id):
         token = self.get_token()
         if token:
             self._headers['Authorization'] = 'Bearer {}'.format(token)
             self._headers['Content-Type'] = 'application/yaml'
             _url = "{0}/vnfpkgm/v1/vnf_packages/{1}/artifacts".format(self._base_path, id)
+            return self._send_get(_url, headers=self._headers)
+        return None
+
+    def vnf_list(self):
+        token = self.get_token()
+        if token:
+            self._headers['Authorization'] = 'Bearer {}'.format(token)
+            self._headers['Content-Type'] = 'application/yaml'
+            self._headers['accept'] = 'application/json'
+            _url = "{0}/nslcm/v1/vnfrs".format(self._base_path)
+            return self._send_get(_url, headers=self._headers)
+        return None
+
+    def vnf_get(self, id):
+        token = self.get_token()
+        if token:
+            self._headers['Authorization'] = 'Bearer {}'.format(token)
+            self._headers['Content-Type'] = 'application/json'
+            self._headers['accept'] = 'application/json'
+            _url = "{0}/nslcm/v1/vnfrs/{1}".format(self._base_path, id)
             return self._send_get(_url, headers=self._headers)
         return None
 

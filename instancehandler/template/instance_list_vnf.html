@@ -1,0 +1,56 @@
+{% load get %}
+{% load date_tag %}
+
+<div class="box">
+    <div class="box-header with-border">
+        <h3 class="box-title">{{ type|upper }} Instances</h3>
+
+        <div class="box-tools">
+
+
+
+        </div>
+
+    </div>
+    <div class="box-body">
+        <table id="instances_table" class="table table-bordered table-striped">
+            <thead>
+            <tr>
+                <th>Id</th>
+                <th>VNFD</th>
+                <th>Member Index</th>
+                <th>NS</th>
+                <th>Created At</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for i in instances %}
+                <tr>
+
+                    <td>{{ i|get:"_id" }}</td>
+                    <td><a href="javascript:openDescriptorView('{{project_id}}', 'vnfd', '{{ i|get:"vnfd-id" }}')"> {{ i|get:"vnfd-ref" }}</a></td>
+                    <td>{{ i|get:"member-vnf-index-ref" }}</td>
+                    <td class="ellipsis" data-text="{{ i|get:"nsr-id-ref" }}">{{ i|get:"nsr-id-ref" }}</td>
+                    <td >{{ i|get:"created-time"|get_date }}</td>
+
+                    <td>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-default"
+                                    onclick="javascript:showInstanceDetails('{% url 'projects:instances:show' instance_id=i|get:'_id' project_id=project_id type=type %}')"
+                                    data-toggle="tooltip" data-placement="top" data-container="body" title="Show Info">
+                                <i class="fa fa-info"></i>
+                            </button>
+
+
+                        </div>
+
+                    </td>
+
+
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
