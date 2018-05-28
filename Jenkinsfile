@@ -16,12 +16,12 @@ def devops_checkout() {
     }
 }
 
-node {
+node('docker') {
     checkout scm
     devops_checkout()
 
-    ci_helper = load "devops/jenkins/ci-pipelines/ci_stage_2.groovy"
-    ci_helper.ci_pipeline( 'LCM',
+    ci_stage_2 = load "devops/jenkins/ci-pipelines/ci_stage_2.groovy"
+    ci_stage_2.ci_pipeline( 'LCM',
                            params.PROJECT_URL_PREFIX,
                            params.GERRIT_PROJECT,
                            params.GERRIT_BRANCH,
