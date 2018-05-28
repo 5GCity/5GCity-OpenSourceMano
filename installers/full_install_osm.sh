@@ -72,7 +72,7 @@ function uninstall(){
 
 function remove_stack() {
     stack=$1
-    if $(sg docker -c "docker stack ps ${stack}"); then
+    if sg docker -c "docker stack ps ${stack}" ; then
         echo -e "\nRemoving stack ${stack}" && sg docker -c "docker stack rm ${stack}"
         COUNTER=0
         result=1
@@ -605,7 +605,7 @@ function cmp_overwrite() {
 function generate_config_log_folders() {
     echo "Generating config and log folders"
     sudo mkdir -p /etc/osm/docker
-    sudo cp -b ${DEVOPS}/installers/docker/docker-compose.yaml /etc/osm/docker/docker-compose.yaml
+    sudo cp -b ${OSM_DEVOPS}/installers/docker/docker-compose.yaml /etc/osm/docker/docker-compose.yaml
     sudo mkdir -p /var/log/osm
     echo "Finished generation of config and log folders"
 }
@@ -622,7 +622,7 @@ function generate_docker_env_files() {
         echo "RO_DB_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}" |sudo tee /etc/osm/docker/ro.env
     fi
     echo "OS_NOTIFIER_URI=http://${DEFAULT_IP}:8662" |sudo tee ${OSM_DEVOPS}/installers/docker/mon.env
-    cmp_overwrite ${DEVOPS}/installers/docker/mon.env /etc/osm/docker/mon.env
+    cmp_overwrite ${OSM_DEVOPS}/installers/docker/mon.env /etc/osm/docker/mon.env
     echo "Finished generation of docker env files"
 }
 
@@ -643,7 +643,7 @@ function deploy_lightweight() {
 
 function deploy_elk() {
     sudo mkdir -p /etc/osm/docker/osm_elk
-    sudo cp -b ${DEVOPS}/installers/docker/osm_elk/* /etc/osm/docker/osm_elk
+    sudo cp -b ${OSM_DEVOPS}/installers/docker/osm_elk/* /etc/osm/docker/osm_elk
     remove_stack osm_elk
     echo "Deploying ELK stack"
     sg docker -c "docker stack deploy -c /etc/osm/docker/osm_elk/docker-compose.yml osm_elk"
@@ -689,8 +689,8 @@ function deploy_perfmon() {
     sg docker -c "docker build ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter -f ${OSM_DEVOPS}/installers/docker/osm_metrics/kafka-exporter/Dockerfile -t osm/kafka-exporter --no-cache" || FATAL "cannot build kafka-exporter docker image"
     echo "Finished generation of osm/kafka-exporter docker image"
     sudo mkdir -p /etc/osm/docker/osm_metrics
-    sudo cp -b ${DEVOPS}/installers/docker/osm_metrics/*.yml /etc/osm/docker/osm_metrics
-    sudo cp -b ${DEVOPS}/installers/docker/osm_metrics/*.json /etc/osm/docker/osm_metrics
+    sudo cp -b ${OSM_DEVOPS}/installers/docker/osm_metrics/*.yml /etc/osm/docker/osm_metrics
+    sudo cp -b ${OSM_DEVOPS}/installers/docker/osm_metrics/*.json /etc/osm/docker/osm_metrics
     remove_stack osm_metrics
     echo "Deploying PM stack (Kafka exporter + Prometheus + Grafana)"
     sg docker -c "docker stack deploy -c /etc/osm/docker/osm_metrics/docker-compose.yml osm_metrics"
@@ -729,6 +729,7 @@ function install_lightweight() {
     #install_docker_compose
     generate_docker_images
     track docker_build
+    generate_config_log_folders
     generate_docker_env_files
     deploy_lightweight
     track docker_deploy
