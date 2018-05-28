@@ -29,6 +29,7 @@ function usage(){
     echo -e "     --vimemu:       additionally deploy the VIM emulator as a docker container"
     echo -e "     --elk_stack:    additionally deploy an ELK docker stack for event logging"
     echo -e "     --pm_stack:     additionally deploy a Prometheus+Grafana stack for performance monitoring (PM)"
+    echo -e "     -m <MODULE>:    install OSM but only rebuild the specified docker images (RO, LCM, NBI, LW-UI, MON, KAFKA, MONGO, NONE)"
     echo -e "     -o <ADDON>:     do not install OSM, but ONLY one of the addons (vimemu, elk_stack, pm_stack) (assumes OSM is already installed)"
     echo -e "     -D <devops path> use local devops installation path"
     echo -e "     --nolxd:        do not install and configure LXD, allowing unattended installations (assumes LXD is already installed and confifured)"
@@ -565,28 +566,40 @@ function install_juju() {
 
 function generate_docker_images() {
     echo "Pulling and generating docker images"
-    newgrp docker << EONG
-    docker pull wurstmeister/kafka
-    docker pull wurstmeister/zookeeper
-    docker pull mongo
-    docker pull mysql:5
-EONG
-    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/MON
-    git -C ${LWTEMPDIR}/MON checkout ${COMMIT_ID}
-    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/NBI
-    git -C ${LWTEMPDIR}/NBI checkout ${COMMIT_ID}
-    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/RO
-    git -C ${LWTEMPDIR}/RO checkout ${COMMIT_ID}
-    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/LCM
-    git -C ${LWTEMPDIR}/LCM checkout ${COMMIT_ID}
-    git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/LW-UI
-    git -C ${LWTEMPDIR}/LW-UI checkout ${COMMIT_ID}
-    sg docker -c "docker build ${LWTEMPDIR}/MON -f ${LWTEMPDIR}/MON/docker/Dockerfile -t osm/mon --no-cache" || FATAL "cannot build MON docker image"
-    sg docker -c "docker build ${LWTEMPDIR}/MON/policy_module -f ${LWTEMPDIR}/MON/policy_module/Dockerfile -t osm/pm --no-cache" || FATAL "cannot build PM docker image"
-    sg docker -c "docker build ${LWTEMPDIR}/NBI -f ${LWTEMPDIR}/NBI/Dockerfile.local -t osm/nbi --no-cache" || FATAL "cannot build NBI docker image"
-    sg docker -c "docker build ${LWTEMPDIR}/RO -f ${LWTEMPDIR}/RO/docker/Dockerfile-local -t osm/ro --no-cache" || FATAL "cannot build RO docker image"
-    sg docker -c "docker build ${LWTEMPDIR}/LCM -f ${LWTEMPDIR}/LCM/Dockerfile.local -t osm/lcm --no-cache" || FATAL "cannot build LCM docker image"
-    sg docker -c "docker build ${LWTEMPDIR}/LW-UI -t osm/light-ui -f ${LWTEMPDIR}/LW-UI/Dockerfile --no-cache" || FATAL "cannot build LW-UI docker image"
+    if [ -z "$TO_REBUILD" ] || echo $TO_REBUILD | grep -q KAFKA ; then
+        sg docker -c "docker pull wurstmeister/zookeeper" || FATAL "cannot get zookeeper docker image"
+        sg docker -c "docker pull wurstmeister/kafka" || FATAL "cannot get kafka docker image"
+    fi
+    if [ -z "$TO_REBUILD" ] || echo $TO_REBUILD | grep -q MONGO ; then
+        sg docker -c "docker pull mongo" || FATAL "cannot get mongo docker image"
+    fi
+    if [ -z "$TO_REBUILD" ] || echo $TO_REBUILD | grep -q MON ; then
+        git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/MON
+        git -C ${LWTEMPDIR}/MON checkout ${COMMIT_ID}
+        sg docker -c "docker build ${LWTEMPDIR}/MON -f ${LWTEMPDIR}/MON/docker/Dockerfile -t osm/mon --no-cache" || FATAL "cannot build MON docker image"
+        sg docker -c "docker build ${LWTEMPDIR}/MON/policy_module -f ${LWTEMPDIR}/MON/policy_module/Dockerfile -t osm/pm --no-cache" || FATAL "cannot build PM docker image"
+    fi
+    if [ -z "$TO_REBUILD" ] || echo $TO_REBUILD | grep -q NBI ; then
+        git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/NBI
+        git -C ${LWTEMPDIR}/NBI checkout ${COMMIT_ID}
+        sg docker -c "docker build ${LWTEMPDIR}/NBI -f ${LWTEMPDIR}/NBI/Dockerfile.local -t osm/nbi --no-cache" || FATAL "cannot build NBI docker image"
+    fi
+    if [ -z "$TO_REBUILD" ] || echo $TO_REBUILD | grep -q RO ; then
+        sg docker -c "docker pull mysql:5" || FATAL "cannot get mysql docker image"
+        git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/RO
+        git -C ${LWTEMPDIR}/RO checkout ${COMMIT_ID}
+        sg docker -c "docker build ${LWTEMPDIR}/RO -f ${LWTEMPDIR}/RO/docker/Dockerfile-local -t osm/ro --no-cache" || FATAL "cannot build RO docker image"
+    fi
+    if [ -z "$TO_REBUILD" ] || echo $TO_REBUILD | grep -q LCM ; then
+        git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/LCM
+        git -C ${LWTEMPDIR}/LCM checkout ${COMMIT_ID}
+        sg docker -c "docker build ${LWTEMPDIR}/LCM -f ${LWTEMPDIR}/LCM/Dockerfile.local -t osm/lcm --no-cache" || FATAL "cannot build LCM docker image"
+    fi
+    if [ -z "$TO_REBUILD" ] || echo $TO_REBUILD | grep -q LW-UI ; then
+        git -C ${LWTEMPDIR} clone https://osm.etsi.org/gerrit/osm/LW-UI
+        git -C ${LWTEMPDIR}/LW-UI checkout ${COMMIT_ID}
+        sg docker -c "docker build ${LWTEMPDIR}/LW-UI -t osm/light-ui -f ${LWTEMPDIR}/LW-UI/Dockerfile --no-cache" || FATAL "cannot build LW-UI docker image"
+    fi
     echo "Finished generation of docker images"
 }
 
@@ -790,6 +803,7 @@ function dump_vars(){
     echo "INSTALL_ONLY=$INSTALL_ONLY"
     echo "INSTALL_ELK=$INSTALL_ELK"
     echo "INSTALL_PERFMON=$INSTALL_PERFMON"
+    echo "TO_REBUILD=$TO_REBUILD"
     echo "INSTALL_NOLXD=$INSTALL_NOLXD"
     echo "RELEASE=$RELEASE"
     echo "REPOSITORY=$REPOSITORY"
@@ -835,13 +849,14 @@ INSTALL_LIGHTWEIGHT="y"
 INSTALL_ONLY=""
 INSTALL_ELK=""
 INSTALL_PERFMON=""
+TO_REBUILD=""
 INSTALL_NOLXD=""
 NOCONFIGURE=""
 RELEASE_DAILY=""
 SESSION_ID=`date +%s`
 OSM_DEVOPS=
 
-while getopts ":hy-:b:r:k:u:R:l:p:D:o:" o; do
+while getopts ":hy-:b:r:k:u:R:l:p:D:o:m:" o; do
     case "${o}" in
         h)
             usage && exit 0
@@ -875,6 +890,16 @@ while getopts ":hy-:b:r:k:u:R:l:p:D:o:" o; do
             [ "${OPTARG}" == "vimemu" ] && INSTALL_VIMEMU="y" && continue
             [ "${OPTARG}" == "elk_stack" ] && INSTALL_ELK="y" && continue
             [ "${OPTARG}" == "pm_stack" ] && INSTALL_PERFMON="y" && continue
+            ;;
+        m)
+            [ "${OPTARG}" == "RO" ] && TO_REBUILD="$TO_REBUILD RO" && continue
+            [ "${OPTARG}" == "LCM" ] && TO_REBUILD="$TO_REBUILD LCM" && continue
+            [ "${OPTARG}" == "NBI" ] && TO_REBUILD="$TO_REBUILD NBI" && continue
+            [ "${OPTARG}" == "LW-UI" ] && TO_REBUILD="$TO_REBUILD LW-UI" && continue
+            [ "${OPTARG}" == "MON" ] && TO_REBUILD="$TO_REBUILD MON" && continue
+            [ "${OPTARG}" == "KAFKA" ] && TO_REBUILD="$TO_REBUILD KAFKA" && continue
+            [ "${OPTARG}" == "MONGO" ] && TO_REBUILD="$TO_REBUILD MONGO" && continue
+            [ "${OPTARG}" == "NONE" ] && TO_REBUILD="$TO_REBUILD NONE" && continue
             ;;
         -)
             [ "${OPTARG}" == "help" ] && usage && exit 0
@@ -917,6 +942,8 @@ done
 [ -n "$NOCONFIGURE" ] && [ -n "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible options: --noconfigure can only be used with --soui"
 [ -n "$RELEASE_DAILY" ] && [ -n "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible options: --daily can only be used with --soui"
 [ -n "$INSTALL_NOLXD" ] && [ -z "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible option: --nolxd cannot be used with --soui"
+[ -n "$TO_REBUILD" ] && [ -z "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible option: -m cannot be used with --soui"
+[ -n "$TO_REBUILD" ] && [ "$TO_REBUILD" != " NONE" ] && echo $TO_REBUILD | grep -q NONE && FATAL "Incompatible option: -m NONE cannot be used with other -m options"
 
 if [ -n "$SHOWOPTS" ]; then
     dump_vars
