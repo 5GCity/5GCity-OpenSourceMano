@@ -66,6 +66,15 @@
                             class="fa fa-arrow-circle-right"></i></a></div>
             </div>
 
+            <div class="col-md-6 ">
+                <div class="small-box bg-maroon">
+                    <div class="inner"><h3>{{ project_overview.vnf }}</h3>
+                        <p>VNF Instances</p></div>
+                    <div class="icon"><i class="fa fa-list"></i></div>
+                    <a href='{% url "projects:instances:list" project_id=project_id type="vnf"  %}' class="small-box-footer">Open list <i
+                            class="fa fa-arrow-circle-right"></i></a></div>
+            </div>
+
         </div>
 
     </div>

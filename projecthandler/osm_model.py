@@ -142,6 +142,7 @@ class OsmProject(ProjectStateless):
         nsd = client.nsd_list()
         vnfd = client.vnfd_list()
         ns = client.ns_list()
+        vnf = client.vnf_list()
         result = {
             'owner': self.owner.__str__(),
             'name': self.name,
@@ -151,7 +152,8 @@ class OsmProject(ProjectStateless):
             'nsd': len(nsd) if nsd else 0,
             'vnfd': len(vnfd) if vnfd else 0,
             'ns': len(ns) if ns else 0,
-            'validated': self.validated
+            'vnf': len(vnf) if vnf else 0,
+            #'validated': self.validated
         }
 
         return result
