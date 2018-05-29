@@ -238,6 +238,7 @@ def vnf_list(ctx, ns):
              'ns id',
              'vnf member index',
              'vnfd name',
+             'vim account id',
              'ip address'])
         for vnfr in resp:
             name = vnfr['name'] if 'name' in vnfr else '-'
@@ -247,6 +248,7 @@ def vnf_list(ctx, ns):
                  vnfr['nsr-id-ref'],
                  vnfr['member-vnf-index-ref'],
                  vnfr['vnfd-ref'],
+                 vnfr['vim-account-id'],
                  vnfr['ip-address']])
     else:
         table = PrettyTable(
