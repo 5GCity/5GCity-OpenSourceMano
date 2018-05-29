@@ -1102,29 +1102,20 @@ instance_scenario_action_schema = {
         },
         "add_public_key": description_schema,
         "console": {"type": ["string", "null"], "enum": ["novnc", "xvpvnc", "rdp-html5", "spice-html5", None]},
-        "create-vdu": {
+        "vdu-scaling": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
                     "vdu-id": id_schema,
+                    "osm_vdu_id": name_schema,
+                    "member-vnf-index": name_schema,
                     "count": integer1_schema,
-                },
-                "additionalProperties": False,
-                "required": ["vdu-id"]
-            }
-        },
-        "delete-vdu": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "vdu-id": id_schema,
-                    "transaction-id": id_schema,
+                    "type": {"enum": ["create", "delete"]}
                 },
                 "additionalProperties": False,
                 "minProperties": 1,
-                "maxProperties": 1,
+                "required": ["type"]
             }
         },
         "vnfs": {"type": "array", "items": {"type": "string"}},

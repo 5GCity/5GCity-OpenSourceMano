@@ -37,6 +37,7 @@ The task content is (M: stored at memory, D: stored at database):
             params:     list with the params to be sent to the VIM for CREATE or FIND. For DELETE the vim_id is taken from other related tasks
             find:       (only for CREATE tasks) if present it should FIND before creating and use if existing. Contains the FIND params
             depends_on: list with the 'task_index'es of tasks that must be completed before. e.g. a vm creation depends on a net creation
+                        can contain an int (single index on the same instance-action) or str (compete action ID)
             sdn_net_id: used for net.
             tries:
             interfaces: used for VMs. Each key is the uuid of the instance_interfaces entry at database
@@ -64,6 +65,7 @@ import vimconn
 import yaml
 from db_base import db_base_Exception
 from lib_osm_openvim.ovim import ovimException
+from copy import deepcopy
 
 __author__ = "Alfonso Tierno, Pablo Montes"
 __date__ = "$28-Sep-2017 12:07:15$"
@@ -482,7 +484,7 @@ class vim_thread(threading.Thread):
                 for task_index in task["extra"].get("depends_on", ()):
                     task_dependency = task["depends"].get("TASK-" + str(task_index))
                     if not task_dependency:
-                        task_dependency = self._look_for_task(task["instance_action_id"], "TASK-" + str(task_index))
+                        task_dependency = self._look_for_task(task["instance_action_id"], task_index)
                         if not task_dependency:
                             raise VimThreadException(
                                 "Cannot get depending net task trying to get depending task {}.{}".format(
@@ -640,10 +642,19 @@ class vim_thread(threading.Thread):
                 task["params"] = extra.get("params")
                 depends_on_list = extra.get("depends_on")
                 if depends_on_list:
-                    for index in depends_on_list:
+                    for dependency_task in depends_on_list:
+                        if isinstance(dependency_task, int):
+                            index = dependency_task
+                        else:
+                            instance_action_id, _, task_id = dependency_task.rpartition(".")
+                            if instance_action_id != task["instance_action_id"]:
+                                continue
+                            index = int(task_id)
+
                         if index < len(vim_actions_list) and vim_actions_list[index]["task_index"] == index and\
                                     vim_actions_list[index]["instance_action_id"] == task["instance_action_id"]:
-                            task["depends"]["TASK-" + str(index)] = vim_actions_list[index]
+                                task["depends"]["TASK-" + str(index)] = vim_actions_list[index]
+                                task["depends"]["TASK-{}.{}".format(task["instance_action_id"], index)] = vim_actions_list[index]
                 if extra.get("interfaces"):
                     task["vim_interfaces"] = {}
             else:
@@ -738,7 +749,24 @@ class vim_thread(threading.Thread):
         self.logger.debug("Finishing")
 
     def _look_for_task(self, instance_action_id, task_id):
-        task_index = task_id.split("-")[-1]
+        """
+        Look for a concrete task at vim_actions database table
+        :param instance_action_id: The instance_action_id
+        :param task_id: Can have several formats:
+            <task index>: integer
+            TASK-<task index> :backward compatibility,
+            [TASK-]<instance_action_id>.<task index>: this instance_action_id overrides the one in the parameter
+        :return: Task dictionary or None if not found
+        """
+        if isinstance(task_id, int):
+            task_index = task_id
+        else:
+            if task_id.startswith("TASK-"):
+                task_id = task_id[5:]
+            ins_action_id, _, task_index = task_id.rpartition(".")
+            if ins_action_id:
+                instance_action_id = ins_action_id
+
         with self.db_lock:
             tasks = self.db.get_rows(FROM="vim_actions", WHERE={"instance_action_id": instance_action_id,
                                                                 "task_index": task_index})
@@ -784,11 +812,12 @@ class vim_thread(threading.Thread):
                             "Cannot create VM because depends on a network not created or found: " +
                             str(depends[net["net_id"]]["error_msg"]))
                     net["net_id"] = network_id
-            vim_vm_id, created_items = self.vim.new_vminstance(*params)
+            params_copy = deepcopy(params)
+            vim_vm_id, created_items = self.vim.new_vminstance(*params_copy)
 
             # fill task_interfaces. Look for snd_net_id at database for each interface
             task_interfaces = {}
-            for iface in net_list:
+            for iface in params_copy[5]:
                 task_interfaces[iface["vim_id"]] = {"iface_id": iface["uuid"]}
                 with self.db_lock:
                     result = self.db.get_rows(

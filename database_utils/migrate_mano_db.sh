@@ -33,7 +33,7 @@ DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=31
+LAST_DB_VERSION=32
 
 # Detect paths
 MYSQL=$(which mysql)
@@ -199,6 +199,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5059 ] && DB_VERSION=29  #0.5.59 =>  29
 #[ $OPENMANO_VER_NUM -ge 5060 ] && DB_VERSION=30  #0.5.60 =>  30
 #[ $OPENMANO_VER_NUM -ge 5061 ] && DB_VERSION=31  #0.5.61 =>  31
+#[ $OPENMANO_VER_NUM -ge 5070 ] && DB_VERSION=32  #0.5.70 =>  32
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -1278,6 +1279,17 @@ function downgrade_from_31(){
     echo "      Remove back 'vim_network_name' from 'sce_nets'"
     sql "ALTER TABLE sce_nets DROP COLUMN vim_network_name;"
     sql "DELETE FROM schema_version WHERE version_int='31';"
+}
+function upgrade_to_32(){
+    echo "      Add 'vim_name' to 'instance_vms'"
+    sql "ALTER TABLE instance_vms ADD COLUMN vim_name VARCHAR(255) NULL DEFAULT NULL AFTER vim_vm_id;"
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
+         "VALUES (32, '0.32', '0.5.70', 'Add vim_name to instance vms', '2018-06-28');"
+}
+function downgrade_from_32(){
+    echo "      Remove back 'vim_name' from 'instance_vms'"
+    sql "ALTER TABLE instance_vms DROP COLUMN vim_name;"
+    sql "DELETE FROM schema_version WHERE version_int='32';"
 }
 
 function upgrade_to_X(){

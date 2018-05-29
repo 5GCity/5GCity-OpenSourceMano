@@ -195,6 +195,7 @@ class db_base():
                             highest_version_int, highest_version = row[0:2]
                     return highest_version_int, highest_version
             except (mdb.Error, AttributeError) as e:
+                self.logger.error("Exception '{}' with command '{}'".format(e, cmd))
                 #self.logger.error("get_db_version DB Exception %d: %s. Command %s",e.args[0], e.args[1], cmd)
                 self._format_error(e, tries)
             tries -= 1
@@ -498,24 +499,25 @@ class db_base():
                 self._format_error(e, tries)
             tries -= 1
 
+    def _delete_row_by_id_internal(self, table, uuid):
+        cmd = "DELETE FROM {} WHERE uuid = '{}'".format(table, uuid)
+        self.logger.debug(cmd)
+        self.cur.execute(cmd)
+        deleted = self.cur.rowcount
+        # delete uuid
+        self.cur = self.con.cursor()
+        cmd = "DELETE FROM uuids WHERE root_uuid = '{}'".format(uuid)
+        self.logger.debug(cmd)
+        self.cur.execute(cmd)
+        return deleted
+
     def delete_row_by_id(self, table, uuid):
         tries = 2
         while tries:
             try:
                 with self.con:
-                    #delete host
                     self.cur = self.con.cursor()
-                    cmd = "DELETE FROM {} WHERE uuid = '{}'".format(table, uuid)
-                    self.logger.debug(cmd)
-                    self.cur.execute(cmd)
-                    deleted = self.cur.rowcount
-                    if deleted:
-                        #delete uuid
-                        self.cur = self.con.cursor()
-                        cmd = "DELETE FROM uuids WHERE root_uuid = '{}'".format(uuid)
-                        self.logger.debug(cmd)
-                        self.cur.execute(cmd)
-                return deleted
+                    return self._delete_row_by_id_internal(table, uuid)
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries, "delete", "dependencies")
             tries -= 1
@@ -617,6 +619,7 @@ class db_base():
                     rows = self.cur.fetchall()
                     return rows
             except (mdb.Error, AttributeError) as e:
+                self.logger.error("Exception '{}' with command '{}'".format(e, cmd))
                 self._format_error(e, tries)
             tries -= 1
 

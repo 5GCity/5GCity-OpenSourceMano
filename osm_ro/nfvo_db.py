@@ -761,9 +761,9 @@ class nfvo_db(db_base.db_base):
                     self.cur.execute(cmd)
                     rows = self.cur.fetchall()
                     if self.cur.rowcount==0:
-                        raise db_base.db_base_Exception("No scenario found where " + where_text, db_base.HTTP_Bad_Request)
+                        raise db_base.db_base_Exception("No scenario found where " + where_text, db_base.HTTP_Not_Found)
                     elif self.cur.rowcount>1:
-                        raise db_base.db_base_Exception("More than one scenario found where " + where_text, db_base.HTTP_Bad_Request)
+                        raise db_base.db_base_Exception("More than one scenario found where " + where_text, db_base.HTTP_Conflict)
                     scenario_uuid = rows[0]["uuid"]
                     scenario_name = rows[0]["name"]
                     
@@ -779,7 +779,7 @@ class nfvo_db(db_base.db_base):
 
     def new_rows(self, tables, uuid_list=None):
         """
-        Make a transactional insertion of rows at several tables
+        Make a transactional insertion of rows at several tables. Can be also a deletion
         :param tables: list with dictionary where the keys are the table names and the values are a row or row list
             with the values to be inserted at the table. Each row is a dictionary with the key values. E.g.:
             tables = [
@@ -790,6 +790,7 @@ class nfvo_db(db_base.db_base):
             If tables does not contain the 'created_at', it is generated incrementally with the order of tables. You can
             provide a integer value, that it is an index multiply by 0.00001 to add to the created time to manually set
             up and order
+            If dict contains {"TO-DELETE": uuid} the entry is deleted if exist instead of inserted
         :param uuid_list: list of created uuids, first one is the root (#TODO to store at uuid table)
         :return: None if success,  raise exception otherwise
         """
@@ -805,6 +806,10 @@ class nfvo_db(db_base.db_base):
                             if isinstance(row_list, dict):
                                 row_list = (row_list, )  #create a list with the single value
                             for row in row_list:
+                                if "TO-DELETE" in row:
+                                    self._delete_row_by_id_internal(table_name, row["TO-DELETE"])
+                                    continue
+
                                 if table_name in self.tables_with_created_field:
                                     if "created_at" in row:
                                         created_time_param = created_time + row.pop("created_at")*0.00001
@@ -989,7 +994,7 @@ class nfvo_db(db_base.db_base):
                         vnf_manage_iface_list=[]
                         #instance vms
                         cmd = "SELECT iv.uuid as uuid, vim_vm_id, status, error_msg, vim_info, iv.created_at as "\
-                               "created_at, name, vms.osm_id as vdu_osm_id"\
+                               "created_at, name, vms.osm_id as vdu_osm_id, vim_name"\
                                 " FROM instance_vms as iv join vms on iv.vm_id=vms.uuid "\
                                 " WHERE instance_vnf_id='{}' ORDER BY iv.created_at".format(vnf['uuid'])
                         self.logger.debug(cmd)

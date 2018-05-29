@@ -52,7 +52,8 @@ from Crypto.PublicKey import RSA
 import osm_im.vnfd as vnfd_catalog
 import osm_im.nsd as nsd_catalog
 from pyangbind.lib.serialise import pybindJSONDecoder
-from itertools import chain
+from copy import deepcopy
+
 
 global global_config
 global vimconn_imported
@@ -3679,10 +3680,8 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         else:
             av_index = None
         for vm_index in range(0, vm.get('count', 1)):
-            vm_index_name = ""
-            if vm.get('count', 1) > 1:
-                vm_index_name += "." + chr(97 + vm_index)
-            task_params = (myVMDict['name'] + vm_index_name, myVMDict['description'], myVMDict.get('start', None),
+            vm_name = myVMDict['name'] + "-" + str(vm_index+1)
+            task_params = (vm_name, myVMDict['description'], myVMDict.get('start', None),
                            myVMDict['imageRef'], myVMDict['flavorRef'], myVMDict['networks'], cloud_config_vm,
                            myVMDict['disks'], av_index, vnf_availability_zones)
             # put interface uuid back to scenario[vnfs][vms[[interfaces]
@@ -3699,6 +3698,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                 'instance_vnf_id': vnf_uuid,
                 # TODO delete "vim_vm_id": vm_id,
                 "vm_id": vm["uuid"],
+                "vim_name": vm_name,
                 # "status":
             }
             db_instance_vms.append(db_vm)
@@ -4220,21 +4220,196 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
     if len(vims) == 0:
         raise NfvoException("datacenter '{}' not found".format(str(instanceDict['datacenter_id'])), HTTP_Not_Found)
     myvim = vims.values()[0]
+    vm_result = {}
+    vm_error = 0
+    vm_ok = 0
 
-    if action_dict.get("create-vdu"):
-        for vdu in action_dict["create-vdu"]:
+    myvim_threads_id = {}
+    if action_dict.get("vdu-scaling"):
+        db_instance_vms = []
+        db_vim_actions = []
+        db_instance_interfaces = []
+        instance_action_id = get_task_id()
+        db_instance_action = {
+            "uuid": instance_action_id,   # same uuid for the instance and the action on create
+            "tenant_id": nfvo_tenant,
+            "instance_id": instance_id,
+            "description": "SCALE",
+        }
+        vm_result["instance_action_id"] = instance_action_id
+        task_index = 0
+        for vdu in action_dict["vdu-scaling"]:
             vdu_id = vdu.get("vdu-id")
+            osm_vdu_id = vdu.get("osm_vdu_id")
+            member_vnf_index = vdu.get("member-vnf-index")
             vdu_count = vdu.get("count", 1)
-            # get from database TODO
-            # insert tasks TODO
-            pass
+            if vdu_id:
+                target_vm = mydb.get_rows(
+                    FROM="instance_vms as vms join instance_vnfs as vnfs on vms.instance_vnf_id=vnfs.uuid",
+                    WHERE={"vms.uuid": vdu_id},
+                    ORDER_BY="vms.created_at"
+                )
+                if not target_vm:
+                    raise NfvoException("Cannot find the vdu with id {}".format(vdu_id), HTTP_Not_Found)
+            else:
+                if not osm_vdu_id and not member_vnf_index:
+                    raise NfvoException("Invalid imput vdu parameters. Must supply either 'vdu-id' of 'osm_vdu_id','member-vnf-index'")
+                target_vm = mydb.get_rows(
+                    # SELECT=("ivms.uuid", "ivnfs.datacenter_id", "ivnfs.datacenter_tenant_id"),
+                    FROM="instance_vms as ivms join instance_vnfs as ivnfs on ivms.instance_vnf_id=ivnfs.uuid"\
+                         " join sce_vnfs as svnfs on ivnfs.sce_vnf_id=svnfs.uuid"\
+                         " join vms on ivms.vm_id=vms.uuid",
+                    WHERE={"vms.osm_id": osm_vdu_id, "svnfs.member_vnf_index": member_vnf_index},
+                    ORDER_BY="ivms.created_at"
+                )
+                if not target_vm:
+                    raise NfvoException("Cannot find the vdu with osm_vdu_id {} and member-vnf-index {}".format(osm_vdu_id, member_vnf_index), HTTP_Not_Found)
+                vdu_id = target_vm[-1]["uuid"]
+            vm_result[vdu_id] = {"created": [], "deleted": [], "description": "scheduled"}
+            target_vm = target_vm[-1]
+            datacenter = target_vm["datacenter_id"]
+            myvim_threads_id[datacenter], _ = get_vim_thread(mydb, nfvo_tenant, datacenter)
+            if vdu["type"] == "delete":
+                # look for nm
+                vm_interfaces = None
+                for sce_vnf in instanceDict['vnfs']:
+                    for vm in sce_vnf['vms']:
+                        if vm["uuid"] == vdu_id:
+                            vm_interfaces = vm["interfaces"]
+                            break
+
+                db_vim_action = {
+                    "instance_action_id": instance_action_id,
+                    "task_index": task_index,
+                    "datacenter_vim_id": target_vm["datacenter_tenant_id"],
+                    "action": "DELETE",
+                    "status": "SCHEDULED",
+                    "item": "instance_vms",
+                    "item_id": target_vm["uuid"],
+                    "extra": yaml.safe_dump({"params": vm_interfaces},
+                                            default_flow_style=True, width=256)
+                }
+                task_index += 1
+                db_vim_actions.append(db_vim_action)
+                vm_result[vdu_id]["deleted"].append(vdu_id)
+                # delete from database
+                db_instance_vms.append({"TO-DELETE": vdu_id})
+
+            else:  # vdu["type"] == "create":
+                iface2iface = {}
+                where = {"item": "instance_vms", "item_id": target_vm["uuid"], "action": "CREATE"}
+
+                vim_action_to_clone = mydb.get_rows(FROM="vim_actions", WHERE=where)
+                if not vim_action_to_clone:
+                    raise NfvoException("Cannot find the vim_action at database with {}".format(where), HTTP_Internal_Server_Error)
+                vim_action_to_clone = vim_action_to_clone[0]
+                extra = yaml.safe_load(vim_action_to_clone["extra"])
+
+                # generate a new depends_on. Convert format TASK-Y into new format TASK-ACTION-XXXX.XXXX.Y
+                # TODO do the same for flavor and image when available
+                task_depends_on = []
+                task_params = extra["params"]
+                task_params_networks = deepcopy(task_params[5])
+                for iface in task_params[5]:
+                    if iface["net_id"].startswith("TASK-"):
+                        if "." not in iface["net_id"]:
+                            task_depends_on.append("{}.{}".format(vim_action_to_clone["instance_action_id"],
+                                                             iface["net_id"][5:]))
+                            iface["net_id"] = "TASK-{}.{}".format(vim_action_to_clone["instance_action_id"],
+                                                                  iface["net_id"][5:])
+                        else:
+                            task_depends_on.append(iface["net_id"][5:])
+                    if "mac_address" in iface:
+                        del iface["mac_address"]
+
+                vm_ifaces_to_clone = mydb.get_rows(FROM="instance_interfaces", WHERE={"instance_vm_id": target_vm["uuid"]})
+                for index in range(0, vdu_count):
+                    vm_uuid = str(uuid4())
+                    vm_name = target_vm.get('vim_name')
+                    try:
+                        suffix = vm_name.rfind("-")
+                        vm_name = vm_name[:suffix+1] + str(1 + int(vm_name[suffix+1:]))
+                    except Exception:
+                        pass
+                    db_instance_vm = {
+                        "uuid": vm_uuid,
+                        'instance_vnf_id': target_vm['instance_vnf_id'],
+                        'vm_id': target_vm['vm_id'],
+                        'vim_name': vm_name
+                    }
+                    db_instance_vms.append(db_instance_vm)
+
+                    for vm_iface in vm_ifaces_to_clone:
+                        iface_uuid = str(uuid4())
+                        iface2iface[vm_iface["uuid"]] = iface_uuid
+                        db_vm_iface = {
+                            "uuid": iface_uuid,
+                            'instance_vm_id': vm_uuid,
+                            "instance_net_id": vm_iface["instance_net_id"],
+                            'interface_id': vm_iface['interface_id'],
+                            'type': vm_iface['type'],
+                            'floating_ip': vm_iface['floating_ip'],
+                            'port_security': vm_iface['port_security']
+                        }
+                        db_instance_interfaces.append(db_vm_iface)
+                    task_params_copy = deepcopy(task_params)
+                    for iface in task_params_copy[5]:
+                        iface["uuid"] = iface2iface[iface["uuid"]]
+                        # increment ip_address
+                        if "ip_address" in iface:
+                            ip = iface.get("ip_address")
+                            i = ip.rfind(".")
+                            if i > 0:
+                                try:
+                                    i += 1
+                                    ip = ip[i:] + str(int(ip[:i]) + 1)
+                                    iface["ip_address"] = ip
+                                except:
+                                    iface["ip_address"] = None
+                    if vm_name:
+                        task_params_copy[0] = vm_name
+                    db_vim_action = {
+                        "instance_action_id": instance_action_id,
+                        "task_index": task_index,
+                        "datacenter_vim_id": vim_action_to_clone["datacenter_vim_id"],
+                        "action": "CREATE",
+                        "status": "SCHEDULED",
+                        "item": "instance_vms",
+                        "item_id": vm_uuid,
+                        # ALF
+                        # ALF
+                        # TODO examinar parametros, quitar MAC o incrementar. Incrementar IP y colocar las dependencias con ACTION-asdfasd.
+                        # ALF
+                        # ALF
+                        "extra": yaml.safe_dump({"params": task_params_copy, "depends_on": task_depends_on}, default_flow_style=True, width=256)
+                    }
+                    task_index += 1
+                    db_vim_actions.append(db_vim_action)
+                    vm_result[vdu_id]["created"].append(vm_uuid)
+
+        db_instance_action["number_tasks"] = task_index
+        db_tables = [
+            {"instance_vms": db_instance_vms},
+            {"instance_interfaces": db_instance_interfaces},
+            {"instance_actions": db_instance_action},
+            # TODO revise sfps
+            # {"instance_sfis": db_instance_sfis},
+            # {"instance_sfs": db_instance_sfs},
+            # {"instance_classifications": db_instance_classifications},
+            # {"instance_sfps": db_instance_sfps},
+            {"vim_actions": db_vim_actions}
+        ]
+        logger.debug("create_vdu done DB tables: %s",
+                     yaml.safe_dump(db_tables, indent=4, default_flow_style=False))
+        mydb.new_rows(db_tables, [])
+        for myvim_thread in myvim_threads_id.values():
+            vim_threads["running"][myvim_thread].insert_task(db_vim_actions)
+
+        return vm_result
 
     input_vnfs = action_dict.pop("vnfs", [])
     input_vms = action_dict.pop("vms", [])
     action_over_all = True if not input_vnfs and not input_vms else False
-    vm_result = {}
-    vm_error = 0
-    vm_ok = 0
     for sce_vnf in instanceDict['vnfs']:
         for vm in sce_vnf['vms']:
             if not action_over_all and sce_vnf['uuid'] not in input_vnfs and sce_vnf['vnf_name'] not in input_vnfs and \
@@ -4328,7 +4503,7 @@ def instance_action_get(mydb, nfvo_tenant, instance_id, action_id):
             raise NfvoException("Not found any action with this criteria", HTTP_Not_Found)
         vim_actions = mydb.get_rows(FROM="vim_actions", WHERE={"instance_action_id": action_id})
         rows[0]["vim_actions"] = vim_actions
-    return {"ations": rows}
+    return {"actions": rows}
 
 
 def create_or_use_console_proxy_thread(console_server, console_port):
