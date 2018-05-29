@@ -69,10 +69,10 @@ def check_client_version(obj, what, version='sol005'):
               envvar='OSM_RO_PORT',
               help='hostname of RO server.  ' +
                    'Also can set OSM_RO_PORT in environment')
-@click.option('--sol005',
-              is_flag=True,
+@click.option('--sol005/--no-sol005',
+              default=True,
               envvar='OSM_SOL005',
-              help='Use ETSI NFV SOL005 API')
+              help='Use ETSI NFV SOL005 API (default) or the previous SO API')
 @click.pass_context
 def cli(ctx, hostname, so_port, so_project, ro_hostname, ro_port, sol005):
     if hostname is None:
