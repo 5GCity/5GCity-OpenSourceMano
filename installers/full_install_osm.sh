@@ -33,6 +33,7 @@ function usage(){
     echo -e "     -o <ADDON>:     do not install OSM, but ONLY one of the addons (vimemu, elk_stack, pm_stack) (assumes OSM is already installed)"
     echo -e "     -D <devops path> use local devops installation path"
     echo -e "     --nolxd:        do not install and configure LXD, allowing unattended installations (assumes LXD is already installed and confifured)"
+    echo -e "     --nodocker:     do not install docker, do not initialize a swarm (assumes docker is already installed and a swarm has been initialized)"
     echo -e "     --uninstall:    uninstall OSM: remove the containers and delete NAT rules"
     echo -e "     --source:       install OSM from source code using the latest stable tag"
     echo -e "     --develop:      (deprecated, use '-b master') install OSM from source code using the master branch"
@@ -639,8 +640,7 @@ function generate_docker_env_files() {
     echo "Finished generation of docker env files"
 }
 
-function deploy_lightweight() {
-    echo "Deploying lightweight build"
+function init_docker_swarm() {
     if [ "${DEFAULT_MTU}" != "1500" ]; then
       DOCKER_NETS=`sg docker -c "docker network list" | awk '{print $2}' | egrep -v "^ID$" | paste -d " " -s`
       DOCKER_GW_NET=`sg docker -c "docker network inspect ${DOCKER_NETS}" | grep Subnet | awk -F\" '{print $4}' | egrep "^172" | sort -u | tail -1 |  awk -F\. '{if ($2 != 255) print $1"."$2+1"."$3"."$4; else print "-1";}'`
@@ -648,6 +648,12 @@ function deploy_lightweight() {
     fi
     sg docker -c "docker swarm init --advertise-addr ${DEFAULT_IP}"
     sg docker -c "docker network create --driver=overlay --attachable --opt com.docker.network.driver.mtu=${DEFAULT_MTU} netOSM"
+    return 0
+}
+
+function deploy_lightweight() {
+    echo "Deploying lightweight build"
+    [ -n "$INSTALL_NODOCKER" ] || init_docker_swarm
     remove_stack osm
     sg docker -c "docker stack deploy -c /etc/osm/docker/docker-compose.yaml osm"
     #docker-compose -f /etc/osm/docker/docker-compose.yaml up -d
@@ -737,7 +743,7 @@ function install_lightweight() {
     [ -z "$OSMLCM_VCA_HOST" ] && FATAL "Cannot obtain juju controller IP address"
     [ -z "$OSMLCM_VCA_SECRET" ] && FATAL "Cannot obtain juju secret"
     track juju
-    install_docker_ce
+    [ -n "$INSTALL_NODOCKER" ] || install_docker_ce
     track docker_ce
     #install_docker_compose
     generate_docker_images
@@ -805,6 +811,7 @@ function dump_vars(){
     echo "INSTALL_PERFMON=$INSTALL_PERFMON"
     echo "TO_REBUILD=$TO_REBUILD"
     echo "INSTALL_NOLXD=$INSTALL_NOLXD"
+    echo "INSTALL_NODOCKER=$INSTALL_NODOCKER"
     echo "RELEASE=$RELEASE"
     echo "REPOSITORY=$REPOSITORY"
     echo "REPOSITORY_BASE=$REPOSITORY_BASE"
@@ -851,6 +858,7 @@ INSTALL_ELK=""
 INSTALL_PERFMON=""
 TO_REBUILD=""
 INSTALL_NOLXD=""
+INSTALL_NODOCKER=""
 NOCONFIGURE=""
 RELEASE_DAILY=""
 SESSION_ID=`date +%s`
@@ -912,6 +920,7 @@ while getopts ":hy-:b:r:k:u:R:l:p:D:o:m:" o; do
             [ "${OPTARG}" == "test" ] && TEST_INSTALLER="y" && continue
             [ "${OPTARG}" == "lxdinstall" ] && INSTALL_LXD="y" && continue
             [ "${OPTARG}" == "nolxd" ] && INSTALL_NOLXD="y" && continue
+            [ "${OPTARG}" == "nodocker" ] && INSTALL_NODOCKER="y" && continue
             [ "${OPTARG}" == "lxdimages" ] && INSTALL_FROM_LXDIMAGES="y" && continue
             [ "${OPTARG}" == "lightweight" ] && INSTALL_LIGHTWEIGHT="y" && continue
             [ "${OPTARG}" == "soui" ] && INSTALL_LIGHTWEIGHT="" && RELEASE="-R ReleaseTHREE" && REPOSITORY="-r stable" && continue
@@ -942,6 +951,7 @@ done
 [ -n "$NOCONFIGURE" ] && [ -n "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible options: --noconfigure can only be used with --soui"
 [ -n "$RELEASE_DAILY" ] && [ -n "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible options: --daily can only be used with --soui"
 [ -n "$INSTALL_NOLXD" ] && [ -z "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible option: --nolxd cannot be used with --soui"
+[ -n "$INSTALL_NODOCKER" ] && [ -z "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible option: --nodocker cannot be used with --soui"
 [ -n "$TO_REBUILD" ] && [ -z "$INSTALL_LIGHTWEIGHT" ] && FATAL "Incompatible option: -m cannot be used with --soui"
 [ -n "$TO_REBUILD" ] && [ "$TO_REBUILD" != " NONE" ] && echo $TO_REBUILD | grep -q NONE && FATAL "Incompatible option: -m NONE cannot be used with other -m options"
 
