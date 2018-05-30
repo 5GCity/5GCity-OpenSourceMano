@@ -166,13 +166,13 @@ class Nsd(object):
                                       resp))
             print resp['id']
         else:
-            msg = ""
+            msg = "Error {}".format(http_code)
             if resp:
                 try:
-                    msg = json.loads(resp)
+                    msg = "{} - {}".format(msg, json.loads(resp))
                 except ValueError:
-                    msg = resp
-            raise ClientException("failed to create/update nsd - {}".format(name, msg))
+                    msg = "{} - {}".format(msg, resp)
+            raise ClientException("failed to create/update nsd - {}".format(msg))
 
     def update(self, name, filename):
         nsd = self.get(name)
