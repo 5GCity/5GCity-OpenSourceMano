@@ -3147,7 +3147,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                     "created": create_network,
                     'datacenter_id': datacenter_id,
                     'datacenter_tenant_id': myvim_thread_id,
-                    'status': 'BUILD' if create_network else "ACTIVE"
+                    'status': 'BUILD' #  if create_network else "ACTIVE"
                 }
                 db_instance_nets.append(db_net)
                 db_vim_action = {
