@@ -31,7 +31,7 @@ Q=@
 GEN_VNFD_PKG := $(TOOLS_DIR)/gen_vnfd_pkg.sh
 GEN_NSD_PKG  := $(TOOLS_DIR)/gen_nsd_pkg.sh
 GEN_PKG      := $(TOOLS_DIR)/generate_descriptor_pkg.sh
-TEST_PKG     := $(TOOLS_DIR)/upgrade_descriptor_version.py
+TEST_PKG     := $(TOOLS_DIR)/validate_descriptor.py
 BUILD_VNFD   := $(shell readlink -f .|sed -e 's/\/.*descriptor-packages//' | grep vnfd)
 
 DEP_FILES = $(wildcard src/*)
@@ -76,7 +76,7 @@ clean:
 
 test:
 	$(Q)echo -n testing $(shell readlink -f src/*.yaml)  "             " 
-	$(Q)$(TEST_PKG) --test src/*.yaml
+	$(Q)$(TEST_PKG) src/*.yaml
 	$(Q)echo OK
         
 .DEFAULT_GOAL := all
