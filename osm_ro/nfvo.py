@@ -306,7 +306,7 @@ def get_imagelist(mydb, vnf_id, nfvo_tenant=None):
 
 
 def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, datacenter_tenant_id=None,
-            vim_tenant=None, vim_tenant_name=None, vim_user=None, vim_passwd=None):
+            vim_tenant=None, vim_tenant_name=None, vim_user=None, vim_passwd=None, ignore_errors=False):
     '''Obtain a dictionary of VIM (datacenter) classes with some of the input parameters
     return dictionary with {datacenter_id: vim_class, ... }. vim_class contain:
             'nfvo_tenant_id','datacenter_id','vim_tenant_id','vim_url','vim_url_admin','datacenter_name','type','user','passwd'
@@ -350,6 +350,10 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
                 except (IOError, ImportError) as e:
                     # if module_info and module_info[0]:
                     #     file.close(module_info[0])
+                    if ignore_errors:
+                        logger.error("Unknown vim type '{}'. Can not open file '{}.py'; {}: {}".format(
+                                            vim["type"], module, type(e).__name__, str(e)))
+                        continue
                     raise NfvoException("Unknown vim type '{}'. Can not open file '{}.py'; {}: {}".format(
                                             vim["type"], module, type(e).__name__, str(e)), HTTP_Bad_Request)
 
@@ -372,6 +376,9 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
                                 config=extra, persistent_info=persistent_info
                         )
             except Exception as e:
+                if ignore_errors:
+                    logger.error("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, str(e)))
+                    continue
                 http_code = HTTP_Internal_Server_Error
                 if isinstance(e, vimconn.vimconnException):
                     http_code = e.http_code
@@ -1309,7 +1316,7 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
             vnf_descriptor['vnf']['tenant_id'] = tenant_id
         # Step 3. Get the URL of the VIM from the nfvo_tenant and the datacenter
         if global_config["auto_push_VNF_to_VIMs"]:
-            vims = get_vim(mydb, tenant_id)
+            vims = get_vim(mydb, tenant_id, ignore_errors=True)
 
     # Step 4. Review the descriptor and add missing  fields
     #print vnf_descriptor
@@ -1446,7 +1453,7 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
             vnf_descriptor['vnf']['tenant_id'] = tenant_id
         # Step 3. Get the URL of the VIM from the nfvo_tenant and the datacenter
         if global_config["auto_push_VNF_to_VIMs"]:
-            vims = get_vim(mydb, tenant_id)
+            vims = get_vim(mydb, tenant_id, ignore_errors=True)
 
     # Step 4. Review the descriptor and add missing  fields
     #print vnf_descriptor
@@ -1630,7 +1637,7 @@ def delete_vnf(mydb,tenant_id,vnf_id,datacenter=None,vim_tenant=None):
     if tenant_id != "any":
         check_tenant(mydb, tenant_id)
         # Get the URL of the VIM from the nfvo_tenant and the datacenter
-        vims = get_vim(mydb, tenant_id)
+        vims = get_vim(mydb, tenant_id, ignore_errors=True)
     else:
         vims={}
 
