@@ -1170,7 +1170,8 @@ class vimconnector(vimconn.vimconnector):
                                     continue
                             free_floating_ip = ip.get("floating_ip_address")
                         else:
-                            if isinstance(floating_network['floating_ip'], str):
+                            if isinstance(floating_network['floating_ip'], str) and \
+                                floating_network['floating_ip'].lower() != "true":
                                 pool_id = floating_network['floating_ip']
                             else:
                                 # Find the external network
