@@ -77,6 +77,46 @@ class Client(object):
                                   json=vim_data)
         return None
 
+
+    def sdn_list(self):
+        token = self.get_token()
+        if token:
+            self._headers['Authorization'] = 'Bearer {}'.format(token)
+            self._headers['accept'] = 'application/json'
+            _url = "{0}/admin/v1/sdns".format(self._base_path)
+            return self._send_get(_url, headers=self._headers)
+
+    def sdn_delete(self, id):
+        token = self.get_token()
+        if token:
+            self._headers['Authorization'] = 'Bearer {}'.format(token)
+            self._headers['accept'] = 'application/json'
+            _url = "{0}/admin/v1/sdns/{1}".format(self._base_path, id)
+            return self._send_delete(_url, headers=self._headers)
+        return None
+
+    def sdn_get(self, id):
+        token = self.get_token()
+        if token:
+            self._headers['Authorization'] = 'Bearer {}'.format(token)
+            self._headers['accept'] = 'application/json'
+            _url = "{0}/admin/v1/sdns/{1}".format(self._base_path, id)
+            return self._send_get(_url, headers=self._headers)
+        return None
+
+    def sdn_create(self, sdn_data):
+        token = self.get_token()
+        headers = {}
+        if token:
+            headers['Authorization'] = 'Bearer {}'.format(token)
+            headers['Content-Type'] = 'application/json'
+            headers['accept'] = 'application/json'
+
+            _url = "{0}/admin/v1/sdns".format(self._base_path)
+            return self._send_post(_url, headers=headers,
+                                  json=sdn_data)
+        return None
+
     def nsd_list(self):
         token = self.get_token()
         if token:

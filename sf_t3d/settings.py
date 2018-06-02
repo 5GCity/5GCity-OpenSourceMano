@@ -48,7 +48,8 @@ INSTALLED_APPS = [
     'sf_user',
     'projecthandler',
     'vimhandler',
-    'instancehandler'
+    'instancehandler',
+    'sdnctrlhandler'
 ]
 
 MIDDLEWARE_CLASSES = [
@@ -80,6 +81,7 @@ TEMPLATES = [
             os.path.join(BASE_DIR, 'projecthandler', 'template', 'project'),
             os.path.join(BASE_DIR, 'vimhandler', 'template'),
             os.path.join(BASE_DIR, 'instancehandler', 'template'),
+            os.path.join(BASE_DIR, 'sdnctrlhandler', 'template'),
         ],
         'APP_DIRS': True,
         'OPTIONS': {

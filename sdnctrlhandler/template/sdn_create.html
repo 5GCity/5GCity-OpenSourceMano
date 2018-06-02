@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% load get %}
+{% load staticfiles %}
+
+
+{% block head_block %}
+    {{ block.super }}
+
+{% endblock %}
+{% block title_header_big %}
+    {{ block.super }}
+{% endblock %}
+{% block left_sidebar %}
+
+    {% include 'osm/osm_project_left_sidebar.html' %}
+
+{% endblock %}
+
+
+{% block breadcrumb_body %}
+    {{ block.super }}
+    <li><a href="{% url 'projects:sdns:list' project_id=project_id %}">SDN Controllers</a></li>
+{% endblock %}
+
+{% block content_body %}
+    {{ block.super }}
+
+    <div class="row">
+        <div class="col-md-12">
+            <form action='{% url 'projects:sdns:create' project_id=project_id%}' method="post">
+                {% csrf_token %}
+                <div class="box">
+                    <div class="box-header with-border">
+                        <h3 class="box-title">New SDN Controller</h3>
+                        <div class="box-tools">
+
+                        </div>
+                    </div>
+                    <div class="box-body">
+                        <div class="row">
+                            <div class="col-lg-6">
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="name" class="col-sm-3 control-label">Name*</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input class="form-control" id="name" name="name" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="sdn_type" class="col-sm-3 control-label">Type*</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input class="form-control" id="sdn_type" name="type" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="sdn_user" class="col-sm-3 control-label">Username*</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input class="form-control" id="sdn_user" name="user" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="sdn_password" class="col-sm-3 control-label">Password*</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input type="password" class="form-control" id="password"
+                                                   name="sdn_password" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="sdn_ip" class="col-sm-3 control-label">IP*</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input class="form-control" id="sdn_ip" name="ip"  required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="sdn_port" class="col-sm-3 control-label">Port*</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input class="form-control" type="number" id="sdn_port" name="port" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="sdn_dpid" class="col-sm-3 control-label">DPID*</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input class="form-control" id="sdn_dpid" name="dpid" pattern="[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){7}" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="form-group">
+                                        <label for="sdn_version" class="col-sm-3 control-label">Version</label>
+                                        <div class="col-sm-6 input-group input-group-sm">
+                                            <input class="form-control" id="sdn_version" name="version">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                    <div class="box-footer">
+                        <button onclick="location.href='{%  url 'projects:sdns:list' project_id=project_id %}'" class="btn btn-default pull-left">Back to
+                            SDN Controllers
+                        </button>
+                        <button class="btn btn-primary pull-right">Create</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+    </div>
+{% endblock %}
+
+{% block resource_block %}
+    {{ block.super }}
+    <!-- Utility JS -->
+
+    <script>
+        $(document).ready(function () {
+        });
+    </script>
+
+{% endblock %}
+
+{% block footer %}
+    {% include "footer.html"  %}
+{% endblock %}

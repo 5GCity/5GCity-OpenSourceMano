@@ -48,6 +48,12 @@
                     <i class="fa fa-list fa-fw"></i><span>VNF Instances</span>
                 </a>
             </li>
+            {% url "projects:sdns:list"  project_id=project_id as sdn_list_url %}
+             <li {% if request.get_full_path == sdn_list_url %} class="active" {% endif %}>
+                 <a href='{% url "projects:sdns:list"  project_id=project_id %}'>
+                     <i class="fa fa-list fa-fw"></i><span>SDN Controllers</span>
+                 </a>
+             </li>
             <li class="header">CONFIG</li>
             {% url "vim:list"  type='ns' as  vim_list_url %}
              <li {% if request.get_full_path == vim_list_url %} class="active" {% endif %}>

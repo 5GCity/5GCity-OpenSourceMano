@@ -30,7 +30,9 @@ def list(request, project_id=None, type=None):
     elif type == 'vnf':
         result = client.vnf_list()
 
-    return __response_handler(request, {'instances': result, 'type': type, 'project_id': project_id}, 'instance_list.html')
+    result = {'instances': result, 'type': type, 'project_id': project_id}
+
+    return __response_handler(request, result, 'instance_list.html')
 
 
 @login_required

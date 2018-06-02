@@ -15,14 +15,14 @@
 #
 
 from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required, permission_required
-from django.http import HttpResponse, JsonResponse
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
 from lib.osm.osmclient.client import Client
 import yaml
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger('helper.py')
+log = logging.getLogger('view.py')
 
 @login_required
 def list(request):
