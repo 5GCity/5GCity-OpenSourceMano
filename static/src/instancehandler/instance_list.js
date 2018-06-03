@@ -19,9 +19,11 @@ function performAction(url) {
     $('#modal_instance_new_action').modal('show');
 }
 
-function deleteNs(url) {
+function deleteNs(url, force) {
     bootbox.confirm("Are you sure want to delete?", function (result) {
         if (result) {
+            if(force)
+                url = url + '?force=true';
             location.href = url
         }
     })

@@ -104,9 +104,10 @@ def action(request, project_id=None, instance_id=None, type=None):
 
 @login_required
 def delete(request, project_id=None, instance_id=None, type=None):
+    force = bool(request.GET.get('force', False))
     result = {}
     client = Client()
-    result = client.ns_delete(instance_id)
+    result = client.ns_delete(instance_id, force)
     print result
     return __response_handler(request, result, 'projects:instances:list', to_redirect=True, type='ns', project_id=project_id)
 

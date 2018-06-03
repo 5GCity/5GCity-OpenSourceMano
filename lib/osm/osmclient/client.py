@@ -252,13 +252,16 @@ class Client(object):
             return self._send_get(_url, headers=self._headers)
         return None
 
-    def ns_delete(self, id):
+    def ns_delete(self, id, force=None):
         token = self.get_token()
         if token:
             self._headers['Authorization'] = 'Bearer {}'.format(token)
-            #self._headers['Content-Type'] = 'application/yaml'
             self._headers['accept'] = 'application/json'
-            _url = "{0}/nslcm/v1/ns_instances_content/{1}".format(self._base_path, id)
+            query_path = ''
+            if force:
+                query_path = '?FORCE=true'
+            _url = "{0}/nslcm/v1/ns_instances_content/{1}{2}".format(self._base_path, id, query_path)
+
             return self._send_delete(_url, headers=self._headers)
         return None
 

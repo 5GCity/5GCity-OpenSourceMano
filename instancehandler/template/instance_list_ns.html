@@ -79,6 +79,10 @@
                                 <li>
                                     <a href="{% url 'projects:instances:ns_operations' project_id=project_id type=type instance_id=i|get:'_id' %}">
                                         <i class="fa fa-list"></i>Active operations</a></li>
+                                <li class="divider"></li>
+                                <li>
+                                    <a href="javascript:deleteNs('{% url 'projects:instances:delete' instance_id=i|get:'_id' project_id=project_id type=type %}', true)">
+                                        <i class="fa fa-trash" style="color:red" ></i>Force delete</a></li>
                             </ul>
 
 
