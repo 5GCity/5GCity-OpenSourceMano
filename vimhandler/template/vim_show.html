@@ -1,24 +1,6 @@
 {% extends "base.html" %}
 {% load get %}
 {% load staticfiles %}
-{% block head_base %}
-    {% with skin_css="AdminLTE/dist/css/skins/skin-purple.min.css"%}
-        {{ block.super }}
-    {% endwith %}
-{% endblock %}
-
-{% block body %}
-    {% with skin="purple"%}
-        {{ block.super }}
-    {% endwith %}
-{% endblock %}
-{% block logo_sidebar %}
-    {% with logo_mini="assets/img/osm_small_logo.png" logo="assets/img/OSM-logo.png" %}
-        {{ block.super }}
-    {% endwith %}
-{% endblock %}
-
-
 
 {% block head_block %}
     {{ block.super }}
@@ -29,14 +11,14 @@
 {% endblock %}
 {% block left_sidebar %}
 
-    {% include 'left_sidebar_base.html' %}
+    {% include 'osm/osm_project_left_sidebar.html' %}
 
 {% endblock %}
 
 
 {% block breadcrumb_body %}
     {{ block.super }}
-    <li><a href="{% url 'vim:list' %}">VIMS</a></li>
+    <li><a href="{% url 'projects:vims:list' project_id=project_id%}">VIMS</a></li>
 {% endblock %}
 
 {% block content_body %}
@@ -139,7 +121,7 @@
             </div>
             <div class="box-footer">
                 <div class="">
-                    <button onclick="location.href='{% url 'vim:list' %}'" class="btn btn-primary">Back to VIM Accounts</button>
+                    <button onclick="location.href='{% url 'projects:vims:list' project_id=project_id%}'" class="btn btn-primary">Back to VIM Accounts</button>
                 </div>
             </div>
         </div>

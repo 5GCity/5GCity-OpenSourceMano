@@ -54,10 +54,10 @@
                      <i class="fa fa-list fa-fw"></i><span>SDN Controllers</span>
                  </a>
              </li>
-            <li class="header">CONFIG</li>
-            {% url "vim:list"  type='ns' as  vim_list_url %}
+
+            {% url "projects:vims:list"  project_id=project_id as  vim_list_url %}
              <li {% if request.get_full_path == vim_list_url %} class="active" {% endif %}>
-                 <a href='{% url "vim:list" %}'>
+                 <a href='{% url "projects:vims:list"  project_id=project_id %}'>
                      <i class="fa fa-list fa-fw"></i><span>VIM Accounts</span>
                  </a>
              </li>

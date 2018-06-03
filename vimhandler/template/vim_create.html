@@ -12,14 +12,14 @@
 {% endblock %}
 {% block left_sidebar %}
 
-    {% include 'left_sidebar_base.html' %}
+    {% include 'osm/osm_project_left_sidebar.html' %}
 
 {% endblock %}
 
 
 {% block breadcrumb_body %}
     {{ block.super }}
-    <li><a href="{% url 'vim:list' %}">VIMS</a></li>
+    <li><a href="{% url 'projects:vims:list' project_id=project_id %}">VIMS</a></li>
 {% endblock %}
 
 {% block content_body %}
@@ -27,7 +27,7 @@
 
     <div class="row">
         <div class="col-md-12">
-            <form action='{% url "vim:create" %}' method="post">
+            <form action='{% url "projects:vims:create" project_id=project_id  %}' method="post">
                 {% csrf_token %}
                 <div class="box">
                     <div class="box-header with-border">
@@ -175,7 +175,7 @@
 
                     </div>
                     <div class="box-footer">
-                        <button onclick="location.href='{% url 'vim:list' %}'" class="btn btn-default pull-left">Back to
+                        <button onclick="location.href='{% url 'projects:vims:list' project_id=project_id%}'" class="btn btn-default pull-left">Back to
                             VIM Accounts
                         </button>
                         <button class="btn btn-primary pull-right">Create</button>

@@ -24,19 +24,22 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger('view.py')
 
+
 @login_required
-def list(request):
+def list(request, project_id):
     client = Client()
     result = client.vim_list()
     print result
     result = {
+        "project_id": project_id,
         "datacenters": result
     }
     return __response_handler(request, result, 'vim_list.html')
 
+
 @login_required
-def create(request):
-    result = {}
+def create(request, project_id):
+    result = {'project_id': project_id}
     if request.method == 'GET':
         return __response_handler(request, result, 'vim_create.html')
     else:
@@ -67,24 +70,25 @@ def create(request):
                 print e
         result = client.vim_create(vim_data)
         # TODO  'vim:show', to_redirect=True, vim_id=vim_id
-        return __response_handler(request, result, 'vim:list', to_redirect=True)
+        return __response_handler(request, result, 'projects:vims:list', to_redirect=True, project_id=project_id)
 
 @login_required
-def delete(request, vim_id=None):
+def delete(request, project_id, vim_id=None):
     try:
         client = Client()
         del_res = client.vim_delete(vim_id)
     except Exception as e:
         log.exception(e)
-    return __response_handler(request, {}, 'vim:list', to_redirect=True)
+    return __response_handler(request, {}, 'projects:vims:list', to_redirect=True, project_id=project_id)
 
 @login_required
-def show(request, vim_id=None):
+def show(request, project_id, vim_id=None):
     client = Client()
     datacenter = client.vim_get(vim_id)
     print datacenter
     return __response_handler(request, {
-        "datacenter": datacenter
+        "datacenter": datacenter,
+        "project_id": project_id
     }, 'vim_show.html')
 
 

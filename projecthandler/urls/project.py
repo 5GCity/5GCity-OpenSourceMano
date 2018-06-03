@@ -22,6 +22,7 @@ urlpatterns = [
     url(r'^new/', views.create_new_project, name='new_project'),
     url(r'^(?P<project_id>\d+)/$', views.open_project, name='open_project'),
     url(r'^(?P<project_id>\d+)/sdn/', include('sdnctrlhandler.urls', namespace='sdns'), name='sdns_base'),
+    url(r'^(?P<project_id>\d+)/vims/', include('vimhandler.urls', namespace='vims'), name='vims_base'),
     url(r'^(?P<project_id>\d+)/instances/', include('instancehandler.urls', namespace='instances'), name='instances_base'),
     url(r'^(?P<project_id>\d+)/delete$', views.delete_project, name='delete_project'),
     url(r'^(?P<project_id>\d+)/graph(/$)', views.graph, name='graph_view'),

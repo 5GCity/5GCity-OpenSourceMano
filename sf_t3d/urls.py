@@ -26,7 +26,7 @@ urlpatterns = [
     url(r'^auth_guest/$', user_views.guest_login, name='auth_user_guest'),
     url(r'^register', user_views.register_view, name='register_user'),
     url(r'^projects/', include('projecthandler.urls.project', namespace='projects'), name='projects_base'),
-    url(r'^vims/', include('vimhandler.urls', namespace='vim'), name='vims_base'),
+    #url(r'^vims/', include('vimhandler.urls', namespace='vim'), name='vims_base'),
     #url(r'^sdn/', include('sdnctrlhandler.urls', namespace='sdn'), name='sdns_base'),
 
     url(r'^$', views.home, name='home'),
