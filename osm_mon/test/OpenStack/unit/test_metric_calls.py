@@ -29,6 +29,7 @@ import unittest
 
 import mock
 
+from osm_mon.core.auth import AuthManager
 from osm_mon.plugins.OpenStack.Gnocchi import metrics as metric_req
 
 from osm_mon.plugins.OpenStack.common import Common
@@ -60,6 +61,8 @@ def perform_request_side_effect(*args, **kwargs):
     resp = Response()
     if 'marker' in args[0]:
         resp.text = json.dumps([])
+    if 'resource/generic' in args[0]:
+        resp.text = json.dumps({'metrics': {'cpu_util': 'test_id'}})
     return resp
 
 
@@ -72,87 +75,78 @@ class TestMetricCalls(unittest.TestCase):
         self.metrics = metric_req.Metrics()
         self.metrics._common = Common()
 
-    @mock.patch.object(metric_req.Metrics, "get_metric_name")
     @mock.patch.object(metric_req.Metrics, "get_metric_id")
     @mock.patch.object(Common, "perform_request")
     def test_invalid_config_metric_req(
-            self, perf_req, get_metric, get_metric_name):
+            self, perf_req, get_metric):
         """Test the configure metric function, for an invalid metric."""
         # Test invalid configuration for creating a metric
         values = {"metric_details": "invalid_metric"}
 
         m_id, r_id, status = self.metrics.configure_metric(
-            endpoint, auth_token, values)
+            endpoint, auth_token, values, verify_ssl=False)
 
         perf_req.assert_not_called()
-        self.assertEqual(m_id, None)
-        self.assertEqual(r_id, None)
         self.assertEqual(status, False)
 
         # Test with an invalid metric name, will not perform request
         values = {"resource_uuid": "r_id"}
-        get_metric_name.return_value = "metric_name", None
 
         m_id, r_id, status = self.metrics.configure_metric(
-            endpoint, auth_token, values)
+            endpoint, auth_token, values, verify_ssl=False)
 
         perf_req.assert_not_called()
-        self.assertEqual(m_id, None)
-        self.assertEqual(r_id, "r_id")
         self.assertEqual(status, False)
-        get_metric_name.reset_mock()
 
         # If metric exists, it won't be recreated
-        get_metric_name.return_value = "metric_name", "norm_name"
         get_metric.return_value = "metric_id"
 
         m_id, r_id, status = self.metrics.configure_metric(
-            endpoint, auth_token, values)
+            endpoint, auth_token, values, verify_ssl=False)
 
         perf_req.assert_not_called()
-        self.assertEqual(m_id, "metric_id")
-        self.assertEqual(r_id, "r_id")
         self.assertEqual(status, False)
 
-    @mock.patch.object(metric_req.Metrics, "get_metric_name")
     @mock.patch.object(metric_req.Metrics, "get_metric_id")
     @mock.patch.object(Common, "perform_request")
+    @mock.patch.object(AuthManager, "get_credentials")
     def test_valid_config_metric_req(
-            self, perf_req, get_metric, get_metric_name):
+            self, get_creds, perf_req, get_metric):
         """Test the configure metric function, for a valid metric."""
         # Test valid configuration and payload for creating a metric
+        get_creds.return_value = type('obj', (object,), {'config': '{"insecure":true}'})
         values = {"resource_uuid": "r_id",
-                  "metric_unit": "units"}
-        get_metric_name.return_value = "norm_name", "metric_name"
+                  "metric_unit": "units",
+                  "metric_name": "cpu_util"}
         get_metric.return_value = None
         payload = {"id": "r_id",
-                   "metrics": {"metric_name":
+                   "metrics": {"cpu_util":
                                    {"archive_policy_name": "high",
-                                    "name": "metric_name",
+                                    "name": "cpu_util",
                                     "unit": "units"}}}
 
-        perf_req.return_value = type('obj', (object,), {'text': '{"id":"1"}'})
+        perf_req.return_value = type('obj', (object,), {'text': '{"metrics":{"cpu_util":1}, "id":1}'})
 
-        self.metrics.configure_metric(endpoint, auth_token, values)
+        self.metrics.configure_metric(endpoint, auth_token, values, verify_ssl=False)
 
         perf_req.assert_called_with(
-            "<ANY>/v1/resource/generic", auth_token, req_type="post",
+            "<ANY>/v1/resource/generic", auth_token, req_type="post", verify_ssl=False,
             payload=json.dumps(payload, sort_keys=True))
 
     @mock.patch.object(Common, "perform_request")
     def test_delete_metric_req(self, perf_req):
         """Test the delete metric function."""
-        self.metrics.delete_metric(endpoint, auth_token, "metric_id")
+        self.metrics.delete_metric(endpoint, auth_token, "metric_id", verify_ssl=False)
 
         perf_req.assert_called_with(
-            "<ANY>/v1/metric/metric_id", auth_token, req_type="delete")
+            "<ANY>/v1/metric/metric_id", auth_token, req_type="delete", verify_ssl=False)
 
     @mock.patch.object(Common, "perform_request")
     def test_delete_metric_invalid_status(self, perf_req):
         """Test invalid response for delete request."""
         perf_req.return_value = type('obj', (object,), {"status_code": "404"})
 
-        status = self.metrics.delete_metric(endpoint, auth_token, "metric_id")
+        status = self.metrics.delete_metric(endpoint, auth_token, "metric_id", verify_ssl=False)
 
         self.assertEqual(status, False)
 
@@ -163,10 +157,10 @@ class TestMetricCalls(unittest.TestCase):
         # Test listing metrics without any configuration options
         values = {}
         perf_req.side_effect = perform_request_side_effect
-        self.metrics.list_metrics(endpoint, auth_token, values)
+        self.metrics.list_metrics(endpoint, auth_token, values, verify_ssl=False)
 
         perf_req.assert_any_call(
-            "<ANY>/v1/metric?sort=name:asc", auth_token, req_type="get")
+            "<ANY>/v1/metric?sort=name:asc", auth_token, req_type="get", verify_ssl=False)
         resp_list.assert_called_with([{u'id': u'test_id'}])
 
     @mock.patch.object(metric_req.Metrics, "response_list")
@@ -176,10 +170,10 @@ class TestMetricCalls(unittest.TestCase):
         # Test listing metrics with a resource id specified
         values = {"resource_uuid": "resource_id"}
         perf_req.side_effect = perform_request_side_effect
-        self.metrics.list_metrics(endpoint, auth_token, values)
+        self.metrics.list_metrics(endpoint, auth_token, values, verify_ssl=False)
 
         perf_req.assert_any_call(
-            "<ANY>/v1/resource/generic/resource_id", auth_token, req_type="get")
+            "<ANY>/v1/metric/test_id", auth_token, req_type="get", verify_ssl=False)
 
     @mock.patch.object(metric_req.Metrics, "response_list")
     @mock.patch.object(Common, "perform_request")
@@ -188,10 +182,10 @@ class TestMetricCalls(unittest.TestCase):
         # Test listing metrics with a metric_name specified
         values = {"metric_name": "disk_write_bytes"}
         perf_req.side_effect = perform_request_side_effect
-        self.metrics.list_metrics(endpoint, auth_token, values)
+        self.metrics.list_metrics(endpoint, auth_token, values, verify_ssl=False)
 
         perf_req.assert_any_call(
-            "<ANY>/v1/metric?sort=name:asc", auth_token, req_type="get")
+            "<ANY>/v1/metric?sort=name:asc", auth_token, req_type="get", verify_ssl=False)
         resp_list.assert_called_with(
             [{u'id': u'test_id'}], metric_name="disk_write_bytes")
 
@@ -202,38 +196,21 @@ class TestMetricCalls(unittest.TestCase):
         # Test listing metrics with a resource id and metric name specified
 
         values = {"resource_uuid": "resource_id",
-                  "metric_name": "packets_sent"}
+                  "metric_name": "cpu_utilization"}
         perf_req.side_effect = perform_request_side_effect
-        self.metrics.list_metrics(endpoint, auth_token, values)
+        self.metrics.list_metrics(endpoint, auth_token, values, verify_ssl=False)
 
         perf_req.assert_any_call(
-            "<ANY>/v1/resource/generic/resource_id", auth_token, req_type="get")
+            "<ANY>/v1/metric/test_id", auth_token, req_type="get", verify_ssl=False)
 
     @mock.patch.object(Common, "perform_request")
     def test_get_metric_id(self, perf_req):
         """Test get_metric_id function."""
-        self.metrics.get_metric_id(endpoint, auth_token, "my_metric", "r_id")
+        perf_req.return_value = type('obj', (object,), {'text': '{"alarm_id":"1"}'})
+        self.metrics.get_metric_id(endpoint, auth_token, "my_metric", "r_id", verify_ssl=False)
 
         perf_req.assert_called_with(
-            "<ANY>/v1/resource/generic/r_id", auth_token, req_type="get")
-
-    def test_get_metric_name(self):
-        """Test the result from the get_metric_name function."""
-        # test with a valid metric_name
-        values = {"metric_name": "disk_write_ops"}
-
-        metric_name, norm_name = self.metrics.get_metric_name(values)
-
-        self.assertEqual(metric_name, "disk_write_ops")
-        self.assertEqual(norm_name, "disk.write.requests")
-
-        # test with an invalid metric name
-        values = {"metric_name": "my_invalid_metric"}
-
-        metric_name, norm_name = self.metrics.get_metric_name(values)
-
-        self.assertEqual(metric_name, "my_invalid_metric")
-        self.assertEqual(norm_name, None)
+            "<ANY>/v1/resource/generic/r_id", auth_token, req_type="get", verify_ssl=False)
 
     @mock.patch.object(metric_req.Metrics, "get_metric_id")
     @mock.patch.object(Common, "perform_request")
@@ -247,7 +224,7 @@ class TestMetricCalls(unittest.TestCase):
         perf_req.return_value = type('obj', (object,), {'text': '{"metric_data":"[]"}'})
 
         get_metric.return_value = "metric_id"
-        self.metrics.read_metric_data(endpoint, auth_token, values)
+        self.metrics.read_metric_data(endpoint, auth_token, values, verify_ssl=False)
 
         perf_req.assert_called_once()
 
@@ -258,13 +235,13 @@ class TestMetricCalls(unittest.TestCase):
         values = {}
 
         times, data = self.metrics.read_metric_data(
-            endpoint, auth_token, values)
+            endpoint, auth_token, values, verify_ssl=False)
 
         self.assertEqual(times, [])
         self.assertEqual(data, [])
 
     def test_complete_response_list(self):
-        """Test the response list function for formating metric lists."""
+        """Test the response list function for formatting metric lists."""
         # Mock a list for testing purposes, with valid OSM metric
         resp_list = self.metrics.response_list(metric_list)
 

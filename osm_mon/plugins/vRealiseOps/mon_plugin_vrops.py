@@ -24,7 +24,7 @@
 """
 Monitoring metrics & creating Alarm definitions in vROPs
 """
-
+import pytz
 import requests
 import logging
 
@@ -1263,7 +1263,7 @@ class MonPlugin():
         """
         date_time_formatted = '0000-00-00T00:00:00'
         if date_time != 0:
-            complete_datetime = datetime.datetime.fromtimestamp(date_time/1000.0).isoformat('T')
+            complete_datetime = datetime.datetime.fromtimestamp(date_time/1000.0, tz=pytz.utc).isoformat('T')
             date_time_formatted = complete_datetime.split('.',1)[0]
         return date_time_formatted
 

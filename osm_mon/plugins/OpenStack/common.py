@@ -25,13 +25,17 @@ import logging
 
 import requests
 import yaml
+from keystoneauth1 import session
+from keystoneauth1.identity import v3
 from keystoneclient.v3 import client
 
 from osm_mon.core.auth import AuthManager
+from osm_mon.core.settings import Config
 
 __author__ = "Helena McGough"
 
 log = logging.getLogger(__name__)
+cfg = Config.instance()
 
 
 class Common(object):
@@ -39,28 +43,37 @@ class Common(object):
 
     def __init__(self):
         """Create the common instance."""
-        self.auth_manager = AuthManager()
 
     @staticmethod
-    def get_auth_token(vim_uuid):
+    def get_auth_token(vim_uuid, verify_ssl=True):
         """Authenticate and/or renew the authentication token."""
         auth_manager = AuthManager()
         creds = auth_manager.get_credentials(vim_uuid)
-        ks = client.Client(auth_url=creds.url,
-                           username=creds.user,
-                           password=creds.password,
-                           tenant_name=creds.tenant_name)
-        return ks.auth_token
+        sess = session.Session(verify=verify_ssl)
+        ks = client.Client(session=sess)
+        token_dict = ks.get_raw_token_from_identity_service(auth_url=creds.url,
+                                                            username=creds.user,
+                                                            password=creds.password,
+                                                            project_name=creds.tenant_name,
+                                                            project_domain_id='default',
+                                                            user_domain_id='default')
+        return token_dict['auth_token']
 
     @staticmethod
-    def get_endpoint(service_type, vim_uuid):
+    def get_endpoint(service_type, vim_uuid, verify_ssl=True):
         """Get the endpoint for Gnocchi/Aodh."""
         auth_manager = AuthManager()
         creds = auth_manager.get_credentials(vim_uuid)
-        ks = client.Client(auth_url=creds.url,
+        auth = v3.Password(auth_url=creds.url,
                            username=creds.user,
                            password=creds.password,
-                           tenant_name=creds.tenant_name)
+                           project_name=creds.tenant_name,
+                           project_domain_id='default',
+                           user_domain_id='default')
+        sess = session.Session(auth=auth, verify=verify_ssl)
+        ks = client.Client(session=sess, interface='public')
+        service = ks.services.list(type=service_type)[0]
+        endpoints = ks.endpoints.list(service)
         endpoint_type = 'publicURL'
         region_name = 'RegionOne'
         if creds.config is not None:
@@ -72,16 +85,17 @@ class Common(object):
                 endpoint_type = config['endpoint_type']
             if 'region_name' in config:
                 region_name = config['region_name']
-
-        return ks.service_catalog.url_for(
-            service_type=service_type,
-            endpoint_type=endpoint_type,
-            region_name=region_name)
+        for endpoint in endpoints:
+            if endpoint.interface in endpoint_type and endpoint.region == region_name:
+                return endpoint.url
 
     @staticmethod
     def perform_request(url, auth_token,
-                        req_type=None, payload=None, params=None):
+                        req_type=None, payload=None, params=None, verify_ssl=True):
         """Perform the POST/PUT/GET/DELETE request."""
+
+        timeout = cfg.REQUEST_TIMEOUT
+
         # request headers
         headers = {'X-Auth-Token': auth_token,
                    'Content-type': 'application/json'}
@@ -89,25 +103,25 @@ class Common(object):
         if req_type == "put":
             response = requests.put(
                 url, data=payload, headers=headers,
-                timeout=10)
+                timeout=timeout, verify=verify_ssl)
         elif req_type == "get":
             response = requests.get(
-                url, params=params, headers=headers, timeout=10)
+                url, params=params, headers=headers, timeout=timeout, verify=verify_ssl)
         elif req_type == "delete":
             response = requests.delete(
-                url, headers=headers, timeout=10)
+                url, headers=headers, timeout=timeout, verify=verify_ssl)
         else:
             response = requests.post(
                 url, data=payload, headers=headers,
-                timeout=10)
+                timeout=timeout, verify=verify_ssl)
 
         # Raises exception if there was an error
         try:
             response.raise_for_status()
         # pylint: disable=broad-except
         except Exception:
-            # Log out the result of the request for debugging purpose
-            log.debug(
+            # Log out the result of the request
+            log.warning(
                 'Result: %s, %s',
                 response.status_code, response.text)
         return response

@@ -21,15 +21,18 @@
 ##
 """Tests for all common OpenStack methods."""
 
+# TODO: Mock database calls. Improve assertions.
+
 import json
 import unittest
 
 import mock
-from six.moves.BaseHTTPServer import BaseHTTPRequestHandler
 
+from six.moves.BaseHTTPServer import HTTPServer
+
+from osm_mon.core.database import DatabaseManager, Alarm
 from osm_mon.core.message_bus.producer import KafkaProducer
-from osm_mon.core.settings import Config
-from osm_mon.plugins.OpenStack.Aodh.alarming import Alarming
+from osm_mon.plugins.OpenStack.Aodh.notifier import NotifierHandler
 from osm_mon.plugins.OpenStack.common import Common
 from osm_mon.plugins.OpenStack.response import OpenStack_Response
 
@@ -71,19 +74,18 @@ class Response(object):
         self.text = text
 
 
-class NotifierHandler(BaseHTTPRequestHandler):
+class RFile():
+    def read(self, content_length):
+        return post_data
+
+
+class MockNotifierHandler(NotifierHandler):
     """Mock the NotifierHandler class for testing purposes."""
 
-    def __init__(self, request, client_address, server):
-        """Initilase mock NotifierHandler."""
-        self.request = request
-        self.client_address = client_address
-        self.server = server
-        self.setup()
-        try:
-            self.handle()
-        finally:
-            self.finish()
+    def __init__(self):
+        """Initialise mock NotifierHandler."""
+        self.headers = {'Content-Length': '20'}
+        self.rfile = RFile()
 
     def setup(self):
         """Mock setup function."""
@@ -97,61 +99,6 @@ class NotifierHandler(BaseHTTPRequestHandler):
         """Mock finish function."""
         pass
 
-    def _set_headers(self):
-        """Mock getting the request headers."""
-        pass
-
-    def do_GET(self):
-        """Mock functionality for GET request."""
-        self._set_headers()
-        pass
-
-    def do_POST(self):
-        """Mock functionality for a POST request."""
-        self._set_headers()
-        self.notify_alarm(json.loads(post_data))
-
-    def notify_alarm(self, values):
-        """Mock the notify_alarm functionality to generate a valid response."""
-        config = Config.instance()
-        config.read_environ()
-        self._alarming = Alarming()
-        self._common = Common()
-        self._response = OpenStack_Response()
-        self._producer = KafkaProducer('alarm_response')
-        alarm_id = values['alarm_id']
-
-        vim_uuid = 'test_id'
-
-        auth_token = Common.get_auth_token(vim_uuid)
-        endpoint = Common.get_endpoint("alarming", vim_uuid)
-
-        # If authenticated generate and send response message
-        if auth_token is not None and endpoint is not None:
-            url = "{}/v2/alarms/%s".format(endpoint) % alarm_id
-
-            # Get the resource_id of the triggered alarm and the date
-            result = Common.perform_request(
-                url, auth_token, req_type="get")
-            alarm_details = json.loads(result.text)
-            gnocchi_rule = alarm_details['gnocchi_resources_threshold_rule']
-            resource_id = gnocchi_rule['resource_id']
-            a_date = "dd-mm-yyyy 00:00"
-
-            # Process an alarm notification if resource_id is valid
-            if resource_id is not None:
-                # Try generate and send response
-                try:
-                    resp_message = self._response.generate_response(
-                        'notify_alarm', a_id=alarm_id,
-                        r_id=resource_id,
-                        sev=values['severity'], date=a_date,
-                        state=values['current'], vim_type="OpenStack")
-                    self._producer.notify_alarm(
-                        'notify_alarm', resp_message)
-                except Exception:
-                    pass
-
 
 class TestNotifier(unittest.TestCase):
     """Test the NotifierHandler class for requests from aodh."""
@@ -159,8 +106,7 @@ class TestNotifier(unittest.TestCase):
     def setUp(self):
         """Setup tests."""
         super(TestNotifier, self).setUp()
-        self.handler = NotifierHandler(
-            "mock_request", "mock_address", "mock_server")
+        self.handler = MockNotifierHandler()
 
     @mock.patch.object(NotifierHandler, "_set_headers")
     def test_do_GET(self, set_head):
@@ -227,20 +173,21 @@ class TestNotifier(unittest.TestCase):
     @mock.patch.object(OpenStack_Response, "generate_response")
     @mock.patch.object(Common, "get_auth_token")
     @mock.patch.object(Common, "perform_request")
-    def test_notify_alarm_resp_call(self, perf_req, auth, response, endpoint, notify):
+    @mock.patch.object(DatabaseManager, "get_alarm")
+    def test_notify_alarm_resp_call(self, get_alarm, perf_req, auth, response, endpoint, notify):
         """Test notify_alarm tries to generate a response for SO."""
         # Mock valid auth token and endpoint, valid response from aodh
         auth.return_value = "my_auth_token"
         endpoint.returm_value = "my_endpoint"
         perf_req.return_value = Response(valid_get_resp)
+        mock_alarm = Alarm()
+        get_alarm.return_value = mock_alarm
         self.handler.notify_alarm(json.loads(post_data))
 
         notify.assert_called()
-        response.assert_called_with('notify_alarm', a_id="my_alarm_id",
-                                    r_id="my_resource_id", sev="critical",
-                                    date="dd-mm-yyyy 00:00",
-                                    state="current_state",
-                                    vim_type="OpenStack")
+        response.assert_called_with('notify_alarm', a_id='my_alarm_id', date=mock.ANY, metric_name=None,
+                                    ns_id=None, operation=None, sev='critical', state='current_state',
+                                    threshold_value=None, vdu_name=None, vnf_member_index=None)
 
     @mock.patch.object(Common, "get_endpoint")
     @mock.patch.object(KafkaProducer, "notify_alarm")
@@ -266,15 +213,17 @@ class TestNotifier(unittest.TestCase):
     @mock.patch.object(OpenStack_Response, "generate_response")
     @mock.patch.object(Common, "get_auth_token")
     @mock.patch.object(Common, "perform_request")
+    @mock.patch.object(DatabaseManager, "get_alarm")
     def test_notify_alarm_valid_resp(
-            self, perf_req, auth, response, notify, endpoint):
+            self, get_alarm, perf_req, auth, response, notify, endpoint):
         """Test the notify_alarm function, sends response to the producer."""
         # Generate return values for valid notify_alarm operation
         auth.return_value = "my_auth_token"
         endpoint.return_value = "my_endpoint"
         perf_req.return_value = Response(valid_get_resp)
         response.return_value = valid_notify_resp
-
+        mock_alarm = Alarm()
+        get_alarm.return_value = mock_alarm
         self.handler.notify_alarm(json.loads(post_data))
 
         notify.assert_called_with(

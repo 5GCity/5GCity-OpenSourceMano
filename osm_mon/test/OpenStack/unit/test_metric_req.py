@@ -22,16 +22,14 @@
 """Tests for all metric request message keys."""
 
 import json
-
 import logging
-
 import unittest
 
 import mock
 
+from osm_mon.core.auth import AuthManager
 from osm_mon.core.message_bus.producer import KafkaProducer
 from osm_mon.plugins.OpenStack.Gnocchi import metrics as metric_req
-
 from osm_mon.plugins.OpenStack.common import Common
 
 log = logging.getLogger(__name__)
@@ -57,38 +55,47 @@ class TestMetricReq(unittest.TestCase):
         self.metrics = metric_req.Metrics()
 
     @mock.patch.object(Common, "get_auth_token", mock.Mock())
-    @mock.patch.object(Common, 'get_endpoint', mock.Mock())
+    @mock.patch.object(Common, "get_endpoint", mock.Mock())
     @mock.patch.object(metric_req.Metrics, "delete_metric")
     @mock.patch.object(metric_req.Metrics, "get_metric_id")
-    def test_delete_metric_key(self, get_metric_id, del_metric):
+    @mock.patch.object(AuthManager, "get_credentials")
+    def test_delete_metric_key(self, get_creds, get_metric_id, del_metric):
         """Test the functionality for a delete metric request."""
         # Mock a message value and key
         message = Message()
         message.key = "delete_metric_request"
         message.value = json.dumps({"metric_name": "disk_write_ops", "resource_uuid": "my_r_id", "correlation_id": 1})
 
+        get_creds.return_value = type('obj', (object,), {
+            'config': '{"insecure":true}'
+        })
         del_metric.return_value = True
 
         # Call the metric functionality and check delete request
         get_metric_id.return_value = "my_metric_id"
         self.metrics.metric_calls(message, 'test_id')
-        del_metric.assert_called_with(mock.ANY, mock.ANY, "my_metric_id")
+        del_metric.assert_called_with(mock.ANY, mock.ANY, "my_metric_id", False)
 
     @mock.patch.object(Common, "get_auth_token", mock.Mock())
     @mock.patch.object(Common, 'get_endpoint', mock.Mock())
     @mock.patch.object(metric_req.Metrics, "list_metrics")
-    def test_list_metric_key(self, list_metrics):
+    @mock.patch.object(AuthManager, "get_credentials")
+    def test_list_metric_key(self, get_creds, list_metrics):
         """Test the functionality for a list metric request."""
         # Mock a message with list metric key and value
         message = Message()
         message.key = "list_metric_request"
         message.value = json.dumps({"metrics_list_request": {"correlation_id": 1}})
 
+        get_creds.return_value = type('obj', (object,), {
+            'config': '{"insecure":true}'
+        })
+
         list_metrics.return_value = []
 
         # Call the metric functionality and check list functionality
         self.metrics.metric_calls(message, 'test_id')
-        list_metrics.assert_called_with(mock.ANY, mock.ANY, {"correlation_id": 1})
+        list_metrics.assert_called_with(mock.ANY, mock.ANY, {"correlation_id": 1}, False)
 
     @mock.patch.object(Common, "get_auth_token", mock.Mock())
     @mock.patch.object(Common, 'get_endpoint', mock.Mock())
@@ -96,7 +103,9 @@ class TestMetricReq(unittest.TestCase):
     @mock.patch.object(metric_req.Metrics, "list_metrics")
     @mock.patch.object(metric_req.Metrics, "delete_metric")
     @mock.patch.object(metric_req.Metrics, "configure_metric")
-    def test_update_metric_key(self, config_metric, delete_metric, list_metrics,
+    @mock.patch.object(AuthManager, "get_credentials")
+    @mock.patch.object(Common, "perform_request")
+    def test_update_metric_key(self, perf_req, get_creds, config_metric, delete_metric, list_metrics,
                                read_data):
         """Test the functionality for an update metric request."""
         # Mock a message with update metric key and value
@@ -106,6 +115,12 @@ class TestMetricReq(unittest.TestCase):
                                         {"correlation_id": 1,
                                          "metric_name": "my_metric",
                                          "resource_uuid": "my_r_id"}})
+
+        get_creds.return_value = type('obj', (object,), {
+            'config': '{"insecure":true}'
+        })
+
+        perf_req.return_value = type('obj', (object,), {'text': '{"metric_id":"1"}'})
 
         # Call metric functionality and confirm no function is called
         # Gnocchi does not support updating a metric configuration
@@ -118,30 +133,36 @@ class TestMetricReq(unittest.TestCase):
     @mock.patch.object(Common, "get_auth_token", mock.Mock())
     @mock.patch.object(Common, 'get_endpoint', mock.Mock())
     @mock.patch.object(metric_req.Metrics, "configure_metric")
-    def test_config_metric_key(self, config_metric):
+    @mock.patch.object(AuthManager, "get_credentials")
+    def test_config_metric_key(self, get_credentials, config_metric):
         """Test the functionality for a create metric request."""
         # Mock a message with create metric key and value
         message = Message()
         message.key = "create_metric_request"
-        message.value = json.dumps({"metric_create_request": "metric_details"})
-
+        message.value = json.dumps({"metric_create_request": {"correlation_id": 123}})
+        get_credentials.return_value = type('obj', (object,), {'config': '{"insecure":true}'})
         # Call metric functionality and check config metric
         config_metric.return_value = "metric_id", "resource_id", True
         self.metrics.metric_calls(message, 'test_id')
-        config_metric.assert_called_with(mock.ANY, mock.ANY, "metric_details")
+        config_metric.assert_called_with(mock.ANY, mock.ANY, {"correlation_id": 123}, False)
 
     @mock.patch.object(Common, "get_auth_token", mock.Mock())
     @mock.patch.object(Common, 'get_endpoint', mock.Mock())
     @mock.patch.object(metric_req.Metrics, "read_metric_data")
-    def test_read_data_key(self, read_data):
+    @mock.patch.object(AuthManager, "get_credentials")
+    def test_read_data_key(self, get_creds, read_data):
         """Test the functionality for a read metric data request."""
         # Mock a message with a read data key and value
         message = Message()
         message.key = "read_metric_data_request"
         message.value = json.dumps({"alarm_uuid": "alarm_id"})
 
+        get_creds.return_value = type('obj', (object,), {
+            'config': '{"insecure":true}'
+        })
+
         # Call metric functionality and check read data metrics
         read_data.return_value = "time_stamps", "data_values"
         self.metrics.metric_calls(message, 'test_id')
         read_data.assert_called_with(
-            mock.ANY, mock.ANY, json.loads(message.value))
+            mock.ANY, mock.ANY, json.loads(message.value), False)

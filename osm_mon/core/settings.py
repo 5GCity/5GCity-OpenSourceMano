@@ -64,6 +64,7 @@ class Config(object):
         CfgParam('DATABASE', "sqlite:///mon_sqlite.db", six.text_type),
         CfgParam('OS_NOTIFIER_URI', "http://localhost:8662", six.text_type),
         CfgParam('OS_DEFAULT_GRANULARITY', "300", six.text_type),
+        CfgParam('REQUEST_TIMEOUT', 10, int),
     ]
 
     _config_dict = {cfg.key: cfg for cfg in _configuration}
@@ -73,12 +74,13 @@ class Config(object):
         """Set the default values."""
         for cfg in self._configuration:
             setattr(self, cfg.key, cfg.default)
+        self.read_environ()
 
     def read_environ(self):
         """Check the appropriate environment variables and update defaults."""
         for key in self._config_keys:
             try:
-                val = str(os.environ[key])
+                val = self._config_dict[key].data_type(os.environ[key])
                 setattr(self, key, val)
             except KeyError as exc:
                 log.debug("Environment variable not present: %s", exc)

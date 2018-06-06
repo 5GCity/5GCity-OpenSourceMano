@@ -53,3 +53,10 @@ class AuthManager:
         credentials = self.get_credentials(creds_dict['_id'])
         if credentials:
             credentials.delete_instance()
+
+    def get_config(self, vim_uuid):
+        return json.loads(self.get_credentials(vim_uuid).config)
+
+    def is_verify_ssl(self, vim_uuid):
+        vim_config = self.get_config(vim_uuid)
+        return 'insecure' not in vim_config or vim_config['insecure'] is False

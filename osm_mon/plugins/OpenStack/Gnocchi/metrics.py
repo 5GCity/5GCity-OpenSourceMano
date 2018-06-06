@@ -29,8 +29,8 @@ import time
 import six
 import yaml
 
+from osm_mon.core.auth import AuthManager
 from osm_mon.core.message_bus.producer import KafkaProducer
-from osm_mon.core.settings import Config
 from osm_mon.plugins.OpenStack.common import Common
 from osm_mon.plugins.OpenStack.response import OpenStack_Response
 
@@ -62,12 +62,6 @@ class Metrics(object):
 
     def __init__(self):
         """Initialize the metric actions."""
-        # Configure an instance of the OpenStack metric plugin
-        config = Config.instance()
-        config.read_environ()
-
-        # Initialise authentication for API requests
-        self._common = Common()
 
         # Use the Response class to generate valid json response messages
         self._response = OpenStack_Response()
@@ -75,33 +69,39 @@ class Metrics(object):
         # Initializer a producer to send responses back to SO
         self._producer = KafkaProducer("metric_response")
 
+        self._auth_manager = AuthManager()
+
     def metric_calls(self, message, vim_uuid):
         """Consume info from the message bus to manage metric requests."""
+        log.info("OpenStack metric action required.")
         try:
             values = json.loads(message.value)
         except ValueError:
             values = yaml.safe_load(message.value)
-        log.info("OpenStack metric action required.")
-
-        auth_token = Common.get_auth_token(vim_uuid)
-
-        endpoint = Common.get_endpoint("metric", vim_uuid)
 
         if 'metric_name' in values and values['metric_name'] not in METRIC_MAPPINGS.keys():
             raise ValueError('Metric ' + values['metric_name'] + ' is not supported.')
+
+        verify_ssl = self._auth_manager.is_verify_ssl(vim_uuid)
+
+        endpoint = Common.get_endpoint("metric", vim_uuid, verify_ssl=verify_ssl)
+
+        auth_token = Common.get_auth_token(vim_uuid, verify_ssl=verify_ssl)
 
         if message.key == "create_metric_request":
             # Configure metric
             metric_details = values['metric_create_request']
             metric_id, resource_id, status = self.configure_metric(
-                endpoint, auth_token, metric_details)
+                endpoint, auth_token, metric_details, verify_ssl)
 
             # Generate and send a create metric response
             try:
                 resp_message = self._response.generate_response(
-                    'create_metric_response', status=status,
+                    'create_metric_response',
+                    status=status,
                     cor_id=metric_details['correlation_id'],
-                    metric_id=metric_id, r_id=resource_id)
+                    metric_id=metric_id,
+                    r_id=resource_id)
                 log.info("Response messages: %s", resp_message)
                 self._producer.create_metrics_resp(
                     'create_metric_response', resp_message)
@@ -110,109 +110,112 @@ class Metrics(object):
 
         elif message.key == "read_metric_data_request":
             # Read all metric data related to a specified metric
-            timestamps, metric_data = self.read_metric_data(
-                endpoint, auth_token, values)
+            timestamps, metric_data = self.read_metric_data(endpoint, auth_token, values, verify_ssl)
 
             # Generate and send a response message
             try:
-
-                metric_id = self.get_metric_id(endpoint, auth_token, METRIC_MAPPINGS[values['metric_name']],
-                                               values['resource_uuid'])
+                metric_id = self.get_metric_id(endpoint,
+                                               auth_token,
+                                               METRIC_MAPPINGS[values['metric_name']],
+                                               values['resource_uuid'],
+                                               verify_ssl)
                 resp_message = self._response.generate_response(
                     'read_metric_data_response',
                     m_id=metric_id,
                     m_name=values['metric_name'],
                     r_id=values['resource_uuid'],
                     cor_id=values['correlation_id'],
-                    times=timestamps, metrics=metric_data)
+                    times=timestamps,
+                    metrics=metric_data)
                 log.info("Response message: %s", resp_message)
                 self._producer.read_metric_data_response(
                     'read_metric_data_response', resp_message)
             except Exception as exc:
-                log.warning("Failed to send read metric response:%s", exc)
+                log.warning("Failed to create response: %s", exc)
 
         elif message.key == "delete_metric_request":
             # delete the specified metric in the request
             metric_id = self.get_metric_id(endpoint, auth_token, METRIC_MAPPINGS[values['metric_name']],
-                                           values['resource_uuid'])
+                                           values['resource_uuid'], verify_ssl)
             status = self.delete_metric(
-                endpoint, auth_token, metric_id)
+                endpoint, auth_token, metric_id, verify_ssl)
 
             # Generate and send a response message
             try:
                 resp_message = self._response.generate_response(
-                    'delete_metric_response', m_id=metric_id,
+                    'delete_metric_response',
+                    m_id=metric_id,
                     m_name=values['metric_name'],
-                    status=status, r_id=values['resource_uuid'],
+                    status=status,
+                    r_id=values['resource_uuid'],
                     cor_id=values['correlation_id'])
                 log.info("Response message: %s", resp_message)
                 self._producer.delete_metric_response(
                     'delete_metric_response', resp_message)
             except Exception as exc:
-                log.warning("Failed to send delete response:%s", exc)
+                log.warning("Failed to create response: %s", exc)
 
         elif message.key == "update_metric_request":
             # Gnocchi doesn't support configuration updates
             # Log and send a response back to this effect
-            log.warning("Gnocchi doesn't support metric configuration\
-                      updates.")
+            log.warning("Gnocchi doesn't support metric configuration updates.")
             req_details = values['metric_create_request']
             metric_name = req_details['metric_name']
             resource_id = req_details['resource_uuid']
-            metric_id = self.get_metric_id(
-                endpoint, auth_token, metric_name, resource_id)
+            metric_id = self.get_metric_id(endpoint, auth_token, metric_name, resource_id, verify_ssl)
 
             # Generate and send a response message
             try:
                 resp_message = self._response.generate_response(
-                    'update_metric_response', status=False,
+                    'update_metric_response',
+                    status=False,
                     cor_id=req_details['correlation_id'],
-                    r_id=resource_id, m_id=metric_id)
+                    r_id=resource_id,
+                    m_id=metric_id)
                 log.info("Response message: %s", resp_message)
                 self._producer.update_metric_response(
                     'update_metric_response', resp_message)
             except Exception as exc:
-                log.exception("Failed to send an update response:")
+                log.warning("Failed to create response: %s", exc)
 
         elif message.key == "list_metric_request":
             list_details = values['metrics_list_request']
 
             metric_list = self.list_metrics(
-                endpoint, auth_token, list_details)
+                endpoint, auth_token, list_details, verify_ssl)
 
             # Generate and send a response message
             try:
                 resp_message = self._response.generate_response(
-                    'list_metric_response', m_list=metric_list,
+                    'list_metric_response',
+                    m_list=metric_list,
                     cor_id=list_details['correlation_id'])
                 log.info("Response message: %s", resp_message)
                 self._producer.list_metric_response(
                     'list_metric_response', resp_message)
             except Exception as exc:
-                log.warning("Failed to send a list response:%s", exc)
+                log.warning("Failed to create response: %s", exc)
 
         else:
-            log.warning("Unknown key, no action will be performed.")
+            log.warning("Unknown key %s, no action will be performed.", message.key)
 
-        return
-
-    def configure_metric(self, endpoint, auth_token, values):
+    def configure_metric(self, endpoint, auth_token, values, verify_ssl):
         """Create the new metric in Gnocchi."""
         try:
             resource_id = values['resource_uuid']
         except KeyError:
-            log.warning("Resource is not defined correctly.")
+            log.warning("resource_uuid field is missing.")
             return None, None, False
 
-        # Check/Normalize metric name
-        norm_name, metric_name = self.get_metric_name(values)
-        if metric_name is None:
-            log.warning("This metric is not supported by this plugin.")
-            return None, resource_id, False
+        try:
+            metric_name = values['metric_name'].lower()
+        except KeyError:
+            log.warning("metric_name field is missing.")
+            return None, None, False
 
         # Check for an existing metric for this resource
         metric_id = self.get_metric_id(
-            endpoint, auth_token, metric_name, resource_id)
+            endpoint, auth_token, metric_name, resource_id, verify_ssl)
 
         if metric_id is None:
             # Try appending metric to existing resource
@@ -222,7 +225,10 @@ class Metrics(object):
                 payload = {metric_name: {'archive_policy_name': 'high',
                                          'unit': values['metric_unit']}}
                 result = Common.perform_request(
-                    res_url, auth_token, req_type="post",
+                    res_url,
+                    auth_token,
+                    req_type="post",
+                    verify_ssl=verify_ssl,
                     payload=json.dumps(payload, sort_keys=True))
                 # Get id of newly created metric
                 for row in json.loads(result.text):
@@ -246,8 +252,11 @@ class Metrics(object):
                                                        metric_name: metric}}, sort_keys=True)
 
                     resource = Common.perform_request(
-                        url, auth_token, req_type="post",
-                        payload=resource_payload)
+                        url,
+                        auth_token,
+                        req_type="post",
+                        payload=resource_payload,
+                        verify_ssl=verify_ssl)
 
                     # Return the newly created resource_id for creating alarms
                     new_resource_id = json.loads(resource.text)['id']
@@ -255,11 +264,11 @@ class Metrics(object):
                              new_resource_id)
 
                     metric_id = self.get_metric_id(
-                        endpoint, auth_token, metric_name, new_resource_id)
+                        endpoint, auth_token, metric_name, new_resource_id, verify_ssl)
 
                     return metric_id, new_resource_id, True
                 except Exception as exc:
-                    log.warning("Failed to create a new resource:%s", exc)
+                    log.warning("Failed to create a new resource: %s", exc)
             return None, None, False
 
         else:
@@ -267,50 +276,42 @@ class Metrics(object):
 
         return metric_id, resource_id, False
 
-    def delete_metric(self, endpoint, auth_token, metric_id):
+    def delete_metric(self, endpoint, auth_token, metric_id, verify_ssl):
         """Delete metric."""
         url = "{}/v1/metric/%s".format(endpoint) % metric_id
 
         try:
             result = Common.perform_request(
-                url, auth_token, req_type="delete")
+                url,
+                auth_token,
+                req_type="delete",
+                verify_ssl=verify_ssl)
             if str(result.status_code) == "404":
                 log.warning("Failed to delete the metric.")
                 return False
             else:
                 return True
         except Exception as exc:
-            log.warning("Failed to carry out delete metric request:%s", exc)
+            log.warning("Failed to delete metric: %s", exc)
         return False
 
-    def list_metrics(self, endpoint, auth_token, values):
+    def list_metrics(self, endpoint, auth_token, values, verify_ssl):
         """List all metrics."""
 
         # Check for a specified list
-        try:
-            # Check if the metric_name was specified for the list
-            if values['metric_name']:
-                metric_name = values['metric_name'].lower()
-                if metric_name not in METRIC_MAPPINGS.keys():
-                    log.warning("This metric is not supported, won't be listed.")
-                    metric_name = None
-            else:
-                metric_name = None
-        except KeyError as exc:
-            log.info("Metric name is not specified: %s", exc)
-            metric_name = None
+        metric_name = None
+        if 'metric_name' in values:
+            metric_name = values['metric_name'].lower()
 
-        try:
+        resource = None
+        if 'resource_uuid' in values:
             resource = values['resource_uuid']
-        except KeyError as exc:
-            log.info("Resource is not specified:%s", exc)
-            resource = None
 
         try:
             if resource:
                 url = "{}/v1/resource/generic/{}".format(endpoint, resource)
                 result = Common.perform_request(
-                    url, auth_token, req_type="get")
+                    url, auth_token, req_type="get", verify_ssl=verify_ssl)
                 resource_data = json.loads(result.text)
                 metrics = resource_data['metrics']
 
@@ -319,7 +320,7 @@ class Metrics(object):
                         metric_id = metrics[METRIC_MAPPINGS[metric_name]]
                         url = "{}/v1/metric/{}".format(endpoint, metric_id)
                         result = Common.perform_request(
-                            url, auth_token, req_type="get")
+                            url, auth_token, req_type="get", verify_ssl=verify_ssl)
                         metric_list = json.loads(result.text)
                         log.info("Returning an %s resource list for %s metrics",
                                  metric_name, resource)
@@ -332,7 +333,7 @@ class Metrics(object):
                     for k, v in metrics.items():
                         url = "{}/v1/metric/{}".format(endpoint, v)
                         result = Common.perform_request(
-                            url, auth_token, req_type="get")
+                            url, auth_token, req_type="get", verify_ssl=verify_ssl)
                         metric = json.loads(result.text)
                         metric_list.append(metric)
                     if metric_list:
@@ -345,7 +346,7 @@ class Metrics(object):
             else:
                 url = "{}/v1/metric?sort=name:asc".format(endpoint)
                 result = Common.perform_request(
-                    url, auth_token, req_type="get")
+                    url, auth_token, req_type="get", verify_ssl=verify_ssl)
                 metrics = []
                 metrics_partial = json.loads(result.text)
                 for metric in metrics_partial:
@@ -355,7 +356,7 @@ class Metrics(object):
                     last_metric_id = metrics_partial[-1]['id']
                     url = "{}/v1/metric?sort=name:asc&marker={}".format(endpoint, last_metric_id)
                     result = Common.perform_request(
-                        url, auth_token, req_type="get")
+                        url, auth_token, req_type="get", verify_ssl=verify_ssl)
                     if len(json.loads(result.text)) > 0:
                         metrics_partial = json.loads(result.text)
                         for metric in metrics_partial:
@@ -375,40 +376,32 @@ class Metrics(object):
                     log.info("There are no metrics available")
                     return []
         except Exception as exc:
-            log.warning("Failed to generate any metric list. %s", exc)
+            log.exception("Failed to list metrics. %s", exc)
         return None
 
-    def get_metric_id(self, endpoint, auth_token, metric_name, resource_id):
+    def get_metric_id(self, endpoint, auth_token, metric_name, resource_id, verify_ssl):
         """Check if the desired metric already exists for the resource."""
         url = "{}/v1/resource/generic/%s".format(endpoint) % resource_id
         try:
             # Try return the metric id if it exists
             result = Common.perform_request(
-                url, auth_token, req_type="get")
+                url,
+                auth_token,
+                req_type="get",
+                verify_ssl=verify_ssl)
             return json.loads(result.text)['metrics'][metric_name]
-        except Exception:
-            log.info("Metric doesn't exist. No metric_id available")
-        return None
-
-    def get_metric_name(self, values):
-        """Check metric name configuration and normalize."""
-        metric_name = None
-        try:
-            # Normalize metric name
-            metric_name = values['metric_name'].lower()
-            return metric_name, METRIC_MAPPINGS[metric_name]
         except KeyError:
-            log.info("Metric name %s is invalid.", metric_name)
-        return metric_name, None
+            log.warning("Metric doesn't exist. No metric_id available")
+            return None
 
-    def read_metric_data(self, endpoint, auth_token, values):
+    def read_metric_data(self, endpoint, auth_token, values, verify_ssl):
         """Collect metric measures over a specified time period."""
         timestamps = []
         data = []
         try:
             # get metric_id
             metric_id = self.get_metric_id(endpoint, auth_token, METRIC_MAPPINGS[values['metric_name']],
-                                           values['resource_uuid'])
+                                           values['resource_uuid'], verify_ssl)
             # Try and collect measures
             collection_unit = values['collection_unit'].upper()
             collection_period = values['collection_period']
@@ -430,7 +423,10 @@ class Metrics(object):
 
             # Perform metric data request
             metric_data = Common.perform_request(
-                url, auth_token, req_type="get")
+                url,
+                auth_token,
+                req_type="get",
+                verify_ssl=verify_ssl)
 
             # Generate a list of the requested timestamps and data
             for r in json.loads(metric_data.text):

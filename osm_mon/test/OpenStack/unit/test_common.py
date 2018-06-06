@@ -31,7 +31,6 @@ from keystoneclient.v3 import client
 
 from osm_mon.core.auth import AuthManager
 from osm_mon.core.database import VimCredentials
-from osm_mon.core.settings import Config
 from osm_mon.plugins.OpenStack.common import Common
 
 __author__ = "Helena McGough"
@@ -69,14 +68,14 @@ class TestCommon(unittest.TestCase):
         self.creds.tenant_name = 'tenant_name'
 
     @mock.patch.object(AuthManager, "get_credentials")
-    @mock.patch.object(Config, "instance")
-    @mock.patch.object(client, "Client")
-    def test_get_auth_token(self, key_client, cfg, get_creds):
+    @mock.patch.object(client.Client, "get_raw_token_from_identity_service")
+    def test_get_auth_token(self, get_token, get_creds):
         """Test generating a new authentication token."""
         get_creds.return_value = self.creds
         Common.get_auth_token('test_id')
         get_creds.assert_called_with('test_id')
-        key_client.assert_called_with(auth_url='url', password='password', tenant_name='tenant_name', username='user')
+        get_token.assert_called_with(auth_url='url', password='password', project_name='tenant_name', username='user',
+                                     project_domain_id='default', user_domain_id='default')
 
     @mock.patch.object(requests, 'post')
     def test_post_req(self, post):
@@ -85,7 +84,7 @@ class TestCommon(unittest.TestCase):
                                     payload="payload")
 
         post.assert_called_with("url", data="payload", headers=mock.ANY,
-                                timeout=mock.ANY)
+                                timeout=mock.ANY, verify=True)
 
     @mock.patch.object(requests, 'get')
     def test_get_req(self, get):
@@ -94,7 +93,7 @@ class TestCommon(unittest.TestCase):
         Common.perform_request("url", "auth_token", req_type="get")
 
         get.assert_called_with("url", params=None, headers=mock.ANY,
-                               timeout=mock.ANY)
+                               timeout=mock.ANY, verify=True)
 
         # Test with some parameters specified
         get.reset_mock()
@@ -102,7 +101,7 @@ class TestCommon(unittest.TestCase):
                                     params="some parameters")
 
         get.assert_called_with("url", params="some parameters",
-                               headers=mock.ANY, timeout=mock.ANY)
+                               headers=mock.ANY, timeout=mock.ANY, verify=True)
 
     @mock.patch.object(requests, 'put')
     def test_put_req(self, put):
@@ -110,11 +109,11 @@ class TestCommon(unittest.TestCase):
         Common.perform_request("url", "auth_token", req_type="put",
                                     payload="payload")
         put.assert_called_with("url", data="payload", headers=mock.ANY,
-                               timeout=mock.ANY)
+                               timeout=mock.ANY, verify=True)
 
     @mock.patch.object(requests, 'delete')
     def test_delete_req(self, delete):
         """Testing a delete request."""
         Common.perform_request("url", "auth_token", req_type="delete")
 
-        delete.assert_called_with("url", headers=mock.ANY, timeout=mock.ANY)
+        delete.assert_called_with("url", headers=mock.ANY, timeout=mock.ANY, verify=True)
