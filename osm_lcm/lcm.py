@@ -984,6 +984,7 @@ class Lcm:
                 db_nslcmop["detailed-status"] = "configuring: init: {}".format(number_to_configure)
             else:
                 db_nslcmop["operationState"] = "COMPLETED"
+                db_nslcmop["statusEnteredTime"] = time()
                 db_nslcmop["detailed-status"] = "done"
                 db_nsr["config-status"] = "configured"
                 db_nsr["detailed-status"] = "done"
