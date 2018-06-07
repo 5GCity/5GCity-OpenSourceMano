@@ -39,26 +39,26 @@
             {% url "projects:instances:list" project_id=project_id type='ns' as  instance_ns_list_url %}
             <li {% if request.get_full_path == instance_ns_list_url %} class="active" {% endif %} >
                 <a href='{% url "projects:instances:list" project_id=project_id  type="ns"%}'>
-                    <i class="fa fa-list fa-fw"></i><span>NS Instances</span>
+                    <i class="fa fa-sitemap fa-fw"></i><span>NS Instances</span>
                 </a>
             </li>
             {% url "projects:instances:list" project_id=project_id type='vnf' as  instance_ns_list_url %}
             <li {% if request.get_full_path == instance_ns_list_url %} class="active" {% endif %} >
                 <a href='{% url "projects:instances:list" project_id=project_id  type="vnf"%}'>
-                    <i class="fa fa-list fa-fw"></i><span>VNF Instances</span>
+                    <i class="far fa-hdd fa-fw"></i><span>VNF Instances</span>
                 </a>
             </li>
             {% url "projects:sdns:list"  project_id=project_id as sdn_list_url %}
              <li {% if request.get_full_path == sdn_list_url %} class="active" {% endif %}>
                  <a href='{% url "projects:sdns:list"  project_id=project_id %}'>
-                     <i class="fa fa-list fa-fw"></i><span>SDN Controllers</span>
+                     <i class="fas fa-globe fa-fw"></i><span>SDN Controllers</span>
                  </a>
              </li>
 
             {% url "projects:vims:list"  project_id=project_id as  vim_list_url %}
              <li {% if request.get_full_path == vim_list_url %} class="active" {% endif %}>
                  <a href='{% url "projects:vims:list"  project_id=project_id %}'>
-                     <i class="fa fa-list fa-fw"></i><span>VIM Accounts</span>
+                     <i class="fa fa-server fa-fw"></i><span>VIM Accounts</span>
                  </a>
              </li>
 
