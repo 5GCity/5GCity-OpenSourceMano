@@ -53,7 +53,7 @@ function create(fs, dropzone) {
     data.append('id', '{{descriptor_id}}');
     console.log(text);
     $.ajax({
-        url: "new",
+        url: new_desc_url,
         type: 'POST',
         data: data,
         cache: false,

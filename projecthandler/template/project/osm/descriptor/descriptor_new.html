@@ -52,6 +52,7 @@ Onboard new {{ descriptor_type }} package
 <script>
     var descr_list_url = '{% url "projects:list_descriptors"  project_id=project_id descriptor_type=descriptor_type%}';
     var csrf_token = '{{csrf_token}}';
+    var new_desc_url ="{% url 'projects:new_descriptor' project_id=project_id descriptor_type=descriptor_type %}"
 
     function cancel(id) {
         window.location.href = descr_list_url
