@@ -108,7 +108,6 @@ class vimconnector(vimconn.vimconnector):
             self.verify = False
         if self.config.get("ca_cert"):
             self.verify = self.config.get("ca_cert")
-        self.verify = self.config.get("insecure", False)
 
         if not url:
             raise TypeError('url param can not be NoneType')
