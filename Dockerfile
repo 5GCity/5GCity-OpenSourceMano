@@ -18,7 +18,7 @@ FROM ubuntu:16.04
 
 RUN  apt-get update && \
   DEBIAN_FRONTEND=noninteractive apt-get -y install git make wget python python-pip debhelper tox && \
-  DEBIAN_FRONTEND=noninteractive pip install -U pip && \
+  DEBIAN_FRONTEND=noninteractive pip install pip==9.0.3 && \
   DEBIAN_FRONTEND=noninteractive pip install -U pyang pyangbind && \
   DEBIAN_FRONTEND=noninteractive pip install -U stdeb
 
