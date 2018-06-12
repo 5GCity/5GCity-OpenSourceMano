@@ -837,37 +837,43 @@ module vnfd-base
 
           case vdu-monitoring-param {
             description "VDU-related metric from the infrastructure";
-            leaf vdu-ref {
-              type leafref {
-                path "../../vdu/id";
+            container vdu-monitoring-param {
+              leaf vdu-ref {
+                type leafref {
+                  path "../../../vdu/id";
+                }
               }
-            }
-            leaf vdu-monitoring-param-ref {
-              type leafref {
-                path "../../vdu[id = current()/../vdu-ref]/monitoring-param/id";
+              leaf vdu-monitoring-param-ref {
+                type leafref {
+                  path "../../../vdu[id = current()/../vdu-ref]/monitoring-param/id";
+                }
               }
             }
           }
 
           case vnf-metric {
             description "VNF-related metric (from VCA)";
-            leaf vnf-metric-name-ref {
-              type leafref {
-                path "../../vnf-configuration/metrics/name";
+            container vnf-metric {
+              leaf vnf-metric-name-ref {
+                type leafref {
+                  path "../../../vnf-configuration/metrics/name";
+                }
               }
             }
           }
 
           case vdu-metric {
             description "VDU-related metric (from VCA)";
-            leaf vdu-id-ref {
-              type leafref {
-                path "../../vdu/id";
+            container vdu-metric {
+              leaf vdu-ref {
+                type leafref {
+                  path "../../../vdu/id";
+                }
               }
-            }
-            leaf vdu-metric-name-ref {
-              type leafref {
-                path "../../vdu[id = current()/../vdu-id-ref]/vdu-configuration/metrics/name";
+              leaf vdu-metric-name-ref {
+                type leafref {
+                  path "../../../vdu[id = current()/../vdu-ref]/vdu-configuration/metrics/name";
+                }
               }
             }
           }
