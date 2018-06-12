@@ -447,6 +447,30 @@ module vnfr
             uses manotypes:vca-configuration;
           }
 
+          list monitoring-param {
+            description
+              "List of VDU-related monitoring parameters at NFVI level";
+            key id;
+            leaf id {
+              description "The unique id of the monitoring param at VDU level";
+              type string;
+            }
+
+            leaf nfvi-metric {
+              description "The associated NFVI metric to be monitored";
+              type manotypes:nfvi-metric-type;
+            }
+
+            leaf interface-name-ref {
+              description
+                "Reference to a VDU interface name. Applicable only when the nfvi-metric
+                refers to an interface and not to the VM";
+              type leafref {
+                path "../../interface/name";
+              }
+            }
+          }
+
           list volumes {
             key "name";
 
@@ -563,7 +587,74 @@ module vnfr
           uses placement-group-info;
         }
 
-        uses manotypes:monitoring-param;
+        list monitoring-param {
+          description
+            "List of monitoring parameters at the network service level";
+          key id;
+          leaf id {
+            type string;
+          }
+
+          leaf name {
+            type string;
+          }
+
+          uses manotypes:monitoring-param-aggregation;
+
+          choice monitoring-type {
+            description
+              "Defines the type of monitoring param to be used:
+                * vdu-monitorin-param:     VDU-related metric (from NFVI)
+                * vnf-metric:              VNF-related metric (from VCA)
+                * vdu-metric:              VDU-related metric (from VCA)
+              ";
+
+            case vdu-monitoring-param {
+              description "VDU-related metric from the infrastructure";
+              container vdu-monitoring-param {
+                leaf vdu-ref {
+                  type leafref {
+                    path "../../../vdur/id";
+                  }
+                }
+                leaf vdu-monitoring-param-ref {
+                  type leafref {
+                    path "../../../vdur[id = current()/../vdu-ref]/monitoring-param/id";
+                  }
+                }
+              }
+            }
+
+            case vnf-metric {
+              description "VNF-related metric (from VCA)";
+              container vnf-metric {
+                leaf vnf-metric-name-ref {
+                  type leafref {
+                    path "../../../vnf-configuration/metrics/name";
+                  }
+                }
+              }
+            }
+
+            case vdu-metric {
+              description "VDU-related metric (from VCA)";
+              container vdu-metric {
+                leaf vdu-ref {
+                  type leafref {
+                    path "../../../vdur/id";
+                  }
+                }
+                leaf vdu-metric-name-ref {
+                  type leafref {
+                    path "../../../vdur[id = current()/../vdu-ref]/vdu-configuration/metrics/name";
+                  }
+                }
+              }
+            }
+
+          }
+
+        }
 
         leaf operational-status {
           description
