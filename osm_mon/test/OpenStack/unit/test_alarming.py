@@ -57,50 +57,49 @@ class TestAlarming(unittest.TestCase):
         super(TestAlarming, self).setUp()
         self.alarming = alarm_req.Alarming()
 
-    @mock.patch.object(alarm_req.Alarming, "check_payload")
-    @mock.patch.object(alarm_req.Alarming, "check_for_metric")
     @mock.patch.object(Common, "perform_request")
-    def test_config_invalid_alarm_req(self, perf_req, check_metric, check_pay):
+    def test_config_invalid_alarm_req(self, perf_req):
         """Test configure an invalid alarm request."""
-        # Configuring with invalid alarm name results in failure
+        # Configuring with invalid metric name results in failure
         values = {"alarm_name": "my_alarm",
                   "metric_name": "my_metric",
                   "resource_uuid": "my_r_id"}
-        self.alarming.configure_alarm(alarm_endpoint, metric_endpoint, auth_token, values, {})
+        with self.assertRaises(KeyError):
+            self.alarming.configure_alarm(alarm_endpoint, auth_token, values, {})
         perf_req.assert_not_called()
         perf_req.reset_mock()
 
-        # Correct alarm_name will check for metric in Gnocchi
-        # If there isn't one an alarm won;t be created
+        # Configuring with missing metric name results in failure
         values = {"alarm_name": "disk_write_ops",
-                  "metric_name": "disk_write_ops",
                   "resource_uuid": "my_r_id"}
 
-        check_metric.return_value = None
-
-        self.alarming.configure_alarm(alarm_endpoint, metric_endpoint, auth_token, values, {})
+        with self.assertRaises(KeyError):
+            self.alarming.configure_alarm(alarm_endpoint, auth_token, values, {})
         perf_req.assert_not_called()
 
-    @mock.patch.object(alarm_req.Alarming, "check_payload")
-    @mock.patch.object(alarm_req.Alarming, "check_for_metric")
     @mock.patch.object(Common, "perform_request")
-    def test_config_valid_alarm_req(self, perf_req, check_metric, check_pay):
+    def test_config_valid_alarm_req(self, perf_req):
         """Test config a valid alarm."""
-        # Correct alarm_name will check for metric in Gnocchi
-        # And conform that the payload is configured correctly
         values = {"alarm_name": "disk_write_ops",
                   "metric_name": "disk_write_ops",
-                  "resource_uuid": "my_r_id"}
-
-        check_metric.return_value = "my_metric_id"
-        check_pay.return_value = "my_payload"
+                  "resource_uuid": "my_r_id",
+                  "statistic": "AVERAGE",
+                  "threshold_value": 60,
+                  "operation": "GT"}
 
         perf_req.return_value = type('obj', (object,), {'text': '{"alarm_id":"1"}'})
 
-        self.alarming.configure_alarm(alarm_endpoint, metric_endpoint, auth_token, values, {})
+        self.alarming.configure_alarm(alarm_endpoint, auth_token, values, {})
+        payload = {"name": "disk_write_ops",
+                   "gnocchi_resources_threshold_rule": {"resource_type": "generic", "comparison_operator": "gt",
+                                                        "granularity": "300", "metric": "disk.write.requests",
+                                                        "aggregation_method": "mean", "threshold": 60,
+                                                        "resource_id": "my_r_id"},
+                   "alarm_actions": ["http://localhost:8662"], "state": "ok", "type": "gnocchi_resources_threshold",
+                   "severity": "critical"}
         perf_req.assert_called_with(
             "alarm_endpoint/v2/alarms/", auth_token,
-            req_type="post", payload="my_payload")
+            req_type="post", payload=json.dumps(payload, sort_keys=True))
 
     @mock.patch.object(Common, "perform_request")
     def test_delete_alarm_req(self, perf_req):
@@ -113,18 +112,27 @@ class TestAlarming(unittest.TestCase):
     @mock.patch.object(Common, "perform_request")
     def test_invalid_list_alarm_req(self, perf_req):
         """Test invalid list alarm_req."""
-        # Request will not be performed with out a resoure_id
+        # Request will not be performed without a resource_id
         list_details = {"mock_details": "invalid_details"}
-        self.alarming.list_alarms(alarm_endpoint, auth_token, list_details)
-
+        with self.assertRaises(KeyError):
+            self.alarming.list_alarms(alarm_endpoint, auth_token, list_details)
         perf_req.assert_not_called()
 
     @mock.patch.object(Common, "perform_request")
     def test_valid_list_alarm_req(self, perf_req):
         """Test valid list alarm request."""
         # Minimum requirement for an alarm list is resource_id
-        list_details = {"resource_uuid": "mock_r_id"}
-        self.alarming.list_alarms(alarm_endpoint, auth_token, list_details)
+        list_details = {"resource_uuid": "mock_r_id", "alarm_name": "mock_alarm", "severity": "critical"}
+
+        mock_perf_req_return_value = [
+            {"alarm_id": "1", "name": "mock_alarm", "severity": "critical",
+             "gnocchi_resources_threshold_rule": {"resource_id": "mock_r_id"}}]
+        perf_req.return_value = type('obj', (object,),
+                                     {'text': json.dumps(mock_perf_req_return_value)})
+
+        alarm_list = self.alarming.list_alarms(alarm_endpoint, auth_token, list_details)
+
+        self.assertDictEqual(alarm_list[0], mock_perf_req_return_value[0])
 
         perf_req.assert_called_with(
             "alarm_endpoint/v2/alarms/", auth_token, req_type="get")
@@ -132,9 +140,11 @@ class TestAlarming(unittest.TestCase):
 
         # Check list with alarm_name defined
         list_details = {"resource_uuid": "mock_r_id",
-                        "alarm_name": "my_alarm",
+                        "alarm_name": "mock_alarm",
                         "severity": "critical"}
-        self.alarming.list_alarms(alarm_endpoint, auth_token, list_details)
+        alarm_list = self.alarming.list_alarms(alarm_endpoint, auth_token, list_details)
+
+        self.assertDictEqual(alarm_list[0], mock_perf_req_return_value[0])
 
         perf_req.assert_called_with(
             "alarm_endpoint/v2/alarms/", auth_token, req_type="get")
@@ -148,22 +158,19 @@ class TestAlarming(unittest.TestCase):
             "alarm_endpoint/v2/alarms/my_alarm_id/state", auth_token, req_type="put",
             payload=json.dumps("ok"))
 
-    @mock.patch.object(alarm_req.Alarming, "check_payload")
     @mock.patch.object(Common, "perform_request")
-    def test_update_alarm_invalid(self, perf_req, check_pay):
+    def test_update_alarm_invalid(self, perf_req):
         """Test update alarm with invalid get response."""
         values = {"alarm_uuid": "my_alarm_id"}
 
         perf_req.return_value = type('obj', (object,), {'invalid_prop': 'Invalid response'})
 
-        self.alarming.update_alarm(alarm_endpoint, auth_token, values, {})
-
+        with self.assertRaises(Exception):
+            self.alarming.update_alarm(alarm_endpoint, auth_token, values, {})
         perf_req.assert_called_with(mock.ANY, auth_token, req_type="get")
-        check_pay.assert_not_called()
 
-    @mock.patch.object(alarm_req.Alarming, "check_payload")
     @mock.patch.object(Common, "perform_request")
-    def test_update_alarm_invalid_payload(self, perf_req, check_pay):
+    def test_update_alarm_invalid_payload(self, perf_req):
         """Test update alarm with invalid payload."""
         resp = Response({"name": "my_alarm",
                          "state": "alarm",
@@ -171,11 +178,10 @@ class TestAlarming(unittest.TestCase):
                              {"resource_id": "my_resource_id",
                               "metric": "my_metric"}})
         perf_req.return_value = resp
-        check_pay.return_value = None
         values = {"alarm_uuid": "my_alarm_id"}
 
-        self.alarming.update_alarm(alarm_endpoint, auth_token, values, {})
-
+        with self.assertRaises(Exception):
+            self.alarming.update_alarm(alarm_endpoint, auth_token, values, {})
         perf_req.assert_called_with(mock.ANY, auth_token, req_type="get")
         self.assertEqual(perf_req.call_count, 1)
 
@@ -263,10 +269,8 @@ class TestAlarming(unittest.TestCase):
     def test_check_invalid_payload(self):
         """Test the check payload function for an invalid payload."""
         values = {"alarm_values": "mock_invalid_details"}
-        payload = self.alarming.check_payload(
-            values, "my_metric", "r_id", "alarm_name")
-
-        self.assertEqual(payload, None)
+        with self.assertRaises(Exception):
+            self.alarming.check_payload(values, "my_metric", "r_id", "alarm_name")
 
     @mock.patch.object(Common, "perform_request")
     def test_get_alarm_state(self, perf_req):
@@ -278,13 +282,13 @@ class TestAlarming(unittest.TestCase):
         perf_req.assert_called_with(
             "alarm_endpoint/v2/alarms/alarm_id/state", auth_token, req_type="get")
 
-    @mock.patch.object(Common, "get_endpoint")
     @mock.patch.object(Common, "perform_request")
-    def test_check_for_metric(self, perf_req, get_endpoint):
+    def test_check_for_metric(self, perf_req):
         """Test the check for metric function."""
-        get_endpoint.return_value = "gnocchi_endpoint"
+        mock_perf_req_return_value = {"metrics": {"cpu_util": 123}}
+        perf_req.return_value = type('obj', (object,), {'text': json.dumps(mock_perf_req_return_value)})
 
-        self.alarming.check_for_metric(auth_token, metric_endpoint, "metric_name", "r_id")
+        self.alarming.check_for_metric(auth_token, metric_endpoint, "cpu_utilization", "r_id")
 
         perf_req.assert_called_with(
             "metric_endpoint/v1/resource/generic/r_id", auth_token, req_type="get")

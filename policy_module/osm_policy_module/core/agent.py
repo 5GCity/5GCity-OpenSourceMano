@@ -25,15 +25,12 @@ import json
 import logging
 from typing import Dict, List
 
-import peewee
 import yaml
-
 from kafka import KafkaConsumer
-from osm_policy_module.core.config import Config
-from osm_policy_module.common.lcm_client import LcmClient
-
 from osm_policy_module.common.alarm_config import AlarmConfig
+from osm_policy_module.common.lcm_client import LcmClient
 from osm_policy_module.common.mon_client import MonClient
+from osm_policy_module.core.config import Config
 from osm_policy_module.core.database import ScalingRecord, ScalingAlarm
 
 log = logging.getLogger(__name__)

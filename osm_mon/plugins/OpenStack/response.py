@@ -30,7 +30,7 @@ schema_version = "1.0"
 
 
 class OpenStack_Response(object):
-    """Generates responses for SO from OpenStaack plugins."""
+    """Generates responses for OpenStack plugin."""
 
     def __init__(self):
         """Initialize OpenStack Response instance."""

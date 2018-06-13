@@ -45,7 +45,6 @@ from osm_mon.core.database import DatabaseManager
 from osm_mon.core.message_bus.producer import KafkaProducer
 
 from osm_mon.plugins.OpenStack.response import OpenStack_Response
-from osm_mon.core.settings import Config
 
 
 class NotifierHandler(BaseHTTPRequestHandler):
@@ -68,53 +67,49 @@ class NotifierHandler(BaseHTTPRequestHandler):
         # Gets the size of data
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
+        # Python 2/3 string compatibility
         try:
             post_data = post_data.decode()
         except AttributeError:
             pass
-        log.info("This alarm was triggered: %s", json.loads(post_data))
+        log.info("This alarm was triggered: %s", json.dumps(post_data))
 
-        # Generate a notify_alarm response for the SO
-        self.notify_alarm(json.loads(post_data))
+        # Send alarm notification to message bus
+        try:
+            self.notify_alarm(json.dumps(post_data))
+        except Exception:
+            log.exception("Error notifying alarm")
 
     def notify_alarm(self, values):
-        """Send a notification response message to the SO."""
+        """Sends alarm notification message to bus."""
 
-        try:
-            # Initialise configuration and authentication for response message
-            config = Config.instance()
-            config.read_environ()
-            response = OpenStack_Response()
-            producer = KafkaProducer('alarm_response')
+        # Initialise configuration and authentication for response message
+        response = OpenStack_Response()
+        producer = KafkaProducer('alarm_response')
 
-            database_manager = DatabaseManager()
+        database_manager = DatabaseManager()
 
-            alarm_id = values['alarm_id']
-            alarm = database_manager.get_alarm(alarm_id, 'openstack')
-            # Process an alarm notification if resource_id is valid
-            # Get date and time for response message
-            a_date = time.strftime("%d-%m-%Y") + " " + time.strftime("%X")
-            # Try generate and send response
-            try:
-                resp_message = response.generate_response(
-                    'notify_alarm', a_id=alarm_id,
-                    vdu_name=alarm.vdu_name,
-                    vnf_member_index=alarm.vnf_member_index,
-                    ns_id=alarm.ns_id,
-                    metric_name=alarm.metric_name,
-                    operation=alarm.operation,
-                    threshold_value=alarm.threshold,
-                    sev=values['severity'],
-                    date=a_date,
-                    state=values['current'])
-                producer.notify_alarm(
-                    'notify_alarm', resp_message)
-                log.info("Sent an alarm response to SO: %s", resp_message)
-            except Exception as exc:
-                log.exception("Couldn't notify SO of the alarm:")
-
-        except:
-            log.exception("Could not notify alarm.")
+        alarm_id = values['alarm_id']
+        alarm = database_manager.get_alarm(alarm_id, 'openstack')
+        # Process an alarm notification if resource_id is valid
+        # Get date and time for response message
+        a_date = time.strftime("%d-%m-%Y") + " " + time.strftime("%X")
+        # Generate and send response
+        resp_message = response.generate_response(
+            'notify_alarm',
+            a_id=alarm_id,
+            vdu_name=alarm.vdu_name,
+            vnf_member_index=alarm.vnf_member_index,
+            ns_id=alarm.ns_id,
+            metric_name=alarm.metric_name,
+            operation=alarm.operation,
+            threshold_value=alarm.threshold,
+            sev=values['severity'],
+            date=a_date,
+            state=values['current'])
+        producer.notify_alarm(
+            'notify_alarm', resp_message)
+        log.info("Sent alarm notification: %s", resp_message)
 
 
 def run(server_class=HTTPServer, handler_class=NotifierHandler, port=8662):

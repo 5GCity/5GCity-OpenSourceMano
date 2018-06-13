@@ -137,9 +137,10 @@ class TestAlarmKeys(unittest.TestCase):
     @mock.patch.object(Common, 'get_auth_token', mock.Mock())
     @mock.patch.object(Common, 'get_endpoint', mock.Mock())
     @mock.patch.object(DatabaseManager, 'save_alarm', mock.Mock())
+    @mock.patch.object(Common, "perform_request")
     @mock.patch.object(AuthManager, 'get_credentials')
     @mock.patch.object(alarm_req.Alarming, 'configure_alarm')
-    def test_config_alarm_key(self, config_alarm, get_creds):
+    def test_config_alarm_key(self, config_alarm, get_creds, perf_req):
         """Test the functionality for a create alarm request."""
         # Mock a message with config alarm key and value
         message = Message()
@@ -148,15 +149,18 @@ class TestAlarmKeys(unittest.TestCase):
                                                              'operation': 'GT', 'metric_name': 'cpu_utilization',
                                                              'vdu_name': 'vdu',
                                                              'vnf_member_index': '1',
-                                                             'ns_id': '1'}})
-
+                                                             'ns_id': '1',
+                                                             'resource_uuid': '123'}})
+        mock_perf_req_return_value = {"metrics": {"cpu_util": 123}}
+        perf_req.return_value = type('obj', (object,), {'text': json.dumps(mock_perf_req_return_value, sort_keys=True)})
         get_creds.return_value = mock_creds
 
         # Call alarming functionality and check config alarm call
-        config_alarm.return_value = 'my_alarm_id', True
+        config_alarm.return_value = 'my_alarm_id'
         self.alarming.alarming(message, 'test_id')
-        config_alarm.assert_called_with(mock.ANY, mock.ANY, mock.ANY, {'correlation_id': 1, 'threshold_value': 50,
-                                                                       'operation': 'GT',
-                                                                       'metric_name': 'cpu_utilization',
-                                                                       'vdu_name': 'vdu',
-                                                                       'vnf_member_index': '1', 'ns_id': '1'}, {})
+        config_alarm.assert_called_with(mock.ANY, mock.ANY, {'correlation_id': 1, 'threshold_value': 50,
+                                                             'operation': 'GT',
+                                                             'metric_name': 'cpu_utilization',
+                                                             'vdu_name': 'vdu',
+                                                             'vnf_member_index': '1', 'ns_id': '1',
+                                                             'resource_uuid': '123'}, {})
