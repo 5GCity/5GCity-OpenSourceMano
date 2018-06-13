@@ -1,0 +1,53 @@
+{
+  "provisioners": [
+    {
+      "type": "shell",
+      "script": "scripts/get-install-osm.sh",
+      "execute_command": "{{.Path}} {{user `osm_installer`}}"
+    },
+    {
+      "type": "shell",
+      "execute_command": "echo 'vagrant' | {{.Vars}} sudo -S -E bash '{{.Path}}'",
+      "script": "scripts/cleanup.sh"
+    }
+  ],
+  "variables": {
+    "osm_installer": "https://osm-download.etsi.org/ftp/osm-4.0-four/install_osm.sh",
+    "input_ovf": "output-virtualbox-iso/packer-ubuntu-16.04-amd64-juju.ovf",
+    "vm_name": "packer-ubuntu-16.04-ovf-amd64"
+  },
+  "builders": [
+    {
+      "type": "virtualbox-ovf",
+      "source_path": "{{user `input_ovf`}}",
+      "headless": true,
+      "ssh_username": "vagrant",
+      "ssh_password": "vagrant",
+      "ssh_port": 22,
+      "ssh_wait_timeout": "10000s",
+      "shutdown_command": "echo 'vagrant'|sudo -S shutdown -P now",
+      "virtualbox_version_file": ".vbox_version",
+      "vm_name": "{{user `vm_name`}}",
+      "vboxmanage": [
+        [
+          "modifyvm",
+          "{{.Name}}",
+          "--memory",
+          "4096"
+        ],
+        [
+          "modifyvm",
+          "{{.Name}}",
+          "--cpus",
+          "2"
+        ]
+      ]
+    }
+  ],
+  "post-processors": [
+    {
+      "output": "builds/{{.Provider}}-osm.box",
+      "type": "vagrant"
+    }
+  ]
+}
