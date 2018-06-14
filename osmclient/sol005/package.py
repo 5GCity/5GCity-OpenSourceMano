@@ -18,13 +18,9 @@
 OSM package API handling
 """
 
-import tarfile
-import re
-import yaml
 #from os import stat
 #from os.path import basename
 from osmclient.common.exceptions import ClientException
-from osmclient.common.exceptions import NotFound
 from osmclient.common import utils
 import json
 
@@ -56,7 +52,7 @@ class Package(object):
         #headers['Content-Range'] = 'bytes 0-{}/{}'.format(file_size - 1, file_size)
         headers["Content-File-MD5"] = utils.md5(filename)
         http_header = ['{}: {}'.format(key,val)
-                      for (key,val) in headers.items()]
+                      for (key,val) in list(headers.items())]
         self._http.set_http_header(http_header)
         http_code, resp = self._http.post_cmd(endpoint=endpoint, filename=filename)
         #print 'HTTP CODE: {}'.format(http_code)
@@ -67,7 +63,7 @@ class Package(object):
             if not resp or 'id' not in resp:
                 raise ClientException('unexpected response from server - {}'.format(
                                       resp))
-            print resp['id']
+            print(resp['id'])
         else:
             msg = ""
             if resp:
@@ -75,5 +71,5 @@ class Package(object):
                      msg = json.loads(resp)
                 except ValueError:
                     msg = resp
-            raise ClientException("failed to delete ns {} - {}".format(name, msg))
+            raise ClientException("failed to upload package - {}".format(msg))
 

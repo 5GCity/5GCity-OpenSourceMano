@@ -84,9 +84,9 @@ class Ns(object):
         #print 'HTTP CODE: {}'.format(http_code)
         #print 'RESP: {}'.format(resp)
         if http_code == 202:
-            print 'Deletion in progress'
+            print('Deletion in progress')
         elif http_code == 204:
-            print 'Deleted'
+            print('Deleted')
         else:
             msg = ""
             if resp:
@@ -143,7 +143,7 @@ class Ns(object):
                     if vld.get("vim-network-name"):
                         if isinstance(vld["vim-network-name"], dict):
                             vim_network_name_dict = {}
-                            for vim_account, vim_net in vld["vim-network-name"].items():
+                            for vim_account, vim_net in list(vld["vim-network-name"].items()):
                                 vim_network_name_dict[get_vim_account_id(vim_account)] = vim_net
                             vld["vim-network-name"] = vim_network_name_dict
                 ns["vld"] = ns_config["vld"]
@@ -169,7 +169,7 @@ class Ns(object):
                 if not resp or 'id' not in resp:
                     raise ClientException('unexpected response from server - {} '.format(
                                       resp))
-                print resp['id']
+                print(resp['id'])
             else:
                 msg = ""
                 if resp:
@@ -273,7 +273,7 @@ class Ns(object):
                 if not resp or 'id' not in resp:
                     raise ClientException('unexpected response from server - {}'.format(
                                       resp))
-                print resp['id']
+                print(resp['id'])
             else:
                 msg = ""
                 if resp:
@@ -299,7 +299,7 @@ class Ns(object):
             #print 'RESP: {}'.format(resp)
             if http_code in (200, 201, 202, 204):
                 #resp = json.loads(resp)
-                print 'Alarm created'
+                print('Alarm created')
             else:
                 msg = ""
                 if resp:
@@ -327,7 +327,7 @@ class Ns(object):
             #print 'RESP: {}'.format(resp)
             if http_code in (200, 201, 202, 204):
                 #resp = json.loads(resp)
-                print 'Alarm deleted'
+                print('Alarm deleted')
             else:
                 msg = ""
                 if resp:
@@ -339,7 +339,7 @@ class Ns(object):
                                       http_code, msg))
         except ClientException as exc:
             message="failed to delete alarm: alarm {}\n{}".format(
-                    alarm,
+                    name,
                     exc.message)
             raise ClientException(message)
 

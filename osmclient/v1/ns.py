@@ -122,7 +122,7 @@ class Ns(object):
             for network in ns_config['vim-network-name']:
                 # now find this network
                 vld_name = network['name']
-                vim_vld_name = network['vim-network-name']
+                # vim_vld_name = network['vim-network-name']
 
                 for index, vld in enumerate(nsr['nsd']['vld']):
                     if vld['name'] == vld_name:

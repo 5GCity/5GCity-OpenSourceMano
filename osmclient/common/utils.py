@@ -67,10 +67,10 @@ def get_key_val_from_pkg(descriptor_file):
 
     dict = yaml.load(tar.extractfile(yamlfile))
     result = {}
-    for k1, v1 in dict.items():
+    for k1, v1 in list(dict.items()):
         if not k1.endswith('-catalog'):
             continue
-        for k2, v2 in v1.items():
+        for k2, v2 in list(v1.items()):
             if not k2.endswith('nsd') and not k2.endswith('vnfd'):
                 continue
 
@@ -80,7 +80,7 @@ def get_key_val_from_pkg(descriptor_file):
                 result['type'] = 'vnfd'
 
             for entry in v2:
-                for k3, v3 in entry.items():
+                for k3, v3 in list(entry.items()):
                     # strip off preceeding chars before :
                     key_name = k3.split(':').pop()
 

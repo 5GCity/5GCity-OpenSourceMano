@@ -21,7 +21,6 @@ OSM SDN controller API handling
 from osmclient.common import utils
 from osmclient.common.exceptions import ClientException
 from osmclient.common.exceptions import NotFound
-import yaml
 import json
 
 
@@ -45,7 +44,7 @@ class SdnController(object):
             if not resp or 'id' not in resp:
                 raise ClientException('unexpected response from server - {}'.format(
                                       resp))
-            print resp['id']
+            print(resp['id'])
         else:
             msg = ""
             if resp:
@@ -67,7 +66,7 @@ class SdnController(object):
             if not resp or 'id' not in resp:
                 raise ClientException('unexpected response from server - {}'.format(
                                       resp))
-            print resp['id']
+            print(resp['id'])
         else:
             msg = ""
             if resp:
@@ -87,11 +86,11 @@ class SdnController(object):
         #print 'HTTP CODE: {}'.format(http_code)
         #print 'RESP: {}'.format(resp)
         if http_code == 202:
-            print 'Deletion in progress'
+            print('Deletion in progress')
         elif http_code == 204:
-            print 'Deleted'
+            print('Deleted')
         elif resp and 'result' in resp:
-            print 'Deleted'
+            print('Deleted')
         else:
             msg = ""
             if resp:

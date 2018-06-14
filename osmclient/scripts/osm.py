@@ -76,9 +76,9 @@ def check_client_version(obj, what, version='sol005'):
 @click.pass_context
 def cli(ctx, hostname, so_port, so_project, ro_hostname, ro_port, sol005):
     if hostname is None:
-        print(
+        print((
             "either hostname option or OSM_HOSTNAME " +
-            "environment variable needs to be specified")
+            "environment variable needs to be specified"))
         exit(1)
     kwargs={}
     if so_port is not None:
@@ -228,7 +228,7 @@ def vnf_list(ctx, ns):
         else:
             resp = ctx.obj.vnf.list()
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
     fullclassname = ctx.obj.__module__ + "." + ctx.obj.__class__.__name__
     if fullclassname == 'osmclient.sol005.client.Client':
@@ -280,7 +280,7 @@ def ns_op_list(ctx, name):
         check_client_version(ctx.obj, ctx.command.name)
         resp = ctx.obj.ns.list_op(name)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
     table = PrettyTable(['id', 'operation', 'status'])
@@ -299,15 +299,15 @@ def nsd_show(ctx, name, literal):
         resp = ctx.obj.nsd.get(name)
         #resp = ctx.obj.nsd.get_individual(name)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
     if literal:
-        print yaml.safe_dump(resp)
+        print(yaml.safe_dump(resp))
         return
 
     table = PrettyTable(['field', 'value'])
-    for k, v in resp.items():
+    for k, v in list(resp.items()):
         table.add_row([k, json.dumps(v, indent=2)])
     table.align = 'l'
     print(table)
@@ -344,15 +344,15 @@ def vnfd_show(ctx, name, literal):
         resp = ctx.obj.vnfd.get(name)
         #resp = ctx.obj.vnfd.get_individual(name)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
     if literal:
-        print yaml.safe_dump(resp)
+        print(yaml.safe_dump(resp))
         return
 
     table = PrettyTable(['field', 'value'])
-    for k, v in resp.items():
+    for k, v in list(resp.items()):
         table.add_row([k, json.dumps(v, indent=2)])
     table.align = 'l'
     print(table)
@@ -398,16 +398,16 @@ def ns_show(ctx, name, literal, filter):
     try:
         ns = ctx.obj.ns.get(name)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
     if literal:
-        print yaml.safe_dump(resp)
+        print(yaml.safe_dump(ns))
         return
 
     table = PrettyTable(['field', 'value'])
 
-    for k, v in ns.items():
+    for k, v in list(ns.items()):
         if filter is None or filter in k:
             table.add_row([k, json.dumps(v, indent=2)])
 
@@ -415,7 +415,7 @@ def ns_show(ctx, name, literal, filter):
     if fullclassname != 'osmclient.sol005.client.Client':
         nsopdata = ctx.obj.ns.get_opdata(ns['id'])
         nsr_optdata = nsopdata['nsr:nsr']
-        for k, v in nsr_optdata.items():
+        for k, v in list(nsr_optdata.items()):
             if filter is None or filter in k:
                 table.add_row([k, json.dumps(v, indent=2)])
     table.align = 'l'
@@ -437,15 +437,15 @@ def vnf_show(ctx, name, literal, filter):
         check_client_version(ctx.obj, ctx.command.name)
         resp = ctx.obj.vnf.get(name)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
     if literal:
-        print yaml.safe_dump(resp)
+        print(yaml.safe_dump(resp))
         return
 
     table = PrettyTable(['field', 'value'])
-    for k, v in resp.items():
+    for k, v in list(resp.items()):
         if filter is None or filter in k:
             table.add_row([k, json.dumps(v, indent=2)])
     table.align = 'l'
@@ -460,7 +460,7 @@ def vnf_monitoring_show(ctx, vnf_name):
         check_client_version(ctx.obj, ctx.command.name, 'v1')
         resp = ctx.obj.vnf.get_monitoring(vnf_name)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
     table = PrettyTable(['vnf name', 'monitoring name', 'value', 'units'])
@@ -483,11 +483,11 @@ def ns_monitoring_show(ctx, ns_name):
         check_client_version(ctx.obj, ctx.command.name, 'v1')
         resp = ctx.obj.ns.get_monitoring(ns_name)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
     table = PrettyTable(['vnf name', 'monitoring name', 'value', 'units'])
-    for key, val in resp.items():
+    for key, val in list(resp.items()):
         for monitor in val:
             table.add_row(
                 [key,
@@ -510,11 +510,11 @@ def ns_op_show(ctx, id, filter):
         check_client_version(ctx.obj, ctx.command.name)
         op_info = ctx.obj.ns.get_op(id)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
     table = PrettyTable(['field', 'value'])
-    for k, v in op_info.items():
+    for k, v in list(op_info.items()):
         if filter is None or filter in k:
             table.add_row([k, json.dumps(v, indent=2)])
     table.align = 'l'
@@ -530,7 +530,7 @@ def nsd_create(ctx, filename, overwrite):
         check_client_version(ctx.obj, ctx.command.name)
         ctx.obj.nsd.create(filename, overwrite)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -565,7 +565,7 @@ def vnfd_create(ctx, filename, overwrite):
         check_client_version(ctx.obj, ctx.command.name)
         ctx.obj.vnfd.create(filename, overwrite)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -631,7 +631,7 @@ def ns_create(ctx,
             ssh_keys=ssh_keys,
             account=vim_account)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -644,7 +644,7 @@ def nsd_update(ctx, name, content):
         check_client_version(ctx.obj, ctx.command.name)
         ctx.obj.nsd.update(name, content)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 @cli.command(name='nsd-update', short_help='updates a NSD/NSpkg')
@@ -678,7 +678,7 @@ def vnfd_update(ctx, name, content):
         check_client_version(ctx.obj, ctx.command.name)
         ctx.obj.vnfd.update(name, content)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -720,7 +720,7 @@ def nsd_delete(ctx, name, force):
             check_client_version(ctx.obj, '--force')
             ctx.obj.nsd.delete(name, force)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -756,7 +756,7 @@ def vnfd_delete(ctx, name, force):
             check_client_version(ctx.obj, '--force')
             ctx.obj.vnfd.delete(name, force)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -800,7 +800,7 @@ def ns_delete(ctx, name, force):
             check_client_version(ctx.obj, '--force')
             ctx.obj.ns.delete(name, force)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -869,7 +869,7 @@ def vim_create(ctx,
         else:
             ctx.obj.vim.create(name, vim)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -915,7 +915,7 @@ def vim_update(ctx,
         if config: vim['config'] = config
         ctx.obj.vim.update(name, vim, sdn_controller, sdn_port_mapping)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -935,7 +935,7 @@ def vim_delete(ctx, name, force):
             check_client_version(ctx.obj, '--force')
             ctx.obj.vim.delete(name, force)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -977,11 +977,11 @@ def vim_show(ctx, name):
         if 'vim_password' in resp:
             resp['vim_password']='********'
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
     table = PrettyTable(['key', 'attribute'])
-    for k, v in resp.items():
+    for k, v in list(resp.items()):
         table.add_row([k, json.dumps(v, indent=2)])
     table.align = 'l'
     print(table)
@@ -1047,7 +1047,7 @@ def sdnc_create(ctx,
         check_client_version(ctx.obj, ctx.command.name)
         ctx.obj.sdnc.create(name, sdncontroller)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
 
 
 @cli.command(name='sdnc-update', short_help='updates an SDN controller')
@@ -1102,7 +1102,7 @@ def sdnc_update(ctx,
         check_client_version(ctx.obj, ctx.command.name)
         ctx.obj.sdnc.update(name, sdncontroller)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -1119,7 +1119,7 @@ def sdnc_delete(ctx, name, force):
         check_client_version(ctx.obj, ctx.command.name)
         ctx.obj.sdnc.delete(name, force)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -1133,7 +1133,7 @@ def sdnc_list(ctx, filter):
         check_client_version(ctx.obj, ctx.command.name)
         resp = ctx.obj.sdnc.list(filter)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
     table = PrettyTable(['name', 'id'])
     for sdnc in resp:
@@ -1154,11 +1154,11 @@ def sdnc_show(ctx, name):
         check_client_version(ctx.obj, ctx.command.name)
         resp = ctx.obj.sdnc.get(name)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
     table = PrettyTable(['key', 'attribute'])
-    for k, v in resp.items():
+    for k, v in list(resp.items()):
         table.add_row([k, json.dumps(v, indent=2)])
     table.align = 'l'
     print(table)
@@ -1205,7 +1205,7 @@ def ns_alarm_create(ctx, name, ns, vnf, vdu, metric, severity,
         check_client_version(ctx.obj, ctx.command.name)
         ctx.obj.ns.create_alarm(alarm)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -1256,15 +1256,15 @@ def ns_metric_export(ctx, ns, vnf, vdu, metric, interval):
     try:
         check_client_version(ctx.obj, ctx.command.name)
         if not interval:
-            print '{}'.format(ctx.obj.ns.export_metric(metric_data))
+            print('{}'.format(ctx.obj.ns.export_metric(metric_data)))
         else:
             i = 1
             while True:
-                print '{} {}'.format(ctx.obj.ns.export_metric(metric_data),i)
+                print('{} {}'.format(ctx.obj.ns.export_metric(metric_data),i))
                 time.sleep(int(interval))
                 i+=1
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -1286,7 +1286,7 @@ def upload_package(ctx, filename):
         if fullclassname != 'osmclient.sol005.client.Client':
             ctx.obj.package.wait_for_upload(filename)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -1302,7 +1302,7 @@ def show_ns_scaling(ctx, ns_name):
         check_client_version(ctx.obj, ctx.command.name, 'v1')
         resp = ctx.obj.ns.list()
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
     table = PrettyTable(
@@ -1346,7 +1346,7 @@ def ns_scale(ctx, ns_name, ns_scale_group, index):
         check_client_version(ctx.obj, ctx.command.name, 'v1')
         ctx.obj.ns.scale(ns_name, ns_scale_group, index)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -1357,7 +1357,7 @@ def config_agent_list(ctx):
     try:
         check_client_version(ctx.obj, ctx.command.name, 'v1')
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
     table = PrettyTable(['name', 'account-type', 'details'])
     for account in ctx.obj.vca.list():
@@ -1381,7 +1381,7 @@ def config_agent_delete(ctx, name):
         check_client_version(ctx.obj, ctx.command.name, 'v1')
         ctx.obj.vca.delete(name)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 
@@ -1405,7 +1405,7 @@ def config_agent_add(ctx, name, account_type, server, user, secret):
         check_client_version(ctx.obj, ctx.command.name, 'v1')
         ctx.obj.vca.create(name, account_type, server, user, secret)
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 @cli.command(name='ro-dump')
@@ -1415,7 +1415,7 @@ def ro_dump(ctx):
     check_client_version(ctx.obj, ctx.command.name, 'v1')
     resp = ctx.obj.vim.get_resource_orchestrator()
     table = PrettyTable(['key', 'attribute'])
-    for k, v in resp.items():
+    for k, v in list(resp.items()):
         table.add_row([k, json.dumps(v, indent=2)])
     table.align = 'l'
     print(table)
@@ -1458,7 +1458,7 @@ def ns_action(ctx,
         ctx.obj.ns.exec_op(ns_name, op_name='action', op_data=op_data)
 
     except ClientException as inst:
-        print(inst.message)
+        print((inst.message))
         exit(1)
 
 

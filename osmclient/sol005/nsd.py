@@ -21,7 +21,6 @@ OSM nsd API handling
 from osmclient.common.exceptions import NotFound
 from osmclient.common.exceptions import ClientException
 from osmclient.common import utils
-import yaml
 import json
 import magic
 #from os import stat
@@ -109,9 +108,9 @@ class Nsd(object):
         #print 'HTTP CODE: {}'.format(http_code)
         #print 'RESP: {}'.format(resp)
         if http_code == 202:
-            print 'Deletion in progress'
+            print('Deletion in progress')
         elif http_code == 204:
-            print 'Deleted'
+            print('Deleted')
         else:
             msg = ""
             if resp:
@@ -143,7 +142,7 @@ class Nsd(object):
                   )
         headers["Content-File-MD5"] = utils.md5(filename)
         http_header = ['{}: {}'.format(key,val)
-                      for (key,val) in headers.items()]
+                      for (key,val) in list(headers.items())]
         self._http.set_http_header(http_header)
         if update_endpoint:
             http_code, resp = self._http.put_cmd(endpoint=update_endpoint, filename=filename)
@@ -164,7 +163,7 @@ class Nsd(object):
             if not resp or 'id' not in resp:
                 raise ClientException('unexpected response from server - {}'.format(
                                       resp))
-            print resp['id']
+            print(resp['id'])
         else:
             msg = "Error {}".format(http_code)
             if resp:

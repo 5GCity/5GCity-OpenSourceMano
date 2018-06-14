@@ -17,9 +17,7 @@
 from io import BytesIO
 import pycurl
 import json
-import yaml
 from osmclient.common import http
-from osmclient.common.exceptions import ClientException
 
 class Http(http.Http):
 

@@ -68,7 +68,7 @@ class Client(object):
         self._headers['Accept'] = 'application/json'
         self._headers['Content-Type'] = 'application/yaml'
         http_header = ['{}: {}'.format(key,val)
-                      for (key,val) in self._headers.items()]
+                      for (key,val) in list(self._headers.items())]
         self._http_client.set_http_header(http_header)
 
         token = self.get_token()

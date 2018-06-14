@@ -120,7 +120,7 @@ class Client(object):
                 # SO Version 5.x.x.x.x translates to OSM V3
                 return 'v3'
             return 'v2'
-        except Exception as e:
+        except Exception:
             return 'v2'
 
 

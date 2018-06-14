@@ -66,7 +66,7 @@ class Vim(object):
             if not resp or 'id' not in resp:
                 raise ClientException('unexpected response from server - {}'.format(
                                       resp))
-            print resp['id']
+            print(resp['id'])
         else:
             msg = ""
             if resp:
@@ -81,9 +81,9 @@ class Vim(object):
 
         vim_config = {}
         if 'config' in vim_account:
-            if config=="" and (sdncontroller or sdn_port_mapping):
+            if vim_account.get('config')=="" and (sdn_controller or sdn_port_mapping):
                 raise ClientException("clearing config is incompatible with updating SDN info")
-            if config=="":
+            if vim_account.get('config')=="":
                 vim_config = None
             else:
                 vim_config = yaml.safe_load(vim_account['config'])
@@ -105,7 +105,7 @@ class Vim(object):
             if not resp or 'id' not in resp:
                 raise ClientException('unexpected response from server - {}'.format(
                                       resp))
-            print resp['id']
+            print(resp['id'])
         else:
             msg = ""
             if resp:
@@ -144,9 +144,9 @@ class Vim(object):
         #print 'HTTP CODE: {}'.format(http_code)
         #print 'RESP: {}'.format(resp)
         if http_code == 202:
-            print 'Deletion in progress'
+            print('Deletion in progress')
         elif http_code == 204:
-            print 'Deleted'
+            print('Deleted')
         else:
             msg = ""
             if resp:
