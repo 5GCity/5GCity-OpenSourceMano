@@ -27,7 +27,7 @@
 
     <div class="row">
         <div class="col-md-12">
-            <form action='{% url 'projects:sdns:create' project_id=project_id%}' method="post">
+            <form action='{% url 'projects:sdns:create' project_id=project_id %}' method="post">
                 {% csrf_token %}
                 <div class="box">
                     <div class="box-header with-border">
@@ -51,9 +51,15 @@
                                     <div class="form-group">
                                         <label for="sdn_type" class="col-sm-3 control-label">Type*</label>
                                         <div class="col-sm-6 input-group input-group-sm">
-                                            <input class="form-control" id="sdn_type" name="type" required>
+                                        <select id="sdn_type" name="type" class="form-control">
+                                            <option value="onos">ONOS</option>
+                                            <option value="opendaylight">OpenDaylight</option>
+                                            <option value="floodlight">Floodlight</option>
+
+                                        </select>
                                         </div>
                                     </div>
+
                                 </div>
                                 <div class="row">
                                     <div class="form-group">
@@ -78,7 +84,7 @@
                                     <div class="form-group">
                                         <label for="sdn_ip" class="col-sm-3 control-label">IP*</label>
                                         <div class="col-sm-6 input-group input-group-sm">
-                                            <input class="form-control" id="sdn_ip" name="ip"  required>
+                                            <input class="form-control" id="sdn_ip" name="ip" required>
                                         </div>
                                     </div>
                                 </div>
@@ -86,7 +92,8 @@
                                     <div class="form-group">
                                         <label for="sdn_port" class="col-sm-3 control-label">Port*</label>
                                         <div class="col-sm-6 input-group input-group-sm">
-                                            <input class="form-control" type="number" id="sdn_port" name="port" required>
+                                            <input class="form-control" type="number" id="sdn_port" name="port"
+                                                   required>
                                         </div>
                                     </div>
                                 </div>
@@ -94,7 +101,9 @@
                                     <div class="form-group">
                                         <label for="sdn_dpid" class="col-sm-3 control-label">DPID*</label>
                                         <div class="col-sm-6 input-group input-group-sm">
-                                            <input class="form-control" id="sdn_dpid" name="dpid" pattern="[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){7}" required>
+                                            <input class="form-control" id="sdn_dpid" name="dpid"
+                                                   placeholder="xx:xx:xx:xx:xx:xx:xx:xx"
+                                                   pattern="[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){7}" required>
                                         </div>
                                     </div>
                                 </div>
@@ -111,7 +120,8 @@
 
                     </div>
                     <div class="box-footer">
-                        <button onclick="location.href='{%  url 'projects:sdns:list' project_id=project_id %}'" class="btn btn-default pull-left">Back to
+                        <button onclick="location.href='{% url 'projects:sdns:list' project_id=project_id %}'"
+                                class="btn btn-default pull-left">Back to
                             SDN Controllers
                         </button>
                         <button class="btn btn-primary pull-right">Create</button>
