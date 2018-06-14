@@ -15,14 +15,14 @@
           </li>
           {% url "projects:list_descriptors"  project_id=project_id descriptor_type="nsd" as  nsd_list_url %}
           {% url "projects:list_descriptors"  project_id=project_id descriptor_type='vnfd' as  vnfd_list_url %}
-        <li {% if request.get_full_path == nsd_list_url or  request.get_full_path == vnfd_list_url%} class="active treeview" {% else %} class="treeview" {% endif %} >
+        <li {% if request.get_full_path == nsd_list_url or  request.get_full_path == vnfd_list_url%} class="active treeview menu-open" {% else %} class="treeview  menu-open" {% endif %} >
                 <a href="#">
                     <i class="fa fa-archive fa-fw"></i> <span>Packages {{nsd_list}}</span>
                     <span class="pull-right-container">
                         <i class="fa fa-angle-left pull-right"></i>
                     </span>
                 </a>
-                <ul class="treeview-menu">
+                <ul class="treeview-menu" style="display: block;">
                     <li {% if request.get_full_path == nsd_list_url %} class="active" {% endif %}>
                         <a href='{{ nsd_list_url }}'>
                             <i class="fa fa-archive fa-fw"></i>NS Packages
