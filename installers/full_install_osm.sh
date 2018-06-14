@@ -777,10 +777,10 @@ function install_vimemu() {
     echo "Starting vim-emu Docker container 'vim-emu' ..."
     if [ -n "$INSTALL_LIGHTWEIGHT" ]; then
         # in lightweight mode, the emulator needs to be attached to netOSM
-        sudo docker run --name vim-emu -t -d --rm --privileged --pid='host' --network=netOSM -v /var/run/docker.sock:/var/run/docker.sock vim-emu-img python examples/osm_default_daemon_topology_2_pop.py
+        sudo docker run --name vim-emu -t -d --restart always --privileged --pid='host' --network=netOSM -v /var/run/docker.sock:/var/run/docker.sock vim-emu-img python examples/osm_default_daemon_topology_2_pop.py
     else
         # classic build mode
-        sudo docker run --name vim-emu -t -d --rm --privileged --pid='host' -v /var/run/docker.sock:/var/run/docker.sock vim-emu-img python examples/osm_default_daemon_topology_2_pop.py
+        sudo docker run --name vim-emu -t -d --restart always --privileged --pid='host' -v /var/run/docker.sock:/var/run/docker.sock vim-emu-img python examples/osm_default_daemon_topology_2_pop.py
     fi
     echo "Waiting for 'vim-emu' container to start ..."
     sleep 5
