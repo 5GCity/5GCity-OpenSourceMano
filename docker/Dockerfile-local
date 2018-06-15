@@ -8,8 +8,8 @@ COPY docker/scripts/ /bin/RO
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install software-properties-common && \
-    apt-get update && \
     DEBIAN_FRONTEND=noninteractive add-apt-repository -y cloud-archive:ocata && \
+    apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install git make python python-pip debhelper && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install wget tox && \
     DEBIAN_FRONTEND=noninteractive pip install pip==9.0.3 && \
