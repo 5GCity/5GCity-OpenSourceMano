@@ -74,7 +74,7 @@ class Http(http.Http):
                            (pycurl.FORM_FILE,
                             formfile[1])))])
         elif filename is not None:
-            with open(filename, 'r') as stream:
+            with open(filename, 'rb') as stream:
                 postdata=stream.read()
             curl_cmd.setopt(pycurl.POSTFIELDS, postdata)
 

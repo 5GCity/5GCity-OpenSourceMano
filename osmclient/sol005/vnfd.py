@@ -127,7 +127,7 @@ class Vnfd(object):
         headers= self._client._headers
         if mime_type in ['application/yaml', 'text/plain']:
             headers['Content-Type'] = 'application/yaml'
-        elif mime_type == 'application/gzip':
+        elif mime_type in ['application/gzip', 'application/x-gzip']:
             headers['Content-Type'] = 'application/gzip'
             #headers['Content-Type'] = 'application/binary'
             # Next three lines are to be removed in next version
