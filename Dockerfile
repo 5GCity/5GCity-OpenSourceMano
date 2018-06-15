@@ -8,7 +8,7 @@ RUN  apt-get update && \
   DEBIAN_FRONTEND=noninteractive pip install -U pyang pyangbind && \
   DEBIAN_FRONTEND=noninteractive apt-get -y install python-yaml python-netaddr python-boto && \
   DEBIAN_FRONTEND=noninteractive apt-get -y install software-properties-common && \
-  DEBIAN_FRONTEND=noninteractive add-apt-repository -y cloud-archive:ocata && \
+  DEBIAN_FRONTEND=noninteractive add-apt-repository -y cloud-archive:pike && \
   DEBIAN_FRONTEND=noninteractive apt-get update && \
   DEBIAN_FRONTEND=noninteractive apt-get -y install python-novaclient python-keystoneclient python-glanceclient python-cinderclient python-neutronclient && \
   DEBIAN_FRONTEND=noninteractive pip install -U progressbar pyvmomi pyvcloud==19.1.1 && \

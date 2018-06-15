@@ -224,7 +224,7 @@ then
         "#####        UPDATE REPOSITORIES                            #####\n"\
         "#################################################################"
     [ "$_DISTRO" == "Ubuntu" ] && apt-get update -y &&
-        add-apt-repository -y cloud-archive:ocata && apt-get update -y
+        add-apt-repository -y cloud-archive:pike && apt-get update -y
 
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && yum check-update -y
     [ "$_DISTRO" == "CentOS" ] && yum install -y epel-release

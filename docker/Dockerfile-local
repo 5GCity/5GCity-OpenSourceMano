@@ -8,7 +8,7 @@ COPY docker/scripts/ /bin/RO
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install software-properties-common && \
-    DEBIAN_FRONTEND=noninteractive add-apt-repository -y cloud-archive:ocata && \
+    DEBIAN_FRONTEND=noninteractive add-apt-repository -y cloud-archive:pike && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install git make python python-pip debhelper && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install wget tox && \
