@@ -1401,7 +1401,7 @@ class vimconnector(vimconn.vimconnector):
                 #get interfaces
                 try:
                     self._reload_connection()
-                    port_dict=self.neutron.list_ports(device_id=vm_id)
+                    port_dict = self.neutron.list_ports(device_id=vm_id)
                     for port in port_dict["ports"]:
                         interface={}
                         try:
@@ -1435,16 +1435,20 @@ class vimconnector(vimconn.vimconnector):
                             interface["vlan"] = network['network'].get('provider:segmentation_id')
                         ips=[]
                         #look for floating ip address
-                        floating_ip_dict = self.neutron.list_floatingips(port_id=port["id"])
-                        if floating_ip_dict.get("floatingips"):
-                            ips.append(floating_ip_dict["floatingips"][0].get("floating_ip_address") )
+                        try:
+                            floating_ip_dict = self.neutron.list_floatingips(port_id=port["id"])
+                            if floating_ip_dict.get("floatingips"):
+                                ips.append(floating_ip_dict["floatingips"][0].get("floating_ip_address") )
+                        except Exception:
+                            pass
 
                         for subnet in port["fixed_ips"]:
                             ips.append(subnet["ip_address"])
                         interface["ip_address"] = ";".join(ips)
                         vm["interfaces"].append(interface)
                 except Exception as e:
-                    self.logger.error("Error getting vm interface information " + type(e).__name__ + ": "+  str(e))
+                    self.logger.error("Error getting vm interface information {}: {}".format(type(e).__name__, e),
+                                      exc_info=True)
             except vimconn.vimconnNotFoundException as e:
                 self.logger.error("Exception getting vm status: %s", str(e))
                 vm['status'] = "DELETED"
