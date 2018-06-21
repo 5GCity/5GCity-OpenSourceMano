@@ -5,8 +5,8 @@ from charmhelpers.core.hookenv import (
     status_set,
 )
 from charms.reactive import (
-    remove_state as remove_flag,
-    set_state as set_flag,
+    clear_flag,
+    set_flag,
     when,
     when_not,
 )
@@ -41,4 +41,4 @@ def touch():
     else:
         action_set({'outout': result})
     finally:
-        remove_flag('actions.touch')
+        clear_flag('actions.touch')
