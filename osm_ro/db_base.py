@@ -652,10 +652,10 @@ class db_base():
                     self.logger.debug(cmd)
                     self.cur.execute(cmd)
                     number = self.cur.rowcount
-                    if number==0:
-                        return -HTTP_Not_Found, "No %s found with %s '%s'" %(error_item_text, what, uuid_name)
-                    elif number>1 and not allow_serveral: 
-                        return -HTTP_Bad_Request, "More than one %s found with %s '%s'" %(error_item_text, what, uuid_name)
+                    if number == 0:
+                        raise db_base_Exception("No {} found with {} '{}'".format(error_item_text, what, uuid_name), http_code=HTTP_Not_Found)
+                    elif number > 1 and not allow_serveral:
+                        raise db_base_Exception("More than one {} found with {} '{}'".format(error_item_text, what, uuid_name), http_code=HTTP_Conflict)
                     if allow_serveral:
                         rows = self.cur.fetchall()
                     else:
@@ -667,7 +667,8 @@ class db_base():
 
     def get_uuid(self, uuid):
         '''check in the database if this uuid is already present'''
-        for retry_ in range(0,2):
+        tries = 2
+        while tries:
             try:
                 with self.con:
                     self.cur = self.con.cursor(mdb.cursors.DictCursor)
@@ -675,9 +676,8 @@ class db_base():
                     rows = self.cur.fetchall()
                     return self.cur.rowcount, rows
             except (mdb.Error, AttributeError) as e:
-                print "nfvo_db.get_uuid DB Exception %d: %s" % (e.args[0], e.args[1])
-                r,c = self._format_error(e)
-                if r!=-HTTP_Request_Timeout or retry_==1: return r,c
+                self._format_error(e, tries)
+            tries -= 1
 
     def get_uuid_from_name(self, table, name):
         '''Searchs in table the name and returns the uuid
