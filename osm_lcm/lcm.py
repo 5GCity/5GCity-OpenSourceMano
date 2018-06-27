@@ -815,11 +815,13 @@ class Lcm:
             for vnf_index, vnfr in db_vnfr.items():
                 if vnfr.get("vim-account-id"):
                     continue
-                if db_nsr["instantiate_params"].get("vnf") and db_nsr["instantiate_params"]["vnf"].get(vnf_index) \
-                        and db_nsr["instantiate_params"]["vnf"][vnf_index].get("vimAccountId"):
-                    vnfr["vim-account-id"] = db_nsr["instantiate_params"]["vnf"][vnf_index]["vimAccountId"]
-                else:
-                    vnfr["vim-account-id"] = db_nsr["instantiate_params"]["vimAccountId"]
+                vnfr["vim-account-id"] = db_nsr["instantiate_params"]["vimAccountId"]
+                if db_nsr["instantiate_params"].get("vnf"):
+                    for vnf_params in db_nsr["instantiate_params"]["vnf"]:
+                        if vnf_params.get("member-vnf-index") == vnf_index:
+                            if vnf_params.get("vimAccountId"):
+                                vnfr["vim-account-id"] = vnf_params.get("vimAccountId")
+                            break
                 self.update_db("vnfrs", vnfr["_id"], vnfr)
 
             # wait until NS is ready
@@ -1158,6 +1160,7 @@ class Lcm:
                 self.db.del_one("nsrs", {"_id": nsr_id})
                 self.db.del_list("nslcmops", {"nsInstanceId": nsr_id})
                 self.db.del_list("vnfrs", {"nsr-id-ref": nsr_id})
+                self.logger.debug(logging_text + "Delete from database")
             else:
                 db_nsr_update = {
                     "operational-status": "terminated",
