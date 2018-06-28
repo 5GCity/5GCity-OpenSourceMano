@@ -37,6 +37,8 @@ description_schema={"type" : ["string","null"], "maxLength":255, "pattern" : "^[
 id_schema_fake = {"type" : "string", "minLength":2, "maxLength":36 }  #"pattern": "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
 id_schema = {"type" : "string", "pattern": "^[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$"}
 pci_schema={"type":"string", "pattern":"^[0-9a-fA-F]{4}(:[0-9a-fA-F]{2}){2}\.[0-9a-fA-F]$"}
+pci_extended_schema = {"type": "string", "pattern": "^[0-9a-fA-F.:-\[\]]$"}
+
 http_schema={"type":"string", "pattern":"^https?://[^'\"=]+$"}
 bandwidth_schema={"type":"string", "pattern" : "^[0-9]+ *([MG]bps)?$"}
 memory_schema={"type":"string", "pattern" : "^[0-9]+ *([MG]i?[Bb])?$"}
@@ -1190,7 +1192,7 @@ sdn_port_mapping_schema  = {
                         "items": {
                             "type": "object",
                             "properties": {
-                                "pci": pci_schema,
+                                "pci": pci_extended_schema,       # pci_schema,
                                 "switch_port": nameshort_schema,
                                 "switch_mac": mac_schema
                             },

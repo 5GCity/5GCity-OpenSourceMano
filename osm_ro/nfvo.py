@@ -3540,7 +3540,8 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
 
     for vm in sce_vnf['vms']:
         myVMDict = {}
-        myVMDict['name'] = "{}.{}.{}".format(instance_name[:64], sce_vnf['name'][:64], vm["name"][:64])
+        sce_vnf_name = sce_vnf['member_vnf_index'] if sce_vnf['member_vnf_index'] else sce_vnf['name']
+        myVMDict['name'] = "{}-{}-{}".format(instance_name[:64], sce_vnf_name[:64], vm["name"][:64])
         myVMDict['description'] = myVMDict['name'][0:99]
         #                if not startvms:
         #                    myVMDict['start'] = "no"
@@ -4024,6 +4025,26 @@ def delete_instance(mydb, tenant_id, instance_id):
     else:
         return "action_id={} instance {} deleted".format(instance_action_id, message)
 
+def get_instance_id(mydb, tenant_id, instance_id):
+    global ovim
+    #check valid tenant_id
+    check_tenant(mydb, tenant_id)
+    #obtain data
+
+    instance_dict = mydb.get_instance_scenario(instance_id, tenant_id, verbose=True)
+    for net in instance_dict["nets"]:
+        if net.get("sdn_net_id"):
+            net_sdn = ovim.show_network(net["sdn_net_id"])
+            net["sdn_info"] = {
+                "admin_state_up": net_sdn.get("admin_state_up"),
+                "flows": net_sdn.get("flows"),
+                "last_error": net_sdn.get("last_error"),
+                "ports": net_sdn.get("ports"),
+                "type": net_sdn.get("type"),
+                "status": net_sdn.get("status"),
+                "vlan": net_sdn.get("vlan"),
+            }
+    return instance_dict
 
 def refresh_instance(mydb, nfvo_tenant, instanceDict, datacenter=None, vim_tenant=None):
     '''Refreshes a scenario instance. It modifies instanceDict'''
@@ -5078,13 +5099,15 @@ def datacenter_sdn_port_mapping_set(mydb, tenant_id, datacenter_id, sdn_port_map
         element = dict()
         element["compute_node"] = compute_node["compute_node"]
         for port in compute_node["ports"]:
-            element["pci"] = port.get("pci")
+            pci = port.get("pci")
             element["switch_port"] = port.get("switch_port")
             element["switch_mac"] = port.get("switch_mac")
-            if not element["pci"] or not (element["switch_port"] or element["switch_mac"]):
+            if not pci or not (element["switch_port"] or element["switch_mac"]):
                 raise NfvoException ("The mapping must contain the 'pci' and at least one of the elements 'switch_port'"
                                      " or 'switch_mac'", HTTP_Bad_Request)
-            maps.append(dict(element))
+            for pci_expanded in utils.expand_brackets(pci):
+                element["pci"] = pci_expanded
+                maps.append(dict(element))
 
     return ovim.set_of_port_mapping(maps, ofc_id=sdn_controller_id, switch_dpid=switch_dpid, region=datacenter_id)
 

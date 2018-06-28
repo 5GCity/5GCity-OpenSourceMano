@@ -1539,19 +1539,15 @@ def http_get_instance_id(tenant_id, instance_id):
     '''get instances details, can use both uuid or name'''
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     try:
+
         #check valid tenant_id
         if tenant_id != "any":
             nfvo.check_tenant(mydb, tenant_id) 
         if tenant_id == "any":
             tenant_id = None
-        #obtain data (first time is only to check that the instance exists)
-        instance_dict = mydb.get_instance_scenario(instance_id, tenant_id, verbose=True)
-        try:
-            nfvo.refresh_instance(mydb, tenant_id, instance_dict)
-        except (nfvo.NfvoException, db_base_Exception) as e:
-            logger.warn("nfvo.refresh_instance couldn't refresh the status of the instance: %s" % str(e))
-        # obtain data with results upated
-        instance = mydb.get_instance_scenario(instance_id, tenant_id, verbose=True)
+
+        instance = nfvo.get_instance_id(mydb, tenant_id, instance_id)
+
         # Workaround to SO, convert vnfs:vms:interfaces:ip_address from ";" separated list to report the first value
         for vnf in instance.get("vnfs", ()):
             for vm in vnf.get("vms", ()):
