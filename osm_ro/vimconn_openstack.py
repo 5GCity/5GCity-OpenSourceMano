@@ -463,7 +463,9 @@ class vimconnector(vimconn.vimconnector):
                     }
             # Gateway should be set to None if not needed. Otherwise openstack assigns one by default
             if ip_profile.get('gateway_address'):
-                subnet['gateway_ip'] = ip_profile.get('gateway_address')
+                subnet['gateway_ip'] = ip_profile['gateway_address']
+            else:
+                subnet['gateway_ip'] = None
             if ip_profile.get('dns_address'):
                 subnet['dns_nameservers'] = ip_profile['dns_address'].split(";")
             if 'dhcp_enabled' in ip_profile:

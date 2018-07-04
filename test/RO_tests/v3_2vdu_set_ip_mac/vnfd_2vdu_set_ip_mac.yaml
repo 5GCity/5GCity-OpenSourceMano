@@ -16,28 +16,28 @@ vnfd-catalog:
         internal-vld:
         -   description: Internal VL
             id:          net_internal
-            name:        net_internal_name
+            name:        internal_vld1
             short-name:  net_internal_sname
             type:        ELAN
             internal-connection-point:
             -   id-ref:     eth2
-                ip-address: 10.10.133.4
+                ip-address: 10.10.135.4
             -   id-ref:     eth3
-                ip-address: 10.10.133.5
+                ip-address: 10.10.135.5
             ip-profile-ref: ip-profile1
         ip-profiles:
         -   description: Inter VNF Link
             ip-profile-params:
-                gateway-address: 10.10.133.1
+                gateway-address: null
                 ip-version:      ipv4
-                subnet-address:  10.10.133.0/24
+                subnet-address:  10.10.135.0/24
                 dhcp-params:
-                  count:         200
-                  start-address: 10.10.133.20
+                  count:         100
+                  start-address: 10.10.135.20
             name: ip-profile1
         vdu:
         -   id: VM1
-            name: VM1-name
+            name: VM11
             image: US1604
             interface:
             -   name: iface11
@@ -67,7 +67,7 @@ vnfd-catalog:
                 vcpu-count: '1'
         -   id: VM2
             image: US1604
-            name: VM2-name
+            name: VM12
             interface:
             -   name: iface21
                 type: EXTERNAL

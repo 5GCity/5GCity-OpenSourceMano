@@ -16,7 +16,7 @@ vnfd-catalog:
         internal-vld:
         -   description: Internal VL
             id:          net_internal
-            name:        net_internal_name
+            name:        internal_vld2
             short-name:  net_internal_sname
             type:        ELAN
             internal-connection-point:
@@ -37,7 +37,7 @@ vnfd-catalog:
             name: ip-profile1
         vdu:
         -   id: VM1
-            name: VM1-name
+            name: VM21
             image: US1604
             interface:
             -   name: iface11
@@ -67,7 +67,7 @@ vnfd-catalog:
                 vcpu-count: '1'
         -   id: VM2
             image: US1604
-            name: VM2-name
+            name: VM22
             interface:
             -   name: iface21
                 type: EXTERNAL

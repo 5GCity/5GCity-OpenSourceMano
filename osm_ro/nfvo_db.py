@@ -812,10 +812,10 @@ class nfvo_db(db_base.db_base):
 
                                 if table_name in self.tables_with_created_field:
                                     if "created_at" in row:
-                                        created_time_param = created_time + row.pop("created_at")*0.00001
+                                        created_time_param = created_time + (index + row.pop("created_at"))*0.00001
                                     else:
                                         created_time_param = created_time + index*0.00001
-                                        index += 1
+                                    index += 1
                                 else:
                                     created_time_param = 0
                                 self._new_row_internal(table_name, row, add_uuid=False, root_uuid=None,

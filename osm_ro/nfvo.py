@@ -1149,8 +1149,8 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                                     vnf=vnfd_id, vdu=vdu_id, iface=iface["name"],
                                                     cp=iface.get("internal-connection-point-ref"), msg=str(e)),
                                                 HTTP_Bad_Request)
-                    if iface.get("position") is not None:
-                        db_interface["created_at"] = int(iface.get("position")) - 1000
+                    if iface.get("position"):
+                        db_interface["created_at"] = int(iface.get("position")) * 50
                     if iface.get("mac-address"):
                         db_interface["mac"] = str(iface.get("mac-address"))
                     db_interfaces.append(db_interface)
@@ -3208,8 +3208,8 @@ def create_instance(mydb, tenant_id, instance_dict):
             "net2task_id": net2task_id,
             "sce_net2instance": sce_net2instance,
         }
-        sce_vnf_list = sorted(scenarioDict['vnfs'], key=lambda k: k['name'])
-        for sce_vnf in sce_vnf_list:
+        # sce_vnf_list = sorted(scenarioDict['vnfs'], key=lambda k: k['name'])
+        for sce_vnf in scenarioDict['vnfs']:  # sce_vnf_list:
             instantiate_vnf(mydb, sce_vnf, vnf_params, vnf_params_out, rollbackList)
         task_index = vnf_params_out["task_index"]
         uuid_list = vnf_params_out["uuid_list"]
