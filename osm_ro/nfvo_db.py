@@ -608,7 +608,7 @@ class nfvo_db(db_base.db_base):
                         # vms
                         cmd = "SELECT vms.uuid as uuid, flavor_id, image_id, image_list, vms.name as name," \
                               " vms.description as description, vms.boot_data as boot_data, count," \
-                              " vms.availability_zone as availability_zone" \
+                              " vms.availability_zone as availability_zone, vms.osm_id as osm_id" \
                               " FROM vnfs join vms on vnfs.uuid=vms.vnf_id" \
                               " WHERE vnfs.uuid='" + vnf['vnf_id'] + "'"  \
                               " ORDER BY vms.created_at"
@@ -656,7 +656,7 @@ class nfvo_db(db_base.db_base):
                                             iface["ip_address"] = sce_interface["ip_address"]
                                         break
                         #nets    every net of a vms
-                        cmd = "SELECT uuid,name,type,description FROM nets WHERE vnf_id='{}'".format(vnf['vnf_id'])  
+                        cmd = "SELECT uuid,name,type,description, osm_id FROM nets WHERE vnf_id='{}'".format(vnf['vnf_id'])
                         self.logger.debug(cmd)
                         self.cur.execute(cmd)
                         vnf['nets'] = self.cur.fetchall()
@@ -672,7 +672,7 @@ class nfvo_db(db_base.db_base):
                                 raise db_base.db_base_Exception("More than one ip-profile found with this criteria: net_id='{}'".format(vnf_net['uuid']), db_base.HTTP_Bad_Request)
                             
                     #sce_nets
-                    cmd = "SELECT uuid,name,type,external,description,vim_network_name" \
+                    cmd = "SELECT uuid,name,type,external,description,vim_network_name, osm_id" \
                           " FROM sce_nets  WHERE scenario_id='{}'" \
                           " ORDER BY created_at ".format(scenario_dict['uuid'])
                     self.logger.debug(cmd)

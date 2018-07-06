@@ -310,7 +310,7 @@ dhcp_schema = {
         "start-address": {"OneOf": [{"type": "null"}, ip_schema]},
         "count": integer0_schema
     },
-    "required": ["enabled", "start-address", "count"],
+    # "required": ["start-address", "count"],
 }
 
 ip_profile_schema = {
@@ -318,7 +318,7 @@ ip_profile_schema = {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type": "object",
     "properties": {
-        "ip-version": {"type": "string", "enum": ["IPv4","IPv6"]},
+        "ip-version": {"type": "string", "enum": ["IPv4", "IPv6"]},
         "subnet-address": ip_prefix_schema,
         "gateway-address": ip_schema,
         "dns-address": {"oneOf": [ip_schema,     # for backward compatibility
@@ -484,6 +484,7 @@ devices_schema={
             "size": size_schema,
             "vpci":pci_schema,
             "xml":xml_text_schema,
+            "name": name_schema,
         },
         "additionalProperties": False,
         "required": ["type"]
@@ -814,7 +815,7 @@ nsd_schema_v03 = {
                                                         "properties":{
                                                             "VNFC": name_schema,
                                                             "local_iface_name": name_schema,
-                                                            "ip_address": ip_schema
+                                                            "ip_address": ip_schema,
                                                         },
                                                         "required": ["VNFC", "local_iface_name"],
                                                     }
@@ -986,41 +987,48 @@ instance_scenario_create_schema_v01 = {
                                 #"metadata": {"type": "object"},
                                 #"user_data": {"type": "string"}
                                 #"cloud-config": cloud_config_schema, #particular for a vnf
-                                "external-connections": {
+                                "vdus": {
+                                    "type": "object",
+                                    "patternProperties": {
+                                        ".": {
+                                            "type": "object",
+                                            "properties": {
+                                                "name": name_schema, # overrides vdu name schema
+                                                "devices": {
+                                                    "type": "object",
+                                                    "patternProperties": {
+                                                        ".": {
+                                                            "vim_id": name_schema,
+                                                        }
+                                                    }
+                                                },
+                                                "interfaces": {
+                                                    "type": "object",
+                                                    "patternProperties": {
+                                                        ".": {
+                                                            "ip_address": ip_schema,
+                                                            "mac_address": mac_schema,
+                                                            "floating-ip": {"type": "boolean"},
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "networks": {
                                     "type": "object",
                                     "patternProperties": {
                                         ".": {
                                             "type": "object",
                                             "properties": {
                                                 "vim-network-name": name_schema,
-                                                "ip_address": ip_schema
+                                                "ip-profile": ip_profile_schema,
+                                                "name": name_schema,
                                             } 
                                         }
                                     }
                                 },
-                                "internal-connections": {
-                                    "type": "object",
-                                    "patternProperties": {
-                                        ".": {
-                                            "type": "object",
-                                            "properties": {
-                                                "ip-profile": ip_profile_schema,
-                                                "elements": {
-                                                    "type" : "array",
-                                                    "items":{
-                                                        "type":"object",
-                                                        "properties":{
-                                                            "VNFC": name_schema,
-                                                            "local_iface_name": name_schema,
-                                                            "ip_address": ip_schema
-                                                        },
-                                                        "required": ["VNFC", "local_iface_name"],
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
                             }
                         }
                     },

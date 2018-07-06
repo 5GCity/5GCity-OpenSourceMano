@@ -882,8 +882,8 @@ class vimconnector(vimconn.vimconnector):
                 return True
             if vm_status == 'ERROR':
                 return False
-            time.sleep(1)
-            elapsed_time += 1
+            time.sleep(5)
+            elapsed_time += 5
 
         # if we exceeded the timeout rollback
         if elapsed_time >= server_timeout:
@@ -981,6 +981,7 @@ class vimconnector(vimconn.vimconnector):
             'disk_list': (optional) list with additional disks to the VM. Each item is a dict with:
                 'image_id': (optional). VIM id of an existing image. If not provided an empty disk must be mounted
                 'size': (mandatory) string with the size of the disk in GB
+                'vim_id' (optional) should use this existing volume id
             availability_zone_index: Index of availability_zone_list to use for this this VM. None if not AV required
             availability_zone_list: list of availability zones given by user in the VNFD descriptor.  Ignore if
                 availability_zone_index is None
@@ -1095,31 +1096,34 @@ class vimconnector(vimconn.vimconnector):
 
             # Create additional volumes in case these are present in disk_list
             base_disk_index = ord('b')
-            if disk_list != None:
+            if disk_list:
                 block_device_mapping = {}
                 for disk in disk_list:
-                    if 'image_id' in disk:
-                        volume = self.cinder.volumes.create(size = disk['size'],name = name + '_vd' +
-                                    chr(base_disk_index), imageRef = disk['image_id'])
+                    if disk.get('vim_id'):
+                        block_device_mapping['_vd' + chr(base_disk_index)] = disk['vim_id']
                     else:
-                        volume = self.cinder.volumes.create(size=disk['size'], name=name + '_vd' +
-                                    chr(base_disk_index))
-                    created_items["volume:" + str(volume.id)] = True
-                    block_device_mapping['_vd' +  chr(base_disk_index)] = volume.id
+                        if 'image_id' in disk:
+                            volume = self.cinder.volumes.create(size=disk['size'], name=name + '_vd' +
+                                                                chr(base_disk_index), imageRef=disk['image_id'])
+                        else:
+                            volume = self.cinder.volumes.create(size=disk['size'], name=name + '_vd' +
+                                                                chr(base_disk_index))
+                        created_items["volume:" + str(volume.id)] = True
+                        block_device_mapping['_vd' + chr(base_disk_index)] = volume.id
                     base_disk_index += 1
 
-                # Wait until volumes are with status available
-                keep_waiting = True
+                # Wait until created volumes are with status available
                 elapsed_time = 0
-                while keep_waiting and elapsed_time < volume_timeout:
-                    keep_waiting = False
-                    for volume_id in block_device_mapping.itervalues():
-                        if self.cinder.volumes.get(volume_id).status != 'available':
-                            keep_waiting = True
-                    if keep_waiting:
-                        time.sleep(1)
-                        elapsed_time += 1
-
+                while elapsed_time < volume_timeout:
+                    for created_item in created_items:
+                        v, _, volume_id = created_item.partition(":")
+                        if v == 'volume':
+                            if self.cinder.volumes.get(volume_id).status != 'available':
+                                break
+                    else:  # all ready: break from while
+                        break
+                    time.sleep(5)
+                    elapsed_time += 5
                 # If we exceeded the timeout rollback
                 if elapsed_time >= volume_timeout:
                     raise vimconn.vimconnException('Timeout creating volumes for instance ' + name,

@@ -722,7 +722,7 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
                 device=devices_original[index]
                 if "image" not in device and "image name" not in device:
                     if 'size' in device:
-                        disk_list.append({'size': device.get('size', default_volume_size)})
+                        disk_list.append({'size': device.get('size', default_volume_size), 'name': device.get('name')})
                     continue
                 image_dict={}
                 image_dict['name']=device.get('image name',flavor_dict['name']+str(dev_nb)+"-img")
@@ -916,6 +916,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     "vnf_id": vnf_uuid,
                     "uuid": net_uuid,
                     "description": get_str(vld, "description", 255),
+                    "osm_id": get_str(vld, "id", 255),
                     "type": "bridge",   # TODO adjust depending on connection point type
                 }
                 net_id2uuid[vld.get("id")] = net_uuid
@@ -995,7 +996,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                 # volumes
                 devices = []
                 if vdu.get("volumes"):
-                    for volume_key in sorted(vdu["volumes"]):
+                    for volume_key in vdu["volumes"]:
                         volume = vdu["volumes"][volume_key]
                         if not image_present:
                             # Convert the first volume to vnfc.image
@@ -1008,7 +1009,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                             db_vm["image_id"] = image_uuid
                         else:
                             # Add Openmano devices
-                            device = {}
+                            device = {"name": str(volume.get("name"))}
                             device["type"] = str(volume.get("device-type"))
                             if volume.get("size"):
                                 device["size"] = int(volume["size"])
@@ -1016,6 +1017,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                 device["image name"] = str(volume["image"])
                                 if volume.get("image-checksum"):
                                     device["image checksum"] = str(volume["image-checksum"])
+
                             devices.append(device)
 
                 # cloud-init
@@ -2292,6 +2294,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                     "scenario_id": scenario_uuid,
                     # "type": #TODO
                     "multipoint": not vld.get("type") == "ELINE",
+                    "osm_id":  get_str(vld, "id", 255),
                     # "external": #TODO
                     "description": get_str(vld, "description", 255),
                 }
@@ -2968,18 +2971,35 @@ def create_instance(mydb, tenant_id, instance_dict):
     sce_net2instance = {}
     net2task_id = {'scenario': {}}
 
+    def ip_profile_IM2RO(ip_profile_im):
+        # translate from input format to database format
+        ip_profile_ro = {}
+        if 'subnet-address' in ip_profile_im:
+            ip_profile_ro['subnet_address'] = ip_profile_im['subnet-address']
+        if 'ip-version' in ip_profile_im:
+            ip_profile_ro['ip_version'] = ip_profile_im['ip-version']
+        if 'gateway-address' in ip_profile_im:
+            ip_profile_ro['gateway_address'] = ip_profile_im['gateway-address']
+        if 'dns-address' in ip_profile_im:
+            ip_profile_ro['dns_address'] = ip_profile_im['dns-address']
+            if isinstance(ip_profile_ro['dns_address'], (list, tuple)):
+                ip_profile_ro['dns_address'] = ";".join(ip_profile_ro['dns_address'])
+        if 'dhcp' in ip_profile_im:
+            ip_profile_ro['dhcp_start_address'] = ip_profile_im['dhcp'].get('start-address')
+            ip_profile_ro['dhcp_enabled'] = ip_profile_im['dhcp'].get('enabled', True)
+            ip_profile_ro['dhcp_count'] = ip_profile_im['dhcp'].get('count')
+        return ip_profile_ro
+
     # logger.debug("Creating instance from scenario-dict:\n%s",
     #               yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False))
     try:
         # 0 check correct parameters
         for net_name, net_instance_desc in instance_dict.get("networks", {}).iteritems():
-            found = False
             for scenario_net in scenarioDict['nets']:
-                if net_name == scenario_net["name"]:
-                    found = True
+                if net_name == scenario_net.get("name") or net_name == scenario_net.get("osm_id") or net_name == scenario_net.get("uuid"):
                     break
-            if not found:
-                raise NfvoException("Invalid scenario network name '{}' at instance:networks".format(net_name),
+            else:
+                raise NfvoException("Invalid scenario network name or id '{}' at instance:networks".format(net_name),
                                     HTTP_Bad_Request)
             if "sites" not in net_instance_desc:
                 net_instance_desc["sites"] = [ {} ]
@@ -3001,12 +3021,10 @@ def create_instance(mydb, tenant_id, instance_dict):
                     site["datacenter"] = default_datacenter_id   # change name to id
 
         for vnf_name, vnf_instance_desc in instance_dict.get("vnfs",{}).iteritems():
-            found = False
             for scenario_vnf in scenarioDict['vnfs']:
-                if vnf_name == scenario_vnf['name'] or vnf_name == scenario_vnf['member_vnf_index']:
-                    found = True
+                if vnf_name == scenario_vnf['member_vnf_index'] or vnf_name == scenario_vnf['uuid'] or vnf_name == scenario_vnf['name']:
                     break
-            if not found:
+            else:
                 raise NfvoException("Invalid vnf name '{}' at instance:vnfs".format(vnf_name), HTTP_Bad_Request)
             if "datacenter" in vnf_instance_desc:
                 # Add this datacenter to myvims
@@ -3016,6 +3034,38 @@ def create_instance(mydb, tenant_id, instance_dict):
                     myvims[d] = v
                     myvim_threads_id[d], _ = get_vim_thread(mydb, tenant_id, vnf_instance_desc["datacenter"])
                 scenario_vnf["datacenter"] = vnf_instance_desc["datacenter"]
+
+            for net_id, net_instance_desc in vnf_instance_desc.get("networks", {}).iteritems():
+                for scenario_net in scenario_vnf['nets']:
+                    if net_id == scenario_net['osm_id'] or net_id == scenario_net['uuid'] or net_id == scenario_net["name"]:
+                        break
+                else:
+                    raise NfvoException("Invalid net id or name '{}' at instance:vnfs:networks".format(net_id), HTTP_Bad_Request)
+                if net_instance_desc.get("vim-network-name"):
+                    scenario_net["vim-network-name"] = net_instance_desc["vim-network-name"]
+                if net_instance_desc.get("name"):
+                    scenario_net["name"] = net_instance_desc["name"]
+                if 'ip-profile' in net_instance_desc:
+                    ipprofile_db = ip_profile_IM2RO(net_instance_desc['ip-profile'])
+                    if 'ip_profile' not in scenario_net:
+                        scenario_net['ip_profile'] = ipprofile_db
+                    else:
+                        update(scenario_net['ip_profile'], ipprofile_db)
+
+            for vdu_id, vdu_instance_desc in vnf_instance_desc.get("vdus", {}).iteritems():
+                for scenario_vm in scenario_vnf['vms']:
+                    if vdu_id == scenario_vm['osm_id'] or vdu_id == scenario_vm["name"]:
+                        break
+                else:
+                    raise NfvoException("Invalid vdu id or name '{}' at instance:vnfs:vdus".format(vdu_id), HTTP_Bad_Request)
+                scenario_vm["instance_parameters"] = vdu_instance_desc
+                for iface_id, iface_instance_desc in vdu_instance_desc.get("interfaces", {}).iteritems():
+                    for scenario_interface in scenario_vm['interfaces']:
+                        if iface_id == scenario_interface['internal_name'] or iface_id == scenario_interface["external_name"]:
+                            scenario_interface.update(iface_instance_desc)
+                            break
+                    else:
+                        raise NfvoException("Invalid vdu id or name '{}' at instance:vnfs:vdus".format(vdu_id), HTTP_Bad_Request)
 
         # 0.1 parse cloud-config parameters
         cloud_config = unify_cloud_config(instance_dict.get("cloud-config"), scenarioDict.get("cloud-config"))
@@ -3027,19 +3077,7 @@ def create_instance(mydb, tenant_id, instance_dict):
             for scenario_net in scenarioDict['nets']:
                 if net_name == scenario_net["name"]:
                     if 'ip-profile' in net_instance_desc:
-                        # translate from input format to database format
-                        ipprofile_in = net_instance_desc['ip-profile']
-                        ipprofile_db = {}
-                        ipprofile_db['subnet_address'] = ipprofile_in.get('subnet-address')
-                        ipprofile_db['ip_version'] = ipprofile_in.get('ip-version', 'IPv4')
-                        ipprofile_db['gateway_address'] = ipprofile_in.get('gateway-address')
-                        ipprofile_db['dns_address'] = ipprofile_in.get('dns-address')
-                        if isinstance(ipprofile_db['dns_address'], (list, tuple)):
-                            ipprofile_db['dns_address'] = ";".join(ipprofile_db['dns_address'])
-                        if 'dhcp' in ipprofile_in:
-                            ipprofile_db['dhcp_start_address'] = ipprofile_in['dhcp'].get('start-address')
-                            ipprofile_db['dhcp_enabled'] = ipprofile_in['dhcp'].get('enabled', True)
-                            ipprofile_db['dhcp_count'] = ipprofile_in['dhcp'].get('count' )
+                        ipprofile_db = ip_profile_IM2RO(net_instance_desc['ip-profile'])
                         if 'ip_profile' not in scenario_net:
                             scenario_net['ip_profile'] = ipprofile_db
                         else:
@@ -3060,21 +3098,41 @@ def create_instance(mydb, tenant_id, instance_dict):
         number_mgmt_networks = 0
         db_instance_nets = []
         for sce_net in scenarioDict['nets']:
-            descriptor_net = instance_dict.get("networks", {}).get(sce_net["name"], {})
+            # get involved datacenters where this network need to be created
+            involved_datacenters = []
+            for sce_vnf in scenarioDict.get("vnfs"):
+                vnf_datacenter = sce_vnf.get("datacenter", default_datacenter_id)
+                if vnf_datacenter in involved_datacenters:
+                    continue
+                if sce_vnf.get("interfaces"):
+                    for sce_vnf_ifaces in sce_vnf["interfaces"]:
+                        if sce_vnf_ifaces.get("sce_net_id") == sce_net["uuid"]:
+                            involved_datacenters.append(vnf_datacenter)
+                            break
+
+            descriptor_net = {}
+            if instance_dict.get("networks") and instance_dict["networks"].get(sce_net["name"]):
+                descriptor_net = instance_dict["networks"][sce_net["name"]]
             net_name = descriptor_net.get("vim-network-name")
             sce_net2instance[sce_net['uuid']] = {}
             net2task_id['scenario'][sce_net['uuid']] = {}
 
-            sites = descriptor_net.get("sites", [ {} ])
-            for site in sites:
-                if site.get("datacenter"):
-                    vim = myvims[ site["datacenter"] ]
-                    datacenter_id = site["datacenter"]
-                    myvim_thread_id = myvim_threads_id[ site["datacenter"] ]
-                else:
-                    vim = myvims[ default_datacenter_id ]
-                    datacenter_id = default_datacenter_id
-                    myvim_thread_id = myvim_threads_id[default_datacenter_id]
+            if sce_net["external"]:
+                number_mgmt_networks += 1
+
+            for datacenter_id in involved_datacenters:
+                netmap_use = None
+                netmap_create = None
+                if descriptor_net.get("sites"):
+                    for site in descriptor_net["sites"]:
+                        if site.get("datacenter") == datacenter_id:
+                            netmap_use = site.get("netmap-use")
+                            netmap_create = site.get("netmap-create")
+                            break
+
+                vim = myvims[datacenter_id]
+                myvim_thread_id = myvim_threads_id[datacenter_id]
+
                 net_type = sce_net['type']
                 lookfor_filter = {'admin_state_up': True, 'status': 'ACTIVE'}  # 'shared': True
 
@@ -3082,31 +3140,29 @@ def create_instance(mydb, tenant_id, instance_dict):
                     if sce_net["external"]:
                         net_name = sce_net["name"]
                     else:
-                        net_name = "{}.{}".format(instance_name, sce_net["name"])
+                        net_name = "{}-{}".format(instance_name, sce_net["name"])
                         net_name = net_name[:255]     # limit length
 
-                if sce_net["external"]:
-                    number_mgmt_networks += 1
-                if "netmap-use" in site or "netmap-create" in site:
+                if netmap_use or netmap_create:
                     create_network = False
                     lookfor_network = False
-                    if "netmap-use" in site:
+                    if netmap_use:
                         lookfor_network = True
-                        if utils.check_valid_uuid(site["netmap-use"]):
-                            lookfor_filter["id"] = site["netmap-use"]
+                        if utils.check_valid_uuid(netmap_use):
+                            lookfor_filter["id"] = netmap_use
                         else:
-                            lookfor_filter["name"] = site["netmap-use"]
-                    if "netmap-create" in site:
+                            lookfor_filter["name"] = netmap_use
+                    if netmap_create:
                         create_network = True
                         net_vim_name = net_name
-                        if site["netmap-create"]:
-                            net_vim_name = site["netmap-create"]
+                        if isinstance(netmap_create, str):
+                            net_vim_name = netmap_create
                 elif sce_net.get("vim_network_name"):
                     create_network = False
                     lookfor_network = True
                     lookfor_filter["name"] = sce_net.get("vim_network_name")
                 elif sce_net["external"]:
-                    if sce_net['vim_id'] != None:
+                    if sce_net['vim_id'] is not None:
                         # there is a netmap at datacenter_nets database   # TODO REVISE!!!!
                         create_network = False
                         lookfor_network = True
@@ -3445,7 +3501,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         # net_name = descriptor_net.get("name")
         net_name = None
         if not net_name:
-            net_name = "{}.{}".format(instance_name, net["name"])
+            net_name = "{}-{}".format(instance_name, net["name"])
             net_name = net_name[:255]  # limit length
         net_type = net['type']
 
@@ -3470,16 +3526,23 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         }
         db_instance_nets.append(db_net)
 
+        if net.get("vim-network-name"):
+            lookfor_filter = {"name": net["vim-network-name"]}
+            task_action = "FIND"
+            task_extra = {"params": (lookfor_filter,)}
+        else:
+            task_action = "CREATE"
+            task_extra = {"params": (net_name, net_type, net.get('ip_profile', None))}
+
         db_vim_action = {
             "instance_action_id": instance_action_id,
             "task_index": task_index,
             "datacenter_vim_id": myvim_thread_id,
             "status": "SCHEDULED",
-            "action": "CREATE",
+            "action": task_action,
             "item": "instance_nets",
             "item_id": net_uuid,
-            "extra": yaml.safe_dump({"params": (net_name, net_type, net.get('ip_profile', None))},
-                                    default_flow_style=True, width=256)
+            "extra": yaml.safe_dump(task_extra, default_flow_style=True, width=256)
         }
         task_index += 1
         db_vim_actions.append(db_vim_action)
@@ -3546,6 +3609,8 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         myVMDict['description'] = myVMDict['name'][0:99]
         #                if not startvms:
         #                    myVMDict['start'] = "no"
+        if vm.get("instance_parameters") and vm["instance_parameters"].get("name"):
+            myVMDict['name'] = vm["instance_parameters"].get("name")
         myVMDict['name'] = myVMDict['name'][0:255]  # limit name length
         # create image at vim in case it not exist
         image_uuid = vm['image_id']
@@ -3577,6 +3642,10 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
             extended_flavor_dict_yaml = yaml.load(extended_info)
             if 'disks' in extended_flavor_dict_yaml:
                 myVMDict['disks'] = extended_flavor_dict_yaml['disks']
+                if vm.get("instance_parameters") and vm["instance_parameters"].get("devices"):
+                    for disk in myVMDict['disks']:
+                        if disk.get("name") in vm["instance_parameters"]["devices"]:
+                            disk.update(vm["instance_parameters"]["devices"][disk.get("name")])
 
         vm['vim_flavor_id'] = flavor_id
         myVMDict['imageRef'] = vm['vim_image_id']
