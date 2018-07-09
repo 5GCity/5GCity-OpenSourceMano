@@ -916,7 +916,7 @@ def http_delete_datacenter_id( datacenter_id):
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     try:
         data = nfvo.delete_datacenter(mydb, datacenter_id)
-        return format_out({"result":"datacenter '" + data + "' deleted by 5GCity Orchestrator!"})
+        return format_out({"result":"datacenter '" + data + "' deleted"})
     except bottle.HTTPError:
         raise
     except (nfvo.NfvoException, db_base_Exception) as e:
