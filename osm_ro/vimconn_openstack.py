@@ -118,7 +118,7 @@ class vimconnector(vimconn.vimconnector):
         self.neutron = self.session.get('neutron')
         self.cinder = self.session.get('cinder')
         self.glance = self.session.get('glance')
-        self.glancev1 = self.session.get('glancev1')
+        # self.glancev1 = self.session.get('glancev1')
         self.keystone = self.session.get('keystone')
         self.api_version3 = self.session.get('api_version3')
         self.vim_type = self.config.get("vim_type")
@@ -219,8 +219,8 @@ class vimconnector(vimconn.vimconnector):
                 glance_endpoint = None
             self.glance = self.session['glance'] = glClient.Client(2, session=sess, endpoint=glance_endpoint)
             #using version 1 of glance client in new_image()
-            self.glancev1 = self.session['glancev1'] = glClient.Client('1', session=sess,
-                                                                       endpoint=glance_endpoint)
+            # self.glancev1 = self.session['glancev1'] = glClient.Client('1', session=sess,
+            #                                                            endpoint=glance_endpoint)
             self.session['reload_client'] = False
             self.persistent_info['session'] = self.session
             # add availablity zone info inside  self.persistent_info
@@ -772,40 +772,38 @@ class vimconnector(vimconn.vimconnector):
                 if "disk_format" in image_dict:
                     disk_format=image_dict["disk_format"]
                 else: #autodiscover based on extension
-                    if image_dict['location'][-6:]==".qcow2":
+                    if image_dict['location'].endswith(".qcow2"):
                         disk_format="qcow2"
-                    elif image_dict['location'][-4:]==".vhd":
+                    elif image_dict['location'].endswith(".vhd"):
                         disk_format="vhd"
-                    elif image_dict['location'][-5:]==".vmdk":
+                    elif image_dict['location'].endswith(".vmdk"):
                         disk_format="vmdk"
-                    elif image_dict['location'][-4:]==".vdi":
+                    elif image_dict['location'].endswith(".vdi"):
                         disk_format="vdi"
-                    elif image_dict['location'][-4:]==".iso":
+                    elif image_dict['location'].endswith(".iso"):
                         disk_format="iso"
-                    elif image_dict['location'][-4:]==".aki":
+                    elif image_dict['location'].endswith(".aki"):
                         disk_format="aki"
-                    elif image_dict['location'][-4:]==".ari":
+                    elif image_dict['location'].endswith(".ari"):
                         disk_format="ari"
-                    elif image_dict['location'][-4:]==".ami":
+                    elif image_dict['location'].endswith(".ami"):
                         disk_format="ami"
                     else:
                         disk_format="raw"
                 self.logger.debug("new_image: '%s' loading from '%s'", image_dict['name'], image_dict['location'])
-                if image_dict['location'][0:4]=="http":
-                    new_image = self.glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
-                            container_format="bare", location=image_dict['location'], disk_format=disk_format)
+                new_image = self.glance.images.create(name=image_dict['name'])
+                if image_dict['location'].startswith("http"):
+                    # TODO there is not a method to direct download. It must be downloaded locally with requests
+                    raise vimconn.vimconnNotImplemented("Cannot create image from URL")
                 else: #local path
                     with open(image_dict['location']) as fimage:
-                        new_image = self.glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
-                            container_format="bare", data=fimage, disk_format=disk_format)
-                #insert metadata. We cannot use 'new_image.properties.setdefault' 
-                #because nova and glance are "INDEPENDENT" and we are using nova for reading metadata
-                new_image_nova=self.nova.images.find(id=new_image.id)
-                new_image_nova.metadata.setdefault('location',image_dict['location'])
+                        self.glance.images.upload(new_image.id, fimage)
+                        #new_image = self.glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
+                        #    container_format="bare", data=fimage, disk_format=disk_format)
                 metadata_to_load = image_dict.get('metadata')
-                if metadata_to_load:
-                    for k,v in yaml.load(metadata_to_load).iteritems():
-                        new_image_nova.metadata.setdefault(k,v)
+                #TODO location is a reserved word for current openstack versions. Use another word
+                metadata_to_load['location'] = image_dict['location']
+                self.glance.images.update(new_image.id, **metadata_to_load)
                 return new_image.id
             except (nvExceptions.Conflict, ksExceptions.ClientException, nvExceptions.ClientException) as e:
                 self._format_exception(e)
@@ -822,7 +820,7 @@ class vimconnector(vimconn.vimconnector):
         '''
         try:
             self._reload_connection()
-            self.nova.images.delete(image_id)
+            self.glance.images.delete(image_id)
             return image_id
         except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e: #TODO remove
             self._format_exception(e)
@@ -831,7 +829,7 @@ class vimconnector(vimconn.vimconnector):
         '''Get the image id from image path in the VIM database. Returns the image_id'''
         try:
             self._reload_connection()
-            images = self.nova.images.list()
+            images = self.glance.images.list()
             for image in images:
                 if image.metadata.get("location")==path:
                     return image.id
@@ -854,17 +852,18 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             filter_dict_os = filter_dict.copy()
             #First we filter by the available filter fields: name, id. The others are removed.
-            filter_dict_os.pop('checksum', None)
-            image_list = self.nova.images.findall(**filter_dict_os)
-            if len(image_list) == 0:
-                return []
-            #Then we filter by the rest of filter fields: checksum
+            image_list = self.glance.images.list()
             filtered_list = []
             for image in image_list:
                 try:
-                    image_class = self.glance.images.get(image.id)
-                    if 'checksum' not in filter_dict or image_class['checksum'] == filter_dict.get('checksum'):
-                        filtered_list.append(image_class.copy())
+                    if filter_dict.get("name") and image["name"] != filter_dict["name"]:
+                        continue
+                    if filter_dict.get("id") and image["id"] != filter_dict["id"]:
+                        continue
+                    if filter_dict.get("checksum") and image["checksum"] != filter_dict["checksum"]:
+                        continue
+
+                    filtered_list.append(image.copy())
                 except gl1Exceptions.HTTPNotFound:
                     pass
             return filtered_list
