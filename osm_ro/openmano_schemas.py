@@ -1077,9 +1077,6 @@ instance_scenario_create_schema_v01 = {
                                         }
                                     }
                                 },
-                                
-
-
                             }
                         }
                     },

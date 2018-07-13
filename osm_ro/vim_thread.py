@@ -277,7 +277,7 @@ class vim_thread(threading.Thread):
                             if task_interface.get("sdn_port_id"):
                                 try:
                                     with self.db_lock:
-                                        self.ovim.delete_port(task_interface["sdn_port_id"])
+                                        self.ovim.delete_port(task_interface["sdn_port_id"], idempotent=True)
                                         task_interface["sdn_port_id"] = None
                                         task_need_update = True
                                 except ovimException as e:
@@ -394,18 +394,18 @@ class vim_thread(threading.Thread):
                         except (ovimException, Exception) as e:
                             text_error = "ovimException getting network snd_net_id={}: {}".format(task_sdn_net_id, e)
                             self.logger.error("task={} get-net: {}".format(task_id, text_error), exc_info=True)
-                            sdn_net = {"status": "ERROR", "error_msg": text_error}
+                            sdn_net = {"status": "ERROR", "last_error": text_error}
                         if sdn_net["status"] == "ERROR":
                             if not vim_info_error_msg:
-                                vim_info_error_msg = sdn_net["error_msg"]
+                                vim_info_error_msg = str(sdn_net.get("last_error"))
                             else:
                                 vim_info_error_msg = "VIM_ERROR: {} && SDN_ERROR: {}".format(
                                     self._format_vim_error_msg(vim_info_error_msg, 1024//2-14),
-                                    self._format_vim_error_msg(sdn_net["error_msg"], 1024//2-14))
-                            if vim_info_status == "VIM_ERROR":
-                                vim_info_status = "VIM_SDN_ERROR"
-                            else:
-                                vim_info_status = "SDN_ERROR"
+                                    self._format_vim_error_msg(sdn_net["last_error"], 1024//2-14))
+                            vim_info_status = "ERROR"
+                        elif sdn_net["status"] == "BUILD":
+                            if vim_info_status == "ACTIVE":
+                                vim_info_status = "BUILD"
 
                     # update database
                     if vim_info_error_msg:
@@ -859,7 +859,7 @@ class vim_thread(threading.Thread):
                 if iface.get("sdn_port_id"):
                     try:
                         with self.db_lock:
-                            self.ovim.delete_port(iface["sdn_port_id"])
+                            self.ovim.delete_port(iface["sdn_port_id"], idempotent=True)
                     except ovimException as e:
                         self.logger.error("task={} del-VM: ovimException when deleting external_port={}: {} ".format(
                             task_id, iface["sdn_port_id"], e), exc_info=True)
@@ -996,8 +996,8 @@ class vim_thread(threading.Thread):
                     port_list = self.ovim.get_ports(columns={'uuid'},
                                                     filter={'name': 'external_port', 'net_id': sdn_net_id})
                     for port in port_list:
-                        self.ovim.delete_port(port['uuid'])
-                    self.ovim.delete_network(sdn_net_id)
+                        self.ovim.delete_port(port['uuid'], idempotent=True)
+                    self.ovim.delete_network(sdn_net_id, idempotent=True)
             if net_vim_id:
                 self.vim.delete_network(net_vim_id)
             task["status"] = "DONE"

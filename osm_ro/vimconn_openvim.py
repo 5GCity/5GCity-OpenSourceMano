@@ -600,6 +600,8 @@ class vimconnector(vimconn.vimconnector):
             for device in new_flavor_dict.get('extended', {}).get('devices', ()):
                 if 'image name' in device:
                     del device['image name']
+                if 'name' in device:
+                    del device['name']
             numas = new_flavor_dict.get('extended', {}).get('numas')
             if numas:
                 numa = numas[0]
