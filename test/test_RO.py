@@ -150,7 +150,7 @@ class test_VIM_datacenter_operations(test_base):
         self.datacenter = test_config["client"].attach_datacenter(name=self.__class__.datacenter_name,
                                                                   vim_tenant_name='fake')
         logger.debug("{}".format(self.datacenter))
-        assert ('vim_tenants' in self.datacenter.get('datacenter', {}))
+        assert ('uuid' in self.datacenter.get('datacenter', {}))
 
     def test_030_list_attached_datacenter(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"], self.__class__.test_index,

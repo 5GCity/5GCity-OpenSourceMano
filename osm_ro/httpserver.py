@@ -471,6 +471,54 @@ def http_get_datacenters(tenant_id):
         bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
 
+@bottle.route(url_base + '/<tenant_id>/vim_accounts', method='GET')
+@bottle.route(url_base + '/<tenant_id>/vim_accounts/<vim_account_id>', method='GET')
+def http_get_vim_account(tenant_id, vim_account_id=None):
+    '''get vim_account list/details, '''
+    logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
+    try:
+        select_ = ('uuid', 'name', 'dt.datacenter_id as vim_id', 'vim_tenant_name', 'vim_tenant_id', 'user', 'config',
+                   'dt.created_at as created_at', 'passwd')
+        where_ = {'nfvo_tenant_id': tenant_id}
+        if vim_account_id:
+            where_['dt.uuid'] = vim_account_id
+        from_ = 'tenants_datacenters as td join datacenter_tenants as dt on dt.uuid=td.datacenter_tenant_id'
+        vim_accounts = mydb.get_rows(SELECT=select_, FROM=from_, WHERE=where_)
+
+        if len(vim_accounts) == 0 and vim_account_id:
+            bottle.abort(HTTP_Not_Found, "No vim_account found for tenant {} and id '{}'".format(tenant_id,
+                                                                                                 vim_account_id))
+        for vim_account in vim_accounts:
+                if vim_account["passwd"]:
+                    vim_account["passwd"] = "******"
+                if vim_account['config'] != None:
+                    try:
+                        config_dict = yaml.load(vim_account['config'])
+                        vim_account['config'] = config_dict
+                        if vim_account['config'].get('admin_password'):
+                            vim_account['config']['admin_password'] = "******"
+                        if vim_account['config'].get('vcenter_password'):
+                            vim_account['config']['vcenter_password'] = "******"
+                        if vim_account['config'].get('nsx_password'):
+                            vim_account['config']['nsx_password'] = "******"
+                    except Exception as e:
+                        logger.error("Exception '%s' while trying to load config information", str(e))
+        # change_keys_http2db(content, http2db_datacenter, reverse=True)
+        #convert_datetime2str(vim_account)
+        if vim_account_id:
+            return format_out({"datacenter": vim_accounts[0]})
+        else:
+            return format_out({"datacenters": vim_accounts})
+    except bottle.HTTPError:
+        raise
+    except (nfvo.NfvoException, db_base_Exception) as e:
+        logger.error("http_get_datacenter_id error {}: {}".format(e.http_code, str(e)))
+        bottle.abort(e.http_code, str(e))
+    except Exception as e:
+        logger.error("Unexpected exception: ", exc_info=True)
+        bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
+
+
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>', method='GET')
 def http_get_datacenter_id(tenant_id, datacenter_id):
     '''get datacenter details, can use both uuid or name'''
@@ -928,7 +976,8 @@ def http_delete_datacenter_id( datacenter_id):
 
 
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>', method='POST')
-def http_associate_datacenters(tenant_id, datacenter_id):
+@bottle.route(url_base + '/<tenant_id>/vim_accounts', method='POST')
+def http_associate_datacenters(tenant_id, datacenter_id=None):
     '''associate an existing datacenter to a this tenant. '''
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     #parse input data
@@ -937,14 +986,9 @@ def http_associate_datacenters(tenant_id, datacenter_id):
     if r:
         logger.debug("Remove received extra items %s", str(r))
     try:
-        id_ = nfvo.associate_datacenter_to_tenant(mydb, tenant_id, datacenter_id, 
-                                    http_content['datacenter'].get('vim_tenant'),
-                                    http_content['datacenter'].get('vim_tenant_name'),
-                                    http_content['datacenter'].get('vim_username'),
-                                    http_content['datacenter'].get('vim_password'),
-                                    http_content['datacenter'].get('config')
-        )
-        return http_get_datacenter_id(tenant_id, id_)
+        vim_account_id = nfvo.create_vim_account(mydb, tenant_id, datacenter_id,
+                                                             **http_content['datacenter'])
+        return http_get_vim_account(tenant_id, vim_account_id)
     except bottle.HTTPError:
         raise
     except (nfvo.NfvoException, db_base_Exception) as e:
@@ -954,39 +998,37 @@ def http_associate_datacenters(tenant_id, datacenter_id):
         logger.error("Unexpected exception: ", exc_info=True)
         bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
+@bottle.route(url_base + '/<tenant_id>/vim_accounts/<vim_account_id>', method='PUT')
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>', method='PUT')
-def http_associate_datacenters_edit(tenant_id, datacenter_id):
+def http_vim_account_edit(tenant_id, vim_account_id=None, datacenter_id=None):
     '''associate an existing datacenter to a this tenant. '''
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     #parse input data
-    http_content,_ = format_in( datacenter_associate_schema )
+    http_content,_ = format_in(datacenter_associate_schema)
     r = utils.remove_extra_items(http_content, datacenter_associate_schema)
     if r:
         logger.debug("Remove received extra items %s", str(r))
     try:
-        id_ = nfvo.edit_datacenter_to_tenant(mydb, tenant_id, datacenter_id,
-                                    http_content['datacenter'].get('vim_tenant'),
-                                    http_content['datacenter'].get('vim_tenant_name'),
-                                    http_content['datacenter'].get('vim_username'),
-                                    http_content['datacenter'].get('vim_password'),
-                                    http_content['datacenter'].get('config')
-        )
-        return http_get_datacenter_id(tenant_id, id_)
+        vim_account_id = nfvo.edit_vim_account(mydb, tenant_id, vim_account_id, datacenter_id=datacenter_id,
+                                               **http_content['datacenter'])
+        return http_get_vim_account(tenant_id, vim_account_id)
     except bottle.HTTPError:
         raise
     except (nfvo.NfvoException, db_base_Exception) as e:
-        logger.error("http_associate_datacenters_edit error {}: {}".format(e.http_code, str(e)))
+        logger.error("http_vim_account_edit error {}: {}".format(e.http_code, str(e)))
         bottle.abort(e.http_code, str(e))
     except Exception as e:
         logger.error("Unexpected exception: ", exc_info=True)
         bottle.abort(HTTP_Internal_Server_Error, type(e).__name__ + ": " + str(e))
 
+
 @bottle.route(url_base + '/<tenant_id>/datacenters/<datacenter_id>', method='DELETE')
-def http_deassociate_datacenters(tenant_id, datacenter_id):
+@bottle.route(url_base + '/<tenant_id>/vim_accounts/<vim_account_id>', method='DELETE')
+def http_deassociate_datacenters(tenant_id, datacenter_id=None, vim_account_id=None):
     '''deassociate an existing datacenter to a this tenant. '''
     logger.debug('FROM %s %s %s', bottle.request.remote_addr, bottle.request.method, bottle.request.url)
     try:
-        data = nfvo.deassociate_datacenter_to_tenant(mydb, tenant_id, datacenter_id)
+        data = nfvo.delete_vim_account(mydb, tenant_id, vim_account_id, datacenter_id)
         return format_out({"result": data})
     except bottle.HTTPError:
         raise

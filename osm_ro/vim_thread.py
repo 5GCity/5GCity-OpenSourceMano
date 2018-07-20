@@ -62,6 +62,11 @@ import time
 import Queue
 import logging
 import vimconn
+import vimconn_openvim
+import vimconn_aws
+import vimconn_opennebula
+import vimconn_openstack
+import vimconn_vmware
 import yaml
 from db_base import db_base_Exception
 from lib_osm_openvim.ovim import ovimException
@@ -70,6 +75,13 @@ from copy import deepcopy
 __author__ = "Alfonso Tierno, Pablo Montes"
 __date__ = "$28-Sep-2017 12:07:15$"
 
+vim_module = {
+    "openvim": vimconn_openvim,
+    "aws": vimconn_aws,
+    "opennebula": vimconn_opennebula,
+    "openstack": vimconn_openstack,
+    "vmware": vimconn_vmware,
+}
 
 def is_task_id(task_id):
     return task_id.startswith("TASK-")
@@ -87,7 +99,7 @@ class vim_thread(threading.Thread):
     REFRESH_BUILD = 5      # 5 seconds
     REFRESH_ACTIVE = 60    # 1 minute
 
-    def __init__(self, myvimconn, task_lock, name=None, datacenter_name=None, datacenter_tenant_id=None,
+    def __init__(self, task_lock, name=None, datacenter_name=None, datacenter_tenant_id=None,
                  db=None, db_lock=None, ovim=None):
         """Init a thread.
         Arguments:
@@ -97,12 +109,8 @@ class vim_thread(threading.Thread):
             'db', 'db_lock': database class and lock to use it in exclusion
         """
         threading.Thread.__init__(self)
-        if isinstance(myvimconn, vimconn.vimconnException):
-            self.vim = None
-            self.error_status = "Error accesing to VIM: {}".format(myvimconn)
-        else:
-            self.vim = myvimconn
-            self.error_status = None
+        self.vim = None
+        self.error_status = None
         self.datacenter_name = datacenter_name
         self.datacenter_tenant_id = datacenter_tenant_id
         self.ovim = ovim
@@ -110,6 +118,7 @@ class vim_thread(threading.Thread):
             self.name = vimconn["id"] + "." + vimconn["config"]["datacenter_tenant_id"]
         else:
             self.name = name
+        self.vim_persistent_info = {}
 
         self.logger = logging.getLogger('openmano.vim.'+self.name)
         self.db = db
@@ -130,6 +139,33 @@ class vim_thread(threading.Thread):
                 -   <task1>  # e.g. CREATE task
                     <task2>  # e.g. DELETE task
         """
+
+    def get_vimconnector(self):
+        try:
+            from_= "datacenter_tenants as dt join datacenters as d on dt.datacenter_id=d.uuid"
+            select_ = ('type', 'd.config as config', 'd.uuid as datacenter_id', 'vim_url', 'vim_url_admin',
+                       'd.name as datacenter_name', 'dt.uuid as datacenter_tenant_id',
+                       'dt.vim_tenant_name as vim_tenant_name', 'dt.vim_tenant_id as vim_tenant_id',
+                       'user', 'passwd', 'dt.config as dt_config')
+            where_ = {"dt.uuid": self.datacenter_tenant_id}
+            with self.db_lock:
+                vims = self.db.get_rows(FROM=from_, SELECT=select_, WHERE=where_)
+            vim = vims[0]
+            extra = {'datacenter_tenant_id': vim.get('datacenter_tenant_id'),
+                     'datacenter_id': vim.get('datacenter_id')}
+
+            self.vim = vim_module[vim["type"]].vimconnector(
+                uuid=vim['datacenter_id'], name=vim['datacenter_name'],
+                tenant_id=vim['vim_tenant_id'], tenant_name=vim['vim_tenant_name'],
+                url=vim['vim_url'], url_admin=vim['vim_url_admin'],
+                user=vim['user'], passwd=vim['passwd'],
+                config=extra, persistent_info=self.vim_persistent_info
+            )
+            self.error_status = None
+        except Exception as e:
+            self.logger.error("Cannot load vimconnector for vim_account {}: {}".format(self.datacenter_tenant_id, e))
+            self.vim = None
+            self.error_status = "Error loading vimconnector: {}".format(e)
 
     def _reload_vim_actions(self):
         """
@@ -720,6 +756,8 @@ class vim_thread(threading.Thread):
     def run(self):
         self.logger.debug("Starting")
         while True:
+            self.get_vimconnector()
+            self.logger.debug("Vimconnector loaded")
             self._reload_vim_actions()
             reload_thread = False
 
