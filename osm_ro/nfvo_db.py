@@ -982,19 +982,27 @@ class nfvo_db(db_base.db_base):
                     
                     # instance_vnfs
                     cmd = "SELECT iv.uuid as uuid, iv.vnf_id as vnf_id, sv.name as vnf_name, sce_vnf_id, datacenter_id"\
-                                " ,datacenter_tenant_id, v.mgmt_access, sv.member_vnf_index, v.osm_id as vnfd_osm_id "\
-                            " FROM instance_vnfs as iv left join sce_vnfs as sv "\
-                                "on iv.sce_vnf_id=sv.uuid join vnfs as v on iv.vnf_id=v.uuid" \
-                            " WHERE iv.instance_scenario_id='{}'" \
-                            " ORDER BY iv.created_at ".format(instance_dict['uuid'])
+                          ", datacenter_tenant_id, v.mgmt_access, sv.member_vnf_index, v.osm_id as vnfd_osm_id "\
+                          "FROM instance_vnfs as iv left join sce_vnfs as sv "\
+                          " on iv.sce_vnf_id=sv.uuid join vnfs as v on iv.vnf_id=v.uuid " \
+                          "WHERE iv.instance_scenario_id='{}' " \
+                          "ORDER BY iv.created_at ".format(instance_dict['uuid'])
                     self.logger.debug(cmd)
                     self.cur.execute(cmd)
                     instance_dict['vnfs'] = self.cur.fetchall()
                     for vnf in instance_dict['vnfs']:
-                        vnf_manage_iface_list=[]
-                        #instance vms
+
+                        vnf_mgmt_access_iface = None
+                        vnf_mgmt_access_vm = None
+                        if vnf["mgmt_access"]:
+                            vnf_mgmt_access = yaml.load(vnf["mgmt_access"])
+                            vnf_mgmt_access_iface = vnf_mgmt_access.get("interface_id")
+                            vnf_mgmt_access_vm = vnf_mgmt_access.get("vm_id")
+                            vnf["ip_address"] = vnf_mgmt_access.get("ip-address")
+
+                        # instance vms
                         cmd = "SELECT iv.uuid as uuid, vim_vm_id, status, error_msg, vim_info, iv.created_at as "\
-                               "created_at, name, vms.osm_id as vdu_osm_id, vim_name"\
+                               "created_at, name, vms.osm_id as vdu_osm_id, vim_name, vms.uuid as vm_uuid"\
                                 " FROM instance_vms as iv join vms on iv.vm_id=vms.uuid "\
                                 " WHERE instance_vnf_id='{}' ORDER BY iv.created_at".format(vnf['uuid'])
                         self.logger.debug(cmd)
@@ -1004,21 +1012,28 @@ class nfvo_db(db_base.db_base):
                             vm_manage_iface_list=[]
                             # instance_interfaces
                             cmd = "SELECT vim_interface_id, instance_net_id, internal_name,external_name, mac_address,"\
-                                  " ii.ip_address as ip_address, vim_info, i.type as type, sdn_port_id"\
+                                  " ii.ip_address as ip_address, vim_info, i.type as type, sdn_port_id, i.uuid"\
                                   " FROM instance_interfaces as ii join interfaces as i on ii.interface_id=i.uuid"\
                                   " WHERE instance_vm_id='{}' ORDER BY created_at".format(vm['uuid'])
                             self.logger.debug(cmd)
                             self.cur.execute(cmd )
                             vm['interfaces'] = self.cur.fetchall()
                             for iface in vm['interfaces']:
+                                if vnf_mgmt_access_iface and vnf_mgmt_access_iface == iface["uuid"]:
+                                    vnf["ip_address"] = iface["ip_address"]
                                 if iface["type"] == "mgmt" and iface["ip_address"]:
-                                    vnf_manage_iface_list.append(iface["ip_address"])
                                     vm_manage_iface_list.append(iface["ip_address"])
                                 if not verbose:
                                     del iface["type"]
-                            if vm_manage_iface_list: vm["ip_address"] = ",".join(vm_manage_iface_list)
-                        if vnf_manage_iface_list: vnf["ip_address"] = ",".join(vnf_manage_iface_list)
-                        
+                                del iface["uuid"]
+                            if vm_manage_iface_list:
+                                vm["ip_address"] = ",".join(vm_manage_iface_list)
+                                if vnf_mgmt_access_vm == vm["vm_uuid"]:
+                                    vnf["ip_address"] = vm["ip_address"]
+                                elif not vnf.get("ip_address"):
+                                    vnf["ip_address"] = vm["ip_address"]
+                            del vm["vm_uuid"]
+
                     #instance_nets
                     #select_text = "instance_nets.uuid as uuid,sce_nets.name as net_name,instance_nets.vim_net_id as net_id,instance_nets.status as status,instance_nets.external as external" 
                     #from_text = "instance_nets join instance_scenarios on instance_nets.instance_scenario_id=instance_scenarios.uuid " + \

@@ -1086,6 +1086,9 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                                 vnfd_id, vdu_id, iface.get("virtual-interface").get("type")),
                                             HTTP_Bad_Request)
 
+                    if iface.get("mgmt-interface"):
+                        db_interface["type"] = "mgmt"
+
                     if iface.get("external-connection-point-ref"):
                         try:
                             cp = vnfd.get("connection-point")[iface.get("external-connection-point-ref")]
