@@ -41,7 +41,7 @@ _requirements = [
 ]
 
 setup(name=_name,
-      version_command=('git describe', 'pep440-git'),
+      version_command=('git describe --match v*', 'pep440-git'),
       description = _description,
       long_description = open('README.rst').read(),
       author = _author,
