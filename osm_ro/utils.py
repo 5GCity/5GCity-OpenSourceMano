@@ -30,8 +30,16 @@ __author__="Alfonso Tierno, Gerardo Garcia"
 __date__ ="$08-sep-2014 12:21:22$"
 
 import datetime
+import time
 import warnings
-from jsonschema import validate as js_v, exceptions as js_e
+from functools import reduce
+from itertools import tee
+
+from six.moves import filter, filterfalse
+
+from jsonschema import exceptions as js_e
+from jsonschema import validate as js_v
+
 #from bs4 import BeautifulSoup
 
 def read_file(file_to_read):
@@ -42,7 +50,7 @@ def read_file(file_to_read):
         f.close()
     except Exception as e:
         return (False, str(e))
-      
+
     return (True, read_data)
 
 def write_file(file_to_write, text):
@@ -53,7 +61,7 @@ def write_file(file_to_write, text):
         f.close()
     except Exception as e:
         return (False, str(e))
-      
+
     return (True, None)
 
 def format_in(http_response, schema):
@@ -93,8 +101,22 @@ def remove_extra_items(data, schema):
 #    return text
 
 
+def delete_nulls(var):
+    if type(var) is dict:
+        for k in var.keys():
+            if var[k] is None: del var[k]
+            elif type(var[k]) is dict or type(var[k]) is list or type(var[k]) is tuple:
+                if delete_nulls(var[k]): del var[k]
+        if len(var) == 0: return True
+    elif type(var) is list or type(var) is tuple:
+        for k in var:
+            if type(k) is dict: delete_nulls(k)
+        if len(var) == 0: return True
+    return False
+
+
 def convert_bandwidth(data, reverse=False):
-    '''Check the field bandwidth recursivelly and when found, it removes units and convert to number 
+    '''Check the field bandwidth recursivelly and when found, it removes units and convert to number
     It assumes that bandwidth is well formed
     Attributes:
         'data': dictionary bottle.FormsDict variable to be checked. None or empty is consideted valid
@@ -127,7 +149,21 @@ def convert_bandwidth(data, reverse=False):
             if type(k) is dict or type(k) is tuple or type(k) is list:
                 convert_bandwidth(k, reverse)
 
-
+def convert_float_timestamp2str(var):
+    '''Converts timestamps (created_at, modified_at fields) represented as float
+    to a string with the format '%Y-%m-%dT%H:%i:%s'
+    It enters recursively in the dict var finding this kind of variables
+    '''
+    if type(var) is dict:
+        for k,v in var.items():
+            if type(v) is float and k in ("created_at", "modified_at"):
+                var[k] = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(v) )
+            elif type(v) is dict or type(v) is list or type(v) is tuple:
+                convert_float_timestamp2str(v)
+        if len(var) == 0: return True
+    elif type(var) is list or type(var) is tuple:
+        for v in var:
+            convert_float_timestamp2str(v)
 
 def convert_datetime2str(var):
     '''Converts a datetime variable to a string with the format '%Y-%m-%dT%H:%i:%s'
@@ -137,7 +173,7 @@ def convert_datetime2str(var):
         for k,v in var.items():
             if type(v) is datetime.datetime:
                 var[k]= v.strftime('%Y-%m-%dT%H:%M:%S')
-            elif type(v) is dict or type(v) is list or type(v) is tuple: 
+            elif type(v) is dict or type(v) is list or type(v) is tuple:
                 convert_datetime2str(v)
         if len(var) == 0: return True
     elif type(var) is list or type(var) is tuple:
@@ -145,7 +181,7 @@ def convert_datetime2str(var):
             convert_datetime2str(v)
 
 def convert_str2boolean(data, items):
-    '''Check recursively the content of data, and if there is an key contained in items, convert value from string to boolean 
+    '''Check recursively the content of data, and if there is an key contained in items, convert value from string to boolean
     Done recursively
     Attributes:
         'data': dictionary variable to be checked. None or empty is considered valid
@@ -208,3 +244,104 @@ def deprecated(message):
           return func(*args, **kwargs)
       return deprecated_func
   return deprecated_decorator
+
+
+def truncate(text, max_length=1024):
+    """Limit huge texts in number of characters"""
+    text = str(text)
+    if text and len(text) >= max_length:
+        return text[:max_length//2-3] + " ... " + text[-max_length//2+3:]
+    return text
+
+
+def merge_dicts(*dicts, **kwargs):
+    """Creates a new dict merging N others and keyword arguments.
+    Right-most dicts take precedence.
+    Keyword args take precedence.
+    """
+    return reduce(
+        lambda acc, x: acc.update(x) or acc,
+        list(dicts) + [kwargs], {})
+
+
+def remove_none_items(adict):
+    """Return a similar dict without keys associated to None values"""
+    return {k: v for k, v in adict.items() if v is not None}
+
+
+def filter_dict_keys(adict, allow):
+    """Return a similar dict, but just containing the explicitly allowed keys
+
+    Arguments:
+        adict (dict): Simple python dict data struct
+        allow (list): Explicits allowed keys
+    """
+    return {k: v for k, v in adict.items() if k in allow}
+
+
+def filter_out_dict_keys(adict, deny):
+    """Return a similar dict, but not containing the explicitly denied keys
+
+    Arguments:
+        adict (dict): Simple python dict data struct
+        deny (list): Explicits denied keys
+    """
+    return {k: v for k, v in adict.items() if k not in deny}
+
+
+def expand_joined_fields(record):
+    """Given a db query result, explode the fields that contains `.` (join
+    operations).
+
+    Example
+        >> expand_joined_fiels({'wim.id': 2})
+        # {'wim': {'id': 2}}
+    """
+    result = {}
+    for field, value in record.items():
+        keys = field.split('.')
+        target = result
+        target = reduce(lambda target, key: target.setdefault(key, {}),
+                        keys[:-1], result)
+        target[keys[-1]] = value
+
+    return result
+
+
+def ensure(condition, exception):
+    """Raise an exception if condition is not met"""
+    if not condition:
+        raise exception
+
+
+def partition(predicate, iterable):
+    """Create two derived iterators from a single one
+    The first iterator created will loop thought the values where the function
+    predicate is True, the second one will iterate over the values where it is
+    false.
+    """
+    iterable1, iterable2 = tee(iterable)
+    return filter(predicate, iterable2), filterfalse(predicate, iterable1)
+
+
+def pipe(*functions):
+    """Compose functions of one argument in the opposite order,
+    So pipe(f, g)(x) = g(f(x))
+    """
+    return lambda x: reduce(lambda acc, f: f(acc), functions, x)
+
+
+def compose(*functions):
+    """Compose functions of one argument,
+    So compose(f, g)(x) = f(g(x))
+    """
+    return lambda x: reduce(lambda acc, f: f(acc), functions[::-1], x)
+
+
+def safe_get(target, key_path, default=None):
+    """Given a path of keys (eg.: "key1.key2.key3"), return a nested value in
+    a nested dict if present, or the default value
+    """
+    keys = key_path.split('.')
+    target = reduce(lambda acc, key: acc.get(key) or {}, keys[:-1], target)
+    return target.get(keys[-1], default)

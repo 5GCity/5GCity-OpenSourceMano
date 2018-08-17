@@ -15,6 +15,7 @@ _maintainer_email = 'gerardo.garciadeblas@telefonica.com'
 _license = 'Apache 2.0'
 _url = 'https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary'
 _requirements = [
+    "six",  # python 2 x 3 compatibility
     "PyYAML",
     "bottle",
     #"mysqlclient",

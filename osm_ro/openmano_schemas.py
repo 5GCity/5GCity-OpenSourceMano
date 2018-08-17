@@ -22,7 +22,7 @@
 ##
 
 '''
-JSON schemas used by openmano httpserver.py module to parse the different files and messages sent through the API 
+JSON schemas used by openmano httpserver.py module to parse the different files and messages sent through the API
 '''
 __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$09-oct-2014 09:09:48$"
@@ -47,7 +47,7 @@ integer1_schema={"type":"integer","minimum":1}
 path_schema={"type":"string", "pattern":"^(\.){0,2}(/[^/\"':{}\(\)]+)+$"}
 vlan_schema={"type":"integer","minimum":1,"maximum":4095}
 vlan1000_schema={"type":"integer","minimum":1000,"maximum":4095}
-mac_schema={"type":"string", "pattern":"^[0-9a-fA-F][02468aceACE](:[0-9a-fA-F]{2}){5}$"}  #must be unicast LSB bit of MSB byte ==0 
+mac_schema={"type":"string", "pattern":"^[0-9a-fA-F][02468aceACE](:[0-9a-fA-F]{2}){5}$"}  #must be unicast LSB bit of MSB byte ==0
 #mac_schema={"type":"string", "pattern":"^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$"}
 ip_schema={"type":"string","pattern":"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"}
 ip_prefix_schema={"type":"string","pattern":"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/(30|[12]?[0-9])$"}
@@ -98,13 +98,13 @@ config_schema = {
         "vim_name": nameshort_schema,
         "vim_tenant_name": nameshort_schema,
         "mano_tenant_name": nameshort_schema,
-        "mano_tenant_id": id_schema, 
+        "mano_tenant_id": id_schema,
         "http_console_proxy": {"type":"boolean"},
         "http_console_host": nameshort_schema,
         "http_console_ports": {
-            "type": "array", 
+            "type": "array",
             "items": {"OneOf": [
-                port_schema, 
+                port_schema,
                 {"type": "object", "properties": {"from": port_schema, "to": port_schema}, "required": ["from", "to"]}
             ]}
         },
@@ -112,12 +112,14 @@ config_schema = {
         "log_socket_level": log_level_schema,
         "log_level_db": log_level_schema,
         "log_level_vim": log_level_schema,
+        "log_level_wim": log_level_schema,
         "log_level_nfvo": log_level_schema,
         "log_level_http": log_level_schema,
         "log_level_console": log_level_schema,
         "log_level_ovim": log_level_schema,
         "log_file_db": path_schema,
         "log_file_vim": path_schema,
+        "log_file_wim": path_schema,
         "log_file_nfvo": path_schema,
         "log_file_http": path_schema,
         "log_file_console": path_schema,
@@ -429,7 +431,7 @@ external_connection_schema_v02 = {
     "properties":{
         "name": name_schema,
         "mgmt": {"type":"boolean"},
-        "type": {"type": "string", "enum":["e-line", "e-lan"]}, 
+        "type": {"type": "string", "enum":["e-line", "e-lan"]},
         "implementation": {"type": "string", "enum":["overlay", "underlay"]},
         "VNFC": name_schema,
         "local_iface_name": name_schema ,
@@ -579,7 +581,7 @@ vnfc_schema = {
         "bridge-ifaces": bridge_interfaces_schema,
         "devices": devices_schema,
         "boot-data" : boot_data_vdu_schema
-        
+
     },
     "required": ["name"],
     "oneOf": [
@@ -766,7 +768,7 @@ nsd_schema_v02 = {
                         },
                     }
                 },
-            
+
             },
             "required": ["vnfs", "name"],
             "additionalProperties": False
@@ -860,7 +862,7 @@ nsd_schema_v03 = {
                         },
                     }
                 },
-            
+
             },
             "required": ["vnfs", "networks","name"],
             "additionalProperties": False
@@ -1027,7 +1029,7 @@ instance_scenario_create_schema_v01 = {
                                                 "vim-network-name": name_schema,
                                                 "ip-profile": ip_profile_schema,
                                                 "name": name_schema,
-                                            } 
+                                            }
                                         }
                                     }
                                 },
@@ -1057,7 +1059,7 @@ instance_scenario_create_schema_v01 = {
                                     }
                                 },
                                 "ip-profile": ip_profile_schema,
-                                #if the network connects VNFs deployed at different sites, you must specify one entry per site that this network connect to 
+                                #if the network connects VNFs deployed at different sites, you must specify one entry per site that this network connect to
                                 "sites": {
                                     "type":"array",
                                     "minLength":1,
@@ -1066,16 +1068,16 @@ instance_scenario_create_schema_v01 = {
                                         "properties":{
                                             # By default for an scenario 'external' network openmano looks for an existing VIM network to map this external scenario network,
                                             # for other networks openamno creates at VIM
-                                            # Use netmap-create to force to create an external scenario network  
+                                            # Use netmap-create to force to create an external scenario network
                                             "netmap-create": {"oneOf":[name_schema,{"type": "null"}]}, #datacenter network to use. Null if must be created as an internal net
-                                            #netmap-use:   Indicates an existing VIM network that must be used for this scenario network. 
+                                            #netmap-use:   Indicates an existing VIM network that must be used for this scenario network.
                                             #Can use both the VIM network name (if it is not ambiguous) or the VIM net UUID
                                             #If both 'netmap-create' and 'netmap-use'are supplied, netmap-use precedes, but if fails openmano follows the netmap-create
                                             #In oder words, it is the same as 'try to map to the VIM network (netmap-use) if exist, and if not create the network (netmap-create)
-                                            "netmap-use": name_schema, # 
+                                            "netmap-use": name_schema, #
                                             "vim-network-name": name_schema, #override network name
                                             #"ip-profile": ip_profile_schema,
-                                            "datacenter": name_schema,                                        
+                                            "datacenter": name_schema,
                                         }
                                     }
                                 },

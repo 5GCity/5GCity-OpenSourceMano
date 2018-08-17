@@ -246,10 +246,10 @@ then
         "#################################################################"
     [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-yaml python-bottle python-mysqldb python-jsonschema "\
         "python-paramiko python-argcomplete python-requests python-logutils libxml2-dev libxslt-dev python-dev "\
-        "python-pip python-crypto"
+        "python-pip python-crypto python-networkx"
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "PyYAML MySQL-python python-jsonschema "\
         "python-paramiko python-argcomplete python-requests python-logutils libxslt-devel libxml2-devel python-devel "\
-        "python-pip python-crypto"
+        "python-pip python-crypto python-networkx"
     # The only way to install python-bottle on Centos7 is with easy_install or pip
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && easy_install -U bottle
 

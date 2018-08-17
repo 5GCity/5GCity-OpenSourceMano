@@ -23,7 +23,7 @@
 
 """"
 This is thread that interacts with a VIM. It processes TASKs sequentially against a single VIM.
-The tasks are stored at database in table vim_actions
+The tasks are stored at database in table vim_wim_actions
 The task content is (M: stored at memory, D: stored at database):
     MD  instance_action_id:  reference a global action over an instance-scenario: database instance_actions
     MD  task_index:     index number of the task. This together with the previous forms a unique key identifier
@@ -49,8 +49,8 @@ The task content is (M: stored at memory, D: stored at database):
             vim_status: VIM status of the element. Stored also at database in the instance_XXX
     M   depends:    dict with task_index(from depends_on) to task class
     M   params:     same as extra[params] but with the resolved dependencies
-    M   vim_interfaces: similar to extra[interfaces] but with VIM information. Stored at database in the instance_XXX but not at vim_actions
-    M   vim_info:   Detailed information of a vm,net from the VIM. Stored at database in the instance_XXX but not at vim_actions
+    M   vim_interfaces: similar to extra[interfaces] but with VIM information. Stored at database in the instance_XXX but not at vim_wim_actions
+    M   vim_info:   Detailed information of a vm,net from the VIM. Stored at database in the instance_XXX but not at vim_wim_actions
     MD  error_msg:  descriptive text upon an error.Stored also at database instance_XXX
     MD  created_at: task creation time
     MD  modified_at: last task update time. On refresh it contains when this task need to be refreshed
@@ -189,7 +189,7 @@ class vim_thread(threading.Thread):
             while True:
                 # get 200 (database_limit) entries each time
                 with self.db_lock:
-                    vim_actions = self.db.get_rows(FROM="vim_actions",
+                    vim_actions = self.db.get_rows(FROM="vim_wim_actions",
                                                    WHERE={"datacenter_vim_id": self.datacenter_tenant_id,
                                                           "item_id>=": old_item_id},
                                                    ORDER_BY=("item_id", "item", "created_at",),
@@ -393,7 +393,7 @@ class vim_thread(threading.Thread):
                     if task_need_update:
                         with self.db_lock:
                             self.db.update_rows(
-                                'vim_actions',
+                                'vim_wim_actions',
                                 UPDATE={"extra": yaml.safe_dump(task["extra"], default_flow_style=True, width=256),
                                         "error_msg": task.get("error_msg"), "modified_at": now},
                                 WHERE={'instance_action_id': task['instance_action_id'],
@@ -463,7 +463,7 @@ class vim_thread(threading.Thread):
                         with self.db_lock:
                             self.db.update_rows('instance_nets', UPDATE=temp_dict, WHERE={"uuid": task["item_id"]})
                             self.db.update_rows(
-                                'vim_actions',
+                                'vim_wim_actions',
                                 UPDATE={"extra": yaml.safe_dump(task["extra"], default_flow_style=True, width=256),
                                         "error_msg": task.get("error_msg"), "modified_at": now},
                                 WHERE={'instance_action_id': task['instance_action_id'],
@@ -644,7 +644,7 @@ class vim_thread(threading.Thread):
                 now = time.time()
                 with self.db_lock:
                     self.db.update_rows(
-                        table="vim_actions",
+                        table="vim_wim_actions",
                         UPDATE={"status": task["status"], "vim_id": task.get("vim_id"), "modified_at": now,
                                 "error_msg": task["error_msg"],
                                 "extra": yaml.safe_dump(task["extra"], default_flow_style=True, width=256)},
@@ -811,7 +811,7 @@ class vim_thread(threading.Thread):
                 instance_action_id = ins_action_id
 
         with self.db_lock:
-            tasks = self.db.get_rows(FROM="vim_actions", WHERE={"instance_action_id": instance_action_id,
+            tasks = self.db.get_rows(FROM="vim_wim_actions", WHERE={"instance_action_id": instance_action_id,
                                                                 "task_index": task_index})
         if not tasks:
             return None
