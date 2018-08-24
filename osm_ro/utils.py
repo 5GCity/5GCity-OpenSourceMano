@@ -30,6 +30,7 @@ __author__="Alfonso Tierno, Gerardo Garcia"
 __date__ ="$08-sep-2014 12:21:22$"
 
 import datetime
+import warnings
 from jsonschema import validate as js_v, exceptions as js_e
 #from bs4 import BeautifulSoup
 
@@ -196,3 +197,14 @@ def expand_brackets(text):
     for char in text[start+1:end]:
         text_list += expand_brackets(text[:start] + char + text[end+1:])
     return text_list
+
+def deprecated(message):
+  def deprecated_decorator(func):
+      def deprecated_func(*args, **kwargs):
+          warnings.warn("{} is a deprecated function. {}".format(func.__name__, message),
+                        category=DeprecationWarning,
+                        stacklevel=2)
+          warnings.simplefilter('default', DeprecationWarning)
+          return func(*args, **kwargs)
+      return deprecated_func
+  return deprecated_decorator

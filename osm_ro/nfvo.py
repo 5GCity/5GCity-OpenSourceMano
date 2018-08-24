@@ -31,6 +31,7 @@ __date__ ="$16-sep-2014 22:05:01$"
 # import json
 import yaml
 import utils
+from utils import deprecated
 import vim_thread
 from db_base import HTTP_Unauthorized, HTTP_Bad_Request, HTTP_Internal_Server_Error, HTTP_Not_Found,\
     HTTP_Conflict, HTTP_Method_Not_Allowed
@@ -1305,6 +1306,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
         raise  # NfvoException("Exception {}".format(e), HTTP_Bad_Request)
 
 
+@deprecated("Use new_vnfd_v3")
 def new_vnf(mydb, tenant_id, vnf_descriptor):
     global global_config
 
@@ -1442,6 +1444,7 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
         raise NfvoException(error_text, e.http_code)
 
 
+@deprecated("Use new_vnfd_v3")
 def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
     global global_config
 
@@ -1742,6 +1745,7 @@ def delete_vnf(mydb,tenant_id,vnf_id,datacenter=None,vim_tenant=None):
     #    return "delete_vnf. Undeleted: %s" %(undeletedItems)
 
 
+@deprecated("Not used")
 def get_hosts_info(mydb, nfvo_tenant_id, datacenter_name=None):
     result, vims = get_vim(mydb, nfvo_tenant_id, None, datacenter_name)
     if result < 0:
@@ -1792,6 +1796,7 @@ def get_hosts(mydb, nfvo_tenant_id):
         raise NfvoException("Not possible to get_host_list from VIM: {}".format(str(e)), e.http_code)
 
 
+@deprecated("Use new_nsd_v3")
 def new_scenario(mydb, tenant_id, topo):
 
 #    result, vims = get_vim(mydb, tenant_id)
@@ -2073,6 +2078,7 @@ def new_scenario(mydb, tenant_id, topo):
     return c
 
 
+@deprecated("Use new_nsd_v3")
 def new_scenario_v02(mydb, tenant_id, scenario_dict, version):
     """ This creates a new scenario for version 0.2 and 0.3"""
     scenario = scenario_dict["scenario"]
@@ -2518,6 +2524,7 @@ def edit_scenario(mydb, tenant_id, scenario_id, data):
     return c
 
 
+@deprecated("Use create_instance")
 def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instance_scenario_description, datacenter=None,vim_tenant=None, startvms=True):
     #print "Checking that nfvo_tenant_id exists and getting the VIM URI and the VIM tenant_id"
     datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_id, datacenter, vim_tenant=vim_tenant)
@@ -4118,6 +4125,7 @@ def get_instance_id(mydb, tenant_id, instance_id):
             }
     return instance_dict
 
+@deprecated("Instance is automatically refreshed by vim_threads")
 def refresh_instance(mydb, nfvo_tenant, instanceDict, datacenter=None, vim_tenant=None):
     '''Refreshes a scenario instance. It modifies instanceDict'''
     '''Returns:
