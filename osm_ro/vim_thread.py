@@ -151,15 +151,20 @@ class vim_thread(threading.Thread):
             with self.db_lock:
                 vims = self.db.get_rows(FROM=from_, SELECT=select_, WHERE=where_)
             vim = vims[0]
-            extra = {'datacenter_tenant_id': vim.get('datacenter_tenant_id'),
-                     'datacenter_id': vim.get('datacenter_id')}
+            vim_config = {}
+            if vim["config"]:
+                vim_config.update(yaml.load(vim["config"]))
+            if vim["dt_config"]:
+                vim_config.update(yaml.load(vim["dt_config"]))
+            vim_config['datacenter_tenant_id'] = vim.get('datacenter_tenant_id')
+            vim_config['datacenter_id'] = vim.get('datacenter_id')
 
             self.vim = vim_module[vim["type"]].vimconnector(
                 uuid=vim['datacenter_id'], name=vim['datacenter_name'],
                 tenant_id=vim['vim_tenant_id'], tenant_name=vim['vim_tenant_name'],
                 url=vim['vim_url'], url_admin=vim['vim_url_admin'],
                 user=vim['user'], passwd=vim['passwd'],
-                config=extra, persistent_info=self.vim_persistent_info
+                config=vim_config, persistent_info=self.vim_persistent_info
             )
             self.error_status = None
         except Exception as e:

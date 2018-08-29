@@ -4676,7 +4676,7 @@ def edit_datacenter(mydb, datacenter_id_name, datacenter_descriptor):
 
     # edit data
     datacenter_id = datacenter['uuid']
-    where={'uuid': datacenter['uuid']}
+    where = {'uuid': datacenter['uuid']}
     remove_port_mapping = False
     new_sdn_port_mapping = None
     if "config" in datacenter_descriptor:
@@ -4686,10 +4686,10 @@ def edit_datacenter(mydb, datacenter_id_name, datacenter_descriptor):
                 if "sdn-port-mapping" in new_config_dict:
                     remove_port_mapping = True
                     new_sdn_port_mapping = new_config_dict.pop("sdn-port-mapping")
-                #delete null fields
-                to_delete=[]
+                # delete null fields
+                to_delete = []
                 for k in new_config_dict:
-                    if new_config_dict[k] == None:
+                    if new_config_dict[k] is None:
                         to_delete.append(k)
                         if k == 'sdn-controller':
                             remove_port_mapping = True
@@ -4699,7 +4699,7 @@ def edit_datacenter(mydb, datacenter_id_name, datacenter_descriptor):
                     config_text = '{}'
                 config_dict = yaml.load(config_text)
                 config_dict.update(new_config_dict)
-                #delete null fields
+                # delete null fields
                 for k in to_delete:
                     del config_dict[k]
             except Exception as e:
@@ -4712,14 +4712,16 @@ def edit_datacenter(mydb, datacenter_id_name, datacenter_descriptor):
             try:
                 datacenter_sdn_port_mapping_delete(mydb, None, datacenter_id)
             except ovimException as e:
-                logger.error("Error deleting datacenter-port-mapping " + str(e))
+                raise NfvoException("Error deleting datacenter-port-mapping " + str(e), HTTP_Conflict)
 
     mydb.update_rows('datacenters', datacenter_descriptor, where)
     if new_sdn_port_mapping:
         try:
             datacenter_sdn_port_mapping_set(mydb, None, datacenter_id, new_sdn_port_mapping)
         except ovimException as e:
-            logger.error("Error adding datacenter-port-mapping " + str(e))
+            # Rollback
+            mydb.update_rows('datacenters', datacenter, where)
+            raise NfvoException("Error adding datacenter-port-mapping " + str(e), HTTP_Conflict)
     return datacenter_id
 
 
@@ -4730,7 +4732,7 @@ def delete_datacenter(mydb, datacenter):
     try:
         datacenter_sdn_port_mapping_delete(mydb, None, datacenter_dict['uuid'])
     except ovimException as e:
-        logger.error("Error deleting datacenter-port-mapping " + str(e))
+        raise NfvoException("Error deleting datacenter-port-mapping " + str(e))
     return datacenter_dict['uuid'] + " " + datacenter_dict['name']
 
 
