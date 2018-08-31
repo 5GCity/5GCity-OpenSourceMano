@@ -22,14 +22,14 @@ OSMRO_PATH=`python -c 'import osm_ro; print osm_ro.__path__[0]'`
 #OSMLIBOVIM_PATH=`python -c 'import lib_osm_openvim; print lib_osm_openvim.__path__[0]'`
 
 #Pip packages required for vmware connector
-pip install pip==9.0.3
-pip install --upgrade pyvcloud==19.1.1
-pip install --upgrade progressbar
-pip install --upgrade prettytable
-pip install --upgrade pyvmomi
-pip install --upgrade pyang pyangbind
-pip install untangle
-pip install -e git+https://github.com/python-oca/python-oca#egg=oca
+pip2 install pip==9.0.3
+pip2 install --upgrade pyvcloud==19.1.1
+pip2 install --upgrade progressbar
+pip2 install --upgrade prettytable
+pip2 install --upgrade pyvmomi
+pip2 install --upgrade pyang pyangbind
+pip2 install untangle
+pip2 install -e git+https://github.com/python-oca/python-oca#egg=oca
 
 systemctl enable osm-ro.service
 

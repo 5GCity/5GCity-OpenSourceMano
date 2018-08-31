@@ -253,15 +253,15 @@ then
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && easy_install -U bottle
 
     # required for vmware connector TODO move that to separete opt in install script
-    pip install pip==9.0.3 || exit 1   #  --upgrade pip    install pip 10 that does not work
-    pip install pyvcloud==19.1.1 || exit 1
-    pip install progressbar || exit 1
-    pip install prettytable || exit 1
-    pip install pyvmomi || exit 1
+    pip2 install pip==9.0.3 || exit 1   #  --upgrade pip    install pip 10 that does not work
+    pip2 install pyvcloud==19.1.1 || exit 1
+    pip2 install progressbar || exit 1
+    pip2 install prettytable || exit 1
+    pip2 install pyvmomi || exit 1
 
     # required for OpenNebula connector
-    pip install untangle || exit 1
-    pip install -e git+https://github.com/python-oca/python-oca#egg=oca || exit 1
+    pip2 install untangle || exit 1
+    pip2 install -e git+https://github.com/python-oca/python-oca#egg=oca || exit 1
 
     # required for AWS connector
     [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-boto"
@@ -332,7 +332,7 @@ then
     [ "$_DISTRO" == "Ubuntu" ] && install_packages "tox debhelper python-bitarray python-lxml python-six"
     # TODO check packages for CentOS and RedHat
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "tox debhelper python-bitarray python-lxml python-six"
-    pip install --upgrade stdeb pyangbind || exit 1
+    pip2 install --upgrade stdeb pyangbind || exit 1
 fi
 su $SUDO_USER -c "make -C ${BASEFOLDER}/IM all"
 dpkg -i ${BASEFOLDER}/IM/deb_dist/python-osm-im*.deb ${BASEFOLDER}/IM/pyangbind/deb_dist/*.deb \
@@ -369,7 +369,7 @@ then
     # TODO check if that is the name in CentOS and RedHat
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages \
         "libmysqlclient-dev python-cffi python-packaging python-pkgconfig python-pycparser libssl-dev libffi-dev"
-    pip install --upgrade stdeb setuptools-version-command || exit 1
+    pip2 install --upgrade stdeb setuptools-version-command || exit 1
 fi
 su $SUDO_USER -c "make -C ${BASEFOLDER}/openvim lite"
 dpkg -i ${BASEFOLDER}/openvim/.build/python-lib-osm-openvim*.deb

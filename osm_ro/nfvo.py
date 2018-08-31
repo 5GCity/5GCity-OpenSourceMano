@@ -3702,6 +3702,8 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                 netDict['vpci'] = iface['vpci']
             if iface.get("mac"):
                 netDict['mac_address'] = iface['mac']
+            if iface.get("mac_address"):
+                netDict['mac_address'] = iface['mac_address']
             if iface.get("ip_address"):
                 netDict['ip_address'] = iface['ip_address']
             if iface.get("port-security") is not None:
