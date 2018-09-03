@@ -32,7 +32,7 @@ to the VIM connector's SFC resources as follows:
 - Service Function (OSM) -> Port Pair Group (Neutron)
 - Service Function Path (OSM) -> Port Chain (Neutron)
 '''
-__author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes, xFlow Research, Igor D.C."
+__author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes, xFlow Research, Igor D.C., Eduardo Sousa"
 __date__  = "$22-sep-2017 23:59:59$"
 
 import vimconn
@@ -52,7 +52,6 @@ import keystoneclient.exceptions as ksExceptions
 import keystoneclient.v3.client as ksClient_v3
 import keystoneclient.v2_0.client as ksClient_v2
 from glanceclient import client as glClient
-import glanceclient.client as gl1Client
 import glanceclient.exc as gl1Exceptions
 from  cinderclient import client as cClient
 from httplib import HTTPException
@@ -1620,7 +1619,7 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("osconnector: Adding a new user to VIM")
         try:
             self._reload_connection()
-            user=self.keystone.users.create(user_name, user_passwd, tenant_id=tenant_id)
+            user=self.keystone.users.create(user_name, password=user_passwd, default_project=tenant_id)
             #self.keystone.tenants.add_user(self.k_creds["username"], #role)
             return user.id
         except ksExceptions.ConnectionError as e:
