@@ -722,8 +722,8 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
             for index in range(0,len(devices_original)) :
                 device=devices_original[index]
                 if "image" not in device and "image name" not in device:
-                    if 'size' in device:
-                        disk_list.append({'size': device.get('size', default_volume_size), 'name': device.get('name')})
+                    # if 'size' in device:
+                    disk_list.append({'size': device.get('size', default_volume_size), 'name': device.get('name')})
                     continue
                 image_dict={}
                 image_dict['name']=device.get('image name',flavor_dict['name']+str(dev_nb)+"-img")

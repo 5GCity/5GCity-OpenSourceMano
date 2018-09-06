@@ -248,7 +248,7 @@ def format_in(default_schema, version_fields=None, version_dict_schema=None, con
             
         js_v(client_data, used_schema)
         return client_data, used_schema
-    except (ValueError, yaml.YAMLError) as exc:
+    except (TypeError, ValueError, yaml.YAMLError) as exc:
         error_text += str(exc)
         logger.error(error_text) 
         bottle.abort(HTTP_Bad_Request, error_text)
