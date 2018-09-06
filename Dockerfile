@@ -1,11 +1,13 @@
 FROM ubuntu:16.04
 
 RUN  apt-get update && \
-  DEBIAN_FRONTEND=noninteractive apt-get -y install git make python python-pip debhelper && \
+  DEBIAN_FRONTEND=noninteractive apt-get -y install git make python python-pip debhelper python3 python3-all python3-pip python3-setuptools && \
   DEBIAN_FRONTEND=noninteractive apt-get -y install wget tox && \
   DEBIAN_FRONTEND=noninteractive pip install pip==9.0.3 && \
+  DEBIAN_FRONTEND=noninteractive pip3 install pip==9.0.3 && \
   DEBIAN_FRONTEND=noninteractive pip install -U setuptools setuptools-version-command stdeb && \
   DEBIAN_FRONTEND=noninteractive pip install -U pyang pyangbind && \
+  DEBIAN_FRONTEND=noninteractive pip3 install -U pyang pyangbind && \
   DEBIAN_FRONTEND=noninteractive apt-get -y install python-yaml python-netaddr python-boto && \
   DEBIAN_FRONTEND=noninteractive apt-get -y install software-properties-common && \
   DEBIAN_FRONTEND=noninteractive add-apt-repository -y cloud-archive:queens && \
