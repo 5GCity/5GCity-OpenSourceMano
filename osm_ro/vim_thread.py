@@ -941,8 +941,9 @@ class vim_thread(threading.Thread):
         sdn_net_id = None
         with self.db_lock:
             result = self.db.get_rows(SELECT=('sdn_net_id',), FROM='instance_nets',
-                                      WHERE={'vim_net_id': vim_net_id, 'instance_scenario_id': None,
-                                             'datacenter_tenant_id': self.datacenter_tenant_id})
+                                      WHERE={'vim_net_id': vim_net_id,
+                                             'datacenter_tenant_id': self.datacenter_tenant_id},
+                                      ORDER="instance_scenario_id")
         if result:
             sdn_net_id = result[0]['sdn_net_id']
 
