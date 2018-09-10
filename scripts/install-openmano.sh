@@ -81,8 +81,8 @@ function ask_user(){
 }
 
 GIT_URL=https://osm.etsi.org/gerrit/osm/RO.git
-GIT_OVIM_URL=https://osm.etsi.org/gerrit/osm/openvim.git
-GIT_OSMIM_URL=https://osm.etsi.org/gerrit/osm/IM.git
+export GIT_OVIM_URL=https://osm.etsi.org/gerrit/osm/openvim.git
+export GIT_OSMIM_URL=https://osm.etsi.org/gerrit/osm/IM.git
 DBUSER="root"
 DBPASSWD=""
 DBPASSWD_PARAM=""
@@ -117,7 +117,7 @@ while getopts ":u:p:b:hiq-:" o; do
             ;;
         -)
             [ "${OPTARG}" == "help" ] && usage && exit 0
-            [ "${OPTARG}" == "develop" ] && DEVELOP="y" && continue
+            [ "${OPTARG}" == "develop" ] && export DEVELOP="y" && continue
             [ "${OPTARG}" == "forcedb" ] && DB_FORCE_UPDATE="${DB_FORCE_UPDATE}--forcedb" && continue
             [ "${OPTARG}" == "updatedb" ] && DB_FORCE_UPDATE="${DB_FORCE_UPDATE}--updatedb" && continue
             [ "${OPTARG}" == "force" ]   &&  FORCE="y" && continue
@@ -200,6 +200,7 @@ else  #[ "$_DISTRO" != "Ubuntu" -a "$_DISTRO" != "CentOS" -a "$_DISTRO" != "Red"
         echo "Cancelled" && exit 1
 fi
 
+export _DISTRO="$_DISTRO"
 #check if installed as a service
 INSTALL_AS_A_SERVICE=""
 [[ "$_DISTRO" == "Ubuntu" ]] &&  [[ ${_RELEASE%%.*} == 16 ]] && [[ -z $DEVELOP ]] && INSTALL_AS_A_SERVICE="y"
@@ -207,14 +208,14 @@ INSTALL_AS_A_SERVICE=""
 # Next operations require knowing BASEFOLDER
 if [[ -z "$NOCLONE" ]]; then
     if [[ -n "$INSTALL_AS_A_SERVICE" ]] ; then
-        BASEFOLDER=__openmano__${RANDOM}
+        export BASEFOLDER=__openmano__${RANDOM}
     else
-        BASEFOLDER="${PWD}/openmano"
+        export BASEFOLDER="${PWD}/openmano"
     fi
     [[ -n "$FORCE" ]] && rm -rf $BASEFOLDER #make idempotent
 else
     HERE=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
-    BASEFOLDER=$(dirname $HERE)
+    export BASEFOLDER=$(dirname $HERE)
 fi
 
 if [[ -z "$NO_PACKAGES" ]]
@@ -311,71 +312,17 @@ echo -e "\n"\
     "#################################################################\n"\
     "#####        INSTALLING OSM-IM LIBRARY                      #####\n"\
     "#################################################################"
-su $SUDO_USER -c "git -C ${BASEFOLDER} clone ${GIT_OSMIM_URL} IM" ||
-    ! echo "Error cannot clone from '${GIT_OSMIM_URL}'" >&2 || exit 1
-if [[ -n $COMMIT_ID ]] ; then
-    echo -e "Installing osm-IM from refspec: $COMMIT_ID"
-    su $SUDO_USER -c "git -C ${BASEFOLDER}/IM checkout $COMMIT_ID" ||
-        ! echo "Error cannot checkout '$COMMIT_ID' from '${GIT_OSMIM_URL}'" >&2 || exit 1
-elif [[ -z $DEVELOP ]]; then
-    LATEST_STABLE_TAG=`git -C "${BASEFOLDER}/IM" tag -l "v[0-9]*" | sort -V | tail -n1`
-    echo -e "Installing osm-IM from refspec: tags/${LATEST_STABLE_TAG}"
-    su $SUDO_USER -c "git -C ${BASEFOLDER}/IM checkout tags/${LATEST_STABLE_TAG}" ||
-        ! echo "Error cannot checkout 'tags/${LATEST_STABLE_TAG}' from '${GIT_OSMIM_URL}'" >&2 || exit 1
-else
-    echo -e "Installing osm-IM from refspec: master"
-fi
-
-# Install debian dependencies before setup.py
-if [[ -z "$NO_PACKAGES" ]]
-then
-    [ "$_DISTRO" == "Ubuntu" ] && install_packages "tox debhelper python-bitarray python-lxml python-six"
-    # TODO check packages for CentOS and RedHat
-    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "tox debhelper python-bitarray python-lxml python-six"
-    pip2 install --upgrade stdeb pyangbind || exit 1
-fi
-su $SUDO_USER -c "make -C ${BASEFOLDER}/IM all"
-dpkg -i ${BASEFOLDER}/IM/deb_dist/python-osm-im*.deb ${BASEFOLDER}/IM/pyangbind/deb_dist/*.deb \
-        ${BASEFOLDER}/IM/pyang/deb_dist/*.deb
-rm -rf "${BASEFOLDER}/IM"
-OSM_IM_PATH=`python -c 'import osm_im; print osm_im.__path__[0]'` ||
-    ! echo "ERROR installing python-osm-im library!!!" >&2  || exit 1
-
+    ${BASEFOLDER}/scripts/install-osm-im.sh
+    OSM_IM_PATH=`python -c 'import osm_im; print osm_im.__path__[0]'` ||
+        ! echo "ERROR installing python-osm-im library!!!" >&2  || exit 1
 
 echo -e "\n"\
     "#################################################################\n"\
     "#####        INSTALLING OVIM LIBRARY                        #####\n"\
     "#################################################################"
-su $SUDO_USER -c "git -C ${BASEFOLDER} clone ${GIT_OVIM_URL} openvim" ||
-    ! echo "Error cannot clone from '${GIT_OVIM_URL}'" || exit 1
-if [[ -n $COMMIT_ID ]] ; then
-    echo -e "Installing lib_osm_openvim from refspec: $COMMIT_ID"
-    su $SUDO_USER -c "git -C ${BASEFOLDER}/openvim checkout $COMMIT_ID" ||
-        ! echo "Error cannot checkout '$COMMIT_ID' from '${GIT_OVIM_URL}'" || exit 1
-elif [[ -z $DEVELOP ]]; then
-    LATEST_STABLE_TAG=`git -C "${BASEFOLDER}/openvim" tag -l "v[0-9]*" | sort -V | tail -n1`
-    echo -e "Installing lib_osm_openvim from refspec: tags/${LATEST_STABLE_TAG}"
-    su $SUDO_USER -c "git -C ${BASEFOLDER}/openvim checkout tags/${LATEST_STABLE_TAG}" ||
-        ! echo "Error cannot checkout 'tags/${LATEST_STABLE_TAG}' from '${GIT_OVIM_URL}'" || exit 1
-else
-    echo -e "Installing lib_osm_openvim from refspec: master"
-fi
-
-# Install debian dependencies before setup.py
-if [[ -z "$NO_PACKAGES" ]]
-then
-    [ "$_DISTRO" == "Ubuntu" ] && install_packages \
-        "libmysqlclient-dev python-cffi python-packaging python-pkgconfig python-pycparser libssl-dev libffi-dev"
-    # TODO check if that is the name in CentOS and RedHat
-    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages \
-        "libmysqlclient-dev python-cffi python-packaging python-pkgconfig python-pycparser libssl-dev libffi-dev"
-    pip2 install --upgrade stdeb setuptools-version-command || exit 1
-fi
-su $SUDO_USER -c "make -C ${BASEFOLDER}/openvim lite"
-dpkg -i ${BASEFOLDER}/openvim/.build/python-lib-osm-openvim*.deb
-rm -rf "${BASEFOLDER}/openvim"
-OSMLIBOVIM_PATH=`python -c 'import lib_osm_openvim; print lib_osm_openvim.__path__[0]'` ||
-    ! echo "ERROR installing python-lib-osm-openvim library!!!" >&2  || exit 1
+    ${BASEFOLDER}/scripts/install-lib-osm-openvim.sh
+    OSMLIBOVIM_PATH=`python -c 'import lib_osm_openvim; print lib_osm_openvim.__path__[0]'` ||
+        ! echo "ERROR installing python-lib-osm-openvim library!!!" >&2  || exit 1
 
 if [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ]
 then
