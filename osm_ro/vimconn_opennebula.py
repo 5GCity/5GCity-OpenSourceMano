@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2017  Telefónica Digital España S.L.U.
+# Copyright 2017  Telefonica Digital Spain S.L.U.
 # This file is part of ETSI OSM
 #  All Rights Reserved.
 #
@@ -26,7 +26,7 @@
 vimconnector implements all the methods to interact with OpenNebula using the XML-RPC API.
 """
 __author__ = "Jose Maria Carmona Perez,Juan Antonio Hernando Labajo, Emilio Abraham Garrido Garcia,Alberto Florez " \
-             "Pages, Andres Pozo Muñoz, Santiago Perez Marin, Onlife Networks Telefonica I+D Product Innovation "
+             "Pages, Andres Pozo Munoz, Santiago Perez Marin, Onlife Networks Telefonica I+D Product Innovation "
 __date__ = "$13-dec-2017 11:09:29$"
 import vimconn
 import requests

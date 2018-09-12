@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openmano
 # All Rights Reserved.
 #
@@ -23,7 +23,7 @@
 
 
 LICENSE_HEAD='/**
-* Copyright 2017 Telefónica Investigación y Desarrollo, S.A.U.
+* Copyright 2017 Telefonica Investigacion y Desarrollo, S.A.U.
 * This file is part of openmano
 * All Rights Reserved.
 *

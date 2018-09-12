@@ -8,34 +8,24 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install software-properties-common && \
     DEBIAN_FRONTEND=noninteractive add-apt-repository -y cloud-archive:queens && \
     apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get -y install git make python python-pip debhelper python3 python3-all python3-pip python3-setuptools && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y install git python python-pip && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install wget tox && \
-    DEBIAN_FRONTEND=noninteractive pip install pip==9.0.3 && \
-    DEBIAN_FRONTEND=noninteractive pip3 install pip==9.0.3 && \
-    DEBIAN_FRONTEND=noninteractive pip install -U setuptools setuptools-version-command stdeb && \
-    DEBIAN_FRONTEND=noninteractive pip install -U pyang pyangbind && \
-    DEBIAN_FRONTEND=noninteractive pip3 install -U pyang pyangbind && \
-    DEBIAN_FRONTEND=noninteractive apt-get -y install python-yaml python-netaddr python-boto && \
-    DEBIAN_FRONTEND=noninteractive apt-get -y install software-properties-common && \
+    DEBIAN_FRONTEND=noninteractive pip2 install pip==9.0.3 && \
+    DEBIAN_FRONTEND=noninteractive pip2 install -U progressbar pyvmomi pyvcloud==19.1.1 && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install python-novaclient python-keystoneclient python-glanceclient python-cinderclient python-neutronclient && \
-    DEBIAN_FRONTEND=noninteractive pip install -U progressbar pyvmomi pyvcloud==19.1.1 && \
-    DEBIAN_FRONTEND=noninteractive apt-get -y install python-argcomplete python-bottle python-cffi python-packaging python-paramiko python-pkgconfig libmysqlclient-dev libssl-dev libffi-dev python-mysqldb && \
-    DEBIAN_FRONTEND=noninteractive apt-get -y install python-logutils python-openstackclient python-openstacksdk && \
-    DEBIAN_FRONTEND=noninteractive pip install untangle && \
-    DEBIAN_FRONTEND=noninteractive pip install -e git+https://github.com/python-oca/python-oca#egg=oca && \
-    DEBIAN_FRONTEND=noninteractive apt-get -y install python-bitarray && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y install python-cffi libmysqlclient-dev libssl-dev libffi-dev python-mysqldb && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y install python-openstacksdk python-openstackclient && \
+    DEBIAN_FRONTEND=noninteractive pip2 install untangle && \
+    DEBIAN_FRONTEND=noninteractive pip2 install -e git+https://github.com/python-oca/python-oca#egg=oca && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install mysql-client && \
-    mkdir -p /root/RO && \
-    make -C /root/RO clean all BRANCH=master && \
-    dpkg -i /root/RO/IM/deb_dist/python-pyang_*.deb && \
-    dpkg -i /root/RO/IM/deb_dist/python-pyangbind_*.deb && \
-    dpkg -i /root/RO/IM/deb_dist/python-osm-im*.deb && \
-    dpkg -i /root/RO/openvim/.build/python-lib-osm-openvim*.deb && \
-    dpkg -i /root/RO/.build/python-osm-ro*.deb && \
+    /root/RO/scripts/install-osm-im.sh --develop && \
+    /root/RO/scripts/install-lib-osm-openvim.sh --develop && \
+    make -C /root/RO prepare && \
+    mkdir -p /var/log/osm && \
+    pip2 install -e /root/RO/build && \
     rm -rf /root/.cache && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    rm -rf /root/RO
+    rm -rf /var/lib/apt/lists/*
 
 VOLUME /var/log/osm
 

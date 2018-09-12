@@ -38,6 +38,7 @@ _requirements = [
     #"lib_osm_openvim",
     #"osm_im",
     "pycrypto",
+    "netaddr",
 ]
 
 setup(name=_name,
