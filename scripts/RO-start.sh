@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# This script is intended for launching RO from a docker container.
+# It waits for mysql server ready, normally running on a separate container, ...
+# then it checks if database is present and creates it if needed.
+# Finally it launches RO server.
 
 [ -z "$RO_DB_OVIM_HOST" ] && export RO_DB_OVIM_HOST="$RO_DB_HOST"
 [ -z "$RO_DB_OVIM_ROOT_PASSWORD" ] && export RO_DB_OVIM_ROOT_PASSWORD="$RO_DB_ROOT_PASSWORD"

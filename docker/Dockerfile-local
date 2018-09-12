@@ -4,8 +4,6 @@ LABEL authors="Gennadiy Dubina, Alfonso Tierno, Gerardo Garcia"
 
 COPY . /root/RO
 
-COPY docker/scripts/ /bin/RO
-
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install software-properties-common && \
     DEBIAN_FRONTEND=noninteractive add-apt-repository -y cloud-archive:queens && \
@@ -72,5 +70,5 @@ ENV RO_DB_HOST="" \
     RO_DB_OVIM_NAME=mano_vim_db \
     OPENMANO_TENANT=osm
 
-CMD /bin/RO/start.sh
+CMD /root/RO/scripts/RO-start.sh
 
