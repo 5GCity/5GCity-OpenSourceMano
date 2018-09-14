@@ -70,5 +70,5 @@ ENV RO_DB_HOST="" \
     RO_DB_OVIM_NAME=mano_vim_db \
     OPENMANO_TENANT=osm
 
-CMD /root/RO/scripts/RO-start.sh
+CMD RO-start.sh
 
