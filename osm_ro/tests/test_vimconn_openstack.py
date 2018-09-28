@@ -45,7 +45,7 @@ class TestSfcOperations(unittest.TestCase):
             '123', 'openstackvim', '456', '789', 'http://dummy.url', None,
             'user', 'pass')
 
-    def _test_new_sfi(self, create_port_pair, sfc_encap,
+    def _test_new_sfi(self, create_sfc_port_pair, sfc_encap,
                       ingress_ports=['5311c75d-d718-4369-bbda-cdcc6da60fcc'],
                       egress_ports=['230cdf1b-de37-4891-bc07-f9010cf1f967']):
         # input to VIM connector
@@ -53,7 +53,7 @@ class TestSfcOperations(unittest.TestCase):
         # + ingress_ports
         # + egress_ports
         # TODO(igordc): must be changed to NSH in Queens (MPLS is a workaround)
-        correlation = 'mpls'
+        correlation = 'nsh'
         if sfc_encap is not None:
             if not sfc_encap:
                 correlation = None
@@ -69,7 +69,7 @@ class TestSfcOperations(unittest.TestCase):
             'egress': egress_ports[0] if len(egress_ports) else None,
             'service_function_parameters': {'correlation': correlation}
         }}
-        create_port_pair.return_value = dict_from_neutron
+        create_sfc_port_pair.return_value = dict_from_neutron
 
         # what the VIM connector is expected to
         # send to OpenStack based on the input
@@ -88,11 +88,11 @@ class TestSfcOperations(unittest.TestCase):
                                           sfc_encap)
 
         # assert that the VIM connector made the expected call to OpenStack
-        create_port_pair.assert_called_with(dict_to_neutron)
+        create_sfc_port_pair.assert_called_with(dict_to_neutron)
         # assert that the VIM connector had the expected result / return value
         self.assertEqual(result, dict_from_neutron['port_pair']['id'])
 
-    def _test_new_sf(self, create_port_pair_group):
+    def _test_new_sf(self, create_sfc_port_pair_group):
         # input to VIM connector
         name = 'osm_sf'
         instances = ['bbd01220-cf72-41f2-9e70-0669c2e5c4cd',
@@ -115,7 +115,7 @@ class TestSfcOperations(unittest.TestCase):
                     "egress_n_tuple": {}
                 }}
         }}
-        create_port_pair_group.return_value = dict_from_neutron
+        create_sfc_port_pair_group.return_value = dict_from_neutron
 
         # what the VIM connector is expected to
         # send to OpenStack based on the input
@@ -130,11 +130,11 @@ class TestSfcOperations(unittest.TestCase):
         result = self.vimconn.new_sf(name, instances)
 
         # assert that the VIM connector made the expected call to OpenStack
-        create_port_pair_group.assert_called_with(dict_to_neutron)
+        create_sfc_port_pair_group.assert_called_with(dict_to_neutron)
         # assert that the VIM connector had the expected result / return value
         self.assertEqual(result, dict_from_neutron['port_pair_group']['id'])
 
-    def _test_new_sfp(self, create_port_chain, sfc_encap, spi):
+    def _test_new_sfp(self, create_sfc_port_chain, sfc_encap, spi):
         # input to VIM connector
         name = 'osm_sfp'
         classifications = ['2bd2a2e5-c5fd-4eac-a297-d5e255c35c19',
@@ -143,11 +143,8 @@ class TestSfcOperations(unittest.TestCase):
                'd8bfdb5d-195e-4f34-81aa-6135705317df']
 
         # TODO(igordc): must be changed to NSH in Queens (MPLS is a workaround)
-        correlation = 'mpls'
+        correlation = 'nsh'
         chain_id = 33
-        if sfc_encap is not None:
-            if not sfc_encap:
-                correlation = None
         if spi:
             chain_id = spi
 
@@ -163,7 +160,7 @@ class TestSfcOperations(unittest.TestCase):
             'port_pair_groups': sfs,
             'chain_parameters': {'correlation': correlation}
         }}
-        create_port_chain.return_value = dict_from_neutron
+        create_sfc_port_chain.return_value = dict_from_neutron
 
         # what the VIM connector is expected to
         # send to OpenStack based on the input
@@ -194,11 +191,11 @@ class TestSfcOperations(unittest.TestCase):
                                               sfc_encap, spi)
 
         # assert that the VIM connector made the expected call to OpenStack
-        create_port_chain.assert_called_with(dict_to_neutron)
+        create_sfc_port_chain.assert_called_with(dict_to_neutron)
         # assert that the VIM connector had the expected result / return value
         self.assertEqual(result, dict_from_neutron['port_chain']['id'])
 
-    def _test_new_classification(self, create_flow_classifier, ctype):
+    def _test_new_classification(self, create_sfc_flow_classifier, ctype):
         # input to VIM connector
         name = 'osm_classification'
         definition = {'ethertype': 'IPv4',
@@ -219,7 +216,7 @@ class TestSfcOperations(unittest.TestCase):
             'tenant_id'] = '130b1e97-b0f1-40a8-8804-b6ad9b8c3e0c'
         dict_from_neutron['flow_classifier'][
             'project_id'] = '130b1e97-b0f1-40a8-8804-b6ad9b8c3e0c'
-        create_flow_classifier.return_value = dict_from_neutron
+        create_sfc_flow_classifier.return_value = dict_from_neutron
 
         # what the VIM connector is expected to
         # send to OpenStack based on the input
@@ -230,100 +227,96 @@ class TestSfcOperations(unittest.TestCase):
         result = self.vimconn.new_classification(name, ctype, definition)
 
         # assert that the VIM connector made the expected call to OpenStack
-        create_flow_classifier.assert_called_with(dict_to_neutron)
+        create_sfc_flow_classifier.assert_called_with(dict_to_neutron)
         # assert that the VIM connector had the expected result / return value
         self.assertEqual(result, dict_from_neutron['flow_classifier']['id'])
 
-    @mock.patch.object(Client, 'create_flow_classifier')
-    def test_new_classification(self, create_flow_classifier):
-        self._test_new_classification(create_flow_classifier,
+    @mock.patch.object(Client, 'create_sfc_flow_classifier')
+    def test_new_classification(self, create_sfc_flow_classifier):
+        self._test_new_classification(create_sfc_flow_classifier,
                                       'legacy_flow_classifier')
 
-    @mock.patch.object(Client, 'create_flow_classifier')
-    def test_new_classification_unsupported_type(self, create_flow_classifier):
+    @mock.patch.object(Client, 'create_sfc_flow_classifier')
+    def test_new_classification_unsupported_type(self, create_sfc_flow_classifier):
         self.assertRaises(vimconn.vimconnNotSupportedException,
                           self._test_new_classification,
-                          create_flow_classifier, 'h265')
+                          create_sfc_flow_classifier, 'h265')
 
-    @mock.patch.object(Client, 'create_port_pair')
-    def test_new_sfi_with_sfc_encap(self, create_port_pair):
-        self._test_new_sfi(create_port_pair, True)
+    @mock.patch.object(Client, 'create_sfc_port_pair')
+    def test_new_sfi_with_sfc_encap(self, create_sfc_port_pair):
+        self._test_new_sfi(create_sfc_port_pair, True)
 
-    @mock.patch.object(Client, 'create_port_pair')
-    def test_new_sfi_without_sfc_encap(self, create_port_pair):
-        self._test_new_sfi(create_port_pair, False)
+    @mock.patch.object(Client, 'create_sfc_port_pair')
+    def test_new_sfi_without_sfc_encap(self, create_sfc_port_pair):
+        self._test_new_sfi(create_sfc_port_pair, False)
 
-    @mock.patch.object(Client, 'create_port_pair')
-    def test_new_sfi_default_sfc_encap(self, create_port_pair):
-        self._test_new_sfi(create_port_pair, None)
+    @mock.patch.object(Client, 'create_sfc_port_pair')
+    def test_new_sfi_default_sfc_encap(self, create_sfc_port_pair):
+        self._test_new_sfi(create_sfc_port_pair, None)
 
-    @mock.patch.object(Client, 'create_port_pair')
-    def test_new_sfi_bad_ingress_ports(self, create_port_pair):
+    @mock.patch.object(Client, 'create_sfc_port_pair')
+    def test_new_sfi_bad_ingress_ports(self, create_sfc_port_pair):
         ingress_ports = ['5311c75d-d718-4369-bbda-cdcc6da60fcc',
                          'a0273f64-82c9-11e7-b08f-6328e53f0fa7']
         self.assertRaises(vimconn.vimconnNotSupportedException,
                           self._test_new_sfi,
-                          create_port_pair, True, ingress_ports=ingress_ports)
+                          create_sfc_port_pair, True, ingress_ports=ingress_ports)
         ingress_ports = []
         self.assertRaises(vimconn.vimconnNotSupportedException,
                           self._test_new_sfi,
-                          create_port_pair, True, ingress_ports=ingress_ports)
+                          create_sfc_port_pair, True, ingress_ports=ingress_ports)
 
-    @mock.patch.object(Client, 'create_port_pair')
-    def test_new_sfi_bad_egress_ports(self, create_port_pair):
+    @mock.patch.object(Client, 'create_sfc_port_pair')
+    def test_new_sfi_bad_egress_ports(self, create_sfc_port_pair):
         egress_ports = ['230cdf1b-de37-4891-bc07-f9010cf1f967',
                         'b41228fe-82c9-11e7-9b44-17504174320b']
         self.assertRaises(vimconn.vimconnNotSupportedException,
                           self._test_new_sfi,
-                          create_port_pair, True, egress_ports=egress_ports)
+                          create_sfc_port_pair, True, egress_ports=egress_ports)
         egress_ports = []
         self.assertRaises(vimconn.vimconnNotSupportedException,
                           self._test_new_sfi,
-                          create_port_pair, True, egress_ports=egress_ports)
+                          create_sfc_port_pair, True, egress_ports=egress_ports)
 
     @mock.patch.object(vimconnector, 'get_sfi')
-    @mock.patch.object(Client, 'create_port_pair_group')
-    def test_new_sf(self, create_port_pair_group, get_sfi):
-        get_sfi.return_value = {'sfc_encap': 'mpls'}
-        self._test_new_sf(create_port_pair_group)
+    @mock.patch.object(Client, 'create_sfc_port_pair_group')
+    def test_new_sf(self, create_sfc_port_pair_group, get_sfi):
+        get_sfi.return_value = {'sfc_encap': True}
+        self._test_new_sf(create_sfc_port_pair_group)
 
     @mock.patch.object(vimconnector, 'get_sfi')
-    @mock.patch.object(Client, 'create_port_pair_group')
-    def test_new_sf_inconsistent_sfc_encap(self, create_port_pair_group,
+    @mock.patch.object(Client, 'create_sfc_port_pair_group')
+    def test_new_sf_inconsistent_sfc_encap(self, create_sfc_port_pair_group,
                                            get_sfi):
         get_sfi.return_value = {'sfc_encap': 'nsh'}
         self.assertRaises(vimconn.vimconnNotSupportedException,
-                          self._test_new_sf, create_port_pair_group)
+                          self._test_new_sf, create_sfc_port_pair_group)
 
-    @mock.patch.object(Client, 'create_port_chain')
-    def test_new_sfp_with_sfc_encap(self, create_port_chain):
-        self._test_new_sfp(create_port_chain, True, None)
+    @mock.patch.object(Client, 'create_sfc_port_chain')
+    def test_new_sfp_with_sfc_encap(self, create_sfc_port_chain):
+        self._test_new_sfp(create_sfc_port_chain, True, None)
 
-    @mock.patch.object(Client, 'create_port_chain')
-    def test_new_sfp_without_sfc_encap(self, create_port_chain):
-        self.assertRaises(vimconn.vimconnNotSupportedException,
-                          self._test_new_sfp,
-                          create_port_chain, False, None)
-        self.assertRaises(vimconn.vimconnNotSupportedException,
-                          self._test_new_sfp,
-                          create_port_chain, False, 25)
+    @mock.patch.object(Client, 'create_sfc_port_chain')
+    def test_new_sfp_without_sfc_encap(self, create_sfc_port_chain):
+        self._test_new_sfp(create_sfc_port_chain, False, None)
+        self._test_new_sfp(create_sfc_port_chain, False, 25)
 
-    @mock.patch.object(Client, 'create_port_chain')
-    def test_new_sfp_default_sfc_encap(self, create_port_chain):
-        self._test_new_sfp(create_port_chain, None, None)
+    @mock.patch.object(Client, 'create_sfc_port_chain')
+    def test_new_sfp_default_sfc_encap(self, create_sfc_port_chain):
+        self._test_new_sfp(create_sfc_port_chain, None, None)
 
-    @mock.patch.object(Client, 'create_port_chain')
-    def test_new_sfp_with_sfc_encap_spi(self, create_port_chain):
-        self._test_new_sfp(create_port_chain, True, 25)
+    @mock.patch.object(Client, 'create_sfc_port_chain')
+    def test_new_sfp_with_sfc_encap_spi(self, create_sfc_port_chain):
+        self._test_new_sfp(create_sfc_port_chain, True, 25)
 
-    @mock.patch.object(Client, 'create_port_chain')
-    def test_new_sfp_default_sfc_encap_spi(self, create_port_chain):
-        self._test_new_sfp(create_port_chain, None, 25)
+    @mock.patch.object(Client, 'create_sfc_port_chain')
+    def test_new_sfp_default_sfc_encap_spi(self, create_sfc_port_chain):
+        self._test_new_sfp(create_sfc_port_chain, None, 25)
 
-    @mock.patch.object(Client, 'list_flow_classifier')
-    def test_get_classification_list(self, list_flow_classifier):
+    @mock.patch.object(Client, 'list_sfc_flow_classifiers')
+    def test_get_classification_list(self, list_sfc_flow_classifiers):
         # what OpenStack is assumed to return to the VIM connector
-        list_flow_classifier.return_value = {'flow_classifiers': [
+        list_sfc_flow_classifiers.return_value = {'flow_classifiers': [
             {'source_port_range_min': 2000,
              'destination_ip_prefix': '192.168.3.0/24',
              'protocol': 'udp',
@@ -346,7 +339,7 @@ class TestSfcOperations(unittest.TestCase):
         result = self.vimconn.get_classification_list(filter_dict.copy())
 
         # assert that VIM connector called OpenStack with the expected filter
-        list_flow_classifier.assert_called_with(**filter_dict)
+        list_sfc_flow_classifiers.assert_called_with(**filter_dict)
         # assert that the VIM connector successfully
         # translated and returned the OpenStack result
         self.assertEqual(result, [
@@ -400,18 +393,18 @@ class TestSfcOperations(unittest.TestCase):
              'id': 'c121ebdd-7f2d-4213-b933-3325298a6966',
              'name': 'osm_sfi'}])
 
-    @mock.patch.object(Client, 'list_port_pair')
-    def test_get_sfi_list_with_sfc_encap(self, list_port_pair):
-        self._test_get_sfi_list(list_port_pair, 'nsh', True)
+    @mock.patch.object(Client, 'list_sfc_port_pairs')
+    def test_get_sfi_list_with_sfc_encap(self, list_sfc_port_pairs):
+        self._test_get_sfi_list(list_sfc_port_pairs, 'nsh', True)
 
-    @mock.patch.object(Client, 'list_port_pair')
-    def test_get_sfi_list_without_sfc_encap(self, list_port_pair):
-        self._test_get_sfi_list(list_port_pair, None, False)
+    @mock.patch.object(Client, 'list_sfc_port_pairs')
+    def test_get_sfi_list_without_sfc_encap(self, list_sfc_port_pairs):
+        self._test_get_sfi_list(list_sfc_port_pairs, None, False)
 
-    @mock.patch.object(Client, 'list_port_pair_group')
-    def test_get_sf_list(self, list_port_pair_group):
+    @mock.patch.object(Client, 'list_sfc_port_pair_groups')
+    def test_get_sf_list(self, list_sfc_port_pair_groups):
         # what OpenStack is assumed to return to the VIM connector
-        list_port_pair_group.return_value = {'port_pair_groups': [
+        list_sfc_port_pair_groups.return_value = {'port_pair_groups': [
             {'port_pairs': ['08fbdbb0-82d6-11e7-ad95-9bb52fbec2f2',
                             '0d63799c-82d6-11e7-8deb-a746bb3ae9f5'],
              'description': '',
@@ -426,11 +419,11 @@ class TestSfcOperations(unittest.TestCase):
         result = self.vimconn.get_sf_list(filter_dict.copy())
 
         # assert that VIM connector called OpenStack with the expected filter
-        list_port_pair_group.assert_called_with(**filter_dict)
+        list_sfc_port_pair_groups.assert_called_with(**filter_dict)
         # assert that the VIM connector successfully
         # translated and returned the OpenStack result
         self.assertEqual(result, [
-            {'instances': ['08fbdbb0-82d6-11e7-ad95-9bb52fbec2f2',
+            {'sfis': ['08fbdbb0-82d6-11e7-ad95-9bb52fbec2f2',
                            '0d63799c-82d6-11e7-8deb-a746bb3ae9f5'],
              'description': '',
              'tenant_id': '8f3019ef06374fa880a0144ad4bc1d7b',
@@ -438,9 +431,9 @@ class TestSfcOperations(unittest.TestCase):
              'id': 'f4a0bde8-82d5-11e7-90e1-a72b762fa27f',
              'name': 'osm_sf'}])
 
-    def _test_get_sfp_list(self, list_port_chain, correlation, sfc_encap):
+    def _test_get_sfp_list(self, list_sfc_port_chains, correlation, sfc_encap):
         # what OpenStack is assumed to return to the VIM connector
-        list_port_chain.return_value = {'port_chains': [
+        list_sfc_port_chains.return_value = {'port_chains': [
             {'port_pair_groups': ['7d8e3bf8-82d6-11e7-a032-8ff028839d25',
                                   '7dc9013e-82d6-11e7-a5a6-a3a8d78a5518'],
              'flow_classifiers': ['1333c2f4-82d7-11e7-a5df-9327f33d104e',
@@ -458,7 +451,7 @@ class TestSfcOperations(unittest.TestCase):
         result = self.vimconn.get_sfp_list(filter_dict.copy())
 
         # assert that VIM connector called OpenStack with the expected filter
-        list_port_chain.assert_called_with(**filter_dict)
+        list_sfc_port_chains.assert_called_with(**filter_dict)
         # assert that the VIM connector successfully
         # translated and returned the OpenStack result
         self.assertEqual(result, [
@@ -474,18 +467,18 @@ class TestSfcOperations(unittest.TestCase):
              'id': '821bc9be-82d7-11e7-8ce3-23a08a27ab47',
              'name': 'osm_sfp'}])
 
-    @mock.patch.object(Client, 'list_port_chain')
-    def test_get_sfp_list_with_sfc_encap(self, list_port_chain):
-        self._test_get_sfp_list(list_port_chain, 'nsh', True)
+    @mock.patch.object(Client, 'list_sfc_port_chains')
+    def test_get_sfp_list_with_sfc_encap(self, list_sfc_port_chains):
+        self._test_get_sfp_list(list_sfc_port_chains, 'nsh', True)
 
-    @mock.patch.object(Client, 'list_port_chain')
-    def test_get_sfp_list_without_sfc_encap(self, list_port_chain):
-        self._test_get_sfp_list(list_port_chain, None, False)
+    @mock.patch.object(Client, 'list_sfc_port_chains')
+    def test_get_sfp_list_without_sfc_encap(self, list_sfc_port_chains):
+        self._test_get_sfp_list(list_sfc_port_chains, None, False)
 
-    @mock.patch.object(Client, 'list_flow_classifier')
-    def test_get_classification(self, list_flow_classifier):
+    @mock.patch.object(Client, 'list_sfc_flow_classifiers')
+    def test_get_classification(self, list_sfc_flow_classifiers):
         # what OpenStack is assumed to return to the VIM connector
-        list_flow_classifier.return_value = {'flow_classifiers': [
+        list_sfc_flow_classifiers.return_value = {'flow_classifiers': [
             {'source_port_range_min': 2000,
              'destination_ip_prefix': '192.168.3.0/24',
              'protocol': 'udp',
@@ -509,7 +502,7 @@ class TestSfcOperations(unittest.TestCase):
             '22198366-d4e8-4d6b-b4d2-637d5d6cbb7d')
 
         # assert that VIM connector called OpenStack with the expected filter
-        list_flow_classifier.assert_called_with(
+        list_sfc_flow_classifiers.assert_called_with(
             id='22198366-d4e8-4d6b-b4d2-637d5d6cbb7d')
         # assert that VIM connector successfully returned the OpenStack result
         self.assertEqual(result,
@@ -534,10 +527,10 @@ class TestSfcOperations(unittest.TestCase):
                                   'aaab0ab0-1452-4636-bb3b-11dca833fa2b'}
                           })
 
-    @mock.patch.object(Client, 'list_flow_classifier')
-    def test_get_classification_many_results(self, list_flow_classifier):
+    @mock.patch.object(Client, 'list_sfc_flow_classifiers')
+    def test_get_classification_many_results(self, list_sfc_flow_classifiers):
         # what OpenStack is assumed to return to the VIM connector
-        list_flow_classifier.return_value = {'flow_classifiers': [
+        list_sfc_flow_classifiers.return_value = {'flow_classifiers': [
             {'source_port_range_min': 2000,
              'destination_ip_prefix': '192.168.3.0/24',
              'protocol': 'udp',
@@ -578,13 +571,13 @@ class TestSfcOperations(unittest.TestCase):
                           '3196bafc-82dd-11e7-a205-9bf6c14b0721')
 
         # assert the VIM connector called OpenStack with the expected filter
-        list_flow_classifier.assert_called_with(
+        list_sfc_flow_classifiers.assert_called_with(
             id='3196bafc-82dd-11e7-a205-9bf6c14b0721')
 
-    @mock.patch.object(Client, 'list_flow_classifier')
-    def test_get_classification_no_results(self, list_flow_classifier):
+    @mock.patch.object(Client, 'list_sfc_flow_classifiers')
+    def test_get_classification_no_results(self, list_sfc_flow_classifiers):
         # what OpenStack is assumed to return to the VIM connector
-        list_flow_classifier.return_value = {'flow_classifiers': []}
+        list_sfc_flow_classifiers.return_value = {'flow_classifiers': []}
 
         # call the VIM connector
         self.assertRaises(vimconn.vimconnNotFoundException,
@@ -592,13 +585,13 @@ class TestSfcOperations(unittest.TestCase):
                           '3196bafc-82dd-11e7-a205-9bf6c14b0721')
 
         # assert the VIM connector called OpenStack with the expected filter
-        list_flow_classifier.assert_called_with(
+        list_sfc_flow_classifiers.assert_called_with(
             id='3196bafc-82dd-11e7-a205-9bf6c14b0721')
 
-    @mock.patch.object(Client, 'list_port_pair')
-    def test_get_sfi(self, list_port_pair):
+    @mock.patch.object(Client, 'list_sfc_port_pairs')
+    def test_get_sfi(self, list_sfc_port_pairs):
         # what OpenStack is assumed to return to the VIM connector
-        list_port_pair.return_value = {'port_pairs': [
+        list_sfc_port_pairs.return_value = {'port_pairs': [
             {'ingress': '5311c75d-d718-4369-bbda-cdcc6da60fcc',
              'description': '',
              'tenant_id': '8f3019ef06374fa880a0144ad4bc1d7b',
@@ -613,7 +606,7 @@ class TestSfcOperations(unittest.TestCase):
         result = self.vimconn.get_sfi('c121ebdd-7f2d-4213-b933-3325298a6966')
 
         # assert the VIM connector called OpenStack with the expected filter
-        list_port_pair.assert_called_with(
+        list_sfc_port_pairs.assert_called_with(
             id='c121ebdd-7f2d-4213-b933-3325298a6966')
         # assert the VIM connector successfully returned the OpenStack result
         self.assertEqual(result,
@@ -628,10 +621,10 @@ class TestSfcOperations(unittest.TestCase):
                           'id': 'c121ebdd-7f2d-4213-b933-3325298a6966',
                           'name': 'osm_sfi1'})
 
-    @mock.patch.object(Client, 'list_port_pair')
-    def test_get_sfi_many_results(self, list_port_pair):
+    @mock.patch.object(Client, 'list_sfc_port_pairs')
+    def test_get_sfi_many_results(self, list_sfc_port_pairs):
         # what OpenStack is assumed to return to the VIM connector
-        list_port_pair.return_value = {'port_pairs': [
+        list_sfc_port_pairs.return_value = {'port_pairs': [
             {'ingress': '5311c75d-d718-4369-bbda-cdcc6da60fcc',
              'description': '',
              'tenant_id': '8f3019ef06374fa880a0144ad4bc1d7b',
@@ -656,13 +649,13 @@ class TestSfcOperations(unittest.TestCase):
                           'c0436d92-82db-11e7-8f9c-5fa535f1261f')
 
         # assert that VIM connector called OpenStack with the expected filter
-        list_port_pair.assert_called_with(
+        list_sfc_port_pairs.assert_called_with(
             id='c0436d92-82db-11e7-8f9c-5fa535f1261f')
 
-    @mock.patch.object(Client, 'list_port_pair')
-    def test_get_sfi_no_results(self, list_port_pair):
+    @mock.patch.object(Client, 'list_sfc_port_pairs')
+    def test_get_sfi_no_results(self, list_sfc_port_pairs):
         # what OpenStack is assumed to return to the VIM connector
-        list_port_pair.return_value = {'port_pairs': []}
+        list_sfc_port_pairs.return_value = {'port_pairs': []}
 
         # call the VIM connector
         self.assertRaises(vimconn.vimconnNotFoundException,
@@ -670,13 +663,13 @@ class TestSfcOperations(unittest.TestCase):
                           'b22892fc-82d9-11e7-ae85-0fea6a3b3757')
 
         # assert that VIM connector called OpenStack with the expected filter
-        list_port_pair.assert_called_with(
+        list_sfc_port_pairs.assert_called_with(
             id='b22892fc-82d9-11e7-ae85-0fea6a3b3757')
 
-    @mock.patch.object(Client, 'list_port_pair_group')
-    def test_get_sf(self, list_port_pair_group):
+    @mock.patch.object(Client, 'list_sfc_port_pair_groups')
+    def test_get_sf(self, list_sfc_port_pair_groups):
         # what OpenStack is assumed to return to the VIM connector
-        list_port_pair_group.return_value = {'port_pair_groups': [
+        list_sfc_port_pair_groups.return_value = {'port_pair_groups': [
             {'port_pairs': ['08fbdbb0-82d6-11e7-ad95-9bb52fbec2f2'],
              'description': '',
              'tenant_id': '8f3019ef06374fa880a0144ad4bc1d7b',
@@ -690,22 +683,21 @@ class TestSfcOperations(unittest.TestCase):
         result = self.vimconn.get_sf('b22892fc-82d9-11e7-ae85-0fea6a3b3757')
 
         # assert that VIM connector called OpenStack with the expected filter
-        list_port_pair_group.assert_called_with(
+        list_sfc_port_pair_groups.assert_called_with(
             id='b22892fc-82d9-11e7-ae85-0fea6a3b3757')
         # assert that VIM connector successfully returned the OpenStack result
         self.assertEqual(result,
-                         {'instances': [
-                             '08fbdbb0-82d6-11e7-ad95-9bb52fbec2f2'],
-                          'description': '',
+                         {'description': '',
                           'tenant_id': '8f3019ef06374fa880a0144ad4bc1d7b',
                           'project_id': '8f3019ef06374fa880a0144ad4bc1d7b',
+                          'sfis': ['08fbdbb0-82d6-11e7-ad95-9bb52fbec2f2'],
                           'id': 'aabba8a6-82d9-11e7-a18a-d3c7719b742d',
                           'name': 'osm_sf1'})
 
-    @mock.patch.object(Client, 'list_port_pair_group')
-    def test_get_sf_many_results(self, list_port_pair_group):
+    @mock.patch.object(Client, 'list_sfc_port_pair_groups')
+    def test_get_sf_many_results(self, list_sfc_port_pair_groups):
         # what OpenStack is assumed to return to the VIM connector
-        list_port_pair_group.return_value = {'port_pair_groups': [
+        list_sfc_port_pair_groups.return_value = {'port_pair_groups': [
             {'port_pairs': ['08fbdbb0-82d6-11e7-ad95-9bb52fbec2f2'],
              'description': '',
              'tenant_id': '8f3019ef06374fa880a0144ad4bc1d7b',
@@ -728,13 +720,13 @@ class TestSfcOperations(unittest.TestCase):
                           'b22892fc-82d9-11e7-ae85-0fea6a3b3757')
 
         # assert that VIM connector called OpenStack with the expected filter
-        list_port_pair_group.assert_called_with(
+        list_sfc_port_pair_groups.assert_called_with(
             id='b22892fc-82d9-11e7-ae85-0fea6a3b3757')
 
-    @mock.patch.object(Client, 'list_port_pair_group')
-    def test_get_sf_no_results(self, list_port_pair_group):
+    @mock.patch.object(Client, 'list_sfc_port_pair_groups')
+    def test_get_sf_no_results(self, list_sfc_port_pair_groups):
         # what OpenStack is assumed to return to the VIM connector
-        list_port_pair_group.return_value = {'port_pair_groups': []}
+        list_sfc_port_pair_groups.return_value = {'port_pair_groups': []}
 
         # call the VIM connector
         self.assertRaises(vimconn.vimconnNotFoundException,
@@ -742,13 +734,13 @@ class TestSfcOperations(unittest.TestCase):
                           'b22892fc-82d9-11e7-ae85-0fea6a3b3757')
 
         # assert that VIM connector called OpenStack with the expected filter
-        list_port_pair_group.assert_called_with(
+        list_sfc_port_pair_groups.assert_called_with(
             id='b22892fc-82d9-11e7-ae85-0fea6a3b3757')
 
-    @mock.patch.object(Client, 'list_port_chain')
-    def test_get_sfp(self, list_port_chain):
+    @mock.patch.object(Client, 'list_sfc_port_chains')
+    def test_get_sfp(self, list_sfc_port_chains):
         # what OpenStack is assumed to return to the VIM connector
-        list_port_chain.return_value = {'port_chains': [
+        list_sfc_port_chains.return_value = {'port_chains': [
             {'port_pair_groups': ['7d8e3bf8-82d6-11e7-a032-8ff028839d25'],
              'flow_classifiers': ['1333c2f4-82d7-11e7-a5df-9327f33d104e'],
              'description': '',
@@ -763,7 +755,7 @@ class TestSfcOperations(unittest.TestCase):
         result = self.vimconn.get_sfp('821bc9be-82d7-11e7-8ce3-23a08a27ab47')
 
         # assert that VIM connector called OpenStack with the expected filter
-        list_port_chain.assert_called_with(
+        list_sfc_port_chains.assert_called_with(
             id='821bc9be-82d7-11e7-8ce3-23a08a27ab47')
         # assert that VIM connector successfully returned the OpenStack result
         self.assertEqual(result,
@@ -779,10 +771,10 @@ class TestSfcOperations(unittest.TestCase):
                           'id': '821bc9be-82d7-11e7-8ce3-23a08a27ab47',
                           'name': 'osm_sfp1'})
 
-    @mock.patch.object(Client, 'list_port_chain')
-    def test_get_sfp_many_results(self, list_port_chain):
+    @mock.patch.object(Client, 'list_sfc_port_chains')
+    def test_get_sfp_many_results(self, list_sfc_port_chains):
         # what OpenStack is assumed to return to the VIM connector
-        list_port_chain.return_value = {'port_chains': [
+        list_sfc_port_chains.return_value = {'port_chains': [
             {'port_pair_groups': ['7d8e3bf8-82d6-11e7-a032-8ff028839d25'],
              'flow_classifiers': ['1333c2f4-82d7-11e7-a5df-9327f33d104e'],
              'description': '',
@@ -809,13 +801,13 @@ class TestSfcOperations(unittest.TestCase):
                           '5d002f38-82de-11e7-a770-f303f11ce66a')
 
         # assert that VIM connector called OpenStack with the expected filter
-        list_port_chain.assert_called_with(
+        list_sfc_port_chains.assert_called_with(
             id='5d002f38-82de-11e7-a770-f303f11ce66a')
 
-    @mock.patch.object(Client, 'list_port_chain')
-    def test_get_sfp_no_results(self, list_port_chain):
+    @mock.patch.object(Client, 'list_sfc_port_chains')
+    def test_get_sfp_no_results(self, list_sfc_port_chains):
         # what OpenStack is assumed to return to the VIM connector
-        list_port_chain.return_value = {'port_chains': []}
+        list_sfc_port_chains.return_value = {'port_chains': []}
 
         # call the VIM connector
         self.assertRaises(vimconn.vimconnNotFoundException,
@@ -823,37 +815,37 @@ class TestSfcOperations(unittest.TestCase):
                           '5d002f38-82de-11e7-a770-f303f11ce66a')
 
         # assert that VIM connector called OpenStack with the expected filter
-        list_port_chain.assert_called_with(
+        list_sfc_port_chains.assert_called_with(
             id='5d002f38-82de-11e7-a770-f303f11ce66a')
 
-    @mock.patch.object(Client, 'delete_flow_classifier')
-    def test_delete_classification(self, delete_flow_classifier):
+    @mock.patch.object(Client, 'delete_sfc_flow_classifier')
+    def test_delete_classification(self, delete_sfc_flow_classifier):
         result = self.vimconn.delete_classification(
             '638f957c-82df-11e7-b7c8-132706021464')
-        delete_flow_classifier.assert_called_with(
+        delete_sfc_flow_classifier.assert_called_with(
             '638f957c-82df-11e7-b7c8-132706021464')
         self.assertEqual(result, '638f957c-82df-11e7-b7c8-132706021464')
 
-    @mock.patch.object(Client, 'delete_port_pair')
-    def test_delete_sfi(self, delete_port_pair):
+    @mock.patch.object(Client, 'delete_sfc_port_pair')
+    def test_delete_sfi(self, delete_sfc_port_pair):
         result = self.vimconn.delete_sfi(
             '638f957c-82df-11e7-b7c8-132706021464')
-        delete_port_pair.assert_called_with(
+        delete_sfc_port_pair.assert_called_with(
             '638f957c-82df-11e7-b7c8-132706021464')
         self.assertEqual(result, '638f957c-82df-11e7-b7c8-132706021464')
 
-    @mock.patch.object(Client, 'delete_port_pair_group')
-    def test_delete_sf(self, delete_port_pair_group):
+    @mock.patch.object(Client, 'delete_sfc_port_pair_group')
+    def test_delete_sf(self, delete_sfc_port_pair_group):
         result = self.vimconn.delete_sf('638f957c-82df-11e7-b7c8-132706021464')
-        delete_port_pair_group.assert_called_with(
+        delete_sfc_port_pair_group.assert_called_with(
             '638f957c-82df-11e7-b7c8-132706021464')
         self.assertEqual(result, '638f957c-82df-11e7-b7c8-132706021464')
 
-    @mock.patch.object(Client, 'delete_port_chain')
-    def test_delete_sfp(self, delete_port_chain):
+    @mock.patch.object(Client, 'delete_sfc_port_chain')
+    def test_delete_sfp(self, delete_sfc_port_chain):
         result = self.vimconn.delete_sfp(
             '638f957c-82df-11e7-b7c8-132706021464')
-        delete_port_chain.assert_called_with(
+        delete_sfc_port_chain.assert_called_with(
             '638f957c-82df-11e7-b7c8-132706021464')
         self.assertEqual(result, '638f957c-82df-11e7-b7c8-132706021464')
 
