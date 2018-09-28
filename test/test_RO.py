@@ -1557,6 +1557,29 @@ def test_vimconnector(args):
         import vimconn_aws as vim
     elif args.vimtype == "openstack":
         import vimconn_openstack as vim
+
+        test_config["test_directory"] = os.path.dirname(__file__) + "/RO_tests"
+
+        tenant_name = args.tenant_name
+        test_config['tenant'] = tenant_name
+        config_params = json.loads(args.config_param)
+        os_user = config_params.get('user')
+        os_passwd = config_params.get('passwd')
+        vim_url = args.endpoint_url
+        test_config['image_path'] = args.image_path
+        test_config['image_name'] = args.image_name
+
+        # openstack connector obj
+        vim_persistent_info = {}
+        test_config['vim_conn'] = vim.vimconnector(
+            uuid="test-uuid-1", name="VIO-openstack",
+            tenant_id=None, tenant_name=tenant_name,
+            url=vim_url, url_admin=None,
+            user=os_user, passwd=os_passwd,
+            config=config_params, persistent_info=vim_persistent_info
+        )
+        test_config['vim_conn'].debug = "true"
+
     elif args.vimtype == "openvim":
         import vimconn_openvim as vim
     else:
@@ -1569,7 +1592,7 @@ def test_vimconnector(args):
     if args.list_tests:
         tests_names = []
         for cls in clsmembers:
-            if cls[0].startswith('test_vimconnector'):
+            if cls[0].startswith('test_vimconn'):
                 tests_names.append(cls[0])
 
         msg = "The 'vim' set tests are:\n\t" + ', '.join(sorted(tests_names))
