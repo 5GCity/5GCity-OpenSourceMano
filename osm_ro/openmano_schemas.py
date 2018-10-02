@@ -37,7 +37,8 @@ description_schema={"type" : ["string","null"], "maxLength":255, "pattern" : "^[
 id_schema_fake = {"type" : "string", "minLength":2, "maxLength":36 }  #"pattern": "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
 id_schema = {"type" : "string", "pattern": "^[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$"}
 pci_schema={"type":"string", "pattern":"^[0-9a-fA-F]{4}(:[0-9a-fA-F]{2}){2}\.[0-9a-fA-F]$"}
-pci_extended_schema = {"type": "string", "pattern": "^[0-9a-fA-F.:-\[\]]$"}
+# allows [] for wildcards. For that reason huge length limit is set
+pci_extended_schema = {"type": "string", "pattern": "^[0-9a-fA-F.:-\[\]]{12,40}$"}
 
 http_schema={"type":"string", "pattern":"^https?://[^'\"=]+$"}
 bandwidth_schema={"type":"string", "pattern" : "^[0-9]+ *([MG]bps)?$"}
