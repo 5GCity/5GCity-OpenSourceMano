@@ -351,13 +351,13 @@ class vimconnector(vimconn.vimconnector):
                                   ConnectionError, ksExceptions.ConnectionError, neExceptions.ConnectionFailed
                                   )):
             raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))
-        elif isinstance(exception, (nvExceptions.ClientException, ksExceptions.ClientException,
-                                    neExceptions.NeutronException, nvExceptions.BadRequest)):
-            if "could not be found" in str(exception):
-                raise vimconn.vimconnNotFoundException(type(exception).__name__ + ": " + str(exception))
-            raise vimconn.vimconnUnexpectedResponse(type(exception).__name__ + ": " + str(exception))
         elif isinstance(exception, (neExceptions.NetworkNotFoundClient, nvExceptions.NotFound)):
             raise vimconn.vimconnNotFoundException(type(exception).__name__ + ": " + str(exception))
+        elif isinstance(exception,  (KeyError, nvExceptions.BadRequest)):
+            raise vimconn.vimconnException(type(exception).__name__ + ": " + str(exception))
+        elif isinstance(exception, (nvExceptions.ClientException, ksExceptions.ClientException,
+                                    neExceptions.NeutronException)):
+            raise vimconn.vimconnUnexpectedResponse(type(exception).__name__ + ": " + str(exception))
         elif isinstance(exception, nvExceptions.Conflict):
             raise vimconn.vimconnConflictException(type(exception).__name__ + ": " + str(exception))
         elif isinstance(exception, vimconn.vimconnException):
@@ -664,83 +664,84 @@ class vimconnector(vimconn.vimconnector):
         retry=0
         max_retries=3
         name_suffix = 0
-        name=flavor_data['name']
-        while retry<max_retries:
-            retry+=1
-            try:
-                self._reload_connection()
-                if change_name_if_used:
-                    #get used names
-                    fl_names=[]
-                    fl=self.nova.flavors.list()
-                    for f in fl:
-                        fl_names.append(f.name)
-                    while name in fl_names:
-                        name_suffix += 1
-                        name = flavor_data['name']+"-" + str(name_suffix)
+        try:
+            name=flavor_data['name']
+            while retry<max_retries:
+                retry+=1
+                try:
+                    self._reload_connection()
+                    if change_name_if_used:
+                        #get used names
+                        fl_names=[]
+                        fl=self.nova.flavors.list()
+                        for f in fl:
+                            fl_names.append(f.name)
+                        while name in fl_names:
+                            name_suffix += 1
+                            name = flavor_data['name']+"-" + str(name_suffix)
 
-                ram = flavor_data.get('ram',64)
-                vcpus = flavor_data.get('vcpus',1)
-                numa_properties=None
+                    ram = flavor_data.get('ram',64)
+                    vcpus = flavor_data.get('vcpus',1)
+                    numa_properties=None
 
-                extended = flavor_data.get("extended")
-                if extended:
-                    numas=extended.get("numas")
-                    if numas:
-                        numa_nodes = len(numas)
-                        if numa_nodes > 1:
-                            return -1, "Can not add flavor with more than one numa"
-                        numa_properties = {"hw:numa_nodes":str(numa_nodes)}
-                        numa_properties["hw:mem_page_size"] = "large"
-                        numa_properties["hw:cpu_policy"] = "dedicated"
-                        numa_properties["hw:numa_mempolicy"] = "strict"
-                        if self.vim_type == "VIO":
-                            numa_properties["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
-                            numa_properties["vmware:latency_sensitivity_level"] = "high"
-                        for numa in numas:
-                            #overwrite ram and vcpus
-                            #check if key 'memory' is present in numa else use ram value at flavor
-                            if 'memory' in numa:
-                                ram = numa['memory']*1024
-                            #See for reference: https://specs.openstack.org/openstack/nova-specs/specs/mitaka/implemented/virt-driver-cpu-thread-pinning.html
-                            if 'paired-threads' in numa:
-                                vcpus = numa['paired-threads']*2
-                                #cpu_thread_policy "require" implies that the compute node must have an STM architecture
-                                numa_properties["hw:cpu_thread_policy"] = "require"
-                                numa_properties["hw:cpu_policy"] = "dedicated"
-                            elif 'cores' in numa:
-                                vcpus = numa['cores']
-                                # cpu_thread_policy "prefer" implies that the host must not have an SMT architecture, or a non-SMT architecture will be emulated
-                                numa_properties["hw:cpu_thread_policy"] = "isolate"
-                                numa_properties["hw:cpu_policy"] = "dedicated"
-                            elif 'threads' in numa:
-                                vcpus = numa['threads']
-                                # cpu_thread_policy "prefer" implies that the host may or may not have an SMT architecture
-                                numa_properties["hw:cpu_thread_policy"] = "prefer"
-                                numa_properties["hw:cpu_policy"] = "dedicated"
-                            # for interface in numa.get("interfaces",() ):
-                            #     if interface["dedicated"]=="yes":
-                            #         raise vimconn.vimconnException("Passthrough interfaces are not supported for the openstack connector", http_code=vimconn.HTTP_Service_Unavailable)
-                            #     #TODO, add the key 'pci_passthrough:alias"="<label at config>:<number ifaces>"' when a way to connect it is available
+                    extended = flavor_data.get("extended")
+                    if extended:
+                        numas=extended.get("numas")
+                        if numas:
+                            numa_nodes = len(numas)
+                            if numa_nodes > 1:
+                                return -1, "Can not add flavor with more than one numa"
+                            numa_properties = {"hw:numa_nodes":str(numa_nodes)}
+                            numa_properties["hw:mem_page_size"] = "large"
+                            numa_properties["hw:cpu_policy"] = "dedicated"
+                            numa_properties["hw:numa_mempolicy"] = "strict"
+                            if self.vim_type == "VIO":
+                                numa_properties["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
+                                numa_properties["vmware:latency_sensitivity_level"] = "high"
+                            for numa in numas:
+                                #overwrite ram and vcpus
+                                #check if key 'memory' is present in numa else use ram value at flavor
+                                if 'memory' in numa:
+                                    ram = numa['memory']*1024
+                                #See for reference: https://specs.openstack.org/openstack/nova-specs/specs/mitaka/implemented/virt-driver-cpu-thread-pinning.html
+                                if 'paired-threads' in numa:
+                                    vcpus = numa['paired-threads']*2
+                                    #cpu_thread_policy "require" implies that the compute node must have an STM architecture
+                                    numa_properties["hw:cpu_thread_policy"] = "require"
+                                    numa_properties["hw:cpu_policy"] = "dedicated"
+                                elif 'cores' in numa:
+                                    vcpus = numa['cores']
+                                    # cpu_thread_policy "prefer" implies that the host must not have an SMT architecture, or a non-SMT architecture will be emulated
+                                    numa_properties["hw:cpu_thread_policy"] = "isolate"
+                                    numa_properties["hw:cpu_policy"] = "dedicated"
+                                elif 'threads' in numa:
+                                    vcpus = numa['threads']
+                                    # cpu_thread_policy "prefer" implies that the host may or may not have an SMT architecture
+                                    numa_properties["hw:cpu_thread_policy"] = "prefer"
+                                    numa_properties["hw:cpu_policy"] = "dedicated"
+                                # for interface in numa.get("interfaces",() ):
+                                #     if interface["dedicated"]=="yes":
+                                #         raise vimconn.vimconnException("Passthrough interfaces are not supported for the openstack connector", http_code=vimconn.HTTP_Service_Unavailable)
+                                #     #TODO, add the key 'pci_passthrough:alias"="<label at config>:<number ifaces>"' when a way to connect it is available
 
-                #create flavor                 
-                new_flavor=self.nova.flavors.create(name,
-                                ram,
-                                vcpus,
-                                flavor_data.get('disk',0),
-                                is_public=flavor_data.get('is_public', True)
-                            )
-                #add metadata
-                if numa_properties:
-                    new_flavor.set_keys(numa_properties)
-                return new_flavor.id
-            except nvExceptions.Conflict as e:
-                if change_name_if_used and retry < max_retries:
-                    continue
-                self._format_exception(e)
-            #except nvExceptions.BadRequest as e:
-            except (ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError) as e:
-                self._format_exception(e)
+                    #create flavor
+                    new_flavor=self.nova.flavors.create(name,
+                                    ram,
+                                    vcpus,
+                                    flavor_data.get('disk',0),
+                                    is_public=flavor_data.get('is_public', True)
+                                )
+                    #add metadata
+                    if numa_properties:
+                        new_flavor.set_keys(numa_properties)
+                    return new_flavor.id
+                except nvExceptions.Conflict as e:
+                    if change_name_if_used and retry < max_retries:
+                        continue
+                    self._format_exception(e)
+        #except nvExceptions.BadRequest as e:
+        except (ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError, KeyError) as e:
+            self._format_exception(e)
 
     def delete_flavor(self,flavor_id):
         '''Deletes a tenant flavor from openstack VIM. Returns the old flavor_id

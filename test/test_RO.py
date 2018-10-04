@@ -291,6 +291,11 @@ class test_vimconn_connect(test_base):
             vca_object = test_config["vim_conn"].connect()
             logger.debug("{}".format(vca_object))
             self.assertIsNotNone(vca_object)
+        elif test_config['vimtype'] == 'openstack':
+            test_config["vim_conn"]._reload_connection()
+            network_list = test_config["vim_conn"].get_network_list()
+            logger.debug("{}".format(network_list))
+            self.assertIsNotNone(network_list)
 
 class test_vimconn_new_network(test_base):
     network_name = None
@@ -372,11 +377,16 @@ class test_vimconn_new_network(test_base):
                     version = item['ip-profile']['ip-version']
                     dhcp_count = item['ip-profile']['dhcp']['count']
                     dhcp_enabled = item['ip-profile']['dhcp']['enabled']
+                    dhcp_start_address = item['ip-profile']['dhcp']['start-address']
+                    subnet_address = item['ip-profile']['subnet-address']
+
 
         self.__class__.network_name = _get_random_string(20)
         ip_profile = {'dhcp_count': dhcp_count,
                       'dhcp_enabled': dhcp_enabled,
-                      'ip_version': version
+                      'dhcp_start_address': dhcp_start_address,
+                      'ip_version': version,
+                      'subnet_address': subnet_address
                      }
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
                                                             self.__class__.test_index,
@@ -480,7 +490,11 @@ class test_vimconn_new_network(test_base):
 
         # refresh net status
         net_dict = test_config["vim_conn"].refresh_nets_status([unknown_net_id])
-        self.assertEqual(net_dict, {})
+        if test_config['vimtype'] == 'openstack':
+            self.assertEqual(net_dict[unknown_net_id]['status'], 'DELETED')
+        else:
+            # TODO : Fix vmware connector to return status DELETED as per vimconn.py
+            self.assertEqual(net_dict, {})
 
 class test_vimconn_get_network_list(test_base):
     network_name = None
@@ -524,7 +538,10 @@ class test_vimconn_get_network_list(test_base):
                                                 inspect.currentframe().f_code.co_name)
         self.__class__.test_index += 1
 
-        network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
+        if test_config['vimtype'] == 'openstack':
+            network_name = test_config['vim_conn'].get_network(self.__class__.network_id)['name']
+        else:
+            network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
 
         # find network from list by it's name
         new_network_list = test_config["vim_conn"].get_network_list({'name': network_name})
@@ -555,7 +572,10 @@ class test_vimconn_get_network_list(test_base):
                                                 inspect.currentframe().f_code.co_name)
         self.__class__.test_index += 1
 
-        network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
+        if test_config['vimtype'] == 'openstack':
+            network_name = test_config['vim_conn'].get_network(self.__class__.network_id)['name']
+        else:
+            network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
         # find network from list by it's shared value
         new_network_list = test_config["vim_conn"].get_network_list({'shared':Shared,
                                                                 'name':network_name})
@@ -572,7 +592,10 @@ class test_vimconn_get_network_list(test_base):
         self.__class__.test_index += 1
 
         tenant_list = test_config["vim_conn"].get_tenant_list()
-        network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
+        if test_config['vimtype'] == 'openstack':
+            network_name = test_config['vim_conn'].get_network(self.__class__.network_id)['name']
+        else:
+            network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
 
         for tenant_item in tenant_list:
             if test_config['tenant'] == tenant_item.get('name'):
@@ -593,7 +616,10 @@ class test_vimconn_get_network_list(test_base):
         self.__class__.test_index += 1
         status = 'ACTIVE'
 
-        network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
+        if test_config['vimtype'] == 'openstack':
+            network_name = test_config['vim_conn'].get_network(self.__class__.network_id)['name']
+        else:
+            network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
 
         # find network from list by it's status
         new_network_list = test_config["vim_conn"].get_network_list({'status':status,
@@ -719,10 +745,12 @@ class test_vimconn_get_flavor(test_base):
                     vcpus = item['vcpus']
                     disk = item['disk']
 
-        flavor_data = {'ram': ram,
+        flavor_data = {
+                      'name' : _get_random_string(20),
+                      'ram': ram,
                       'vcpus': vcpus,
                       'disk': disk
-                      }
+                    }
 
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
                                                             self.__class__.test_index,
@@ -760,7 +788,7 @@ class test_vimconn_new_flavor(test_base):
     flavor_id = None
 
     def test_000_new_flavor(self):
-        flavor_data = {'ram': 1024, 'vpcus': 1, 'disk': 10}
+        flavor_data = {'name': _get_random_string(20), 'ram': 1024, 'vpcus': 1, 'disk': 10}
 
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
                                                             self.__class__.test_index,
@@ -769,8 +797,8 @@ class test_vimconn_new_flavor(test_base):
 
         # create new flavor
         self.__class__.flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
-        self.assertEqual(type(self.__class__.flavor_id),str)
-        self.assertIsInstance(uuid.UUID(self.__class__.flavor_id),uuid.UUID)
+        self.assertIsInstance(self.__class__.flavor_id, (str, unicode))
+        self.assertIsInstance(uuid.UUID(self.__class__.flavor_id), uuid.UUID)
 
     def test_010_delete_flavor(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
