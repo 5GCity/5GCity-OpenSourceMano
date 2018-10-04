@@ -850,10 +850,11 @@ class test_vimconn_new_image(test_base):
 
         image_path = test_config['image_path']
         if image_path:
-            self.__class__.image_id = test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : image_path })
+            self.__class__.image_id = test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : image_path, 'metadata': {'upload_location':None} })
             time.sleep(20)
-            self.assertEqual(type(self.__class__.image_id),str)
-            self.assertIsInstance(uuid.UUID(self.__class__.image_id),uuid.UUID)
+
+            self.assertIsInstance(self.__class__.image_id, (str, unicode))
+            self.assertIsInstance(uuid.UUID(self.__class__.image_id), uuid.UUID)
         else:
             self.skipTest("Skipping test as image file not present at RO container")
 
@@ -866,7 +867,7 @@ class test_vimconn_new_image(test_base):
         self.__class__.test_index += 1
 
         with self.assertRaises(Exception) as context:
-            test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : Non_exist_image_path })
+            test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : Non_exist_image_path})
 
         self.assertEqual((context.exception).http_code, 400)
 
@@ -877,7 +878,8 @@ class test_vimconn_new_image(test_base):
         self.__class__.test_index += 1
 
         image_id = test_config["vim_conn"].delete_image(self.__class__.image_id)
-        self.assertEqual(type(image_id),str)
+
+        self.assertIsInstance(image_id, (str, unicode))
 
     def test_030_delete_image_negative(self):
         Non_exist_image_id = str(uuid.uuid4())
@@ -935,8 +937,8 @@ class test_vimconn_get_image_list(test_base):
             if 'name' in item:
                 self.__class__.image_name = item['name']
                 self.__class__.image_id = item['id']
-                self.assertEqual(type(self.__class__.image_name),str)
-                self.assertEqual(type(self.__class__.image_id),str)
+                self.assertIsInstance(self.__class__.image_name, (str, unicode))
+                self.assertIsInstance(self.__class__.image_id, (str, unicode))
 
     def test_010_get_image_list_by_name(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
@@ -947,9 +949,9 @@ class test_vimconn_get_image_list(test_base):
         image_list = test_config["vim_conn"].get_image_list({'name': self.__class__.image_name})
 
         for item in image_list:
-            self.assertEqual(type(item['id']), str)
+            self.assertIsInstance(item['id'], (str, unicode))
+            self.assertIsInstance(item['name'], (str, unicode))
             self.assertEqual(item['id'], self.__class__.image_id)
-            self.assertEqual(type(item['name']), str)
             self.assertEqual(item['name'], self.__class__.image_name)
 
     def test_020_get_image_list_by_id(self):
@@ -961,10 +963,10 @@ class test_vimconn_get_image_list(test_base):
         filter_image_list = test_config["vim_conn"].get_image_list({'id': self.__class__.image_id})
 
         for item1 in filter_image_list:
-            self.assertEqual(type(item1.get('id')), str)
-            self.assertEqual(item1.get('id'), self.__class__.image_id)
-            self.assertEqual(type(item1.get('name')), str)
-            self.assertEqual(item1.get('name'), self.__class__.image_name)
+            self.assertIsInstance(item1['id'], (str, unicode))
+            self.assertIsInstance(item1['name'], (str, unicode))
+            self.assertEqual(item1['id'], self.__class__.image_id)
+            self.assertEqual(item1['name'], self.__class__.image_name)
 
     def test_030_get_image_list_negative(self):
         Non_exist_image_id = uuid.uuid4()
@@ -1396,8 +1398,8 @@ class test_vimconn_get_tenant_list(test_base):
         for item in tenant_list:
             if test_config['tenant'] == item['name']:
                 self.__class__.tenant_id = item['id']
-                self.assertEqual(type(item['name']), str)
-                self.assertEqual(type(item['id']), str)
+                self.assertIsInstance(item['name'], (str, unicode))
+                self.assertIsInstance(item['id'], (str, unicode))
 
     def test_010_get_tenant_list_by_id(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
@@ -1409,7 +1411,7 @@ class test_vimconn_get_tenant_list(test_base):
         filter_tenant_list = test_config["vim_conn"].get_tenant_list({'id': self.__class__.tenant_id})
 
         for item in filter_tenant_list:
-            self.assertEqual(type(item['id']), str)
+            self.assertIsInstance(item['id'], (str, unicode))
             self.assertEqual(item['id'], self.__class__.tenant_id)
 
     def test_020_get_tenant_list_by_name(self):
@@ -1422,7 +1424,7 @@ class test_vimconn_get_tenant_list(test_base):
         filter_tenant_list = test_config["vim_conn"].get_tenant_list({'name': test_config['tenant']})
 
         for item in filter_tenant_list:
-            self.assertEqual(type(item['name']), str)
+            self.assertIsInstance(item['name'], (str, unicode))
             self.assertEqual(item['name'], test_config['tenant'])
 
     def test_030_get_tenant_list_by_name_and_id(self):
@@ -1436,8 +1438,8 @@ class test_vimconn_get_tenant_list(test_base):
                                                                     'id': self.__class__.tenant_id})
 
         for item in filter_tenant_list:
-            self.assertEqual(type(item['name']), str)
-            self.assertEqual(type(item['id']), str)
+            self.assertIsInstance(item['name'], (str, unicode))
+            self.assertIsInstance(item['id'], (str, unicode))
             self.assertEqual(item['name'], test_config['tenant'])
             self.assertEqual(item['id'], self.__class__.tenant_id)
 
@@ -1454,6 +1456,7 @@ class test_vimconn_get_tenant_list(test_base):
 
         self.assertEqual(filter_tenant_list, [])
 
+
 class test_vimconn_new_tenant(test_base):
     tenant_id = None
 
@@ -1464,10 +1467,11 @@ class test_vimconn_new_tenant(test_base):
                                                 inspect.currentframe().f_code.co_name)
         self.__class__.test_index += 1
 
-        self.__class__.tenant_id = test_config["vim_conn"].new_tenant(tenant_name)
+        self.__class__.tenant_id = test_config["vim_conn"].new_tenant(tenant_name, "")
         time.sleep(15)
 
-        self.assertEqual(type(self.__class__.tenant_id), str)
+        self.assertIsInstance(self.__class__.tenant_id, (str, unicode))
+
 
     def test_010_new_tenant_negative(self):
         Invalid_tenant_name = 10121
@@ -1477,9 +1481,10 @@ class test_vimconn_new_tenant(test_base):
         self.__class__.test_index += 1
 
         with self.assertRaises(Exception) as context:
-            test_config["vim_conn"].new_tenant(Invalid_tenant_name)
+            test_config["vim_conn"].new_tenant(Invalid_tenant_name, "")
 
         self.assertEqual((context.exception).http_code, 400)
+
 
     def test_020_delete_tenant(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
@@ -1488,7 +1493,8 @@ class test_vimconn_new_tenant(test_base):
         self.__class__.test_index += 1
 
         tenant_id = test_config["vim_conn"].delete_tenant(self.__class__.tenant_id)
-        self.assertEqual(type(tenant_id), str)
+
+        self.assertIsInstance(tenant_id, (str, unicode))
 
     def test_030_delete_tenant_negative(self):
         Non_exist_tenant_name = 'Test_30_tenant'

@@ -347,13 +347,12 @@ class vimconnector(vimconn.vimconnector):
 
     def _format_exception(self, exception):
         '''Transform a keystone, nova, neutron  exception into a vimconn exception'''
-        if isinstance(exception, (HTTPException, gl1Exceptions.HTTPException, gl1Exceptions.CommunicationError,
-                                  ConnectionError, ksExceptions.ConnectionError, neExceptions.ConnectionFailed
-                                  )):
-            raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))
-        elif isinstance(exception, (neExceptions.NetworkNotFoundClient, nvExceptions.NotFound)):
+        if isinstance(exception, (neExceptions.NetworkNotFoundClient, nvExceptions.NotFound, ksExceptions.NotFound, gl1Exceptions.HTTPNotFound)):
             raise vimconn.vimconnNotFoundException(type(exception).__name__ + ": " + str(exception))
-        elif isinstance(exception,  (KeyError, nvExceptions.BadRequest)):
+        elif isinstance(exception, (HTTPException, gl1Exceptions.HTTPException, gl1Exceptions.CommunicationError,
+                               ConnectionError, ksExceptions.ConnectionError, neExceptions.ConnectionFailed)):
+            raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))
+        elif isinstance(exception,  (KeyError, nvExceptions.BadRequest, ksExceptions.BadRequest)):
             raise vimconn.vimconnException(type(exception).__name__ + ": " + str(exception))
         elif isinstance(exception, (nvExceptions.ClientException, ksExceptions.ClientException,
                                     neExceptions.NeutronException)):
@@ -401,7 +400,7 @@ class vimconnector(vimconn.vimconnector):
             else:
                 project = self.keystone.tenants.create(tenant_name, tenant_description)
             return project.id
-        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
+        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ksExceptions.BadRequest, ConnectionError)  as e:
             self._format_exception(e)
 
     def delete_tenant(self, tenant_id):
@@ -414,7 +413,7 @@ class vimconnector(vimconn.vimconnector):
             else:
                 self.keystone.tenants.delete(tenant_id)
             return tenant_id
-        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
+        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ksExceptions.NotFound, ConnectionError)  as e:
             self._format_exception(e)
 
     def new_network(self,net_name, net_type, ip_profile=None, shared=False, vlan=None):
@@ -793,7 +792,14 @@ class vimconnector(vimconn.vimconnector):
                     else:
                         disk_format="raw"
                 self.logger.debug("new_image: '%s' loading from '%s'", image_dict['name'], image_dict['location'])
-                new_image = self.glance.images.create(name=image_dict['name'])
+                if self.vim_type == "VIO":
+                    container_format = "bare"
+                    if 'container_format' in image_dict:
+                        container_format = image_dict['container_format']
+                    new_image = self.glance.images.create(name=image_dict['name'], container_format=container_format,
+                                                          disk_format=disk_format)
+                else:
+                    new_image = self.glance.images.create(name=image_dict['name'])
                 if image_dict['location'].startswith("http"):
                     # TODO there is not a method to direct download. It must be downloaded locally with requests
                     raise vimconn.vimconnNotImplemented("Cannot create image from URL")
@@ -803,8 +809,11 @@ class vimconnector(vimconn.vimconnector):
                         #new_image = self.glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
                         #    container_format="bare", data=fimage, disk_format=disk_format)
                 metadata_to_load = image_dict.get('metadata')
-                #TODO location is a reserved word for current openstack versions. Use another word
-                metadata_to_load['location'] = image_dict['location']
+                # TODO location is a reserved word for current openstack versions. fixed for VIO please check for openstack
+                if self.vim_type == "VIO":
+                    metadata_to_load['upload_location'] = image_dict['location']
+                else:
+                    metadata_to_load['location'] = image_dict['location']
                 self.glance.images.update(new_image.id, **metadata_to_load)
                 return new_image.id
             except (nvExceptions.Conflict, ksExceptions.ClientException, nvExceptions.ClientException) as e:
@@ -824,7 +833,7 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             self.glance.images.delete(image_id)
             return image_id
-        except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e: #TODO remove
+        except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, gl1Exceptions.HTTPNotFound, ConnectionError) as e: #TODO remove
             self._format_exception(e)
 
     def get_image_id_from_path(self, path):
