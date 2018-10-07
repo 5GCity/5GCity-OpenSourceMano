@@ -1588,6 +1588,7 @@ class vimconnector(vimconn.vimconnector):
         #If no mgmt, then the 1st NN in netlist is considered as primary net. 
         primary_net = None
         primary_netname = None
+        primary_net_href = None
         network_mode = 'bridged'
         if net_list is not None and len(net_list) > 0:
             for net in net_list:
@@ -1598,6 +1599,8 @@ class vimconnector(vimconn.vimconnector):
 
             try:
                 primary_net_id = primary_net['net_id']
+                url_list = [self.url, '/api/network/', primary_net_id]
+                primary_net_href = ''.join(url_list) 
                 network_dict = self.get_vcd_network(network_uuid=primary_net_id)
                 if 'name' in network_dict:
                     primary_netname = network_dict['name']
@@ -1667,9 +1670,9 @@ class vimconnector(vimconn.vimconnector):
                 <InstantiationParams>
                      <NetworkConfigSection>
                          <ovf:Info>Configuration parameters for logical networks</ovf:Info>
-                         <NetworkConfig networkName="None">
+                         <NetworkConfig networkName="{}">
                              <Configuration>
-                                 <ParentNetwork href=""/>
+                                 <ParentNetwork href="{}" />
                                  <FenceMode>bridged</FenceMode>
                              </Configuration>
                          </NetworkConfig>
@@ -1724,6 +1727,8 @@ class vimconnector(vimconn.vimconnector):
                 </SourcedItem>
                 <AllEULAsAccepted>false</AllEULAsAccepted>
                 </InstantiateVAppTemplateParams>""".format(vmname_andid,
+                                                        primary_netname,
+                                                        primary_net_href,
                                                      vapp_tempalte_href,
                                                                 vm_href,
                                                                   vm_id,
@@ -1862,8 +1867,8 @@ class vimconnector(vimconn.vimconnector):
         # add NICs & connect to networks in netlist
         try:
             self.logger.info("Request to connect VM to a network: {}".format(net_list))
-            nicIndex = 0
             primary_nic_index = 0
+            nicIndex = 0
             for net in net_list:
                 # openmano uses network id in UUID format.
                 # vCloud Director need a name so we do reverse operation from provided UUID we lookup a name
@@ -1880,6 +1885,10 @@ class vimconnector(vimconn.vimconnector):
                 interface_net_id = net['net_id']
                 interface_net_name = self.get_network_name_by_id(network_uuid=interface_net_id)
                 interface_network_mode = net['use']
+
+                if interface_net_name == primary_netname:
+                    nicIndex += 1
+                    continue
 
                 if interface_network_mode == 'mgmt':
                     primary_nic_index = nicIndex
@@ -2774,11 +2783,16 @@ class vimconnector(vimconn.vimconnector):
                                                                          "VM details")
                         xmlroot = XmlElementTree.fromstring(response.content)
 
+                        
                         result = response.content.replace("\n"," ")
-                        hdd_mb = re.search('vcloud:capacity="(\d+)"\svcloud:storageProfileOverrideVmDefault=',result).group(1)
-                        vm_details['hdd_mb'] = int(hdd_mb) if hdd_mb else None
-                        cpus = re.search('<rasd:Description>Number of Virtual CPUs</.*?>(\d+)</rasd:VirtualQuantity>',result).group(1)
-                        vm_details['cpus'] = int(cpus) if cpus else None
+                        hdd_match = re.search('vcloud:capacity="(\d+)"\svcloud:storageProfileOverrideVmDefault=',result)
+                        if hdd_match:
+                            hdd_mb = hdd_match.group(1)
+                            vm_details['hdd_mb'] = int(hdd_mb) if hdd_mb else None
+                        cpus_match = re.search('<rasd:Description>Number of Virtual CPUs</.*?>(\d+)</rasd:VirtualQuantity>',result)
+                        if cpus_match:
+                            cpus = cpus_match.group(1)
+                            vm_details['cpus'] = int(cpus) if cpus else None
                         memory_mb = re.search('<rasd:Description>Memory Size</.*?>(\d+)</rasd:VirtualQuantity>',result).group(1)
                         vm_details['memory_mb'] = int(memory_mb) if memory_mb else None
                         vm_details['status'] = vcdStatusCode2manoFormat[int(xmlroot.get('status'))]
@@ -4634,6 +4648,8 @@ class vimconnector(vimconn.vimconnector):
                 None
         """
 
+        self.logger.info("Add network adapter to VM: network_name {} nicIndex {}".\
+                         format(network_name, nicIndex))
         try:
             ip_address = None
             floating_ip = False
