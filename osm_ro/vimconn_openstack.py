@@ -353,6 +353,8 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))
         elif isinstance(exception, (nvExceptions.ClientException, ksExceptions.ClientException,
                                     neExceptions.NeutronException, nvExceptions.BadRequest)):
+            if "could not be found" in str(exception):
+                raise vimconn.vimconnNotFoundException(type(exception).__name__ + ": " + str(exception))
             raise vimconn.vimconnUnexpectedResponse(type(exception).__name__ + ": " + str(exception))
         elif isinstance(exception, (neExceptions.NetworkNotFoundClient, nvExceptions.NotFound)):
             raise vimconn.vimconnNotFoundException(type(exception).__name__ + ": " + str(exception))

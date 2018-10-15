@@ -37,7 +37,6 @@ import yaml
 import sys
 import time
 import uuid
-import json
 from argparse import ArgumentParser
 
 __author__ = "Pablo Montes, Alfonso Tierno"
@@ -696,7 +695,7 @@ class test_vimconn_delete_network(test_base):
         with self.assertRaises(Exception) as context:
             test_config["vim_conn"].delete_network(Non_exist_id)
 
-        self.assertEqual((context.exception).http_code, 400)
+        self.assertEqual((context.exception).http_code, 404)
 
 class test_vimconn_get_flavor(test_base):
 
@@ -1542,7 +1541,7 @@ def test_vimconnector(args):
 
         tenant_name = args.tenant_name
         test_config['tenant'] = tenant_name
-        config_params = json.loads(args.config_param)
+        config_params = yaml.load(args.config_param)
         org_name = config_params.get('orgname')
         org_user = config_params.get('user')
         org_passwd = config_params.get('passwd')
@@ -1562,7 +1561,7 @@ def test_vimconnector(args):
 
         tenant_name = args.tenant_name
         test_config['tenant'] = tenant_name
-        config_params = json.loads(args.config_param)
+        config_params = yaml.load(args.config_param)
         os_user = config_params.get('user')
         os_passwd = config_params.get('passwd')
         vim_url = args.endpoint_url
@@ -1615,7 +1614,7 @@ def test_vimconnector(args):
         # include all tests
         for cls in clsmembers:
             # We exclude 'test_VIM_tenant_operations' unless it is specifically requested by the user
-            if cls[0].startswith('test_vimconnector'):
+            if cls[0].startswith('test_vimconn'):
                 code_based_tests.append(cls[1])
 
     logger.debug("tests to be executed: {}".format(code_based_tests))
