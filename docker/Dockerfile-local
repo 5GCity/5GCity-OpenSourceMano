@@ -2,8 +2,6 @@ from ubuntu:xenial
 
 LABEL authors="Gennadiy Dubina, Alfonso Tierno, Gerardo Garcia"
 
-COPY . /root/RO
-
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install software-properties-common && \
     DEBIAN_FRONTEND=noninteractive add-apt-repository -y cloud-archive:queens && \
@@ -17,8 +15,11 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install python-openstacksdk python-openstackclient && \
     DEBIAN_FRONTEND=noninteractive pip2 install untangle && \
     DEBIAN_FRONTEND=noninteractive pip2 install -e git+https://github.com/python-oca/python-oca#egg=oca && \
-    DEBIAN_FRONTEND=noninteractive apt-get -y install mysql-client && \
-    /root/RO/scripts/install-osm-im.sh --develop && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y install mysql-client
+
+COPY . /root/RO
+
+RUN /root/RO/scripts/install-osm-im.sh --develop && \
     /root/RO/scripts/install-lib-osm-openvim.sh --develop && \
     make -C /root/RO prepare && \
     mkdir -p /var/log/osm && \
@@ -61,4 +62,3 @@ ENV RO_DB_HOST="" \
     OPENMANO_TENANT=osm
 
 CMD RO-start.sh
-
