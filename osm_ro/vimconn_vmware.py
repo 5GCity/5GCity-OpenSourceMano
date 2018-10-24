@@ -1523,7 +1523,7 @@ class vimconnector(vimconn.vimconnector):
         vmname_andid = ''.join(new_vm_name)
 
         for net in net_list:
-            if net['type'] == "SR-IOV" or net['type'] == "PCI-PASSTHROUGH":
+            if net['type'] == "PCI-PASSTHROUGH":
                 raise vimconn.vimconnNotSupportedException(
                       "Current vCD version does not support type : {}".format(net['type']))
 
@@ -1553,7 +1553,6 @@ class vimconnector(vimconn.vimconnector):
         else:
             raise vimconn.vimconnNotFoundException("new_vminstance(): Failed create vApp {}: "
                                                    "(Failed retrieve catalog information {})".format(name, image_id))
-
 
         # Set vCPU and Memory based on flavor.
         vm_cpus = None
@@ -1798,14 +1797,13 @@ class vimconnector(vimconn.vimconnector):
         #Add PCI passthrough/SRIOV configrations
         vm_obj = None
         pci_devices_info = []
-        sriov_net_info = []
         reserve_memory = False
 
         for net in net_list:
             if net["type"] == "PF" or net["type"] == "PCI-PASSTHROUGH":
                 pci_devices_info.append(net)
             elif (net["type"] == "VF" or net["type"] == "SR-IOV" or net["type"] == "VFnotShared") and 'net_id'in net:
-                sriov_net_info.append(net)
+                reserve_memory = True
 
         #Add PCI
         if len(pci_devices_info) > 0:
@@ -1918,7 +1916,7 @@ class vimconnector(vimconn.vimconnector):
                             self.logger.info("new_vminstance(): Attaching net {} to vapp".format(interface_net_name))
                             self.connect_vapp_to_org_vdc_network(vapp_id, nets[0].get('name'))
 
-                        type_list = ('PF', 'PCI-PASSTHROUGH', 'VF', 'SR-IOV', 'VFnotShared')
+                        type_list = ('PF', 'PCI-PASSTHROUGH', 'VFnotShared')
                         if 'type' in net and net['type'] not in type_list:
                             # fetching nic type from vnf
                             if 'model' in net:
@@ -1952,39 +1950,9 @@ class vimconnector(vimconn.vimconnector):
             if cloud_config:
                 self.cloud_init(vapp,cloud_config)
 
-        # ############# Stub code for SRIOV #################
-        #Add SRIOV
-#         if len(sriov_net_info) > 0:
-#             self.logger.info("Need to add SRIOV adapters {} into VM {}".format(sriov_net_info,
-#                                                                         vmname_andid ))
-#             sriov_status, vm_obj, vcenter_conect = self.add_sriov(vapp_uuid,
-#                                                                   sriov_net_info,
-#                                                                   vmname_andid)
-#             if sriov_status:
-#                 self.logger.info("Added SRIOV {} to VM {}".format(
-#                                                             sriov_net_info,
-#                                                             vmname_andid)
-#                                  )
-#                 reserve_memory = True
-#             else:
-#                 self.logger.info("Fail to add SRIOV {} to VM {}".format(
-#                                                             sriov_net_info,
-#                                                             vmname_andid)
-#                                  )
-
             # If VM has PCI devices or SRIOV reserve memory for VM
             if reserve_memory:
-                memReserve = vm_obj.config.hardware.memoryMB
-                spec = vim.vm.ConfigSpec()
-                spec.memoryAllocation = vim.ResourceAllocationInfo(reservation=memReserve)
-                task = vm_obj.ReconfigVM_Task(spec=spec)
-                if task:
-                    result = self.wait_for_vcenter_task(task, vcenter_conect)
-                    self.logger.info("Reserved memory {} MB for "
-                                     "VM VM status: {}".format(str(memReserve), result))
-                else:
-                    self.logger.info("Fail to reserved memory {} to VM {}".format(
-                                                                str(memReserve), str(vm_obj)))
+                self.reserve_memory_for_all_vms(vapp, memory_mb)
 
             self.logger.debug("new_vminstance(): starting power on vApp {} ".format(vmname_andid))
 
@@ -5032,6 +5000,10 @@ class vimconnector(vimconn.vimconnector):
                                                                         "network connection section")
                     data = response.content
                     data = data.split('<Link rel="edit"')[0]
+                    vcd_netadapter_type = nic_type
+                    if nic_type in ['SR-IOV', 'VF']:
+                        vcd_netadapter_type = "SRIOVETHERNETCARD"
+
                     if '<PrimaryNetworkConnectionIndex>' not in data:
                         self.logger.debug("add_network_adapter PrimaryNIC not in data nic_type {}".format(nic_type))
                         item = """<PrimaryNetworkConnectionIndex>{}</PrimaryNetworkConnectionIndex>
@@ -5041,7 +5013,7 @@ class vimconnector(vimconn.vimconnector):
                                 <IpAddressAllocationMode>{}</IpAddressAllocationMode>
                                 <NetworkAdapterType>{}</NetworkAdapterType>
                                 </NetworkConnection>""".format(primary_nic_index, network_name, nicIndex,
-                                                                               allocation_mode, nic_type)
+                                                                               allocation_mode, vcd_netadapter_type)
                         # Stub for ip_address feature
                         if ip_address:
                             ip_tag = '<IpAddress>{}</IpAddress>'.format(ip_address)
@@ -5060,7 +5032,7 @@ class vimconnector(vimconn.vimconnector):
                                     <IpAddressAllocationMode>{}</IpAddressAllocationMode>
                                     <NetworkAdapterType>{}</NetworkAdapterType>
                                     </NetworkConnection>""".format(network_name, nicIndex,
-                                                                allocation_mode, nic_type)
+                                                                allocation_mode, vcd_netadapter_type)
                         # Stub for ip_address feature
                         if ip_address:
                             ip_tag = '<IpAddress>{}</IpAddress>'.format(ip_address)
