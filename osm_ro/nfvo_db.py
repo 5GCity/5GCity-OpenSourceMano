@@ -991,7 +991,7 @@ class nfvo_db(db_base.db_base):
                     self.cur.execute(cmd)
                     instance_dict['vnfs'] = self.cur.fetchall()
                     for vnf in instance_dict['vnfs']:
-
+                        vnf["ip_address"] = None
                         vnf_mgmt_access_iface = None
                         vnf_mgmt_access_vm = None
                         if vnf["mgmt_access"]:
@@ -1020,7 +1020,8 @@ class nfvo_db(db_base.db_base):
                             vm['interfaces'] = self.cur.fetchall()
                             for iface in vm['interfaces']:
                                 if vnf_mgmt_access_iface and vnf_mgmt_access_iface == iface["uuid"]:
-                                    vnf["ip_address"] = iface["ip_address"]
+                                    if not vnf["ip_address"]:
+                                        vnf["ip_address"] = iface["ip_address"]
                                 if iface["type"] == "mgmt" and iface["ip_address"]:
                                     vm_manage_iface_list.append(iface["ip_address"])
                                 if not verbose:
@@ -1028,9 +1029,7 @@ class nfvo_db(db_base.db_base):
                                 del iface["uuid"]
                             if vm_manage_iface_list:
                                 vm["ip_address"] = ",".join(vm_manage_iface_list)
-                                if vnf_mgmt_access_vm == vm["vm_uuid"]:
-                                    vnf["ip_address"] = vm["ip_address"]
-                                elif not vnf.get("ip_address"):
+                                if not vnf["ip_address"] and vnf_mgmt_access_vm == vm["vm_uuid"]:
                                     vnf["ip_address"] = vm["ip_address"]
                             del vm["vm_uuid"]
 

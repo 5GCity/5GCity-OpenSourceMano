@@ -3261,6 +3261,7 @@ def create_instance(mydb, tenant_id, instance_dict):
             "myvims": myvims,
             "cloud_config": cloud_config,
             "RO_pub_key": tenant[0].get('RO_pub_key'),
+            "instance_parameters": instance_dict,
         }
         vnf_params_out = {
             "task_index": task_index,
@@ -3664,6 +3665,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         myVMDict['networks'] = []
         task_depends_on = []
         # TODO ALF. connect_mgmt_interfaces. Connect management interfaces if this is true
+        is_management_vm = False
         db_vm_ifaces = []
         for iface in vm['interfaces']:
             netDict = {}
@@ -3696,7 +3698,10 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                             Try to delete and create the scenarios and VNFs again", HTTP_Conflict)
                 else:
                     raise NfvoException(e_text, HTTP_Internal_Server_Error)
-            if netDict["use"] == "mgmt" or netDict["use"] == "bridge":
+            if netDict["use"] == "mgmt":
+                is_management_vm = True
+                netDict["type"] = "virtual"
+            if netDict["use"] == "bridge":
                 netDict["type"] = "virtual"
             if iface.get("vpci"):
                 netDict['vpci'] = iface['vpci']
@@ -3750,9 +3755,16 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
 
         # We add the RO key to cloud_config if vnf will need ssh access
         cloud_config_vm = cloud_config
-        if ssh_access and ssh_access['required'] and ssh_access['default-user'] and tenant[0].get('RO_pub_key'):
-            RO_key = {"key-pairs": [tenant[0]['RO_pub_key']]}
-            cloud_config_vm = unify_cloud_config(cloud_config_vm, RO_key)
+        if is_management_vm and params["instance_parameters"].get("mgmt_keys"):
+            cloud_config_vm = unify_cloud_config({"key-pairs": params["instance_parameters"]["mgmt_keys"]},
+                                                  cloud_config_vm)
+
+        if vm.get("instance_parameters") and vm["instance_parameters"].get("mgmt_keys"):
+            cloud_config_vm = unify_cloud_config({"key-pairs": vm["instance_parameters"]["mgmt_keys"]},
+                                                 cloud_config_vm)
+        # if ssh_access and ssh_access['required'] and ssh_access['default-user'] and tenant[0].get('RO_pub_key'):
+        #     RO_key = {"key-pairs": [tenant[0]['RO_pub_key']]}
+        #     cloud_config_vm = unify_cloud_config(cloud_config_vm, RO_key)
         if vm.get("boot_data"):
             cloud_config_vm = unify_cloud_config(vm["boot_data"], cloud_config_vm)
 
@@ -4331,6 +4343,8 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
             "description": "SCALE",
         }
         vm_result["instance_action_id"] = instance_action_id
+        vm_result["created"] = []
+        vm_result["deleted"] = []
         task_index = 0
         for vdu in action_dict["vdu-scaling"]:
             vdu_id = vdu.get("vdu-id")
@@ -4338,17 +4352,17 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
             member_vnf_index = vdu.get("member-vnf-index")
             vdu_count = vdu.get("count", 1)
             if vdu_id:
-                target_vm = mydb.get_rows(
+                target_vms = mydb.get_rows(
                     FROM="instance_vms as vms join instance_vnfs as vnfs on vms.instance_vnf_id=vnfs.uuid",
                     WHERE={"vms.uuid": vdu_id},
                     ORDER_BY="vms.created_at"
                 )
-                if not target_vm:
+                if not target_vms:
                     raise NfvoException("Cannot find the vdu with id {}".format(vdu_id), HTTP_Not_Found)
             else:
                 if not osm_vdu_id and not member_vnf_index:
                     raise NfvoException("Invalid imput vdu parameters. Must supply either 'vdu-id' of 'osm_vdu_id','member-vnf-index'")
-                target_vm = mydb.get_rows(
+                target_vms = mydb.get_rows(
                     # SELECT=("ivms.uuid", "ivnfs.datacenter_id", "ivnfs.datacenter_tenant_id"),
                     FROM="instance_vms as ivms join instance_vnfs as ivnfs on ivms.instance_vnf_id=ivnfs.uuid"\
                          " join sce_vnfs as svnfs on ivnfs.sce_vnf_id=svnfs.uuid"\
@@ -4356,38 +4370,41 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                     WHERE={"vms.osm_id": osm_vdu_id, "svnfs.member_vnf_index": member_vnf_index},
                     ORDER_BY="ivms.created_at"
                 )
-                if not target_vm:
+                if not target_vms:
                     raise NfvoException("Cannot find the vdu with osm_vdu_id {} and member-vnf-index {}".format(osm_vdu_id, member_vnf_index), HTTP_Not_Found)
-                vdu_id = target_vm[-1]["uuid"]
-            vm_result[vdu_id] = {"created": [], "deleted": [], "description": "scheduled"}
-            target_vm = target_vm[-1]
+                vdu_id = target_vms[-1]["uuid"]
+            target_vm = target_vms[-1]
             datacenter = target_vm["datacenter_id"]
             myvim_threads_id[datacenter], _ = get_vim_thread(mydb, nfvo_tenant, datacenter)
-            if vdu["type"] == "delete":
-                # look for nm
-                vm_interfaces = None
-                for sce_vnf in instanceDict['vnfs']:
-                    for vm in sce_vnf['vms']:
-                        if vm["uuid"] == vdu_id:
-                            vm_interfaces = vm["interfaces"]
-                            break
 
-                db_vim_action = {
-                    "instance_action_id": instance_action_id,
-                    "task_index": task_index,
-                    "datacenter_vim_id": target_vm["datacenter_tenant_id"],
-                    "action": "DELETE",
-                    "status": "SCHEDULED",
-                    "item": "instance_vms",
-                    "item_id": target_vm["uuid"],
-                    "extra": yaml.safe_dump({"params": vm_interfaces},
-                                            default_flow_style=True, width=256)
-                }
-                task_index += 1
-                db_vim_actions.append(db_vim_action)
-                vm_result[vdu_id]["deleted"].append(vdu_id)
-                # delete from database
-                db_instance_vms.append({"TO-DELETE": vdu_id})
+            if vdu["type"] == "delete":
+                for index in range(0, vdu_count):
+                    target_vm = target_vms[-1-index]
+                    vdu_id = target_vm["uuid"]
+                    # look for nm
+                    vm_interfaces = None
+                    for sce_vnf in instanceDict['vnfs']:
+                        for vm in sce_vnf['vms']:
+                            if vm["uuid"] == vdu_id:
+                                vm_interfaces = vm["interfaces"]
+                                break
+
+                    db_vim_action = {
+                        "instance_action_id": instance_action_id,
+                        "task_index": task_index,
+                        "datacenter_vim_id": target_vm["datacenter_tenant_id"],
+                        "action": "DELETE",
+                        "status": "SCHEDULED",
+                        "item": "instance_vms",
+                        "item_id": vdu_id,
+                        "extra": yaml.safe_dump({"params": vm_interfaces},
+                                                default_flow_style=True, width=256)
+                    }
+                    task_index += 1
+                    db_vim_actions.append(db_vim_action)
+                    vm_result["deleted"].append(vdu_id)
+                    # delete from database
+                    db_instance_vms.append({"TO-DELETE": vdu_id})
 
             else:  # vdu["type"] == "create":
                 iface2iface = {}
@@ -4422,7 +4439,7 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                     vm_name = target_vm.get('vim_name')
                     try:
                         suffix = vm_name.rfind("-")
-                        vm_name = vm_name[:suffix+1] + str(1 + int(vm_name[suffix+1:]))
+                        vm_name = vm_name[:suffix+1] + str(index + 1 + int(vm_name[suffix+1:]))
                     except Exception:
                         pass
                     db_instance_vm = {
@@ -4479,7 +4496,7 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                     }
                     task_index += 1
                     db_vim_actions.append(db_vim_action)
-                    vm_result[vdu_id]["created"].append(vm_uuid)
+                    vm_result["created"].append(vm_uuid)
 
         db_instance_action["number_tasks"] = task_index
         db_tables = [

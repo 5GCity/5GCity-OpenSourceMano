@@ -964,15 +964,17 @@ scenario_action_schema = {
 }
 
 instance_scenario_create_schema_v01 = {
-    "title":"instance scenario create information schema v0.1",
+    "title": "instance scenario create information schema v0.1",
     "$schema": "http://json-schema.org/draft-04/schema#",
-    "type":"object",
-    "properties":{
+    "type": "object",
+    "properties": {
         "schema_version": {"type": "string", "enum": ["0.1"]},
-        "instance":{
-            "type":"object",
-            "properties":{
-                "name":name_schema,
+        "instance": {
+            "type": "object",
+            "properties": {
+                "mgmt_keys": {"type": "array", "items": {"type":"string"}},
+                "vduImage": name_schema,
+                "name": name_schema,
                 "description":description_schema,
                 "datacenter": name_schema,
                 "scenario" : name_schema, #can be an UUID or name
@@ -996,7 +998,9 @@ instance_scenario_create_schema_v01 = {
                                         ".": {
                                             "type": "object",
                                             "properties": {
-                                                "name": name_schema, # overrides vdu name schema
+                                                "name": name_schema,  # overrides vdu name schema
+                                                "mgmt_keys": {"type": "array", "items": {"type": "string"}},
+                                                "vduImage": name_schema,
                                                 "devices": {
                                                     "type": "object",
                                                     "patternProperties": {
