@@ -1072,7 +1072,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
 
                     if iface.get("virtual-interface").get("type") == "OM-MGMT":
                         db_interface["type"] = "mgmt"
-                    elif iface.get("virtual-interface").get("type") in ("VIRTIO", "E1000"):
+                    elif iface.get("virtual-interface").get("type") in ("VIRTIO", "E1000", "PARAVIRT"):
                         db_interface["type"] = "bridge"
                         db_interface["model"] = get_str(iface.get("virtual-interface"), "type", 12)
                     elif iface.get("virtual-interface").get("type") in ("SR-IOV", "PCI-PASSTHROUGH"):

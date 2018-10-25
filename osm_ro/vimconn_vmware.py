@@ -1917,8 +1917,9 @@ class vimconnector(vimconn.vimconnector):
                         if 'type' in net and net['type'] not in type_list:
                             # fetching nic type from vnf
                             if 'model' in net:
-                                if net['model'] is not None and net['model'].lower() == 'virtio':
-                                    nic_type = 'VMXNET3'
+                                if net['model'] is not None:
+                                    if net['model'].lower() == 'paravirt' or net['model'].lower() == 'virtio':
+                                        nic_type = 'VMXNET3'
                                 else:
                                     nic_type = net['model']
 

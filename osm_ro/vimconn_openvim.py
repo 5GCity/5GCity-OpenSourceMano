@@ -846,7 +846,7 @@ class vimconnector(vimconn.vimconnector):
                 if net.get("vpci"):
                     net_dict["vpci"] = net["vpci"]
                 if net.get("model"):
-                    if net["model"] == "VIRTIO":
+                    if net["model"] == "VIRTIO" or net["model"] == "paravirt":
                         net_dict["model"] = "virtio"
                     else:
                         net_dict["model"] = net["model"]

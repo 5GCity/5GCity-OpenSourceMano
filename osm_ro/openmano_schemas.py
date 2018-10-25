@@ -465,7 +465,7 @@ bridge_interfaces_schema={
             "bandwidth":bandwidth_schema,
             "vpci":pci_schema,
             "mac_address": mac_schema,
-            "model": {"type":"string", "enum":["virtio","e1000","ne2k_pci","pcnet","rtl8139"]},
+            "model": {"type":"string", "enum":["virtio","e1000","ne2k_pci","pcnet","rtl8139", "paravirt"]},
             "port-security": {"type" : "boolean"},
             "floating-ip": {"type" : "boolean"}
         },
