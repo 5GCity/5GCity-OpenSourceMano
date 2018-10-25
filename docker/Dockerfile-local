@@ -46,6 +46,7 @@ EXPOSE 9090
 # RO_DB_OVIM_PORT:        default value '3306'
 # RO_DB_NAME:             default value 'mano_db'
 # RO_DB_OVIM_NAME:        default value 'mano_vim_db'
+# RO_LOG_FILE:            default log to stderr if not defined
 
 ENV RO_DB_HOST="" \
     RO_DB_OVIM_HOST="" \
@@ -59,6 +60,7 @@ ENV RO_DB_HOST="" \
     RO_DB_OVIM_PORT=3306 \
     RO_DB_NAME=mano_db \
     RO_DB_OVIM_NAME=mano_vim_db \
-    OPENMANO_TENANT=osm
+    OPENMANO_TENANT=osm \
+    RO_LOG_LEVEL=DEBUG
 
 CMD RO-start.sh
