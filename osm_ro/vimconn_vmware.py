@@ -1466,7 +1466,7 @@ class vimconnector(vimconn.vimconnector):
                 'name': (optional) name for the interface.
                 'net_id': VIM network id where this interface must be connect to. Mandatory for type==virtual
                 'vpci': (optional) virtual vPCI address to assign at the VM. Can be ignored depending on VIM capabilities
-                'model': (optional and only have sense for type==virtual) interface model: virtio, e2000, ...
+                'model': (optional and only have sense for type==virtual) interface model: virtio, e1000, ...
                 'mac_address': (optional) mac address to assign to this interface
                 #TODO: CHECK if an optional 'vlan' parameter is needed for VIMs when type if VF and net_id is not provided,
                     the VLAN tag to be used. In case net_id is provided, the internal network vlan is used for tagging VF

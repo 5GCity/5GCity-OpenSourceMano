@@ -809,7 +809,7 @@ class vimconnector(vimconn.vimconnector):
                 name:
                 net_id: network uuid to connect
                 vpci: virtual vcpi to assign
-                model: interface model, virtio, e2000, ...
+                model: interface model, virtio, e1000, ...
                 mac_address: 
                 use: 'data', 'bridge',  'mgmt'
                 type: 'virtual', 'PCI-PASSTHROUGH'('PF'), 'SR-IOV'('VF'), 'VFnotShared'
