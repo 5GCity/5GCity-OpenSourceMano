@@ -1871,6 +1871,7 @@ class vimconnector(vimconn.vimconnector):
             vdc_obj = VDC(self.client, href=vdc.get('href'))
             vapp_resource = vdc_obj.get_vapp(vmname_andid)
             vapp = VApp(self.client, resource=vapp_resource)
+            vapp_id = vapp_resource.get('id').split(':')[-1]
 
             self.logger.info("Removing primary NIC: ")
             # First remove all NICs so that NIC properties can be adjusted as needed
@@ -1915,8 +1916,7 @@ class vimconnector(vimconn.vimconnector):
                         if interface_net_name != primary_netname:
                             # connect network to VM - with all DHCP by default
                             self.logger.info("new_vminstance(): Attaching net {} to vapp".format(interface_net_name))
-                            task = vapp.connect_org_vdc_network(nets[0].get('name'))
-                            self.client.get_task_monitor().wait_for_success(task=task)
+                            self.connect_vapp_to_org_vdc_network(vapp_id, nets[0].get('name'))
 
                         type_list = ('PF', 'PCI-PASSTHROUGH', 'VF', 'SR-IOV', 'VFnotShared')
                         if 'type' in net and net['type'] not in type_list:
@@ -1984,7 +1984,6 @@ class vimconnector(vimconn.vimconnector):
 
             self.logger.debug("new_vminstance(): starting power on vApp {} ".format(vmname_andid))
 
-            vapp_id = vapp_resource.get('id').split(':')[-1]
             poweron_task = self.power_on_vapp(vapp_id, vmname_andid)
             result = self.client.get_task_monitor().wait_for_success(task=poweron_task)
             if result.get('status') == 'success':
@@ -3713,8 +3712,15 @@ class vimconnector(vimconn.vimconnector):
             # either use client provided UUID or search for a first available
             #  if both are not defined we return none
             if parent_network_uuid is not None:
-                url_list = [self.url, '/api/admin/network/', parent_network_uuid]
+                provider_network = None
+                available_networks = None
+                add_vdc_rest_url = None
+
+                url_list = [self.url, '/api/admin/vdc/', self.tenant_id, '/networks']
                 add_vdc_rest_url = ''.join(url_list)
+
+                url_list = [self.url, '/api/admin/network/', parent_network_uuid]
+                available_networks = ''.join(url_list)
 
             #Creating all networks as Direct Org VDC type networks.
             #Unused in case of Underlay (data/ptp) network interface.
@@ -4642,6 +4648,161 @@ class vimconnector(vimconn.vimconnector):
                              " for VM : {}".format(exp))
             raise vimconn.vimconnException(message=exp)
 
+
+    def reserve_memory_for_all_vms(self, vapp, memory_mb):
+        """
+            Method to reserve memory for all VMs
+            Args :
+                vapp - VApp
+                memory_mb - Memory in MB
+            Returns:
+                None
+        """
+
+        self.logger.info("Reserve memory for all VMs")
+        for vms in vapp.get_all_vms():
+            vm_id = vms.get('id').split(':')[-1]
+
+            url_rest_call = "{}/api/vApp/vm-{}/virtualHardwareSection/memory".format(self.url, vm_id)
+
+            headers = {'Accept':'application/*+xml;version=' + API_VERSION,
+                       'x-vcloud-authorization': self.client._session.headers['x-vcloud-authorization']}
+            headers['Content-Type'] = 'application/vnd.vmware.vcloud.rasdItem+xml'
+            response = self.perform_request(req_type='GET',
+                                            url=url_rest_call,
+                                            headers=headers)
+
+            if response.status_code == 403:
+                response = self.retry_rest('GET', url_rest_call)
+
+            if response.status_code != 200:
+                self.logger.error("REST call {} failed reason : {}"\
+                                  "status code : {}".format(url_rest_call,
+                                                            response.content,
+                                                            response.status_code))
+                raise vimconn.vimconnException("reserve_memory_for_all_vms : Failed to get "\
+                                               "memory")
+
+            bytexml = bytes(bytearray(response.content, encoding='utf-8'))
+            contentelem = lxmlElementTree.XML(bytexml)
+            namespaces = {prefix:uri for prefix,uri in contentelem.nsmap.iteritems() if prefix}
+            namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
+
+            # Find the reservation element in the response
+            memelem_list = contentelem.findall(".//rasd:Reservation", namespaces)
+            for memelem in memelem_list:
+                memelem.text = str(memory_mb)
+
+            newdata = lxmlElementTree.tostring(contentelem, pretty_print=True)
+
+            response = self.perform_request(req_type='PUT',
+                                            url=url_rest_call,
+                                            headers=headers,
+                                            data=newdata)
+
+            if response.status_code == 403:
+                add_headers = {'Content-Type': headers['Content-Type']}
+                response = self.retry_rest('PUT', url_rest_call, add_headers, newdata)
+
+            if response.status_code != 202:
+                self.logger.error("REST call {} failed reason : {}"\
+                                  "status code : {} ".format(url_rest_call,
+                                  response.content,
+                                  response.status_code))
+                raise vimconn.vimconnException("reserve_memory_for_all_vms : Failed to update "\
+                                               "virtual hardware memory section")
+            else:
+                mem_task = self.get_task_from_response(response.content)
+                result = self.client.get_task_monitor().wait_for_success(task=mem_task)
+                if result.get('status') == 'success':
+                    self.logger.info("reserve_memory_for_all_vms(): VM {} succeeded "\
+                                      .format(vm_id))
+                else:
+                    self.logger.error("reserve_memory_for_all_vms(): VM {} failed "\
+                                      .format(vm_id))
+
+    def connect_vapp_to_org_vdc_network(self, vapp_id, net_name):
+        """
+            Configure VApp network config with org vdc network
+            Args :
+                vapp - VApp
+            Returns:
+                None
+        """
+
+        self.logger.info("Connecting vapp {} to org vdc network {}".
+                         format(vapp_id, net_name))
+
+        url_rest_call = "{}/api/vApp/vapp-{}/networkConfigSection/".format(self.url, vapp_id)
+
+        headers = {'Accept':'application/*+xml;version=' + API_VERSION,
+                   'x-vcloud-authorization': self.client._session.headers['x-vcloud-authorization']}
+        response = self.perform_request(req_type='GET',
+                                        url=url_rest_call,
+                                        headers=headers)
+
+        if response.status_code == 403:
+            response = self.retry_rest('GET', url_rest_call)
+
+        if response.status_code != 200:
+            self.logger.error("REST call {} failed reason : {}"\
+                              "status code : {}".format(url_rest_call,
+                                                        response.content,
+                                                        response.status_code))
+            raise vimconn.vimconnException("connect_vapp_to_org_vdc_network : Failed to get "\
+                                           "network config section")
+
+        data = response.content
+        headers['Content-Type'] = 'application/vnd.vmware.vcloud.networkConfigSection+xml'
+        net_id = self.get_network_id_by_name(net_name)
+        if not net_id:
+            raise vimconn.vimconnException("connect_vapp_to_org_vdc_network : Failed to find "\
+                                           "existing network")
+
+        bytexml = bytes(bytearray(data, encoding='utf-8'))
+        newelem = lxmlElementTree.XML(bytexml)
+        namespaces = {prefix: uri for prefix, uri in newelem.nsmap.iteritems() if prefix}
+        namespaces["xmlns"] = "http://www.vmware.com/vcloud/v1.5"
+        nwcfglist = newelem.findall(".//xmlns:NetworkConfig", namespaces)
+
+        newstr = """<NetworkConfig networkName="{}">
+                  <Configuration>
+                       <ParentNetwork href="{}/api/network/{}"/>
+                       <FenceMode>bridged</FenceMode>
+                  </Configuration>
+              </NetworkConfig>
+           """.format(net_name, self.url, net_id)
+        newcfgelem = lxmlElementTree.fromstring(newstr)
+        if nwcfglist:
+            nwcfglist[0].addnext(newcfgelem)
+
+        newdata = lxmlElementTree.tostring(newelem, pretty_print=True)
+
+        response = self.perform_request(req_type='PUT',
+                                        url=url_rest_call,
+                                        headers=headers,
+                                        data=newdata)
+
+        if response.status_code == 403:
+            add_headers = {'Content-Type': headers['Content-Type']}
+            response = self.retry_rest('PUT', url_rest_call, add_headers, newdata)
+
+        if response.status_code != 202:
+            self.logger.error("REST call {} failed reason : {}"\
+                              "status code : {} ".format(url_rest_call,
+                              response.content,
+                              response.status_code))
+            raise vimconn.vimconnException("connect_vapp_to_org_vdc_network : Failed to update "\
+                                           "network config section")
+        else:
+            vapp_task = self.get_task_from_response(response.content)
+            result = self.client.get_task_monitor().wait_for_success(task=vapp_task)
+            if result.get('status') == 'success':
+                self.logger.info("connect_vapp_to_org_vdc_network(): Vapp {} connected to "\
+                                 "network {}".format(vapp_id, net_name))
+            else:
+                self.logger.error("connect_vapp_to_org_vdc_network(): Vapp {} failed to "\
+                                  "connect to network {}".format(vapp_id, net_name))
 
     def remove_primary_network_adapter_from_all_vms(self, vapp):
         """
