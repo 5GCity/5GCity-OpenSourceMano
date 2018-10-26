@@ -1938,10 +1938,14 @@ class vimconnector(vimconn.vimconnector):
                             else:
                                 self.logger.info("new_vminstance(): adding network adapter "\
                                                          "to a network {}".format(nets[0].get('name')))
+                                nic_type = 'VMXNET3'
+                                if net['type'] in ['SR-IOV', 'VF']:
+                                    nic_type = net['type']
                                 self.add_network_adapter_to_vms(vapp, nets[0].get('name'),
                                                                 primary_nic_index,
                                                                 nicIndex,
-                                                                net)
+                                                                net,
+                                                                nic_type=nic_type)
                 nicIndex += 1
 
             # cloud-init for ssh-key injection
