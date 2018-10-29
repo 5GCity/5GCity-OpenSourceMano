@@ -179,7 +179,7 @@ if __name__=="__main__":
                                                'severity:%(levelname)s logger:%(name)s log:%(message)s'.format(
                                                     host=hostname),
                                                datefmt='%Y-%m-%dT%H:%M:%S')
-    log_format_simple =  "%(asctime)s %(levelname)s  %(name)s %(filename)s:%(lineno)s %(message)s"
+    log_format_simple =  "%(asctime)s %(levelname)s  %(name)s %(thread)d %(filename)s:%(lineno)s %(message)s"
     log_formatter_simple = logging.Formatter(log_format_simple, datefmt='%Y-%m-%dT%H:%M:%S')
     logging.basicConfig(format=log_format_simple, level= logging.DEBUG)
     logger = logging.getLogger('openmano')
