@@ -6327,12 +6327,18 @@ class vimconnector(vimconn.vimconnector):
 
             Returns org and vdc object
         """
-        org = Org(self.client, resource=self.client.get_org())
-        vdc = org.get_vdc(self.tenant_name)
+        vdc = None
+        try:
+            org = Org(self.client, resource=self.client.get_org())
+            vdc = org.get_vdc(self.tenant_name)
+        except Exception as e:
+            # pyvcloud not giving a specific exception, Refresh nevertheless
+            self.logger.debug("Received exception {}, refreshing token ".format(str(e)))
 
         #Retry once, if failed by refreshing token
         if vdc is None:
             self.get_token()
+            org = Org(self.client, resource=self.client.get_org())
             vdc = org.get_vdc(self.tenant_name)
 
         return org, vdc
