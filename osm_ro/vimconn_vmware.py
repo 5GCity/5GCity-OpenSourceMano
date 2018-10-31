@@ -1917,6 +1917,7 @@ class vimconnector(vimconn.vimconnector):
                             self.connect_vapp_to_org_vdc_network(vapp_id, nets[0].get('name'))
 
                         type_list = ('PF', 'PCI-PASSTHROUGH', 'VFnotShared')
+                        nic_type = 'VMXNET3'
                         if 'type' in net and net['type'] not in type_list:
                             # fetching nic type from vnf
                             if 'model' in net:
@@ -1936,7 +1937,6 @@ class vimconnector(vimconn.vimconnector):
                             else:
                                 self.logger.info("new_vminstance(): adding network adapter "\
                                                          "to a network {}".format(nets[0].get('name')))
-                                nic_type = 'VMXNET3'
                                 if net['type'] in ['SR-IOV', 'VF']:
                                     nic_type = net['type']
                                 self.add_network_adapter_to_vms(vapp, nets[0].get('name'),
@@ -2610,13 +2610,12 @@ class vimconnector(vimconn.vimconnector):
 
         try:
             vapp_name = self.get_namebyvappid(vm__vim_uuid)
-            vapp_resource = vdc_obj.get_vapp(vapp_name)
-            vapp = VApp(self.client, resource=vapp_resource)
             if vapp_name is None:
                 self.logger.debug("delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
                 return -1, "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid)
-            else:
-                self.logger.info("Deleting vApp {} and UUID {}".format(vapp_name, vm__vim_uuid))
+            self.logger.info("Deleting vApp {} and UUID {}".format(vapp_name, vm__vim_uuid))
+            vapp_resource = vdc_obj.get_vapp(vapp_name)
+            vapp = VApp(self.client, resource=vapp_resource)
 
             # Delete vApp and wait for status change if task executed and vApp is None.
 
