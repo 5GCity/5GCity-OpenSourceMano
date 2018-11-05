@@ -3119,6 +3119,8 @@ def create_instance(mydb, tenant_id, instance_dict):
                         if sce_vnf_ifaces.get("sce_net_id") == sce_net["uuid"]:
                             involved_datacenters.append(vnf_datacenter)
                             break
+            if not involved_datacenters:
+                involved_datacenters.append(default_datacenter_id)
 
             descriptor_net = {}
             if instance_dict.get("networks") and instance_dict["networks"].get(sce_net["name"]):
@@ -3276,7 +3278,7 @@ def create_instance(mydb, tenant_id, instance_dict):
             "sce_net2instance": sce_net2instance,
         }
         # sce_vnf_list = sorted(scenarioDict['vnfs'], key=lambda k: k['name'])
-        for sce_vnf in scenarioDict['vnfs']:  # sce_vnf_list:
+        for sce_vnf in scenarioDict.get('vnfs'):  # sce_vnf_list:
             instantiate_vnf(mydb, sce_vnf, vnf_params, vnf_params_out, rollbackList)
         task_index = vnf_params_out["task_index"]
         uuid_list = vnf_params_out["uuid_list"]
@@ -3580,7 +3582,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
     if sce_vnf.get('mgmt_access'):
         ssh_access = sce_vnf['mgmt_access'].get('config-access', {}).get('ssh-access')
     vnf_availability_zones = []
-    for vm in sce_vnf['vms']:
+    for vm in sce_vnf.get('vms'):
         vm_av = vm.get('availability_zone')
         if vm_av and vm_av not in vnf_availability_zones:
             vnf_availability_zones.append(vm_av)
@@ -4019,7 +4021,7 @@ def delete_instance(mydb, tenant_id, instance_id):
 
     # 2.2 deleting VMs
     # vm_fail_list=[]
-    for sce_vnf in instanceDict['vnfs']:
+    for sce_vnf in instanceDict.get('vnfs', ()):
         datacenter_key = (sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
         vimthread_affected[sce_vnf["datacenter_tenant_id"]] = None
         if datacenter_key not in myvims:
@@ -4072,7 +4074,7 @@ def delete_instance(mydb, tenant_id, instance_id):
         datacenter_key = (net["datacenter_id"], net["datacenter_tenant_id"])
         if datacenter_key not in myvims:
             try:
-                _,myvim_thread = get_vim_thread(mydb, tenant_id, sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
+                _,myvim_thread = get_vim_thread(mydb, tenant_id, net["datacenter_id"], net["datacenter_tenant_id"])
             except NfvoException as e:
                 logger.error(str(e))
                 myvim_thread = None
