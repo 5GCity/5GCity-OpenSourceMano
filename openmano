@@ -273,13 +273,13 @@ def vnf_create(args):
         if not vnfds:
             vnfds = vnfd_catalog.get("vnfd")
         vnfd = vnfds[0]
-        vdu_list = vnfd["vdu"]
+        vdu_list = vnfd.get("vdu")
 
     else:  # old API
         api_version = ""
         token = "vnfs"
         vnfd = myvnf['vnf']
-        vdu_list = vnfd["VNFC"]
+        vdu_list = vnfd.get("VNFC")
 
     if args.name or args.description or args.image_path or args.image_name or args.image_checksum:
         # TODO, change this for API v3
@@ -289,62 +289,63 @@ def vnf_create(args):
                 vnfd['name'] = args.name
             if args.description:
                 vnfd['description'] = args.description
-            if args.image_path:
-                index = 0
-                for image_path_ in args.image_path.split(","):
-                    # print "image-path", image_path_
-                    if api_version == "/v3":
-                        if vdu_list[index].get("image"):
-                            vdu_list[index]['image'] = image_path_
-                            if "image-checksum" in vdu_list[index]:
-                                del vdu_list[index]["image-checksum"]
-                        else:  # image name in volumes
-                            vdu_list[index]["volumes"][0]["image"] = image_path_
-                            if "image-checksum" in vdu_list[index]["volumes"][0]:
-                                del vdu_list[index]["volumes"][0]["image-checksum"]
-                    else:
-                        vdu_list[index]['VNFC image'] = image_path_
-                        if "image name" in vdu_list[index]:
-                            del vdu_list[index]["image name"]
-                        if "image checksum" in vdu_list[index]:
-                            del vdu_list[index]["image checksum"]
-                    index += 1
-            if args.image_name:  # image name precedes if both are supplied
-                index = 0
-                for image_name_ in args.image_name.split(","):
-                    if api_version == "/v3":
-                        if vdu_list[index].get("image"):
-                            vdu_list[index]['image'] = image_name_
-                            if "image-checksum" in vdu_list[index]:
-                                del vdu_list[index]["image-checksum"]
-                            if vdu_list[index].get("alternative-images"):
-                                for a_image in vdu_list[index]["alternative-images"]:
-                                    a_image['image'] = image_name_
-                                    if "image-checksum" in a_image:
-                                        del a_image["image-checksum"]
-                        else:  # image name in volumes
-                            vdu_list[index]["volumes"][0]["image"] = image_name_
-                            if "image-checksum" in vdu_list[index]["volumes"][0]:
-                                del vdu_list[index]["volumes"][0]["image-checksum"]
-                    else:
-                        vdu_list[index]['image name'] = image_name_
-                        if "VNFC image" in vdu_list[index]:
-                            del vdu_list[index]["VNFC image"]
-                    index += 1
-            if args.image_checksum:
-                index = 0
-                for image_checksum_ in args.image_checksum.split(","):
-                    if api_version == "/v3":
-                        if vdu_list[index].get("image"):
-                            vdu_list[index]['image-checksum'] = image_checksum_
-                            if vdu_list[index].get("alternative-images"):
-                                for a_image in vdu_list[index]["alternative-images"]:
-                                    a_image['image-checksum'] = image_checksum_
-                        else:  # image name in volumes
-                            vdu_list[index]["volumes"][0]["image-checksum"] = image_checksum_
-                    else:
-                        vdu_list[index]['image checksum'] = image_checksum_
-                    index += 1
+            if vdu_list:
+                if args.image_path:
+                    index = 0
+                    for image_path_ in args.image_path.split(","):
+                        # print "image-path", image_path_
+                        if api_version == "/v3":
+                            if vdu_list[index].get("image"):
+                                vdu_list[index]['image'] = image_path_
+                                if "image-checksum" in vdu_list[index]:
+                                    del vdu_list[index]["image-checksum"]
+                            else:  # image name in volumes
+                                vdu_list[index]["volumes"][0]["image"] = image_path_
+                                if "image-checksum" in vdu_list[index]["volumes"][0]:
+                                    del vdu_list[index]["volumes"][0]["image-checksum"]
+                        else:
+                            vdu_list[index]['VNFC image'] = image_path_
+                            if "image name" in vdu_list[index]:
+                                del vdu_list[index]["image name"]
+                            if "image checksum" in vdu_list[index]:
+                                del vdu_list[index]["image checksum"]
+                        index += 1
+                if args.image_name:  # image name precedes if both are supplied
+                    index = 0
+                    for image_name_ in args.image_name.split(","):
+                        if api_version == "/v3":
+                            if vdu_list[index].get("image"):
+                                vdu_list[index]['image'] = image_name_
+                                if "image-checksum" in vdu_list[index]:
+                                    del vdu_list[index]["image-checksum"]
+                                if vdu_list[index].get("alternative-images"):
+                                    for a_image in vdu_list[index]["alternative-images"]:
+                                        a_image['image'] = image_name_
+                                        if "image-checksum" in a_image:
+                                            del a_image["image-checksum"]
+                            else:  # image name in volumes
+                                vdu_list[index]["volumes"][0]["image"] = image_name_
+                                if "image-checksum" in vdu_list[index]["volumes"][0]:
+                                    del vdu_list[index]["volumes"][0]["image-checksum"]
+                        else:
+                            vdu_list[index]['image name'] = image_name_
+                            if "VNFC image" in vdu_list[index]:
+                                del vdu_list[index]["VNFC image"]
+                        index += 1
+                if args.image_checksum:
+                    index = 0
+                    for image_checksum_ in args.image_checksum.split(","):
+                        if api_version == "/v3":
+                            if vdu_list[index].get("image"):
+                                vdu_list[index]['image-checksum'] = image_checksum_
+                                if vdu_list[index].get("alternative-images"):
+                                    for a_image in vdu_list[index]["alternative-images"]:
+                                        a_image['image-checksum'] = image_checksum_
+                            else:  # image name in volumes
+                                vdu_list[index]["volumes"][0]["image-checksum"] = image_checksum_
+                        else:
+                            vdu_list[index]['image checksum'] = image_checksum_
+                        index += 1
         except (KeyError, TypeError), e:
             if str(e) == 'vnf':           error_pos= "missing field 'vnf'"
             elif str(e) == 'name':        error_pos= "missing field  'vnf':'name'"
