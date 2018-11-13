@@ -1604,7 +1604,7 @@ def get_vnf_id(mydb, tenant_id, vnf_id):
             SELECT=('vms.uuid as uuid', 'vms.osm_id as osm_id', 'vms.name as name', 'vms.description as description',
                     'boot_data'),
             WHERE={'vnfs.uuid': vnf_id} )
-    if len(content)!=0:
+    if len(content) != 0:
         #raise NfvoException("vnf '{}' not found".format(vnf_id), HTTP_Not_Found)
     # change boot_data into boot-data
         for vm in content:
@@ -1612,7 +1612,7 @@ def get_vnf_id(mydb, tenant_id, vnf_id):
                 vm["boot-data"] = yaml.safe_load(vm["boot_data"])
                 del vm["boot_data"]
 
-    data['vnf']['VNFC'] = content
+        data['vnf']['VNFC'] = content
     #TODO: GET all the information from a VNFC and include it in the output.
 
     #GET NET
