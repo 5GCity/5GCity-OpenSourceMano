@@ -608,7 +608,7 @@ class nfvo_db(db_base.db_base):
                         # vms
                         cmd = "SELECT vms.uuid as uuid, flavor_id, image_id, image_list, vms.name as name," \
                               " vms.description as description, vms.boot_data as boot_data, count," \
-                              " vms.availability_zone as availability_zone, vms.osm_id as osm_id" \
+                              " vms.availability_zone as availability_zone, vms.osm_id as osm_id, vms.pdu_type" \
                               " FROM vnfs join vms on vnfs.uuid=vms.vnf_id" \
                               " WHERE vnfs.uuid='" + vnf['vnf_id'] + "'"  \
                               " ORDER BY vms.created_at"
@@ -1038,9 +1038,12 @@ class nfvo_db(db_base.db_base):
                     #from_text = "instance_nets join instance_scenarios on instance_nets.instance_scenario_id=instance_scenarios.uuid " + \
                     #            "join sce_nets on instance_scenarios.scenario_id=sce_nets.scenario_id"
                     #where_text = "instance_nets.instance_scenario_id='"+ instance_dict['uuid'] + "'"
-                    cmd = "SELECT uuid,vim_net_id,status,error_msg,vim_info,created, sce_net_id, net_id as vnf_net_id, datacenter_id, datacenter_tenant_id, sdn_net_id"\
-                            " FROM instance_nets" \
-                            " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid'])
+                    cmd = "SELECT inets.uuid as uuid,vim_net_id,status,error_msg,vim_info,created, sce_net_id, " \
+                          "net_id as vnf_net_id, datacenter_id, datacenter_tenant_id, sdn_net_id, " \
+                          "snets.osm_id as ns_net_osm_id, nets.osm_id as vnf_net_osm_id, inets.vim_name " \
+                          "FROM instance_nets as inets left join sce_nets as snets on inets.sce_net_id=snets.uuid " \
+                          "left join nets on inets.net_id=nets.uuid " \
+                          "WHERE instance_scenario_id='{}' ORDER BY inets.created_at".format(instance_dict['uuid'])
                     self.logger.debug(cmd)
                     self.cur.execute(cmd)
                     instance_dict['nets'] = self.cur.fetchall()

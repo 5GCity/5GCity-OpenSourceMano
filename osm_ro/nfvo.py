@@ -943,6 +943,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
             cp_name2iface_uuid = {}
             cp_name2vm_uuid = {}
             cp_name2db_interface = {}
+            vdu_id2cp_name = {}  # stored only when one external connection point is presented at this VDU
 
             # table vms (vdus)
             vdu_id2uuid = {}
@@ -960,6 +961,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     "osm_id": vdu_id,
                     "name": get_str(vdu, "name", 255),
                     "description": get_str(vdu, "description", 255),
+                    "pdu_type": get_str(vdu, "pdu-type", 255),
                     "vnf_id": vnf_uuid,
                 }
                 vdu_id2uuid[db_vm["osm_id"]] = vm_uuid
@@ -1049,7 +1051,6 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
 
                 # table interfaces (internal/external interfaces)
                 flavor_epa_interfaces = []
-                vdu_id2cp_name = {}  # stored only when one external connection point is presented at this VDU
                 # for iface in chain(vdu.get("internal-interface").itervalues(), vdu.get("external-interface").itervalues()):
                 for iface in vdu.get("interface").itervalues():
                     flavor_epa_interface = {}
@@ -1240,7 +1241,8 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                             "'member-vdus':'{vdu}'. Reference to a non-existing vdu".format(
                                                 vnf=vnfd_id, pg=pg_name, vdu=vdu_id),
                                             HTTP_Bad_Request)
-                    db_vms[vdu_id2db_table_index[vdu_id]]["availability_zone"] = pg_name
+                    if vdu_id2db_table_index[vdu_id]:
+                        db_vms[vdu_id2db_table_index[vdu_id]]["availability_zone"] = pg_name
                     # TODO consider the case of isolation and not colocation
                     # if pg.get("strategy") == "ISOLATION":
                     
@@ -1256,20 +1258,22 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                 mgmt_access["vm_id"] = vdu_id2uuid[vnfd["mgmt-interface"]["vdu-id"]]
                 # if only one cp is defined by this VDU, mark this interface as of type "mgmt"
                 if vdu_id2cp_name.get(mgmt_vdu_id):
-                    cp_name2db_interface[vdu_id2cp_name[mgmt_vdu_id]]["type"] = "mgmt"
+                    if cp_name2db_interface[vdu_id2cp_name[mgmt_vdu_id]]:
+                        cp_name2db_interface[vdu_id2cp_name[mgmt_vdu_id]]["type"] = "mgmt"
 
             if vnfd["mgmt-interface"].get("ip-address"):
                 mgmt_access["ip-address"] = str(vnfd["mgmt-interface"].get("ip-address"))
             if vnfd["mgmt-interface"].get("cp"):
                 if vnfd["mgmt-interface"]["cp"] not in cp_name2iface_uuid:
-                    raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'mgmt-interface':'cp':'{cp}'. "
+                    raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'mgmt-interface':'cp'['{cp}']. "
                                         "Reference to a non-existing connection-point".format(
                                             vnf=vnfd_id, cp=vnfd["mgmt-interface"]["cp"]),
                                         HTTP_Bad_Request)
                 mgmt_access["vm_id"] = cp_name2vm_uuid[vnfd["mgmt-interface"]["cp"]]
                 mgmt_access["interface_id"] = cp_name2iface_uuid[vnfd["mgmt-interface"]["cp"]]
                 # mark this interface as of type mgmt
-                cp_name2db_interface[vnfd["mgmt-interface"]["cp"]]["type"] = "mgmt"
+                if cp_name2db_interface[vnfd["mgmt-interface"]["cp"]]:
+                    cp_name2db_interface[vnfd["mgmt-interface"]["cp"]]["type"] = "mgmt"
 
             default_user = get_str(vnfd.get("vnf-configuration", {}).get("config-access", {}).get("ssh-access", {}),
                                     "default-user", 64)
@@ -3146,6 +3150,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                 myvim_thread_id = myvim_threads_id[datacenter_id]
 
                 net_type = sce_net['type']
+                net_vim_name = None
                 lookfor_filter = {'admin_state_up': True, 'status': 'ACTIVE'}  # 'shared': True
 
                 if not net_name:
@@ -3218,6 +3223,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                 db_net = {
                     "uuid": net_uuid,
                     'vim_net_id': None,
+                    "vim_name": net_vim_name,
                     "instance_scenario_id": instance_uuid,
                     "sce_net_id": sce_net["uuid"],
                     "created": create_network,
@@ -3531,6 +3537,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         db_net = {
             "uuid": net_uuid,
             'vim_net_id': None,
+            "vim_name": net_name,
             "instance_scenario_id": instance_uuid,
             "net_id": net["uuid"],
             "created": True,
@@ -3616,6 +3623,10 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
     db_instance_vnfs.append(db_instance_vnf)
 
     for vm in sce_vnf['vms']:
+        # skip PDUs
+        if vm.get("pdu_type"):
+            continue
+
         myVMDict = {}
         sce_vnf_name = sce_vnf['member_vnf_index'] if sce_vnf['member_vnf_index'] else sce_vnf['name']
         myVMDict['name'] = "{}-{}-{}".format(instance_name[:64], sce_vnf_name[:64], vm["name"][:64])
