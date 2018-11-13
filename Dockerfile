@@ -40,9 +40,9 @@ RUN  apt-get update && \
 
 
 # Uncomment this block to generate automatically a debian package and show info
-# Set the working directory to /app
-WORKDIR /app
-# Copy the current directory contents into the container at /app
-ADD . /app
-CMD /app/devops-stages/stage-build.sh && find -name "*.deb" -exec dpkg -I  {} ";"
+# # Set the working directory to /app
+# WORKDIR /app
+# # Copy the current directory contents into the container at /app
+# ADD . /app
+# CMD /app/devops-stages/stage-build.sh && find -name "*.deb" -exec dpkg -I  {} ";"
 
