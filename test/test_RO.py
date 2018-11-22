@@ -993,6 +993,19 @@ class test_vimconn_new_vminstance(test_base):
 
         self.__class__.network_id = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
                                                                             net_type=self.__class__.net_type)
+        # find image name and image id
+        if test_config['image_name']:
+            image_list = test_config['vim_conn'].get_image_list({'name': test_config['image_name']})
+            if len(image_list) == 0:
+                raise Exception("Image {} is not found at VIM".format(test_config['image_name']))
+            else:
+                self.__class__.image_id = image_list[0]['id']
+        else:
+            image_list = test_config['vim_conn'].get_image_list()
+            if len(image_list) == 0:
+                raise Exception("Not found any image at VIM")
+            else:
+                self.__class__.image_id = image_list[0]['id']
 
     def tearDown(self):
         test_base.tearDown(self)
@@ -1012,19 +1025,6 @@ class test_vimconn_new_vminstance(test_base):
         # create new flavor
         flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
 
-        # find image name and image id
-        if test_config['image_name']:
-            image_list = test_config['vim_conn'].get_image_list({'name': test_config['image_name']})
-            if len(image_list) == 0:
-                raise Exception("Image {} is not found at VIM".format(test_config['image_name']))
-            else:
-                self.__class__.image_id = image_list[0]['id']
-        else:
-            image_list = test_config['vim_conn'].get_image_list()
-            if len(image_list) == 0:
-                raise Exception("Not found any image at VIM")
-            else:
-                self.__class__.image_id = image_list[0]['id']
 
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
                                                             self.__class__.test_index,
@@ -1381,6 +1381,38 @@ class test_vimconn_new_vminstance(test_base):
         # Deleting created vm instance
         logger.info("Deleting created vm instance")
         test_config["vim_conn"].delete_vminstance(self.__class__.instance_id)
+        time.sleep(10)
+
+    def test_140_new_vminstance_sriov(self):
+        logger.info("Testing creation of sriov vm instance using {}".format(test_config['sriov_net_name']))
+        flavor_data = {'name': _get_random_string(20),'ram': 1024, 'vcpus': 2, 'disk': 10}
+        name = 'eth0'
+
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        sriov_net_name = test_config['sriov_net_name']
+        new_network_list = test_config["vim_conn"].get_network_list({'name': sriov_net_name})
+        for list_item in new_network_list:
+            self.assertEqual(sriov_net_name, list_item.get('name'))
+            self.__class__.sriov_network_id = list_item.get('id')
+
+        net_list = [{'use': 'data', 'name': name, 'floating_ip': False, 'port_security': True, 'type': 'VF', 'net_id': self.__class__.sriov_network_id}]
+
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_sriov_vm', description='', start=False, image_id=self.__class__.image_id, flavor_id=flavor_id, net_list=net_list)
+
+        self.assertIsInstance(instance_id, (str, unicode))
+
+        logger.info("Waiting for created sriov-vm intance")
+        time.sleep(10)
+        # Deleting created vm instance
+        logger.info("Deleting created sriov-vm intance")
+        test_config["vim_conn"].delete_vminstance(instance_id)
         time.sleep(10)
 
 class test_vimconn_get_tenant_list(test_base):
@@ -2096,6 +2128,7 @@ def test_vimconnector(args):
         vim_url = args.endpoint_url
         test_config['image_path'] = args.image_path
         test_config['image_name'] = args.image_name
+        test_config['sriov_net_name'] = args.sriov_net_name
 
         # vmware connector obj
         test_config['vim_conn'] = vim.vimconnector(name=org_name, tenant_name=tenant_name, user=org_user,passwd=org_passwd, url=vim_url, config=config_params)
@@ -2115,6 +2148,7 @@ def test_vimconnector(args):
         vim_url = args.endpoint_url
         test_config['image_path'] = args.image_path
         test_config['image_name'] = args.image_name
+        test_config['sriov_net_name'] = args.sriov_net_name
 
         # openstack connector obj
         vim_persistent_info = {}
@@ -2378,6 +2412,7 @@ if __name__=="__main__":
     vimconn_parser.add_argument('-n', '--image-name', dest='image_name', help="Provide image name for test")
     # TODO add optional arguments for vimconn tests
     # vimconn_parser.add_argument("-i", '--image-name', dest='image_name', help='<HELP>'))
+    vimconn_parser.add_argument('-s', '--sriov-net-name', dest='sriov_net_name', help="Provide SRIOV network name for test")
 
     # Datacenter test set
     # -------------------
