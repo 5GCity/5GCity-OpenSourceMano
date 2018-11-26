@@ -2940,8 +2940,12 @@ def create_instance(mydb, tenant_id, instance_dict):
     rollbackList = []
 
     # print "Checking that the scenario exists and getting the scenario dictionary"
-    scenarioDict = mydb.get_scenario(scenario, tenant_id, datacenter_vim_id=myvim_threads_id[default_datacenter_id],
-                                     datacenter_id=default_datacenter_id)
+    if isinstance(scenario, str):
+        scenarioDict = mydb.get_scenario(scenario, tenant_id, datacenter_vim_id=myvim_threads_id[default_datacenter_id],
+                                         datacenter_id=default_datacenter_id)
+    else:
+        scenarioDict = scenario
+        scenarioDict["uuid"] = None
 
     # logger.debug(">>>>>> Dictionaries before merging")
     # logger.debug(">>>>>> InstanceDict:\n{}".format(yaml.safe_dump(instance_dict,default_flow_style=False, width=256)))
@@ -3112,9 +3116,10 @@ def create_instance(mydb, tenant_id, instance_dict):
         number_mgmt_networks = 0
         db_instance_nets = []
         for sce_net in scenarioDict['nets']:
+            sce_net_uuid = sce_net.get('uuid', sce_net["name"])
             # get involved datacenters where this network need to be created
             involved_datacenters = []
-            for sce_vnf in scenarioDict.get("vnfs"):
+            for sce_vnf in scenarioDict.get("vnfs", ()):
                 vnf_datacenter = sce_vnf.get("datacenter", default_datacenter_id)
                 if vnf_datacenter in involved_datacenters:
                     continue
@@ -3130,8 +3135,13 @@ def create_instance(mydb, tenant_id, instance_dict):
             if instance_dict.get("networks") and instance_dict["networks"].get(sce_net["name"]):
                 descriptor_net = instance_dict["networks"][sce_net["name"]]
             net_name = descriptor_net.get("vim-network-name")
-            sce_net2instance[sce_net['uuid']] = {}
-            net2task_id['scenario'][sce_net['uuid']] = {}
+            # add datacenters from instantiation parameters
+            if descriptor_net.get("sites"):
+                for site in descriptor_net["sites"]:
+                    if site.get("datacenter") and site["datacenter"] not in involved_datacenters:
+                        involved_datacenters.append(site["datacenter"])
+            sce_net2instance[sce_net_uuid] = {}
+            net2task_id['scenario'][sce_net_uuid] = {}
 
             if sce_net["external"]:
                 number_mgmt_networks += 1
@@ -3219,13 +3229,13 @@ def create_instance(mydb, tenant_id, instance_dict):
                 # fill database content
                 net_uuid = str(uuid4())
                 uuid_list.append(net_uuid)
-                sce_net2instance[sce_net['uuid']][datacenter_id] = net_uuid
+                sce_net2instance[sce_net_uuid][datacenter_id] = net_uuid
                 db_net = {
                     "uuid": net_uuid,
                     'vim_net_id': None,
                     "vim_name": net_vim_name,
                     "instance_scenario_id": instance_uuid,
-                    "sce_net_id": sce_net["uuid"],
+                    "sce_net_id": sce_net.get("uuid"),
                     "created": create_network,
                     'datacenter_id': datacenter_id,
                     'datacenter_tenant_id': myvim_thread_id,
@@ -3242,7 +3252,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                     "item_id": net_uuid,
                     "extra": yaml.safe_dump(task_extra, default_flow_style=True, width=256)
                 }
-                net2task_id['scenario'][sce_net['uuid']][datacenter_id] = task_index
+                net2task_id['scenario'][sce_net_uuid][datacenter_id] = task_index
                 task_index += 1
                 db_vim_actions.append(db_vim_action)
 
@@ -3284,14 +3294,14 @@ def create_instance(mydb, tenant_id, instance_dict):
             "sce_net2instance": sce_net2instance,
         }
         # sce_vnf_list = sorted(scenarioDict['vnfs'], key=lambda k: k['name'])
-        for sce_vnf in scenarioDict.get('vnfs'):  # sce_vnf_list:
+        for sce_vnf in scenarioDict.get('vnfs', ()):  # sce_vnf_list:
             instantiate_vnf(mydb, sce_vnf, vnf_params, vnf_params_out, rollbackList)
         task_index = vnf_params_out["task_index"]
         uuid_list = vnf_params_out["uuid_list"]
 
         # Create VNFFGs
         # task_depends_on = []
-        for vnffg in scenarioDict['vnffgs']:
+        for vnffg in scenarioDict.get('vnffgs', ()):
             for rsp in vnffg['rsps']:
                 sfs_created = []
                 for cp in rsp['connection_points']:

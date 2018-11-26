@@ -963,6 +963,30 @@ scenario_action_schema = {
     "additionalProperties": False
 }
 
+instance_scenario_object = {
+    "title": "scenario object used to create an instance not based on any nsd",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type": "object",
+    "properties": {
+        "nets": {
+            "type": "array",
+            "minLength": 1,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": name_schema,
+                    "external": {"type": "boolean"},
+                    "type": {"enum": ["bridge", "ptp", "data"]},  # for overlay, underlay E-LINE, underlay E-LAN
+                },
+                "additionalProperties": False,
+                "required": ["name", "external", "type"]
+            }
+        }
+    },
+    "additionalProperties": False,
+    "required": ["nets"]
+}
+
 instance_scenario_create_schema_v01 = {
     "title": "instance scenario create information schema v0.1",
     "$schema": "http://json-schema.org/draft-04/schema#",
@@ -977,7 +1001,7 @@ instance_scenario_create_schema_v01 = {
                 "name": name_schema,
                 "description":description_schema,
                 "datacenter": name_schema,
-                "scenario" : name_schema, #can be an UUID or name
+                "scenario" : {"oneOff": [name_schema, instance_scenario_object]},  # can be an UUID or name or a dict
                 "action":{"enum": ["deploy","reserve","verify" ]},
                 "connect_mgmt_interfaces": {"oneOf": [{"type":"boolean"}, {"type":"object"}]},# can be true or a dict with datacenter: net_name
                 "cloud-config": cloud_config_schema, #common to all vnfs in the instance scenario
