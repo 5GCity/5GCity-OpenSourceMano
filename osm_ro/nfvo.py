@@ -4374,13 +4374,14 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                     raise NfvoException("Cannot find the vdu with id {}".format(vdu_id), HTTP_Not_Found)
             else:
                 if not osm_vdu_id and not member_vnf_index:
-                    raise NfvoException("Invalid imput vdu parameters. Must supply either 'vdu-id' of 'osm_vdu_id','member-vnf-index'")
+                    raise NfvoException("Invalid input vdu parameters. Must supply either 'vdu-id' of 'osm_vdu_id','member-vnf-index'")
                 target_vms = mydb.get_rows(
                     # SELECT=("ivms.uuid", "ivnfs.datacenter_id", "ivnfs.datacenter_tenant_id"),
                     FROM="instance_vms as ivms join instance_vnfs as ivnfs on ivms.instance_vnf_id=ivnfs.uuid"\
                          " join sce_vnfs as svnfs on ivnfs.sce_vnf_id=svnfs.uuid"\
                          " join vms on ivms.vm_id=vms.uuid",
-                    WHERE={"vms.osm_id": osm_vdu_id, "svnfs.member_vnf_index": member_vnf_index},
+                    WHERE={"vms.osm_id": osm_vdu_id, "svnfs.member_vnf_index": member_vnf_index,
+                           "ivnfs.instance_scenario_id": instance_id},
                     ORDER_BY="ivms.created_at"
                 )
                 if not target_vms:
