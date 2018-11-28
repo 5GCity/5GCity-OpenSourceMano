@@ -141,8 +141,26 @@ class WanLinkCreate(RefreshMixin, CreateAction):
 
         return self.execute(connector, persistence, ovim, instance_nets)
 
-    def get_endpoint(self, persistence, ovim, instance_net):
-        """Retrieve the endpoint (information about the connection PoP <> WAN
+    def _get_connection_point_info(self, persistence, ovim, instance_net):
+        """Retrieve information about the connection PoP <> WAN
+
+        Arguments:
+            persistence: object that encapsulates persistence logic
+                (e.g. db connection)
+            ovim: object that encapsulates network management logic (openvim)
+            instance_net: record with the information about a local network
+                (inside a VIM). This network will be connected via a WAN link
+                to a different network in a distinct VIM.
+                This method is used to trace what would be the way this network
+                can be accessed from the outside world.
+
+        Returns:
+            dict: Record representing the wan_port_mapping associated to the
+                  given instance_net. The expected fields are:
+                  **wim_id**, **datacenter_id**, **pop_switch_id** (the local
+                  network is expected to be connected at this switch),
+                  **pop_switch_port**, **wan_service_endpoint_id**,
+                  **wan_service_mapping_info**.
         """
         wim_account = persistence.get_wim_account_by(uuid=self.wim_account_id)
 
@@ -151,7 +169,7 @@ class WanLinkCreate(RefreshMixin, CreateAction):
         # the endpoint for all different types of networks used in the VIM
         # (provider networks, SDN assist, overlay networks, ...)
         if instance_net.get('sdn_net_id'):
-            return self.get_endpoint_sdn(
+            return self._get_connection_point_info_sdn(
                 persistence, ovim, instance_net, wim_account['wim_id'])
         else:
             raise InconsistentState(
@@ -159,7 +177,8 @@ class WanLinkCreate(RefreshMixin, CreateAction):
                 'found in the database for the record %s after the network '
                 'become active, but it is still NULL', instance_net['uuid'])
 
-    def get_endpoint_sdn(self, persistence, ovim, instance_net, wim_id):
+    def _get_connection_point_info_sdn(self, persistence, ovim,
+                                       instance_net, wim_id):
         criteria = {'net_id': instance_net['sdn_net_id']}
         local_port_mapping = ovim.get_ports(filter=criteria)
 
@@ -184,14 +203,14 @@ class WanLinkCreate(RefreshMixin, CreateAction):
         return wan_port_mapping
 
     @staticmethod
-    def _derive_connection_point(endpoint):
-        point = {'service_endpoint_id': endpoint['wan_service_endpoint_id']}
+    def _derive_connection_point(wan_info):
+        point = {'service_endpoint_id': wan_info['wan_service_endpoint_id']}
         # TODO: Cover other scenarios, e.g. VXLAN.
-        info = endpoint.get('wan_service_mapping_info', {})
-        if 'vlan' in info:
+        details = wan_info.get('wan_service_mapping_info', {})
+        if 'vlan' in details:
             point['service_endpoint_encapsulation_type'] = 'dot1q'
             point['service_endpoint_encapsulation_info'] = {
-                'vlan': info['vlan']
+                'vlan': details['vlan']
             }
         else:
             point['service_endpoint_encapsulation_type'] = 'none'
@@ -206,8 +225,7 @@ class WanLinkCreate(RefreshMixin, CreateAction):
             raise NotImplementedError('Multipoint connectivity is not '
                                       'supported yet.')
 
-    def _update_persistent_data(self, persistence, service_uuid,
-                                endpoints, conn_info):
+    def _update_persistent_data(self, persistence, service_uuid, conn_info):
         """Store plugin/connector specific information in the database"""
         persistence.update_wan_link(self.item_id, {
             'wim_internal_id': service_uuid,
@@ -219,10 +237,10 @@ class WanLinkCreate(RefreshMixin, CreateAction):
         dependencies are solved
         """
         try:
-            endpoints = [self.get_endpoint(persistence, ovim, net)
-                         for net in instance_nets]
-            connection_points = [self._derive_connection_point(e)
-                                 for e in endpoints]
+            wan_info = (self._get_connection_point_info(persistence, ovim, net)
+                        for net in instance_nets)
+            connection_points = [self._derive_connection_point(w)
+                                 for w in wan_info]
 
             uuid, info = connector.create_connectivity_service(
                 self._derive_service_type(connection_points),
@@ -238,7 +256,7 @@ class WanLinkCreate(RefreshMixin, CreateAction):
         self.logger.debug('WAN connectivity established %s\n%s\n',
                           uuid, json.dumps(info, indent=4))
         self.wim_internal_id = uuid
-        self._update_persistent_data(persistence, uuid, endpoints, info)
+        self._update_persistent_data(persistence, uuid, info)
         self.succeed(persistence)
         return uuid
 
