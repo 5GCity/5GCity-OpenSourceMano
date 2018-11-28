@@ -66,7 +66,7 @@ function wait_db(){
         #wait 120 sec
         if [ $attempt -ge $max_attempts ]; then
             echo
-            echo "Can not connect to database ${db_host}:${db_port} during $max_attempts sec"
+            echo "Cannot connect to database ${db_host}:${db_port} during $max_attempts sec"
             return 1
         fi
         attempt=$[$attempt+1]
@@ -78,7 +78,8 @@ function wait_db(){
 
 
 echo "1/4 Apply config"
-configure || exit 1
+# this is not needed anymore because envioron overwrites config file
+# configure || exit 1
 
 
 echo "2/4 Wait for db up"
@@ -129,4 +130,10 @@ fi
 
 
 echo "4/4 Try to start"
-/usr/bin/openmanod -c /etc/osm/openmanod.cfg --log-file=/var/log/osm/openmano.log --create-tenant=osm
+# look for openmanod.cfg
+RO_CONFIG_FILE="/etc/osm/openmanod.cfg"
+[ -f "$RO_CONFIG_FILE" ] || RO_CONFIG_FILE=$(python -c 'import osm_ro; print(osm_ro.__path__[0])')/openmanod.cfg
+[ -f "$RO_CONFIG_FILE" ] || ! echo "configuration file 'openmanod.cfg' not found" || exit 1
+
+openmanod -c "$RO_CONFIG_FILE"  --create-tenant=osm  # --log-file=/var/log/osm/openmano.log
+

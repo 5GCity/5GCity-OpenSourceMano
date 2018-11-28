@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openvim
 # All Rights Reserved.
 #
@@ -1064,15 +1064,14 @@ class vim_thread(threading.Thread):
     def new_sfi(self, task):
         vim_sfi_id = None
         try:
-            params = task["params"]
+            dep_id = "TASK-" + str(task["extra"]["depends_on"][0])
             task_id = task["instance_action_id"] + "." + str(task["task_index"])
-            depends = task.get("depends")
             error_text = ""
-            interfaces = task.get("depends").values()[0].get("extra").get("params")[5]
+            interfaces = task.get("depends").get(dep_id).get("extra").get("interfaces").keys()
             # At the moment, every port associated with the VM will be used both as ingress and egress ports.
             # Bear in mind that different VIM connectors might support SFI differently. In the case of OpenStack, only the
             # first ingress and first egress ports will be used to create the SFI (Port Pair).
-            port_id_list = [interfaces[0].get("vim_id")]
+            port_id_list = [interfaces[0]]
             name = "sfi-%s" % task["item_id"][:8]
             # By default no form of IETF SFC Encapsulation will be used
             vim_sfi_id = self.vim.new_sfi(name, port_id_list, port_id_list, sfc_encap=False)
@@ -1113,12 +1112,11 @@ class vim_thread(threading.Thread):
     def new_sf(self, task):
         vim_sf_id = None
         try:
-            params = task["params"]
             task_id = task["instance_action_id"] + "." + str(task["task_index"])
-            depends = task.get("depends")
             error_text = ""
+            depending_tasks = [ "TASK-" + str(dep_id) for dep_id in task["extra"]["depends_on"]]
             #sfis = task.get("depends").values()[0].get("extra").get("params")[5]
-            sfis = task.get("depends").values()
+            sfis = [task.get("depends").get(dep_task) for dep_task in depending_tasks]
             sfi_id_list = []
             for sfi in sfis:
                 sfi_id_list.append(sfi.get("vim_id"))
@@ -1164,9 +1162,9 @@ class vim_thread(threading.Thread):
         try:
             params = task["params"]
             task_id = task["instance_action_id"] + "." + str(task["task_index"])
-            depends = task.get("depends")
+            depending_task = "TASK-" + str(task.get("extra").get("depends_on")[0])
             error_text = ""
-            interfaces = task.get("depends").values()[0].get("extra").get("params")[5]
+            interfaces = task.get("depends").get(depending_task).get("vim_interfaces").keys()
             # Bear in mind that different VIM connectors might support Classifications differently.
             # In the case of OpenStack, only the first VNF attached to the classifier will be used
             # to create the Classification(s) (the "logical source port" of the "Flow Classifier").
@@ -1188,7 +1186,7 @@ class vim_thread(threading.Thread):
             if '/' not in destination_ip:
                 destination_ip += '/32'
             definition = {
-                    "logical_source_port": interfaces[0].get("vim_id"),
+                    "logical_source_port": interfaces[0],
                     "protocol": ip_proto,
                     "source_ip_prefix": source_ip,
                     "destination_ip_prefix": destination_ip,
@@ -1239,12 +1237,11 @@ class vim_thread(threading.Thread):
         try:
             params = task["params"]
             task_id = task["instance_action_id"] + "." + str(task["task_index"])
-            depends = task.get("depends")
+            depending_tasks = [task.get("depends").get("TASK-" + str(tsk_id)) for tsk_id in task.get("extra").get("depends_on")]
             error_text = ""
-            deps = task.get("depends").values()
             sf_id_list = []
             classification_id_list = []
-            for dep in deps:
+            for dep in depending_tasks:
                 vim_id = dep.get("vim_id")
                 resource = dep.get("item")
                 if resource == "instance_sfs":

@@ -39,10 +39,11 @@ _requirements = [
     #"lib_osm_openvim",
     #"osm_im",
     "pycrypto",
+    "netaddr",
 ]
 
 setup(name=_name,
-      version_command=('git describe --match v*', 'pep440-git'),
+      version_command=('git describe --match v*', 'pep440-git-full'),
       description = _description,
       long_description = open('README.rst').read(),
       author = _author,

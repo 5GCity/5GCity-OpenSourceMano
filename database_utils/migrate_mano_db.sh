@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openmano
 # All Rights Reserved.
 #
@@ -201,6 +201,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5060 ] && DB_VERSION=30  #0.5.60 =>  30
 #[ $OPENMANO_VER_NUM -ge 5061 ] && DB_VERSION=31  #0.5.61 =>  31
 #[ $OPENMANO_VER_NUM -ge 5070 ] && DB_VERSION=32  #0.5.70 =>  32
+#[ $OPENMANO_VER_NUM -ge 5082 ] && DB_VERSION=33  #0.5.82 =>  33
 #[ $OPENMANO_VER_NUM -ge 6000 ] && DB_VERSION=34  #0.6.00 =>  34
 #TODO ... put next versions here
 
@@ -1293,6 +1294,21 @@ function downgrade_from_32(){
     sql "ALTER TABLE instance_vms DROP COLUMN vim_name;"
     sql "DELETE FROM schema_version WHERE version_int='32';"
 }
+
+function upgrade_to_33(){
+    echo "      Add PDU information to 'vms"
+    sql "ALTER TABLE vms ADD COLUMN pdu_type VARCHAR(255) NULL DEFAULT NULL AFTER osm_id;"
+    sql "ALTER TABLE instance_nets ADD COLUMN vim_name VARCHAR(255) NULL DEFAULT NULL AFTER vim_net_id;"
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
+         "VALUES (33, '0.33', '0.5.82', 'Add pdu information to vms', '2018-11-13');"
+}
+function downgrade_from_33(){
+    echo "      Remove back PDU information from' vms'"
+    sql "ALTER TABLE vms DROP COLUMN pdu_type;"
+    sql "ALTER TABLE instance_nets DROP COLUMN vim_name;"
+    sql "DELETE FROM schema_version WHERE version_int='33';"
+}
+
 
 function upgrade_to_X(){
     echo "      change 'datacenter_nets'"

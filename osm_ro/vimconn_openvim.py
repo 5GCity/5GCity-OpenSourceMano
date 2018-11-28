@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openmano
 # All Rights Reserved.
 #
@@ -809,7 +809,7 @@ class vimconnector(vimconn.vimconnector):
                 name:
                 net_id: network uuid to connect
                 vpci: virtual vcpi to assign
-                model: interface model, virtio, e2000, ...
+                model: interface model, virtio, e1000, ...
                 mac_address: 
                 use: 'data', 'bridge',  'mgmt'
                 type: 'virtual', 'PCI-PASSTHROUGH'('PF'), 'SR-IOV'('VF'), 'VFnotShared'
@@ -846,7 +846,7 @@ class vimconnector(vimconn.vimconnector):
                 if net.get("vpci"):
                     net_dict["vpci"] = net["vpci"]
                 if net.get("model"):
-                    if net["model"] == "VIRTIO":
+                    if net["model"] == "VIRTIO" or net["model"] == "paravirt":
                         net_dict["model"] = "virtio"
                     else:
                         net_dict["model"] = net["model"]

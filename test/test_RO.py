@@ -37,7 +37,6 @@ import yaml
 import sys
 import time
 import uuid
-import json
 from argparse import ArgumentParser
 
 __author__ = "Pablo Montes, Alfonso Tierno"
@@ -292,6 +291,11 @@ class test_vimconn_connect(test_base):
             vca_object = test_config["vim_conn"].connect()
             logger.debug("{}".format(vca_object))
             self.assertIsNotNone(vca_object)
+        elif test_config['vimtype'] == 'openstack':
+            test_config["vim_conn"]._reload_connection()
+            network_list = test_config["vim_conn"].get_network_list()
+            logger.debug("{}".format(network_list))
+            self.assertIsNotNone(network_list)
 
 class test_vimconn_new_network(test_base):
     network_name = None
@@ -373,11 +377,16 @@ class test_vimconn_new_network(test_base):
                     version = item['ip-profile']['ip-version']
                     dhcp_count = item['ip-profile']['dhcp']['count']
                     dhcp_enabled = item['ip-profile']['dhcp']['enabled']
+                    dhcp_start_address = item['ip-profile']['dhcp']['start-address']
+                    subnet_address = item['ip-profile']['subnet-address']
+
 
         self.__class__.network_name = _get_random_string(20)
         ip_profile = {'dhcp_count': dhcp_count,
                       'dhcp_enabled': dhcp_enabled,
-                      'ip_version': version
+                      'dhcp_start_address': dhcp_start_address,
+                      'ip_version': version,
+                      'subnet_address': subnet_address
                      }
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
                                                             self.__class__.test_index,
@@ -481,7 +490,11 @@ class test_vimconn_new_network(test_base):
 
         # refresh net status
         net_dict = test_config["vim_conn"].refresh_nets_status([unknown_net_id])
-        self.assertEqual(net_dict, {})
+        if test_config['vimtype'] == 'openstack':
+            self.assertEqual(net_dict[unknown_net_id]['status'], 'DELETED')
+        else:
+            # TODO : Fix vmware connector to return status DELETED as per vimconn.py
+            self.assertEqual(net_dict, {})
 
 class test_vimconn_get_network_list(test_base):
     network_name = None
@@ -525,7 +538,10 @@ class test_vimconn_get_network_list(test_base):
                                                 inspect.currentframe().f_code.co_name)
         self.__class__.test_index += 1
 
-        network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
+        if test_config['vimtype'] == 'openstack':
+            network_name = test_config['vim_conn'].get_network(self.__class__.network_id)['name']
+        else:
+            network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
 
         # find network from list by it's name
         new_network_list = test_config["vim_conn"].get_network_list({'name': network_name})
@@ -556,7 +572,10 @@ class test_vimconn_get_network_list(test_base):
                                                 inspect.currentframe().f_code.co_name)
         self.__class__.test_index += 1
 
-        network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
+        if test_config['vimtype'] == 'openstack':
+            network_name = test_config['vim_conn'].get_network(self.__class__.network_id)['name']
+        else:
+            network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
         # find network from list by it's shared value
         new_network_list = test_config["vim_conn"].get_network_list({'shared':Shared,
                                                                 'name':network_name})
@@ -573,7 +592,10 @@ class test_vimconn_get_network_list(test_base):
         self.__class__.test_index += 1
 
         tenant_list = test_config["vim_conn"].get_tenant_list()
-        network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
+        if test_config['vimtype'] == 'openstack':
+            network_name = test_config['vim_conn'].get_network(self.__class__.network_id)['name']
+        else:
+            network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
 
         for tenant_item in tenant_list:
             if test_config['tenant'] == tenant_item.get('name'):
@@ -594,7 +616,10 @@ class test_vimconn_get_network_list(test_base):
         self.__class__.test_index += 1
         status = 'ACTIVE'
 
-        network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
+        if test_config['vimtype'] == 'openstack':
+            network_name = test_config['vim_conn'].get_network(self.__class__.network_id)['name']
+        else:
+            network_name = test_config['vim_conn'].get_network_name_by_id(self.__class__.network_id)
 
         # find network from list by it's status
         new_network_list = test_config["vim_conn"].get_network_list({'status':status,
@@ -696,7 +721,7 @@ class test_vimconn_delete_network(test_base):
         with self.assertRaises(Exception) as context:
             test_config["vim_conn"].delete_network(Non_exist_id)
 
-        self.assertEqual((context.exception).http_code, 400)
+        self.assertEqual((context.exception).http_code, 404)
 
 class test_vimconn_get_flavor(test_base):
 
@@ -720,10 +745,12 @@ class test_vimconn_get_flavor(test_base):
                     vcpus = item['vcpus']
                     disk = item['disk']
 
-        flavor_data = {'ram': ram,
+        flavor_data = {
+                      'name' : _get_random_string(20),
+                      'ram': ram,
                       'vcpus': vcpus,
                       'disk': disk
-                      }
+                    }
 
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
                                                             self.__class__.test_index,
@@ -761,7 +788,7 @@ class test_vimconn_new_flavor(test_base):
     flavor_id = None
 
     def test_000_new_flavor(self):
-        flavor_data = {'ram': 1024, 'vpcus': 1, 'disk': 10}
+        flavor_data = {'name': _get_random_string(20), 'ram': 1024, 'vpcus': 1, 'disk': 10}
 
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
                                                             self.__class__.test_index,
@@ -770,8 +797,8 @@ class test_vimconn_new_flavor(test_base):
 
         # create new flavor
         self.__class__.flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
-        self.assertEqual(type(self.__class__.flavor_id),str)
-        self.assertIsInstance(uuid.UUID(self.__class__.flavor_id),uuid.UUID)
+        self.assertIsInstance(self.__class__.flavor_id, (str, unicode))
+        self.assertIsInstance(uuid.UUID(self.__class__.flavor_id), uuid.UUID)
 
     def test_010_delete_flavor(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
@@ -823,10 +850,11 @@ class test_vimconn_new_image(test_base):
 
         image_path = test_config['image_path']
         if image_path:
-            self.__class__.image_id = test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : image_path })
+            self.__class__.image_id = test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : image_path, 'metadata': {'upload_location':None} })
             time.sleep(20)
-            self.assertEqual(type(self.__class__.image_id),str)
-            self.assertIsInstance(uuid.UUID(self.__class__.image_id),uuid.UUID)
+
+            self.assertIsInstance(self.__class__.image_id, (str, unicode))
+            self.assertIsInstance(uuid.UUID(self.__class__.image_id), uuid.UUID)
         else:
             self.skipTest("Skipping test as image file not present at RO container")
 
@@ -839,7 +867,7 @@ class test_vimconn_new_image(test_base):
         self.__class__.test_index += 1
 
         with self.assertRaises(Exception) as context:
-            test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : Non_exist_image_path })
+            test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : Non_exist_image_path})
 
         self.assertEqual((context.exception).http_code, 400)
 
@@ -850,7 +878,8 @@ class test_vimconn_new_image(test_base):
         self.__class__.test_index += 1
 
         image_id = test_config["vim_conn"].delete_image(self.__class__.image_id)
-        self.assertEqual(type(image_id),str)
+
+        self.assertIsInstance(image_id, (str, unicode))
 
     def test_030_delete_image_negative(self):
         Non_exist_image_id = str(uuid.uuid4())
@@ -908,8 +937,8 @@ class test_vimconn_get_image_list(test_base):
             if 'name' in item:
                 self.__class__.image_name = item['name']
                 self.__class__.image_id = item['id']
-                self.assertEqual(type(self.__class__.image_name),str)
-                self.assertEqual(type(self.__class__.image_id),str)
+                self.assertIsInstance(self.__class__.image_name, (str, unicode))
+                self.assertIsInstance(self.__class__.image_id, (str, unicode))
 
     def test_010_get_image_list_by_name(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
@@ -920,9 +949,9 @@ class test_vimconn_get_image_list(test_base):
         image_list = test_config["vim_conn"].get_image_list({'name': self.__class__.image_name})
 
         for item in image_list:
-            self.assertEqual(type(item['id']), str)
+            self.assertIsInstance(item['id'], (str, unicode))
+            self.assertIsInstance(item['name'], (str, unicode))
             self.assertEqual(item['id'], self.__class__.image_id)
-            self.assertEqual(type(item['name']), str)
             self.assertEqual(item['name'], self.__class__.image_name)
 
     def test_020_get_image_list_by_id(self):
@@ -934,10 +963,10 @@ class test_vimconn_get_image_list(test_base):
         filter_image_list = test_config["vim_conn"].get_image_list({'id': self.__class__.image_id})
 
         for item1 in filter_image_list:
-            self.assertEqual(type(item1.get('id')), str)
-            self.assertEqual(item1.get('id'), self.__class__.image_id)
-            self.assertEqual(type(item1.get('name')), str)
-            self.assertEqual(item1.get('name'), self.__class__.image_name)
+            self.assertIsInstance(item1['id'], (str, unicode))
+            self.assertIsInstance(item1['name'], (str, unicode))
+            self.assertEqual(item1['id'], self.__class__.image_id)
+            self.assertEqual(item1['name'], self.__class__.image_name)
 
     def test_030_get_image_list_negative(self):
         Non_exist_image_id = uuid.uuid4()
@@ -964,25 +993,6 @@ class test_vimconn_new_vminstance(test_base):
 
         self.__class__.network_id = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
                                                                             net_type=self.__class__.net_type)
-
-    def tearDown(self):
-        test_base.tearDown(self)
-        # Deleting created network
-        result = test_config["vim_conn"].delete_network(self.__class__.network_id)
-        if result:
-            logger.info("Network id {} sucessfully deleted".format(self.__class__.network_id))
-        else:
-            logger.info("Failed to delete network id {}".format(self.__class__.network_id))
-
-    def test_000_new_vminstance(self):
-        vpci = "0000:00:11.0"
-        name = "eth0"
-
-        flavor_data = {'ram': 1024, 'vcpus': 1, 'disk': 10}
-
-        # create new flavor
-        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
-
         # find image name and image id
         if test_config['image_name']:
             image_list = test_config['vim_conn'].get_image_list({'name': test_config['image_name']})
@@ -997,6 +1007,25 @@ class test_vimconn_new_vminstance(test_base):
             else:
                 self.__class__.image_id = image_list[0]['id']
 
+    def tearDown(self):
+        test_base.tearDown(self)
+        # Deleting created network
+        result = test_config["vim_conn"].delete_network(self.__class__.network_id)
+        if result:
+            logger.info("Network id {} sucessfully deleted".format(self.__class__.network_id))
+        else:
+            logger.info("Failed to delete network id {}".format(self.__class__.network_id))
+
+    def test_000_new_vminstance(self):
+        vpci = "0000:00:11.0"
+        name = "eth0"
+
+        flavor_data = {'name': _get_random_string(20), 'ram': 1024, 'vcpus': 1, 'disk': 10}
+
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+
+
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
                                                             self.__class__.test_index,
                                                 inspect.currentframe().f_code.co_name)
@@ -1004,12 +1033,12 @@ class test_vimconn_new_vminstance(test_base):
 
         net_list = [{'use': self.__class__.net_type, 'name': name, 'floating_ip': False, 'vpci': vpci, 'port_security': True, 'type': 'virtual', 'net_id': self.__class__.network_id}]
 
-        self.__class__.instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=self.__class__.image_id, flavor_id=flavor_id, net_list=net_list)
+        self.__class__.instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', description='', start=False, image_id=self.__class__.image_id, flavor_id=flavor_id, net_list=net_list)
 
-        self.assertEqual(type(self.__class__.instance_id),str)
+        self.assertIsInstance(self.__class__.instance_id, (str, unicode))
 
     def test_010_new_vminstance_by_model(self):
-        flavor_data = {'ram': 1024, 'vcpus': 2, 'disk': 10}
+        flavor_data = {'name': _get_random_string(20),'ram': 1024, 'vcpus': 2, 'disk': 10}
         model_name = 'e1000'
         name = 'eth0'
 
@@ -1023,17 +1052,17 @@ class test_vimconn_new_vminstance(test_base):
 
         net_list = [{'use': self.__class__.net_type, 'name': name, 'floating_ip': False, 'port_security': True, 'model': model_name, 'type': 'virtual', 'net_id': self.__class__.network_id}]
 
-        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=self.__class__.image_id,
-                                                                                           flavor_id=flavor_id,
-                                                                                             net_list=net_list)
-        self.assertEqual(type(instance_id),str)
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', description='', start=False, image_id=self.__class__.image_id,flavor_id=flavor_id,net_list=net_list)
+
+        self.assertIsInstance(instance_id, (str, unicode))
+
         # Deleting created vm instance
         logger.info("Deleting created vm intance")
         test_config["vim_conn"].delete_vminstance(instance_id)
         time.sleep(10)
 
     def test_020_new_vminstance_by_net_use(self):
-        flavor_data = {'ram': 1024, 'vcpus': 2, 'disk': 10}
+        flavor_data = {'name': _get_random_string(20),'ram': 1024, 'vcpus': 2, 'disk': 10}
         net_use = 'data'
         name = 'eth0'
 
@@ -1047,17 +1076,18 @@ class test_vimconn_new_vminstance(test_base):
 
         net_list = [{'use': net_use, 'name': name, 'floating_ip': False, 'port_security': True, 'type': 'virtual', 'net_id': self.__class__.network_id}]
 
-        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=self.__class__.image_id,
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', description='', start=False, image_id=self.__class__.image_id,disk_list=None,
                                                                                            flavor_id=flavor_id,
                                                                                              net_list=net_list)
-        self.assertEqual(type(instance_id),str)
+        self.assertIsInstance(instance_id, (str, unicode))
+
         # Deleting created vm instance
         logger.info("Deleting created vm intance")
         test_config["vim_conn"].delete_vminstance(instance_id)
         time.sleep(10)
 
     def test_030_new_vminstance_by_net_type(self):
-        flavor_data = {'ram': 1024, 'vcpus': 2, 'disk': 10}
+        flavor_data = {'name':_get_random_string(20),'ram': 1024, 'vcpus': 2, 'disk': 10}
         _type = 'VF'
         name = 'eth0'
 
@@ -1069,19 +1099,46 @@ class test_vimconn_new_vminstance(test_base):
                                                 inspect.currentframe().f_code.co_name)
         self.__class__.test_index += 1
 
-        net_list = [{'use': self.__class__.net_type, 'name': name, 'floating_ip': False, 'port_security': True, 'type': _type, 'net_id': self.__class__.network_id}]
+        if test_config['vimtype'] == 'vmware':
+            net_list = [{'use': self.__class__.net_type, 'name': name, 'floating_ip': False, 'port_security': True,
+                         'type': _type, 'net_id': self.__class__.network_id}]
 
-        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=self.__class__.image_id,
-                                                                                           flavor_id=flavor_id,
-                                                                                             net_list=net_list)
-        self.assertEqual(type(instance_id),str)
+            instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=self.__class__.image_id,
+                                                                    flavor_id=flavor_id,
+                                                                    net_list=net_list)
+            self.assertEqual(type(instance_id),str)
+
+        if test_config['vimtype'] == 'openstack':
+            # create network of type data
+            network_name = _get_random_string(20)
+            net_type = 'data'
+
+            network_id = test_config["vim_conn"].new_network(net_name=network_name,
+                                                                            net_type=net_type)
+            net_list = [{'use': net_type, 'name': name, 'floating_ip': False, 'port_security': True,
+                         'type': _type, 'net_id': network_id}]
+
+            instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', description='', start=False,
+                                                                    image_id=self.__class__.image_id, disk_list=None,
+                                                                    flavor_id=flavor_id,
+                                                                    net_list=net_list)
+
+            self.assertEqual(type(instance_id), unicode)
+
+            # delete created network
+            result = test_config["vim_conn"].delete_network(network_id)
+            if result:
+                logger.info("Network id {} sucessfully deleted".format(network_id))
+            else:
+                logger.info("Failed to delete network id {}".format(network_id))
+
         # Deleting created vm instance
         logger.info("Deleting created vm intance")
         test_config["vim_conn"].delete_vminstance(instance_id)
         time.sleep(10)
 
     def test_040_new_vminstance_by_cloud_config(self):
-        flavor_data = {'ram': 1024, 'vcpus': 2, 'disk': 10}
+        flavor_data = {'name': _get_random_string(20),'ram': 1024, 'vcpus': 2, 'disk': 10}
         name = 'eth0'
         user_name = 'test_user'
 
@@ -1101,21 +1158,21 @@ class test_vimconn_new_vminstance(test_base):
 
         net_list = [{'use': self.__class__.net_type, 'name': name, 'floating_ip': False, 'port_security': True, 'type': 'virtual', 'net_id': self.__class__.network_id}]
 
-        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Cloud_vm', image_id=self.__class__.image_id,
-                                                                                           flavor_id=flavor_id,
-                                                                                             net_list=net_list,
-                                                                                       cloud_config=cloud_data)
-        self.assertEqual(type(instance_id),str)
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Cloud_vm', description='', start=False,
+                                                                image_id=self.__class__.image_id, flavor_id=flavor_id,net_list=net_list,cloud_config=cloud_data)
+
+        self.assertIsInstance(instance_id, (str, unicode))
+
         # Deleting created vm instance
         logger.info("Deleting created vm intance")
         test_config["vim_conn"].delete_vminstance(instance_id)
         time.sleep(10)
 
     def test_050_new_vminstance_by_disk_list(self):
-        flavor_data = {'ram': 1024, 'vcpus': 2, 'disk': 10}
+        flavor_data = {'name':_get_random_string(20),'ram': 1024, 'vcpus': 2, 'disk': 10}
         name = 'eth0'
 
-        device_data = [{'image_id': self.__class__.image_id, 'size': '5'}]
+        device_data = [{'image_id': self.__class__.image_id, 'size': '10'}]
 
         # create new flavor
         flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
@@ -1127,11 +1184,12 @@ class test_vimconn_new_vminstance(test_base):
 
         net_list = [{'use': self.__class__.net_type, 'name': name, 'floating_ip': False, 'port_security': True, 'type': 'virtual', 'net_id': self.__class__.network_id}]
 
-        instance_id, _ = test_config["vim_conn"].new_vminstance(name='VM_test1', image_id=self.__class__.image_id,
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='VM_test1', description='', start=False, image_id=self.__class__.image_id,
                                                                                            flavor_id=flavor_id,
                                                                                              net_list=net_list,
                                                                                          disk_list=device_data)
-        self.assertEqual(type(instance_id),str)
+
+        self.assertIsInstance(instance_id, (str, unicode))
         # Deleting created vm instance
         logger.info("Deleting created vm intance")
         test_config["vim_conn"].delete_vminstance(instance_id)
@@ -1150,10 +1208,12 @@ class test_vimconn_new_vminstance(test_base):
         net_list = [{'use': self.__class__.net_type, 'name': name, 'floating_ip': False, 'port_security': True, 'type': 'virtual', 'net_id': self.__class__.network_id}]
 
         with self.assertRaises(Exception) as context:
-            test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=unknown_image_id,
+            test_config["vim_conn"].new_vminstance(name='Test1_vm', description='', start=False, image_id=unknown_image_id,
                                                                   flavor_id=unknown_flavor_id,
                                                                             net_list=net_list)
-        self.assertEqual((context.exception).http_code, 404)
+
+        self.assertIn((context.exception).http_code, (400, 404))
+
 
     def test_070_get_vminstance(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
@@ -1194,16 +1254,49 @@ class test_vimconn_new_vminstance(test_base):
                                                             self.__class__.test_index,
                                                 inspect.currentframe().f_code.co_name)
         self.__class__.test_index += 1
-        vm_list = []
-        vm_list.append(self.__class__.instance_id)
 
-        # refresh vm status
-        vm_info = test_config["vim_conn"].refresh_vms_status(vm_list)
-        for attr in vm_info[self.__class__.instance_id]:
-            if attr == 'status':
-                self.assertEqual(vm_info[self.__class__.instance_id][attr], 'ACTIVE')
-            if attr == 'interfaces':
-                self.assertEqual(type(vm_info[self.__class__.instance_id][attr]), list)
+        if test_config['vimtype'] == 'vmware':
+            vm_list = []
+            vm_list.append(self.__class__.instance_id)
+
+            # refresh vm status
+            vm_info = test_config["vim_conn"].refresh_vms_status(vm_list)
+            for attr in vm_info[self.__class__.instance_id]:
+                if attr == 'status':
+                    self.assertEqual(vm_info[self.__class__.instance_id][attr], 'ACTIVE')
+                if attr == 'interfaces':
+                    self.assertEqual(type(vm_info[self.__class__.instance_id][attr]), list)
+
+        if test_config['vimtype'] == 'openstack':
+            vpci = "0000:00:11.0"
+            name = "eth0"
+
+            flavor_data = {'name': _get_random_string(20), 'ram': 1024, 'vcpus': 1, 'disk': 10}
+
+            # create new flavor
+            flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+             # create new vm instance
+            net_list = [{'use': self.__class__.net_type, 'name': name, 'floating_ip': False, 'vpci': vpci, 'port_security': True, 'type': 'virtual', 'net_id': self.__class__.network_id}]
+
+            instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', description='', start=False, image_id=self.__class__.image_id, flavor_id=flavor_id, net_list=net_list)
+
+            time.sleep(30)
+            vm_list = []
+            vm_list.append(instance_id)
+
+            # refresh vm status
+            vm_info = test_config["vim_conn"].refresh_vms_status(vm_list)
+            for attr in vm_info[instance_id]:
+                if attr == 'status':
+                    self.assertEqual(vm_info[instance_id][attr], 'ACTIVE')
+                if attr == 'interfaces':
+                    self.assertEqual(type(vm_info[instance_id][attr]), list)
+
+            #Deleting created vm instance
+            logger.info("Deleting created vm intance")
+            test_config["vim_conn"].delete_vminstance(instance_id)
+            time.sleep(10)
+
 
     def test_100_refresh_vms_status_negative(self):
         unknown_id = str(uuid.uuid4())
@@ -1214,7 +1307,12 @@ class test_vimconn_new_vminstance(test_base):
         self.__class__.test_index += 1
 
         vm_dict = test_config["vim_conn"].refresh_vms_status([unknown_id])
-        self.assertEqual(vm_dict, {})
+
+        if test_config['vimtype'] == 'vmware':
+            self.assertEqual(vm_dict,{})
+
+        if test_config['vimtype'] == 'openstack':
+            self.assertEqual(vm_dict[unknown_id]['status'], 'DELETED')
 
     def test_110_action_vminstance(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
@@ -1222,12 +1320,43 @@ class test_vimconn_new_vminstance(test_base):
                                                 inspect.currentframe().f_code.co_name)
         self.__class__.test_index += 1
 
-        action_list = ['shutdown','start','shutoff','rebuild','pause','resume']
-        # various action on vminstace
-        for action in action_list:
-            instance_id = test_config["vim_conn"].action_vminstance(self.__class__.instance_id,
-                                                                               { action: None})
-            self.assertEqual(instance_id, self.__class__.instance_id)
+        if test_config['vimtype'] == 'vmware':
+            action_list = ['shutdown', 'start', 'shutoff', 'rebuild', 'pause', 'resume']
+            # various action on vminstace
+            for action in action_list:
+                instance_id = test_config["vim_conn"].action_vminstance(self.__class__.instance_id,
+                                                                        {action: None})
+                self.assertEqual(instance_id, self.__class__.instance_id)
+
+        if test_config['vimtype'] == 'openstack':
+            # create new vm instance
+            vpci = "0000:00:11.0"
+            name = "eth0"
+
+            flavor_data = {'name': _get_random_string(20), 'ram': 1024, 'vcpus': 1, 'disk': 10}
+
+            # create new flavor
+            flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+
+            net_list = [{'use': self.__class__.net_type, 'name': name, 'floating_ip': False, 'vpci': vpci, 'port_security': True, 'type': 'virtual', 'net_id': self.__class__.network_id}]
+
+            new_instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', description='', start=False, image_id=self.__class__.image_id, flavor_id=flavor_id, net_list=net_list)
+
+            action_list =  ['shutdown','start','shutoff','rebuild','start','pause','start']
+
+            # various action on vminstace
+            for action in action_list:
+                # sleep for sometime till status is changed
+                time.sleep(25)
+                instance_id = test_config["vim_conn"].action_vminstance(new_instance_id,
+                                                                                   { action: None})
+
+            self.assertTrue(instance_id is None)
+
+            # Deleting created vm instance
+            logger.info("Deleting created vm intance")
+            test_config["vim_conn"].delete_vminstance(new_instance_id)
+            time.sleep(10)
 
     def test_120_action_vminstance_negative(self):
         non_exist_id = str(uuid.uuid4())
@@ -1240,7 +1369,8 @@ class test_vimconn_new_vminstance(test_base):
         with self.assertRaises(Exception) as context:
             test_config["vim_conn"].action_vminstance(non_exist_id, { action: None})
 
-        self.assertEqual((context.exception).http_code, 400)
+        self.assertEqual((context.exception).http_code, 404)
+
 
     def test_130_delete_vminstance(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
@@ -1251,6 +1381,38 @@ class test_vimconn_new_vminstance(test_base):
         # Deleting created vm instance
         logger.info("Deleting created vm instance")
         test_config["vim_conn"].delete_vminstance(self.__class__.instance_id)
+        time.sleep(10)
+
+    def test_140_new_vminstance_sriov(self):
+        logger.info("Testing creation of sriov vm instance using {}".format(test_config['sriov_net_name']))
+        flavor_data = {'name': _get_random_string(20),'ram': 1024, 'vcpus': 2, 'disk': 10}
+        name = 'eth0'
+
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        sriov_net_name = test_config['sriov_net_name']
+        new_network_list = test_config["vim_conn"].get_network_list({'name': sriov_net_name})
+        for list_item in new_network_list:
+            self.assertEqual(sriov_net_name, list_item.get('name'))
+            self.__class__.sriov_network_id = list_item.get('id')
+
+        net_list = [{'use': 'data', 'name': name, 'floating_ip': False, 'port_security': True, 'type': 'VF', 'net_id': self.__class__.sriov_network_id}]
+
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_sriov_vm', description='', start=False, image_id=self.__class__.image_id, flavor_id=flavor_id, net_list=net_list)
+
+        self.assertIsInstance(instance_id, (str, unicode))
+
+        logger.info("Waiting for created sriov-vm intance")
+        time.sleep(10)
+        # Deleting created vm instance
+        logger.info("Deleting created sriov-vm intance")
+        test_config["vim_conn"].delete_vminstance(instance_id)
         time.sleep(10)
 
 class test_vimconn_get_tenant_list(test_base):
@@ -1268,8 +1430,8 @@ class test_vimconn_get_tenant_list(test_base):
         for item in tenant_list:
             if test_config['tenant'] == item['name']:
                 self.__class__.tenant_id = item['id']
-                self.assertEqual(type(item['name']), str)
-                self.assertEqual(type(item['id']), str)
+                self.assertIsInstance(item['name'], (str, unicode))
+                self.assertIsInstance(item['id'], (str, unicode))
 
     def test_010_get_tenant_list_by_id(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
@@ -1281,7 +1443,7 @@ class test_vimconn_get_tenant_list(test_base):
         filter_tenant_list = test_config["vim_conn"].get_tenant_list({'id': self.__class__.tenant_id})
 
         for item in filter_tenant_list:
-            self.assertEqual(type(item['id']), str)
+            self.assertIsInstance(item['id'], (str, unicode))
             self.assertEqual(item['id'], self.__class__.tenant_id)
 
     def test_020_get_tenant_list_by_name(self):
@@ -1294,7 +1456,7 @@ class test_vimconn_get_tenant_list(test_base):
         filter_tenant_list = test_config["vim_conn"].get_tenant_list({'name': test_config['tenant']})
 
         for item in filter_tenant_list:
-            self.assertEqual(type(item['name']), str)
+            self.assertIsInstance(item['name'], (str, unicode))
             self.assertEqual(item['name'], test_config['tenant'])
 
     def test_030_get_tenant_list_by_name_and_id(self):
@@ -1308,8 +1470,8 @@ class test_vimconn_get_tenant_list(test_base):
                                                                     'id': self.__class__.tenant_id})
 
         for item in filter_tenant_list:
-            self.assertEqual(type(item['name']), str)
-            self.assertEqual(type(item['id']), str)
+            self.assertIsInstance(item['name'], (str, unicode))
+            self.assertIsInstance(item['id'], (str, unicode))
             self.assertEqual(item['name'], test_config['tenant'])
             self.assertEqual(item['id'], self.__class__.tenant_id)
 
@@ -1326,6 +1488,7 @@ class test_vimconn_get_tenant_list(test_base):
 
         self.assertEqual(filter_tenant_list, [])
 
+
 class test_vimconn_new_tenant(test_base):
     tenant_id = None
 
@@ -1336,10 +1499,11 @@ class test_vimconn_new_tenant(test_base):
                                                 inspect.currentframe().f_code.co_name)
         self.__class__.test_index += 1
 
-        self.__class__.tenant_id = test_config["vim_conn"].new_tenant(tenant_name)
+        self.__class__.tenant_id = test_config["vim_conn"].new_tenant(tenant_name, "")
         time.sleep(15)
 
-        self.assertEqual(type(self.__class__.tenant_id), str)
+        self.assertIsInstance(self.__class__.tenant_id, (str, unicode))
+
 
     def test_010_new_tenant_negative(self):
         Invalid_tenant_name = 10121
@@ -1349,9 +1513,10 @@ class test_vimconn_new_tenant(test_base):
         self.__class__.test_index += 1
 
         with self.assertRaises(Exception) as context:
-            test_config["vim_conn"].new_tenant(Invalid_tenant_name)
+            test_config["vim_conn"].new_tenant(Invalid_tenant_name, "")
 
         self.assertEqual((context.exception).http_code, 400)
+
 
     def test_020_delete_tenant(self):
         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
@@ -1360,7 +1525,8 @@ class test_vimconn_new_tenant(test_base):
         self.__class__.test_index += 1
 
         tenant_id = test_config["vim_conn"].delete_tenant(self.__class__.tenant_id)
-        self.assertEqual(type(tenant_id), str)
+
+        self.assertIsInstance(tenant_id, (str, unicode))
 
     def test_030_delete_tenant_negative(self):
         Non_exist_tenant_name = 'Test_30_tenant'
@@ -1373,6 +1539,419 @@ class test_vimconn_new_tenant(test_base):
             test_config["vim_conn"].delete_tenant(Non_exist_tenant_name)
 
         self.assertEqual((context.exception).http_code, 404)
+
+
+def get_image_id():
+    if test_config['image_name']:
+        image_list = test_config['vim_conn'].get_image_list({'name': test_config['image_name']})
+        if len(image_list) == 0:
+            raise Exception("Image {} is not found at VIM".format(test_config['image_name']))
+        else:
+            image_id = image_list[0]['id']
+    else:
+        image_list = test_config['vim_conn'].get_image_list()
+        if len(image_list) == 0:
+            raise Exception("Not found any image at VIM")
+        else:
+            image_id = image_list[0]['id']
+    return image_id
+
+
+class test_vimconn_vminstance_by_ip_address(test_base):
+    network_name = None
+    network_id = None
+
+    def setUp(self):
+        # create network
+        self.network_name = _get_random_string(20)
+
+        self.network_id = test_config["vim_conn"].new_network(net_name=self.network_name,
+                                                                       net_type='bridge')
+
+    def tearDown(self):
+        test_base.tearDown(self)
+        # Deleting created network
+        result = test_config["vim_conn"].delete_network(self.network_id)
+        if result:
+            logger.info("Network id {} sucessfully deleted".format(self.network_id))
+        else:
+            logger.info("Failed to delete network id {}".format(self.network_id))
+
+
+    def test_000_vminstance_by_ip_address(self):
+        """
+           This test case will deploy VM with provided IP address
+           Pre-requesite: provided IP address should be from IP pool range which has used for network creation
+        """
+        name = "eth0"
+        # provide ip address  
+        ip_address = '' 
+
+        flavor_data = {'ram': 1024, 'vcpus': 1, 'disk': 10}
+
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+
+        # find image id
+        image_id = get_image_id()
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        net_list = [{'use': 'bridge', 'name': name, 'floating_ip': False, 'port_security': True, 'type': 'virtual',
+                                                    'net_id': self.network_id, 'ip_address': ip_address}]
+
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=image_id,
+                                                            flavor_id=flavor_id, net_list=net_list)
+
+        self.assertEqual(type(instance_id),str)
+        logger.info("Deleting created vm instance")
+        test_config["vim_conn"].delete_vminstance(instance_id)
+        time.sleep(10)
+
+    def test_010_vminstance_by_ip_address_negative(self):
+        name = "eth1"
+        # IP address not from subnet range
+        invalid_ip_address = '10.10.12.1'
+
+        flavor_data = {'ram': 1024, 'vcpus': 1, 'disk': 10}
+
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+
+        # find image name and image id
+        image_id = get_image_id()
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        net_list = [{'use': 'bridge', 'name': name, 'floating_ip': False, 'port_security': True, 'type': 'virtual',
+                                                      'net_id': self.network_id, 'ip_address': invalid_ip_address}]
+
+        with self.assertRaises(Exception) as context:
+            test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=image_id,
+                                                                  flavor_id=flavor_id,
+                                                                    net_list=net_list)
+        self.assertEqual((context.exception).http_code, 400)
+
+    def test_020_vminstance_by_floating_ip(self):
+        name = "eth1"
+        flavor_data = {'ram': 1024, 'vcpus': 1, 'disk': 10}
+
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+
+        # find image name and image id
+        image_id = get_image_id()
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        net_list = [{'use': 'bridge', 'name': name, 'floating_ip': True, 'port_security': True, 'type': 'virtual',
+                                                                                       'net_id': self.network_id}]
+
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=image_id,
+                                                            flavor_id=flavor_id, net_list=net_list)
+
+        self.assertEqual(type(instance_id),str)
+        logger.info("Deleting created vm instance")
+        test_config["vim_conn"].delete_vminstance(instance_id)
+        time.sleep(10)
+
+    def test_030_vminstance_by_mac_address(self):
+        name = "eth1"
+        mac_address = "74:54:2f:21:da:8c" 
+        flavor_data = {'ram': 1024, 'vcpus': 1, 'disk': 10}
+
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+
+        # find image name and image id
+        image_id = get_image_id()
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        net_list = [{'use': 'bridge', 'name': name, 'floating_ip': False, 'port_security': True, 'type': 'virtual',
+                                                             'net_id': self.network_id,'mac_address': mac_address}]
+
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=image_id,
+                                                            flavor_id=flavor_id, net_list=net_list)
+
+        self.assertEqual(type(instance_id),str)
+        logger.info("Deleting created vm instance")
+        test_config["vim_conn"].delete_vminstance(instance_id)
+        time.sleep(10)
+
+class test_vimconn_vminstance_by_adding_10_nics(test_base):
+    network_name = None
+    net_ids = [] 
+
+    def setUp(self):
+        # create network
+        i = 0
+        for i in range(10):
+            self.network_name = _get_random_string(20)
+            network_id = test_config["vim_conn"].new_network(net_name=self.network_name,
+                                                                      net_type='bridge')
+            self.net_ids.append(network_id)
+
+    def tearDown(self):
+        test_base.tearDown(self)
+        # Deleting created network
+        for net_id in self.net_ids:
+            result = test_config["vim_conn"].delete_network(net_id)
+            if result:
+                logger.info("Network id {} sucessfully deleted".format(net_id))
+            else:
+                logger.info("Failed to delete network id {}".format(net_id))
+
+    def test_000_vminstance_by_adding_10_nics(self):
+        flavor_data = {'ram': 1024, 'vcpus': 1, 'disk': 10}
+
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+
+        # find image name and image id
+        image_id = get_image_id()
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        net_list = []
+        c = 1
+        for net_id in self.net_ids:
+            name = "eth{}".format(c)
+            net_list.append({'use': 'bridge', 'name': name, 'floating_ip': False,
+                                    'port_security': True, 'type': 'virtual', 'net_id': net_id})
+            c = c+1
+
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=image_id,
+                                                            flavor_id=flavor_id, net_list=net_list)
+
+        self.assertEqual(type(instance_id),str)
+        logger.info("Deleting created vm instance")
+        test_config["vim_conn"].delete_vminstance(instance_id)
+        time.sleep(10)
+
+
+class test_vimconn_vminstance_by_existing_disk(test_base):
+    network_name = None
+    network_id = None
+
+    def setUp(self):
+        # create network
+        self.network_name = _get_random_string(20)
+        self.network_id = test_config["vim_conn"].new_network(net_name=self.network_name,
+                                                                       net_type='bridge')
+
+    def tearDown(self):
+        test_base.tearDown(self)
+        # Deleting created network
+        result = test_config["vim_conn"].delete_network(self.network_id)
+        if result:
+            logger.info("Network id {} sucessfully deleted".format(self.network_id))
+        else:
+            logger.info("Failed to delete network id {}".format(self.network_id))
+
+
+    def test_000_vminstance_by_existing_disk(self):
+        """ This testcase will add existing disk only if given catalog/image is free 
+            means not used by any other VM
+        """
+
+        flavor_data = {'ram': 1024, 'vcpus': 1, 'disk': 10}
+        name = "eth10"
+
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+
+        # find image name and image id
+        image_id = get_image_id()
+        cirros_image = test_config["vim_conn"].get_image_list({'name': 'cirros'})
+        disk_list = [{'image_id': cirros_image[0]['id'],'size': 5}]
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        net_list = [{'use': 'bridge', 'name': name, 'floating_ip': False, 'port_security': True,
+                                        'type': 'virtual', 'net_id': self.network_id}]
+
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=image_id,
+                                        flavor_id=flavor_id, net_list=net_list,disk_list=disk_list)
+
+        self.assertEqual(type(instance_id),str)
+        logger.info("Deleting created vm instance")
+        test_config["vim_conn"].delete_vminstance(instance_id)
+        time.sleep(10)
+
+    def test_010_vminstance_by_new_disk(self):
+        flavor_data = {'ram': 1024, 'vcpus': 1, 'disk': 10}
+        name = "eth10"
+
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+
+        # find image name and image id
+        image_id = get_image_id()
+        disk_list = [{'size': '5'}]
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        net_list = [{'use': 'bridge', 'name': name, 'floating_ip': False, 'port_security': True,
+                                                  'type': 'virtual', 'net_id': self.network_id}]
+
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=image_id,
+                                        flavor_id=flavor_id, net_list=net_list,disk_list=disk_list)
+
+        self.assertEqual(type(instance_id),str)
+        logger.info("Deleting created vm instance")
+        test_config["vim_conn"].delete_vminstance(instance_id)
+        time.sleep(10)
+
+    def test_020_vminstance_by_CDROM(self):
+        """ This testcase will insert media file only if provided catalog
+            has pre-created ISO media file into vCD
+        """
+        flavor_data ={'ram': 1024, 'vcpus': 1, 'disk': 10}
+        name = "eth10"
+        image_list = test_config["vim_conn"].get_image_list({'name':'Ubuntu'})
+        disk_list = [{'image_id':image_list[0]['id'],'device_type':'cdrom'}]
+
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+
+        # find image name and image id
+        image_id = get_image_id()
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        net_list = [{'use': 'bridge', 'name': name, 'floating_ip': False, 'port_security': True,
+                                                  'type': 'virtual', 'net_id': self.network_id}]
+
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=image_id,
+                                       flavor_id=flavor_id, net_list=net_list,disk_list=disk_list )
+
+        self.assertEqual(type(instance_id),str)
+        logger.info("Deleting created vm instance")
+        test_config["vim_conn"].delete_vminstance(instance_id)
+        time.sleep(10)
+
+
+class test_vimconn_vminstance_by_affinity_anti_affinity(test_base):
+    network_name = None
+    network_id = None
+
+    def setUp(self):
+        # create network
+        self.network_name = _get_random_string(20)
+        self.network_id = test_config["vim_conn"].new_network(net_name=self.network_name,
+                                                                       net_type='bridge')
+
+    def tearDown(self):
+        test_base.tearDown(self)
+        # Deleting created network
+        result = test_config["vim_conn"].delete_network(self.network_id)
+        if result:
+            logger.info("Network id {} sucessfully deleted".format(self.network_id))
+        else:
+            logger.info("Failed to delete network id {}".format(self.network_id))
+
+    def test_000_vminstance_by_affinity_anti_affinity(self):
+        """ This testcase will deploy VM into provided HOSTGROUP in VIM config
+            Pre-requisites: User has created Hosh Groups in vCenter with respective Hosts to be used
+            While creating VIM account user has to pass the Host Group names in availability_zone list
+        """
+        flavor_data = {'ram': 1024, 'vcpus': 1, 'disk': 10}
+        name = "eth10"
+
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+
+        # find image name and image id
+        image_id = get_image_id()
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        net_list = [{'use': 'bridge', 'name': name, 'floating_ip': False, 'port_security': True,
+                                        'type': 'virtual', 'net_id': self.network_id}]
+
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=image_id,
+                                  flavor_id=flavor_id, net_list=net_list,availability_zone_index=1,
+                                                        availability_zone_list=['HG_174','HG_175'])
+
+        self.assertEqual(type(instance_id),str)
+        time.sleep(10)
+        logger.info("Deleting created vm instance")
+        test_config["vim_conn"].delete_vminstance(instance_id)
+
+class test_vimconn_vminstance_by_numa_affinity(test_base):
+    network_name = None
+    network_id = None
+
+    def setUp(self):
+        # create network
+        self.network_name = _get_random_string(20)
+        self.network_id = test_config["vim_conn"].new_network(net_name=self.network_name,
+                                                                       net_type='bridge')
+
+    def tearDown(self):
+        test_base.tearDown(self)
+        # Deleting created network
+        result = test_config["vim_conn"].delete_network(self.network_id)
+        if result:
+            logger.info("Network id {} sucessfully deleted".format(self.network_id))
+        else:
+            logger.info("Failed to delete network id {}".format(self.network_id))
+
+    def test_000_vminstance_by_numa_affinity(self):
+        flavor_data = {'extended': {'numas': [{'paired-threads-id': [['1', '3'], ['2', '4']],
+                                                                        ' paired-threads': 2,                                                                                                                                  'memory': 1}]},
+                                                         'ram': 1024, 'vcpus': 1, 'disk': 10}
+        name = "eth10"
+
+        # create new flavor
+        flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
+
+        # find image name and image id
+        image_id = get_image_id()
+
+        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+                                                            self.__class__.test_index,
+                                                inspect.currentframe().f_code.co_name)
+        self.__class__.test_index += 1
+
+        net_list = [{'use': 'bridge', 'name': name, 'floating_ip': False, 'port_security': True,
+                                        'type': 'virtual', 'net_id': self.network_id}]
+
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=image_id,
+                                                            flavor_id=flavor_id, net_list=net_list)
+
+        self.assertEqual(type(instance_id),str)
+        logger.info("Deleting created vm instance")
+        test_config["vim_conn"].delete_vminstance(instance_id)
+        time.sleep(10)
 
 
 '''
@@ -1542,13 +2121,14 @@ def test_vimconnector(args):
 
         tenant_name = args.tenant_name
         test_config['tenant'] = tenant_name
-        config_params = json.loads(args.config_param)
+        config_params = yaml.load(args.config_param)
         org_name = config_params.get('orgname')
         org_user = config_params.get('user')
         org_passwd = config_params.get('passwd')
         vim_url = args.endpoint_url
         test_config['image_path'] = args.image_path
         test_config['image_name'] = args.image_name
+        test_config['sriov_net_name'] = args.sriov_net_name
 
         # vmware connector obj
         test_config['vim_conn'] = vim.vimconnector(name=org_name, tenant_name=tenant_name, user=org_user,passwd=org_passwd, url=vim_url, config=config_params)
@@ -1557,6 +2137,30 @@ def test_vimconnector(args):
         import vimconn_aws as vim
     elif args.vimtype == "openstack":
         import vimconn_openstack as vim
+
+        test_config["test_directory"] = os.path.dirname(__file__) + "/RO_tests"
+
+        tenant_name = args.tenant_name
+        test_config['tenant'] = tenant_name
+        config_params = yaml.load(args.config_param)
+        os_user = config_params.get('user')
+        os_passwd = config_params.get('passwd')
+        vim_url = args.endpoint_url
+        test_config['image_path'] = args.image_path
+        test_config['image_name'] = args.image_name
+        test_config['sriov_net_name'] = args.sriov_net_name
+
+        # openstack connector obj
+        vim_persistent_info = {}
+        test_config['vim_conn'] = vim.vimconnector(
+            uuid="test-uuid-1", name="VIO-openstack",
+            tenant_id=None, tenant_name=tenant_name,
+            url=vim_url, url_admin=None,
+            user=os_user, passwd=os_passwd,
+            config=config_params, persistent_info=vim_persistent_info
+        )
+        test_config['vim_conn'].debug = "true"
+
     elif args.vimtype == "openvim":
         import vimconn_openvim as vim
     else:
@@ -1569,7 +2173,7 @@ def test_vimconnector(args):
     if args.list_tests:
         tests_names = []
         for cls in clsmembers:
-            if cls[0].startswith('test_vimconnector'):
+            if cls[0].startswith('test_vimconn'):
                 tests_names.append(cls[0])
 
         msg = "The 'vim' set tests are:\n\t" + ', '.join(sorted(tests_names))
@@ -1592,7 +2196,7 @@ def test_vimconnector(args):
         # include all tests
         for cls in clsmembers:
             # We exclude 'test_VIM_tenant_operations' unless it is specifically requested by the user
-            if cls[0].startswith('test_vimconnector'):
+            if cls[0].startswith('test_vimconn'):
                 code_based_tests.append(cls[1])
 
     logger.debug("tests to be executed: {}".format(code_based_tests))
@@ -1874,6 +2478,7 @@ if __name__=="__main__":
     vimconn_parser.add_argument('-n', '--image-name', dest='image_name', help="Provide image name for test")
     # TODO add optional arguments for vimconn tests
     # vimconn_parser.add_argument("-i", '--image-name', dest='image_name', help='<HELP>'))
+    vimconn_parser.add_argument('-s', '--sriov-net-name', dest='sriov_net_name', help="Provide SRIOV network name for test")
 
     # Datacenter test set
     # -------------------

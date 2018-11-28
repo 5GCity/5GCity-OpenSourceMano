@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openmano
 # All Rights Reserved.
 #
@@ -36,7 +36,7 @@ import time
 import sys
 import getopt
 import yaml
-from os import getenv as os_getenv, path as os_path
+from os import environ, path as os_path
 from jsonschema import validate as js_v, exceptions as js_e
 import logging
 import logging.handlers as log_handlers
@@ -51,9 +51,8 @@ import osm_ro
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ = "$26-aug-2014 11:09:29$"
 __version__ = "0.6.00"
-version_date = "Sep 2018"
+version_date = "Nov 2018"
 database_version = 34      # expected database schema version
-
 
 global global_config
 global logger
@@ -157,17 +156,21 @@ def set_logging_file(log_file):
 
 
 if __name__=="__main__":
-    env_config = {
-        'db_host': 'RO_DB_HOST',
-        'db_name': 'RO_DB_NAME',
-        'db_user': 'RO_DB_USER',
-        'db_passwd': 'RO_DB_PASSWORD',
-        'db_ovim_host': 'RO_DB_OVIM_HOST',
-        'db_ovim_name': 'RO_DB_OVIM_NAME',
-        'db_ovim_user': 'RO_DB_OVIM_USER',
-        'db_ovim_passwd': 'RO_DB_OVIM_PASSWORD',
-        'db_port': 'RO_DB_PORT',
-        'db_port': 'RO_DB_PORT',
+    # env2config contains envioron variable names and the correspondence with configuration file openmanod.cfg keys.
+    # If this environ is defined, this value is taken instead of the one at at configuration file
+    env2config = {
+        'RO_DB_HOST': 'db_host',
+        'RO_DB_NAME': 'db_name',
+        'RO_DB_USER': 'db_user',
+        'RO_DB_PASSWORD': 'db_passwd',
+        # 'RO_DB_PORT': 'db_port',
+        'RO_DB_OVIM_HOST': 'db_ovim_host',
+        'RO_DB_OVIM_NAME': 'db_ovim_name',
+        'RO_DB_OVIM_USER': 'db_ovim_user',
+        'RO_DB_OVIM_PASSWORD': 'db_ovim_passwd',
+        # 'RO_DB_OVIM_PORT': 'db_ovim_port',
+        'RO_LOG_LEVEL': 'log_level',
+        'RO_LOG_FILE': 'log_file',
     }
     # Configure logging step 1
     hostname = socket.gethostname()
@@ -177,7 +180,7 @@ if __name__=="__main__":
                                                'severity:%(levelname)s logger:%(name)s log:%(message)s'.format(
                                                     host=hostname),
                                                datefmt='%Y-%m-%dT%H:%M:%S')
-    log_format_simple =  "%(asctime)s %(levelname)s  %(name)s %(filename)s:%(lineno)s %(message)s"
+    log_format_simple =  "%(asctime)s %(levelname)s  %(name)s %(thread)d %(filename)s:%(lineno)s %(message)s"
     log_formatter_simple = logging.Formatter(log_format_simple, datefmt='%Y-%m-%dT%H:%M:%S')
     logging.basicConfig(format=log_format_simple, level= logging.DEBUG)
     logger = logging.getLogger('openmano')
@@ -242,10 +245,15 @@ if __name__=="__main__":
             global_config['log_socket_port'] = log_socket_port
 
         # override with ENV
-        for config_key, env_var in env_config.items():
-            if os_getenv(env_var):
-                global_config[config_key] = os_getenv(env_var)
-
+        for env_k, env_v in environ.items():
+            try:
+                if not env_k.startswith("RO_") or env_k not in env2config or not env_v:
+                    continue
+                global_config[env2config[env_k]] = env_v
+                if env_k.endswith("PORT"):    # convert to int, skip if not possible
+                    global_config[env2config[env_k]] = int(env_v)
+            except Exception as e:
+                logger.warn("skipping environ '{}={}' because exception '{}'".format(env_k, env_v, e))
 
 #         if vnf_repository is not None:
 #             global_config['vnf_repository'] = vnf_repository

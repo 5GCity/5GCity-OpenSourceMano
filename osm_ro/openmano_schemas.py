@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openmano
 # All Rights Reserved.
 #
@@ -37,7 +37,8 @@ description_schema={"type" : ["string","null"], "maxLength":255, "pattern" : "^[
 id_schema_fake = {"type" : "string", "minLength":2, "maxLength":36 }  #"pattern": "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
 id_schema = {"type" : "string", "pattern": "^[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$"}
 pci_schema={"type":"string", "pattern":"^[0-9a-fA-F]{4}(:[0-9a-fA-F]{2}){2}\.[0-9a-fA-F]$"}
-pci_extended_schema = {"type": "string", "pattern": "^[0-9a-fA-F.:-\[\]]$"}
+# allows [] for wildcards. For that reason huge length limit is set
+pci_extended_schema = {"type": "string", "pattern": "^[0-9a-fA-F.:-\[\]]{12,40}$"}
 
 http_schema={"type":"string", "pattern":"^https?://[^'\"=]+$"}
 bandwidth_schema={"type":"string", "pattern" : "^[0-9]+ *([MG]bps)?$"}
@@ -466,7 +467,7 @@ bridge_interfaces_schema={
             "bandwidth":bandwidth_schema,
             "vpci":pci_schema,
             "mac_address": mac_schema,
-            "model": {"type":"string", "enum":["virtio","e1000","ne2k_pci","pcnet","rtl8139"]},
+            "model": {"type":"string", "enum":["virtio","e1000","ne2k_pci","pcnet","rtl8139", "paravirt"]},
             "port-security": {"type" : "boolean"},
             "floating-ip": {"type" : "boolean"}
         },
@@ -964,19 +965,45 @@ scenario_action_schema = {
     "additionalProperties": False
 }
 
-instance_scenario_create_schema_v01 = {
-    "title":"instance scenario create information schema v0.1",
+instance_scenario_object = {
+    "title": "scenario object used to create an instance not based on any nsd",
     "$schema": "http://json-schema.org/draft-04/schema#",
-    "type":"object",
-    "properties":{
+    "type": "object",
+    "properties": {
+        "nets": {
+            "type": "array",
+            "minLength": 1,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": name_schema,
+                    "external": {"type": "boolean"},
+                    "type": {"enum": ["bridge", "ptp", "data"]},  # for overlay, underlay E-LINE, underlay E-LAN
+                },
+                "additionalProperties": False,
+                "required": ["name", "external", "type"]
+            }
+        }
+    },
+    "additionalProperties": False,
+    "required": ["nets"]
+}
+
+instance_scenario_create_schema_v01 = {
+    "title": "instance scenario create information schema v0.1",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type": "object",
+    "properties": {
         "schema_version": {"type": "string", "enum": ["0.1"]},
-        "instance":{
-            "type":"object",
-            "properties":{
-                "name":name_schema,
+        "instance": {
+            "type": "object",
+            "properties": {
+                "mgmt_keys": {"type": "array", "items": {"type":"string"}},
+                "vduImage": name_schema,
+                "name": name_schema,
                 "description":description_schema,
                 "datacenter": name_schema,
-                "scenario" : name_schema, #can be an UUID or name
+                "scenario" : {"oneOff": [name_schema, instance_scenario_object]},  # can be an UUID or name or a dict
                 "action":{"enum": ["deploy","reserve","verify" ]},
                 "connect_mgmt_interfaces": {"oneOf": [{"type":"boolean"}, {"type":"object"}]},# can be true or a dict with datacenter: net_name
                 "cloud-config": cloud_config_schema, #common to all vnfs in the instance scenario
@@ -997,7 +1024,9 @@ instance_scenario_create_schema_v01 = {
                                         ".": {
                                             "type": "object",
                                             "properties": {
-                                                "name": name_schema, # overrides vdu name schema
+                                                "name": name_schema,  # overrides vdu name schema
+                                                "mgmt_keys": {"type": "array", "items": {"type": "string"}},
+                                                "vduImage": name_schema,
                                                 "devices": {
                                                     "type": "object",
                                                     "patternProperties": {

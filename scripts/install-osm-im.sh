@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openmano
 # All Rights Reserved.
 #
@@ -30,6 +30,50 @@
 [ -z "$NO_PACKAGES" ] && NO_PACKAGES=""
 [ -z "$_DISTRO" ] && _DISTRO="Ubuntu"
 
+function usage(){
+    echo -e "usage: sudo -E $0 [OPTIONS]"
+    echo -e "Install last stable source code of osm-im and the needed packages"
+    echo -e "  OPTIONS"
+    echo -e "     -h --help:  show this help"
+    echo -e "     -b REFSPEC: install from source code using a specific branch (master, v2.0, ...) or tag"
+    echo -e "                    -b master          (main branch)"
+    echo -e "                    -b v2.0            (v2.0 branch)"
+    echo -e "                    -b tags/v1.1.0     (a specific tag)"
+    echo -e "                    ..."
+    echo -e "     --develop:  install last master version for developers"
+    echo -e "     --no-install-packages: use this option to skip updating and installing the requires packages. This" \
+            "avoid wasting time if you are sure requires packages are present e.g. because of a previous installation"
+}
+while getopts ":b:h-:" o; do
+    case "${o}" in
+        b)
+            export COMMIT_ID=${OPTARG}
+            ;;
+        h)
+            usage && exit 0
+            ;;
+        -)
+            [ "${OPTARG}" == "help" ] && usage && exit 0
+            [ "${OPTARG}" == "develop" ] && export DEVELOP="y" && continue
+            [ "${OPTARG}" == "quiet" ] && export QUIET_MODE=yes && export DEBIAN_FRONTEND=noninteractive && continue
+            [ "${OPTARG}" == "no-install-packages" ] && export NO_PACKAGES=yes && continue
+            echo -e "Invalid option: '--$OPTARG'\nTry $0 --help for more information" >&2
+            exit 1
+            ;;
+        \?)
+            echo -e "Invalid option: '-$OPTARG'\nTry $0 --help for more information" >&2
+            exit 1
+            ;;
+        :)
+            echo -e "Option '-$OPTARG' requires an argument\nTry $0 --help for more information" >&2
+            exit 1
+            ;;
+        *)
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
 
 su $SUDO_USER -c "git -C ${BASEFOLDER} clone ${GIT_OSMIM_URL} IM" ||
     ! echo "Error cannot clone from '${GIT_OSMIM_URL}'" >&2 || exit 1

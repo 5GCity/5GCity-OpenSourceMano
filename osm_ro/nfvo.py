@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openmano
 # All Rights Reserved.
 #
@@ -989,6 +989,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
             cp_name2iface_uuid = {}
             cp_name2vm_uuid = {}
             cp_name2db_interface = {}
+            vdu_id2cp_name = {}  # stored only when one external connection point is presented at this VDU
 
             # table vms (vdus)
             vdu_id2uuid = {}
@@ -1006,6 +1007,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     "osm_id": vdu_id,
                     "name": get_str(vdu, "name", 255),
                     "description": get_str(vdu, "description", 255),
+                    "pdu_type": get_str(vdu, "pdu-type", 255),
                     "vnf_id": vnf_uuid,
                 }
                 vdu_id2uuid[db_vm["osm_id"]] = vm_uuid
@@ -1095,7 +1097,6 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
 
                 # table interfaces (internal/external interfaces)
                 flavor_epa_interfaces = []
-                vdu_id2cp_name = {}  # stored only when one external connection point is presented at this VDU
                 # for iface in chain(vdu.get("internal-interface").itervalues(), vdu.get("external-interface").itervalues()):
                 for iface in vdu.get("interface").itervalues():
                     flavor_epa_interface = {}
@@ -1118,7 +1119,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
 
                     if iface.get("virtual-interface").get("type") == "OM-MGMT":
                         db_interface["type"] = "mgmt"
-                    elif iface.get("virtual-interface").get("type") in ("VIRTIO", "E1000"):
+                    elif iface.get("virtual-interface").get("type") in ("VIRTIO", "E1000", "PARAVIRT"):
                         db_interface["type"] = "bridge"
                         db_interface["model"] = get_str(iface.get("virtual-interface"), "type", 12)
                     elif iface.get("virtual-interface").get("type") in ("SR-IOV", "PCI-PASSTHROUGH"):
@@ -1286,7 +1287,8 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                             "'member-vdus':'{vdu}'. Reference to a non-existing vdu".format(
                                                 vnf=vnfd_id, pg=pg_name, vdu=vdu_id),
                                             httperrors.Bad_Request)
-                    db_vms[vdu_id2db_table_index[vdu_id]]["availability_zone"] = pg_name
+                    if vdu_id2db_table_index[vdu_id]:
+                        db_vms[vdu_id2db_table_index[vdu_id]]["availability_zone"] = pg_name
                     # TODO consider the case of isolation and not colocation
                     # if pg.get("strategy") == "ISOLATION":
 
@@ -1302,20 +1304,22 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                 mgmt_access["vm_id"] = vdu_id2uuid[vnfd["mgmt-interface"]["vdu-id"]]
                 # if only one cp is defined by this VDU, mark this interface as of type "mgmt"
                 if vdu_id2cp_name.get(mgmt_vdu_id):
-                    cp_name2db_interface[vdu_id2cp_name[mgmt_vdu_id]]["type"] = "mgmt"
+                    if cp_name2db_interface[vdu_id2cp_name[mgmt_vdu_id]]:
+                        cp_name2db_interface[vdu_id2cp_name[mgmt_vdu_id]]["type"] = "mgmt"
 
             if vnfd["mgmt-interface"].get("ip-address"):
                 mgmt_access["ip-address"] = str(vnfd["mgmt-interface"].get("ip-address"))
             if vnfd["mgmt-interface"].get("cp"):
                 if vnfd["mgmt-interface"]["cp"] not in cp_name2iface_uuid:
-                    raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'mgmt-interface':'cp':'{cp}'. "
+                    raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'mgmt-interface':'cp'['{cp}']. "
                                         "Reference to a non-existing connection-point".format(
                                             vnf=vnfd_id, cp=vnfd["mgmt-interface"]["cp"]),
                                         httperrors.Bad_Request)
                 mgmt_access["vm_id"] = cp_name2vm_uuid[vnfd["mgmt-interface"]["cp"]]
                 mgmt_access["interface_id"] = cp_name2iface_uuid[vnfd["mgmt-interface"]["cp"]]
                 # mark this interface as of type mgmt
-                cp_name2db_interface[vnfd["mgmt-interface"]["cp"]]["type"] = "mgmt"
+                if cp_name2db_interface[vnfd["mgmt-interface"]["cp"]]:
+                    cp_name2db_interface[vnfd["mgmt-interface"]["cp"]]["type"] = "mgmt"
 
             default_user = get_str(vnfd.get("vnf-configuration", {}).get("config-access", {}).get("ssh-access", {}),
                                     "default-user", 64)
@@ -1646,15 +1650,15 @@ def get_vnf_id(mydb, tenant_id, vnf_id):
             SELECT=('vms.uuid as uuid', 'vms.osm_id as osm_id', 'vms.name as name', 'vms.description as description',
                     'boot_data'),
             WHERE={'vnfs.uuid': vnf_id} )
-    if len(content)==0:
-        raise NfvoException("vnf '{}' not found".format(vnf_id), httperrors.Not_Found)
+    if len(content) != 0:
+        #raise NfvoException("vnf '{}' not found".format(vnf_id), httperrors.Not_Found)
     # change boot_data into boot-data
-    for vm in content:
-        if vm.get("boot_data"):
-            vm["boot-data"] = yaml.safe_load(vm["boot_data"])
-            del vm["boot_data"]
+        for vm in content:
+            if vm.get("boot_data"):
+                vm["boot-data"] = yaml.safe_load(vm["boot_data"])
+                del vm["boot_data"]
 
-    data['vnf']['VNFC'] = content
+        data['vnf']['VNFC'] = content
     #TODO: GET all the information from a VNFC and include it in the output.
 
     #GET NET
@@ -2982,8 +2986,12 @@ def create_instance(mydb, tenant_id, instance_dict):
     rollbackList = []
 
     # print "Checking that the scenario exists and getting the scenario dictionary"
-    scenarioDict = mydb.get_scenario(scenario, tenant_id, datacenter_vim_id=myvim_threads_id[default_datacenter_id],
-                                     datacenter_id=default_datacenter_id)
+    if isinstance(scenario, str):
+        scenarioDict = mydb.get_scenario(scenario, tenant_id, datacenter_vim_id=myvim_threads_id[default_datacenter_id],
+                                         datacenter_id=default_datacenter_id)
+    else:
+        scenarioDict = scenario
+        scenarioDict["uuid"] = None
 
     # logger.debug(">>>>>> Dictionaries before merging")
     # logger.debug(">>>>>> InstanceDict:\n{}".format(yaml.safe_dump(instance_dict,default_flow_style=False, width=256)))
@@ -3154,9 +3162,10 @@ def create_instance(mydb, tenant_id, instance_dict):
         number_mgmt_networks = 0
         db_instance_nets = []
         for sce_net in scenarioDict['nets']:
+            sce_net_uuid = sce_net.get('uuid', sce_net["name"])
             # get involved datacenters where this network need to be created
             involved_datacenters = []
-            for sce_vnf in scenarioDict.get("vnfs"):
+            for sce_vnf in scenarioDict.get("vnfs", ()):
                 vnf_datacenter = sce_vnf.get("datacenter", default_datacenter_id)
                 if vnf_datacenter in involved_datacenters:
                     continue
@@ -3165,13 +3174,20 @@ def create_instance(mydb, tenant_id, instance_dict):
                         if sce_vnf_ifaces.get("sce_net_id") == sce_net["uuid"]:
                             involved_datacenters.append(vnf_datacenter)
                             break
+            if not involved_datacenters:
+                involved_datacenters.append(default_datacenter_id)
 
             descriptor_net = {}
             if instance_dict.get("networks") and instance_dict["networks"].get(sce_net["name"]):
                 descriptor_net = instance_dict["networks"][sce_net["name"]]
             net_name = descriptor_net.get("vim-network-name")
-            sce_net2instance[sce_net['uuid']] = {}
-            net2task_id['scenario'][sce_net['uuid']] = {}
+            # add datacenters from instantiation parameters
+            if descriptor_net.get("sites"):
+                for site in descriptor_net["sites"]:
+                    if site.get("datacenter") and site["datacenter"] not in involved_datacenters:
+                        involved_datacenters.append(site["datacenter"])
+            sce_net2instance[sce_net_uuid] = {}
+            net2task_id['scenario'][sce_net_uuid] = {}
 
             if sce_net["external"]:
                 number_mgmt_networks += 1
@@ -3190,6 +3206,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                 myvim_thread_id = myvim_threads_id[datacenter_id]
 
                 net_type = sce_net['type']
+                net_vim_name = None
                 lookfor_filter = {'admin_state_up': True, 'status': 'ACTIVE'}  # 'shared': True
 
                 if not net_name:
@@ -3258,12 +3275,13 @@ def create_instance(mydb, tenant_id, instance_dict):
                 # fill database content
                 net_uuid = str(uuid4())
                 uuid_list.append(net_uuid)
-                sce_net2instance[sce_net['uuid']][datacenter_id] = net_uuid
+                sce_net2instance[sce_net_uuid][datacenter_id] = net_uuid
                 db_net = {
                     "uuid": net_uuid,
                     'vim_net_id': None,
+                    "vim_name": net_vim_name,
                     "instance_scenario_id": instance_uuid,
-                    "sce_net_id": sce_net["uuid"],
+                    "sce_net_id": sce_net.get("uuid"),
                     "created": create_network,
                     'datacenter_id': datacenter_id,
                     'datacenter_tenant_id': myvim_thread_id,
@@ -3280,7 +3298,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                     "item_id": net_uuid,
                     "extra": yaml.safe_dump(task_extra, default_flow_style=True, width=256)
                 }
-                net2task_id['scenario'][sce_net['uuid']][datacenter_id] = task_index
+                net2task_id['scenario'][sce_net_uuid][datacenter_id] = task_index
                 task_index += 1
                 db_vim_actions.append(db_vim_action)
 
@@ -3307,6 +3325,7 @@ def create_instance(mydb, tenant_id, instance_dict):
             "myvims": myvims,
             "cloud_config": cloud_config,
             "RO_pub_key": tenant[0].get('RO_pub_key'),
+            "instance_parameters": instance_dict,
         }
         vnf_params_out = {
             "task_index": task_index,
@@ -3321,14 +3340,14 @@ def create_instance(mydb, tenant_id, instance_dict):
             "sce_net2instance": sce_net2instance,
         }
         # sce_vnf_list = sorted(scenarioDict['vnfs'], key=lambda k: k['name'])
-        for sce_vnf in scenarioDict['vnfs']:  # sce_vnf_list:
+        for sce_vnf in scenarioDict.get('vnfs', ()):  # sce_vnf_list:
             instantiate_vnf(mydb, sce_vnf, vnf_params, vnf_params_out, rollbackList)
         task_index = vnf_params_out["task_index"]
         uuid_list = vnf_params_out["uuid_list"]
 
         # Create VNFFGs
         # task_depends_on = []
-        for vnffg in scenarioDict['vnffgs']:
+        for vnffg in scenarioDict.get('vnffgs', ()):
             for rsp in vnffg['rsps']:
                 sfs_created = []
                 for cp in rsp['connection_points']:
@@ -3585,6 +3604,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         db_net = {
             "uuid": net_uuid,
             'vim_net_id': None,
+            "vim_name": net_name,
             "instance_scenario_id": instance_uuid,
             "net_id": net["uuid"],
             "created": True,
@@ -3636,7 +3656,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
     if sce_vnf.get('mgmt_access'):
         ssh_access = sce_vnf['mgmt_access'].get('config-access', {}).get('ssh-access')
     vnf_availability_zones = []
-    for vm in sce_vnf['vms']:
+    for vm in sce_vnf.get('vms'):
         vm_av = vm.get('availability_zone')
         if vm_av and vm_av not in vnf_availability_zones:
             vnf_availability_zones.append(vm_av)
@@ -3670,6 +3690,10 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
     db_instance_vnfs.append(db_instance_vnf)
 
     for vm in sce_vnf['vms']:
+        # skip PDUs
+        if vm.get("pdu_type"):
+            continue
+
         myVMDict = {}
         sce_vnf_name = sce_vnf['member_vnf_index'] if sce_vnf['member_vnf_index'] else sce_vnf['name']
         myVMDict['name'] = "{}-{}-{}".format(instance_name[:64], sce_vnf_name[:64], vm["name"][:64])
@@ -3721,6 +3745,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         myVMDict['networks'] = []
         task_depends_on = []
         # TODO ALF. connect_mgmt_interfaces. Connect management interfaces if this is true
+        is_management_vm = False
         db_vm_ifaces = []
         for iface in vm['interfaces']:
             netDict = {}
@@ -3753,7 +3778,10 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                             Try to delete and create the scenarios and VNFs again", httperrors.Conflict)
                 else:
                     raise NfvoException(e_text, httperrors.Internal_Server_Error)
-            if netDict["use"] == "mgmt" or netDict["use"] == "bridge":
+            if netDict["use"] == "mgmt":
+                is_management_vm = True
+                netDict["type"] = "virtual"
+            if netDict["use"] == "bridge":
                 netDict["type"] = "virtual"
             if iface.get("vpci"):
                 netDict['vpci'] = iface['vpci']
@@ -3807,9 +3835,16 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
 
         # We add the RO key to cloud_config if vnf will need ssh access
         cloud_config_vm = cloud_config
-        if ssh_access and ssh_access['required'] and ssh_access['default-user'] and tenant[0].get('RO_pub_key'):
-            RO_key = {"key-pairs": [tenant[0]['RO_pub_key']]}
-            cloud_config_vm = unify_cloud_config(cloud_config_vm, RO_key)
+        if is_management_vm and params["instance_parameters"].get("mgmt_keys"):
+            cloud_config_vm = unify_cloud_config({"key-pairs": params["instance_parameters"]["mgmt_keys"]},
+                                                  cloud_config_vm)
+
+        if vm.get("instance_parameters") and vm["instance_parameters"].get("mgmt_keys"):
+            cloud_config_vm = unify_cloud_config({"key-pairs": vm["instance_parameters"]["mgmt_keys"]},
+                                                 cloud_config_vm)
+        # if ssh_access and ssh_access['required'] and ssh_access['default-user'] and tenant[0].get('RO_pub_key'):
+        #     RO_key = {"key-pairs": [tenant[0]['RO_pub_key']]}
+        #     cloud_config_vm = unify_cloud_config(cloud_config_vm, RO_key)
         if vm.get("boot_data"):
             cloud_config_vm = unify_cloud_config(vm["boot_data"], cloud_config_vm)
 
@@ -3916,101 +3951,13 @@ def delete_instance(mydb, tenant_id, instance_id):
         # "number_tasks": 0 # filled bellow
     }
 
-    # 2.1 deleting VMs
-    # vm_fail_list=[]
-    for sce_vnf in instanceDict['vnfs']:
-        datacenter_key = (sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
-        vimthread_affected[sce_vnf["datacenter_tenant_id"]] = None
-        if datacenter_key not in myvims:
-            try:
-                _,myvim_thread = get_vim_thread(mydb, tenant_id, sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
-            except NfvoException as e:
-                logger.error(str(e))
-                myvim_thread = None
-            myvim_threads[datacenter_key] = myvim_thread
-            vims = get_vim(mydb, tenant_id, datacenter_id=sce_vnf["datacenter_id"],
-                       datacenter_tenant_id=sce_vnf["datacenter_tenant_id"])
-            if len(vims) == 0:
-                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(sce_vnf["datacenter_id"],
-                                                                                        sce_vnf["datacenter_tenant_id"]))
-                myvims[datacenter_key] = None
-            else:
-                myvims[datacenter_key] = vims.values()[0]
-        myvim = myvims[datacenter_key]
-        myvim_thread = myvim_threads[datacenter_key]
-        for vm in sce_vnf['vms']:
-            if not myvim:
-                error_msg += "\n    VM id={} cannot be deleted because datacenter={} not found".format(vm['vim_vm_id'], sce_vnf["datacenter_id"])
-                continue
-            db_vim_action = {
-                "instance_action_id": instance_action_id,
-                "task_index": task_index,
-                "datacenter_vim_id": sce_vnf["datacenter_tenant_id"],
-                "action": "DELETE",
-                "status": "SCHEDULED",
-                "item": "instance_vms",
-                "item_id": vm["uuid"],
-                "extra": yaml.safe_dump({"params": vm["interfaces"]},
-                                        default_flow_style=True, width=256)
-            }
-            db_vim_actions.append(db_vim_action)
-            for interface in vm["interfaces"]:
-                if not interface.get("instance_net_id"):
-                    continue
-                if interface["instance_net_id"] not in net2vm_dependencies:
-                    net2vm_dependencies[interface["instance_net_id"]] = []
-                net2vm_dependencies[interface["instance_net_id"]].append(task_index)
-            task_index += 1
-
-    # 2.2 deleting NETS
-    # net_fail_list=[]
-    for net in instanceDict['nets']:
-        vimthread_affected[net["datacenter_tenant_id"]] = None
-        datacenter_key = (net["datacenter_id"], net["datacenter_tenant_id"])
-        if datacenter_key not in myvims:
-            try:
-                _,myvim_thread = get_vim_thread(mydb, tenant_id, sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
-            except NfvoException as e:
-                logger.error(str(e))
-                myvim_thread = None
-            myvim_threads[datacenter_key] = myvim_thread
-            vims = get_vim(mydb, tenant_id, datacenter_id=net["datacenter_id"],
-                           datacenter_tenant_id=net["datacenter_tenant_id"])
-            if len(vims) == 0:
-                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(net["datacenter_id"], net["datacenter_tenant_id"]))
-                myvims[datacenter_key] = None
-            else:
-                myvims[datacenter_key] = vims.values()[0]
-        myvim = myvims[datacenter_key]
-        myvim_thread = myvim_threads[datacenter_key]
-
-        if not myvim:
-            error_msg += "\n    Net VIM_id={} cannot be deleted because datacenter={} not found".format(net['vim_net_id'], net["datacenter_id"])
-            continue
-        extra = {"params": (net['vim_net_id'], net['sdn_net_id'])}
-        if net2vm_dependencies.get(net["uuid"]):
-            extra["depends_on"] = net2vm_dependencies[net["uuid"]]
-        db_vim_action = {
-            "instance_action_id": instance_action_id,
-            "task_index": task_index,
-            "datacenter_vim_id": net["datacenter_tenant_id"],
-            "action": "DELETE",
-            "status": "SCHEDULED",
-            "item": "instance_nets",
-            "item_id": net["uuid"],
-            "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
-        }
-        task_index += 1
-        db_vim_actions.append(db_vim_action)
-
-    # 2.3 deleting VNFFGs
-
+    # 2.1 deleting VNFFGs
     for sfp in instanceDict.get('sfps', ()):
         vimthread_affected[sfp["datacenter_tenant_id"]] = None
         datacenter_key = (sfp["datacenter_id"], sfp["datacenter_tenant_id"])
         if datacenter_key not in myvims:
             try:
-                _,myvim_thread = get_vim_thread(mydb, tenant_id, sfp["datacenter_id"], sfp["datacenter_tenant_id"])
+                _, myvim_thread = get_vim_thread(mydb, tenant_id, sfp["datacenter_id"], sfp["datacenter_tenant_id"])
             except NfvoException as e:
                 logger.error(str(e))
                 myvim_thread = None
@@ -4042,12 +3989,52 @@ def delete_instance(mydb, tenant_id, instance_id):
         task_index += 1
         db_vim_actions.append(db_vim_action)
 
+    for classification in instanceDict['classifications']:
+        vimthread_affected[classification["datacenter_tenant_id"]] = None
+        datacenter_key = (classification["datacenter_id"], classification["datacenter_tenant_id"])
+        if datacenter_key not in myvims:
+            try:
+                _, myvim_thread = get_vim_thread(mydb, tenant_id, classification["datacenter_id"], classification["datacenter_tenant_id"])
+            except NfvoException as e:
+                logger.error(str(e))
+                myvim_thread = None
+            myvim_threads[datacenter_key] = myvim_thread
+            vims = get_vim(mydb, tenant_id, datacenter_id=classification["datacenter_id"],
+                           datacenter_tenant_id=classification["datacenter_tenant_id"])
+            if len(vims) == 0:
+                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(classification["datacenter_id"],
+                                                                                               classification["datacenter_tenant_id"]))
+                myvims[datacenter_key] = None
+            else:
+                myvims[datacenter_key] = vims.values()[0]
+        myvim = myvims[datacenter_key]
+        myvim_thread = myvim_threads[datacenter_key]
+
+        if not myvim:
+            error_msg += "\n    vim_classification_id={} cannot be deleted because datacenter={} not found".format(classification['vim_classification_id'],
+                                                                                                                   classification["datacenter_id"])
+            continue
+        depends_on = [action["task_index"] for action in db_vim_actions if action["item"] == "instance_sfps"]
+        extra = {"params": (classification['vim_classification_id']), "depends_on": depends_on}
+        db_vim_action = {
+            "instance_action_id": instance_action_id,
+            "task_index": task_index,
+            "datacenter_vim_id": classification["datacenter_tenant_id"],
+            "action": "DELETE",
+            "status": "SCHEDULED",
+            "item": "instance_classifications",
+            "item_id": classification["uuid"],
+            "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
+        }
+        task_index += 1
+        db_vim_actions.append(db_vim_action)
+
     for sf in instanceDict.get('sfs', ()):
         vimthread_affected[sf["datacenter_tenant_id"]] = None
         datacenter_key = (sf["datacenter_id"], sf["datacenter_tenant_id"])
         if datacenter_key not in myvims:
             try:
-                _,myvim_thread = get_vim_thread(mydb, tenant_id, sf["datacenter_id"], sf["datacenter_tenant_id"])
+                _, myvim_thread = get_vim_thread(mydb, tenant_id, sf["datacenter_id"], sf["datacenter_tenant_id"])
             except NfvoException as e:
                 logger.error(str(e))
                 myvim_thread = None
@@ -4065,7 +4052,8 @@ def delete_instance(mydb, tenant_id, instance_id):
         if not myvim:
             error_msg += "\n    vim_sf_id={} cannot be deleted because datacenter={} not found".format(sf['vim_sf_id'], sf["datacenter_id"])
             continue
-        extra = {"params": (sf['vim_sf_id'])}
+        depends_on = [action["task_index"] for action in db_vim_actions if action["item"] == "instance_sfps"]
+        extra = {"params": (sf['vim_sf_id']), "depends_on": depends_on}
         db_vim_action = {
             "instance_action_id": instance_action_id,
             "task_index": task_index,
@@ -4084,7 +4072,7 @@ def delete_instance(mydb, tenant_id, instance_id):
         datacenter_key = (sfi["datacenter_id"], sfi["datacenter_tenant_id"])
         if datacenter_key not in myvims:
             try:
-                _,myvim_thread = get_vim_thread(mydb, tenant_id, sfi["datacenter_id"], sfi["datacenter_tenant_id"])
+                _, myvim_thread = get_vim_thread(mydb, tenant_id, sfi["datacenter_id"], sfi["datacenter_tenant_id"])
             except NfvoException as e:
                 logger.error(str(e))
                 myvim_thread = None
@@ -4102,7 +4090,8 @@ def delete_instance(mydb, tenant_id, instance_id):
         if not myvim:
             error_msg += "\n    vim_sfi_id={} cannot be deleted because datacenter={} not found".format(sfi['vim_sfi_id'], sfi["datacenter_id"])
             continue
-        extra = {"params": (sfi['vim_sfi_id'])}
+        depends_on = [action["task_index"] for action in db_vim_actions if action["item"] == "instance_sfs"]
+        extra = {"params": (sfi['vim_sfi_id']), "depends_on": depends_on}
         db_vim_action = {
             "instance_action_id": instance_action_id,
             "task_index": task_index,
@@ -4116,20 +4105,70 @@ def delete_instance(mydb, tenant_id, instance_id):
         task_index += 1
         db_vim_actions.append(db_vim_action)
 
-    for classification in instanceDict['classifications']:
-        vimthread_affected[classification["datacenter_tenant_id"]] = None
-        datacenter_key = (classification["datacenter_id"], classification["datacenter_tenant_id"])
+    # 2.2 deleting VMs
+    # vm_fail_list=[]
+    for sce_vnf in instanceDict.get('vnfs', ()):
+        datacenter_key = (sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
+        vimthread_affected[sce_vnf["datacenter_tenant_id"]] = None
         if datacenter_key not in myvims:
             try:
-                _,myvim_thread = get_vim_thread(mydb, tenant_id, classification["datacenter_id"], classification["datacenter_tenant_id"])
+                _, myvim_thread = get_vim_thread(mydb, tenant_id, sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
             except NfvoException as e:
                 logger.error(str(e))
                 myvim_thread = None
             myvim_threads[datacenter_key] = myvim_thread
-            vims = get_vim(mydb, tenant_id, datacenter_id=classification["datacenter_id"],
-                           datacenter_tenant_id=classification["datacenter_tenant_id"])
+            vims = get_vim(mydb, tenant_id, datacenter_id=sce_vnf["datacenter_id"],
+                           datacenter_tenant_id=sce_vnf["datacenter_tenant_id"])
             if len(vims) == 0:
-                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(classification["datacenter_id"], classification["datacenter_tenant_id"]))
+                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(sce_vnf["datacenter_id"],
+                                                                                               sce_vnf["datacenter_tenant_id"]))
+                myvims[datacenter_key] = None
+            else:
+                myvims[datacenter_key] = vims.values()[0]
+        myvim = myvims[datacenter_key]
+        myvim_thread = myvim_threads[datacenter_key]
+
+        for vm in sce_vnf['vms']:
+            if not myvim:
+                error_msg += "\n    VM id={} cannot be deleted because datacenter={} not found".format(vm['vim_vm_id'], sce_vnf["datacenter_id"])
+                continue
+            sfi_dependencies = [action["task_index"] for action in db_vim_actions if action["item"] == "instance_sfis"]
+            db_vim_action = {
+                "instance_action_id": instance_action_id,
+                "task_index": task_index,
+                "datacenter_vim_id": sce_vnf["datacenter_tenant_id"],
+                "action": "DELETE",
+                "status": "SCHEDULED",
+                "item": "instance_vms",
+                "item_id": vm["uuid"],
+                "extra": yaml.safe_dump({"params": vm["interfaces"], "depends_on": sfi_dependencies},
+                                        default_flow_style=True, width=256)
+            }
+            db_vim_actions.append(db_vim_action)
+            for interface in vm["interfaces"]:
+                if not interface.get("instance_net_id"):
+                    continue
+                if interface["instance_net_id"] not in net2vm_dependencies:
+                    net2vm_dependencies[interface["instance_net_id"]] = []
+                net2vm_dependencies[interface["instance_net_id"]].append(task_index)
+            task_index += 1
+
+    # 2.3 deleting NETS
+    # net_fail_list=[]
+    for net in instanceDict['nets']:
+        vimthread_affected[net["datacenter_tenant_id"]] = None
+        datacenter_key = (net["datacenter_id"], net["datacenter_tenant_id"])
+        if datacenter_key not in myvims:
+            try:
+                _,myvim_thread = get_vim_thread(mydb, tenant_id, net["datacenter_id"], net["datacenter_tenant_id"])
+            except NfvoException as e:
+                logger.error(str(e))
+                myvim_thread = None
+            myvim_threads[datacenter_key] = myvim_thread
+            vims = get_vim(mydb, tenant_id, datacenter_id=net["datacenter_id"],
+                           datacenter_tenant_id=net["datacenter_tenant_id"])
+            if len(vims) == 0:
+                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(net["datacenter_id"], net["datacenter_tenant_id"]))
                 myvims[datacenter_key] = None
             else:
                 myvims[datacenter_key] = vims.values()[0]
@@ -4137,17 +4176,25 @@ def delete_instance(mydb, tenant_id, instance_id):
         myvim_thread = myvim_threads[datacenter_key]
 
         if not myvim:
-            error_msg += "\n    vim_classification_id={} cannot be deleted because datacenter={} not found".format(classification['vim_classification_id'], classification["datacenter_id"])
+            error_msg += "\n    Net VIM_id={} cannot be deleted because datacenter={} not found".format(net['vim_net_id'], net["datacenter_id"])
             continue
-        extra = {"params": (classification['vim_classification_id'])}
+        extra = {"params": (net['vim_net_id'], net['sdn_net_id'])}
+        if net2vm_dependencies.get(net["uuid"]):
+            extra["depends_on"] = net2vm_dependencies[net["uuid"]]
+        sfi_dependencies = [action["task_index"] for action in db_vim_actions if action["item"] == "instance_sfis"]
+        if len(sfi_dependencies) > 0:
+            if "depends_on" in extra:
+                extra["depends_on"] += sfi_dependencies
+            else:
+                extra["depends_on"] = sfi_dependencies
         db_vim_action = {
             "instance_action_id": instance_action_id,
             "task_index": task_index,
-            "datacenter_vim_id": classification["datacenter_tenant_id"],
+            "datacenter_vim_id": net["datacenter_tenant_id"],
             "action": "DELETE",
             "status": "SCHEDULED",
-            "item": "instance_classifications",
-            "item_id": classification["uuid"],
+            "item": "instance_nets",
+            "item_id": net["uuid"],
             "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
         }
         task_index += 1
@@ -4392,6 +4439,8 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
             "description": "SCALE",
         }
         vm_result["instance_action_id"] = instance_action_id
+        vm_result["created"] = []
+        vm_result["deleted"] = []
         task_index = 0
         for vdu in action_dict["vdu-scaling"]:
             vdu_id = vdu.get("vdu-id")
@@ -4399,56 +4448,60 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
             member_vnf_index = vdu.get("member-vnf-index")
             vdu_count = vdu.get("count", 1)
             if vdu_id:
-                target_vm = mydb.get_rows(
+                target_vms = mydb.get_rows(
                     FROM="instance_vms as vms join instance_vnfs as vnfs on vms.instance_vnf_id=vnfs.uuid",
                     WHERE={"vms.uuid": vdu_id},
                     ORDER_BY="vms.created_at"
                 )
-                if not target_vm:
+                if not target_vms:
                     raise NfvoException("Cannot find the vdu with id {}".format(vdu_id), httperrors.Not_Found)
             else:
                 if not osm_vdu_id and not member_vnf_index:
-                    raise NfvoException("Invalid imput vdu parameters. Must supply either 'vdu-id' of 'osm_vdu_id','member-vnf-index'")
-                target_vm = mydb.get_rows(
+                    raise NfvoException("Invalid input vdu parameters. Must supply either 'vdu-id' of 'osm_vdu_id','member-vnf-index'")
+                target_vms = mydb.get_rows(
                     # SELECT=("ivms.uuid", "ivnfs.datacenter_id", "ivnfs.datacenter_tenant_id"),
                     FROM="instance_vms as ivms join instance_vnfs as ivnfs on ivms.instance_vnf_id=ivnfs.uuid"\
                          " join sce_vnfs as svnfs on ivnfs.sce_vnf_id=svnfs.uuid"\
                          " join vms on ivms.vm_id=vms.uuid",
-                    WHERE={"vms.osm_id": osm_vdu_id, "svnfs.member_vnf_index": member_vnf_index},
+                    WHERE={"vms.osm_id": osm_vdu_id, "svnfs.member_vnf_index": member_vnf_index,
+                           "ivnfs.instance_scenario_id": instance_id},
                     ORDER_BY="ivms.created_at"
                 )
-                if not target_vm:
+                if not target_vms:
                     raise NfvoException("Cannot find the vdu with osm_vdu_id {} and member-vnf-index {}".format(osm_vdu_id, member_vnf_index), httperrors.Not_Found)
-                vdu_id = target_vm[-1]["uuid"]
-            vm_result[vdu_id] = {"created": [], "deleted": [], "description": "scheduled"}
-            target_vm = target_vm[-1]
+                vdu_id = target_vms[-1]["uuid"]
+            target_vm = target_vms[-1]
             datacenter = target_vm["datacenter_id"]
             myvim_threads_id[datacenter], _ = get_vim_thread(mydb, nfvo_tenant, datacenter)
-            if vdu["type"] == "delete":
-                # look for nm
-                vm_interfaces = None
-                for sce_vnf in instanceDict['vnfs']:
-                    for vm in sce_vnf['vms']:
-                        if vm["uuid"] == vdu_id:
-                            vm_interfaces = vm["interfaces"]
-                            break
 
-                db_vim_action = {
-                    "instance_action_id": instance_action_id,
-                    "task_index": task_index,
-                    "datacenter_vim_id": target_vm["datacenter_tenant_id"],
-                    "action": "DELETE",
-                    "status": "SCHEDULED",
-                    "item": "instance_vms",
-                    "item_id": target_vm["uuid"],
-                    "extra": yaml.safe_dump({"params": vm_interfaces},
-                                            default_flow_style=True, width=256)
-                }
-                task_index += 1
-                db_vim_actions.append(db_vim_action)
-                vm_result[vdu_id]["deleted"].append(vdu_id)
-                # delete from database
-                db_instance_vms.append({"TO-DELETE": vdu_id})
+            if vdu["type"] == "delete":
+                for index in range(0, vdu_count):
+                    target_vm = target_vms[-1-index]
+                    vdu_id = target_vm["uuid"]
+                    # look for nm
+                    vm_interfaces = None
+                    for sce_vnf in instanceDict['vnfs']:
+                        for vm in sce_vnf['vms']:
+                            if vm["uuid"] == vdu_id:
+                                vm_interfaces = vm["interfaces"]
+                                break
+
+                    db_vim_action = {
+                        "instance_action_id": instance_action_id,
+                        "task_index": task_index,
+                        "datacenter_vim_id": target_vm["datacenter_tenant_id"],
+                        "action": "DELETE",
+                        "status": "SCHEDULED",
+                        "item": "instance_vms",
+                        "item_id": vdu_id,
+                        "extra": yaml.safe_dump({"params": vm_interfaces},
+                                                default_flow_style=True, width=256)
+                    }
+                    task_index += 1
+                    db_vim_actions.append(db_vim_action)
+                    vm_result["deleted"].append(vdu_id)
+                    # delete from database
+                    db_instance_vms.append({"TO-DELETE": vdu_id})
 
             else:  # vdu["type"] == "create":
                 iface2iface = {}
@@ -4483,7 +4536,7 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                     vm_name = target_vm.get('vim_name')
                     try:
                         suffix = vm_name.rfind("-")
-                        vm_name = vm_name[:suffix+1] + str(1 + int(vm_name[suffix+1:]))
+                        vm_name = vm_name[:suffix+1] + str(index + 1 + int(vm_name[suffix+1:]))
                     except Exception:
                         pass
                     db_instance_vm = {
@@ -4540,7 +4593,7 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                     }
                     task_index += 1
                     db_vim_actions.append(db_vim_action)
-                    vm_result[vdu_id]["created"].append(vm_uuid)
+                    vm_result["created"].append(vm_uuid)
 
         db_instance_action["number_tasks"] = task_index
         db_tables = [
@@ -4787,7 +4840,7 @@ def edit_datacenter(mydb, datacenter_id_name, datacenter_descriptor):
             try:
                 datacenter_sdn_port_mapping_delete(mydb, None, datacenter_id)
             except ovimException as e:
-                raise NfvoException("Error deleting datacenter-port-mapping " + str(e), HTTP_Conflict)
+                raise NfvoException("Error deleting datacenter-port-mapping " + str(e), httperrors.Conflict)
 
     mydb.update_rows('datacenters', datacenter_descriptor, where)
     if new_sdn_port_mapping:
@@ -4796,7 +4849,7 @@ def edit_datacenter(mydb, datacenter_id_name, datacenter_descriptor):
         except ovimException as e:
             # Rollback
             mydb.update_rows('datacenters', datacenter, where)
-            raise NfvoException("Error adding datacenter-port-mapping " + str(e), HTTP_Conflict)
+            raise NfvoException("Error adding datacenter-port-mapping " + str(e), httperrors.Conflict)
     return datacenter_id
 
 

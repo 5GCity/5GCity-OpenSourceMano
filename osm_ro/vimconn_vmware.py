@@ -579,9 +579,10 @@ class vimconnector(vimconn.vimconnector):
                             else:
                                 net_uuid = net_uuid[3]
                                 # create dict entry
-                                self.logger.debug("Adding  {} to a list vcd id {} network {}".format(net_uuid,
-                                                                                                        vdc_uuid,
-                                                                                         net_details.get('name')))
+                                self.logger.debug("get_vcd_network_list(): Adding network {} "
+                                                  "to a list vcd id {} network {}".format(net_uuid,
+                                                                                          vdc_uuid,
+                                                                                          net_details.get('name')))
                                 filter_dict["name"] = net_details.get('name')
                                 filter_dict["id"] = net_uuid
                                 if [i.text for i in net_details if i.tag.split('}')[-1] == 'IsShared'][0] == 'true':
@@ -667,9 +668,10 @@ class vimconnector(vimconn.vimconnector):
                             else:
                                 net_uuid = net_uuid[3]
                                 # create dict entry
-                                self.logger.debug("Adding  {} to a list vcd id {} network {}".format(net_uuid,
-                                                                                                        vdcid,
-                                                                                         net_details.get('name')))
+                                self.logger.debug("get_network_list(): Adding net {}"
+                                                  " to a list vcd id {} network {}".format(net_uuid,
+                                                                                           vdcid,
+                                                                                           net_details.get('name')))
                                 filter_entry["name"] = net_details.get('name')
                                 filter_entry["id"] = net_uuid
                                 if [i.text for i in net_details if i.tag.split('}')[-1] == 'IsShared'][0] == 'true':
@@ -1466,7 +1468,7 @@ class vimconnector(vimconn.vimconnector):
                 'name': (optional) name for the interface.
                 'net_id': VIM network id where this interface must be connect to. Mandatory for type==virtual
                 'vpci': (optional) virtual vPCI address to assign at the VM. Can be ignored depending on VIM capabilities
-                'model': (optional and only have sense for type==virtual) interface model: virtio, e2000, ...
+                'model': (optional and only have sense for type==virtual) interface model: virtio, e1000, ...
                 'mac_address': (optional) mac address to assign to this interface
                 #TODO: CHECK if an optional 'vlan' parameter is needed for VIMs when type if VF and net_id is not provided,
                     the VLAN tag to be used. In case net_id is provided, the internal network vlan is used for tagging VF
@@ -1521,7 +1523,7 @@ class vimconnector(vimconn.vimconnector):
         vmname_andid = ''.join(new_vm_name)
 
         for net in net_list:
-            if net['type'] == "SR-IOV" or net['type'] == "PCI-PASSTHROUGH":
+            if net['type'] == "PCI-PASSTHROUGH":
                 raise vimconn.vimconnNotSupportedException(
                       "Current vCD version does not support type : {}".format(net['type']))
 
@@ -1551,7 +1553,6 @@ class vimconnector(vimconn.vimconnector):
         else:
             raise vimconn.vimconnNotFoundException("new_vminstance(): Failed create vApp {}: "
                                                    "(Failed retrieve catalog information {})".format(name, image_id))
-
 
         # Set vCPU and Memory based on flavor.
         vm_cpus = None
@@ -1588,6 +1589,7 @@ class vimconnector(vimconn.vimconnector):
         #If no mgmt, then the 1st NN in netlist is considered as primary net. 
         primary_net = None
         primary_netname = None
+        primary_net_href = None
         network_mode = 'bridged'
         if net_list is not None and len(net_list) > 0:
             for net in net_list:
@@ -1598,6 +1600,8 @@ class vimconnector(vimconn.vimconnector):
 
             try:
                 primary_net_id = primary_net['net_id']
+                url_list = [self.url, '/api/network/', primary_net_id]
+                primary_net_href = ''.join(url_list) 
                 network_dict = self.get_vcd_network(network_uuid=primary_net_id)
                 if 'name' in network_dict:
                     primary_netname = network_dict['name']
@@ -1667,9 +1671,9 @@ class vimconnector(vimconn.vimconnector):
                 <InstantiationParams>
                      <NetworkConfigSection>
                          <ovf:Info>Configuration parameters for logical networks</ovf:Info>
-                         <NetworkConfig networkName="None">
+                         <NetworkConfig networkName="{}">
                              <Configuration>
-                                 <ParentNetwork href=""/>
+                                 <ParentNetwork href="{}" />
                                  <FenceMode>bridged</FenceMode>
                              </Configuration>
                          </NetworkConfig>
@@ -1724,6 +1728,8 @@ class vimconnector(vimconn.vimconnector):
                 </SourcedItem>
                 <AllEULAsAccepted>false</AllEULAsAccepted>
                 </InstantiateVAppTemplateParams>""".format(vmname_andid,
+                                                        primary_netname,
+                                                        primary_net_href,
                                                      vapp_tempalte_href,
                                                                 vm_href,
                                                                   vm_id,
@@ -1791,14 +1797,13 @@ class vimconnector(vimconn.vimconnector):
         #Add PCI passthrough/SRIOV configrations
         vm_obj = None
         pci_devices_info = []
-        sriov_net_info = []
         reserve_memory = False
 
         for net in net_list:
             if net["type"] == "PF" or net["type"] == "PCI-PASSTHROUGH":
                 pci_devices_info.append(net)
             elif (net["type"] == "VF" or net["type"] == "SR-IOV" or net["type"] == "VFnotShared") and 'net_id'in net:
-                sriov_net_info.append(net)
+                reserve_memory = True
 
         #Add PCI
         if len(pci_devices_info) > 0:
@@ -1861,9 +1866,18 @@ class vimconnector(vimconn.vimconnector):
 
         # add NICs & connect to networks in netlist
         try:
+            vdc_obj = VDC(self.client, href=vdc.get('href'))
+            vapp_resource = vdc_obj.get_vapp(vmname_andid)
+            vapp = VApp(self.client, resource=vapp_resource)
+            vapp_id = vapp_resource.get('id').split(':')[-1]
+
+            self.logger.info("Removing primary NIC: ")
+            # First remove all NICs so that NIC properties can be adjusted as needed
+            self.remove_primary_network_adapter_from_all_vms(vapp)
+
             self.logger.info("Request to connect VM to a network: {}".format(net_list))
-            nicIndex = 0
             primary_nic_index = 0
+            nicIndex = 0
             for net in net_list:
                 # openmano uses network id in UUID format.
                 # vCloud Director need a name so we do reverse operation from provided UUID we lookup a name
@@ -1890,26 +1904,26 @@ class vimconnector(vimconn.vimconnector):
                                   - NONE (No IP addressing mode specified.)"""
 
                 if primary_netname is not None:
+                    self.logger.debug("new_vminstance(): Filtering by net name {}".format(interface_net_name))
                     nets = filter(lambda n: n.get('name') == interface_net_name, self.get_network_list())
                     #For python3
                     #nets = [n for n in self.get_network_list() if n.get('name') == interface_net_name]
                     if len(nets) == 1:
                         self.logger.info("new_vminstance(): Found requested network: {}".format(nets[0].get('name')))
 
-                        vdc_obj = VDC(self.client, href=vdc.get('href'))
-                        vapp_resource = vdc_obj.get_vapp(vmname_andid)
-                        vapp = VApp(self.client, resource=vapp_resource)
-                        # connect network to VM - with all DHCP by default
-                        task = vapp.connect_org_vdc_network(nets[0].get('name'))
+                        if interface_net_name != primary_netname:
+                            # connect network to VM - with all DHCP by default
+                            self.logger.info("new_vminstance(): Attaching net {} to vapp".format(interface_net_name))
+                            self.connect_vapp_to_org_vdc_network(vapp_id, nets[0].get('name'))
 
-                        self.client.get_task_monitor().wait_for_success(task=task)
-
-                        type_list = ('PF', 'PCI-PASSTHROUGH', 'VF', 'SR-IOV', 'VFnotShared')
+                        type_list = ('PF', 'PCI-PASSTHROUGH', 'VFnotShared')
+                        nic_type = 'VMXNET3'
                         if 'type' in net and net['type'] not in type_list:
                             # fetching nic type from vnf
                             if 'model' in net:
-                                if net['model'] is not None and net['model'].lower() == 'virtio':
-                                    nic_type = 'VMXNET3'
+                                if net['model'] is not None:
+                                    if net['model'].lower() == 'paravirt' or net['model'].lower() == 'virtio':
+                                        nic_type = 'VMXNET3'
                                 else:
                                     nic_type = net['model']
 
@@ -1923,53 +1937,25 @@ class vimconnector(vimconn.vimconnector):
                             else:
                                 self.logger.info("new_vminstance(): adding network adapter "\
                                                          "to a network {}".format(nets[0].get('name')))
+                                if net['type'] in ['SR-IOV', 'VF']:
+                                    nic_type = net['type']
                                 self.add_network_adapter_to_vms(vapp, nets[0].get('name'),
                                                                 primary_nic_index,
                                                                 nicIndex,
-                                                                net)
+                                                                net,
+                                                                nic_type=nic_type)
                 nicIndex += 1
 
             # cloud-init for ssh-key injection
             if cloud_config:
                 self.cloud_init(vapp,cloud_config)
 
-        # ############# Stub code for SRIOV #################
-        #Add SRIOV
-#         if len(sriov_net_info) > 0:
-#             self.logger.info("Need to add SRIOV adapters {} into VM {}".format(sriov_net_info,
-#                                                                         vmname_andid ))
-#             sriov_status, vm_obj, vcenter_conect = self.add_sriov(vapp_uuid,
-#                                                                   sriov_net_info,
-#                                                                   vmname_andid)
-#             if sriov_status:
-#                 self.logger.info("Added SRIOV {} to VM {}".format(
-#                                                             sriov_net_info,
-#                                                             vmname_andid)
-#                                  )
-#                 reserve_memory = True
-#             else:
-#                 self.logger.info("Fail to add SRIOV {} to VM {}".format(
-#                                                             sriov_net_info,
-#                                                             vmname_andid)
-#                                  )
-
             # If VM has PCI devices or SRIOV reserve memory for VM
             if reserve_memory:
-                memReserve = vm_obj.config.hardware.memoryMB
-                spec = vim.vm.ConfigSpec()
-                spec.memoryAllocation = vim.ResourceAllocationInfo(reservation=memReserve)
-                task = vm_obj.ReconfigVM_Task(spec=spec)
-                if task:
-                    result = self.wait_for_vcenter_task(task, vcenter_conect)
-                    self.logger.info("Reserved memory {} MB for "
-                                     "VM VM status: {}".format(str(memReserve), result))
-                else:
-                    self.logger.info("Fail to reserved memory {} to VM {}".format(
-                                                                str(memReserve), str(vm_obj)))
+                self.reserve_memory_for_all_vms(vapp, memory_mb)
 
             self.logger.debug("new_vminstance(): starting power on vApp {} ".format(vmname_andid))
 
-            vapp_id = vapp_resource.get('id').split(':')[-1]
             poweron_task = self.power_on_vapp(vapp_id, vmname_andid)
             result = self.client.get_task_monitor().wait_for_success(task=poweron_task)
             if result.get('status') == 'success':
@@ -2624,13 +2610,12 @@ class vimconnector(vimconn.vimconnector):
 
         try:
             vapp_name = self.get_namebyvappid(vm__vim_uuid)
-            vapp_resource = vdc_obj.get_vapp(vapp_name)
-            vapp = VApp(self.client, resource=vapp_resource)
             if vapp_name is None:
                 self.logger.debug("delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
                 return -1, "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid)
-            else:
-                self.logger.info("Deleting vApp {} and UUID {}".format(vapp_name, vm__vim_uuid))
+            self.logger.info("Deleting vApp {} and UUID {}".format(vapp_name, vm__vim_uuid))
+            vapp_resource = vdc_obj.get_vapp(vapp_name)
+            vapp = VApp(self.client, resource=vapp_resource)
 
             # Delete vApp and wait for status change if task executed and vApp is None.
 
@@ -2774,11 +2759,16 @@ class vimconnector(vimconn.vimconnector):
                                                                          "VM details")
                         xmlroot = XmlElementTree.fromstring(response.content)
 
+                        
                         result = response.content.replace("\n"," ")
-                        hdd_mb = re.search('vcloud:capacity="(\d+)"\svcloud:storageProfileOverrideVmDefault=',result).group(1)
-                        vm_details['hdd_mb'] = int(hdd_mb) if hdd_mb else None
-                        cpus = re.search('<rasd:Description>Number of Virtual CPUs</.*?>(\d+)</rasd:VirtualQuantity>',result).group(1)
-                        vm_details['cpus'] = int(cpus) if cpus else None
+                        hdd_match = re.search('vcloud:capacity="(\d+)"\svcloud:storageProfileOverrideVmDefault=',result)
+                        if hdd_match:
+                            hdd_mb = hdd_match.group(1)
+                            vm_details['hdd_mb'] = int(hdd_mb) if hdd_mb else None
+                        cpus_match = re.search('<rasd:Description>Number of Virtual CPUs</.*?>(\d+)</rasd:VirtualQuantity>',result)
+                        if cpus_match:
+                            cpus = cpus_match.group(1)
+                            vm_details['cpus'] = int(cpus) if cpus else None
                         memory_mb = re.search('<rasd:Description>Memory Size</.*?>(\d+)</rasd:VirtualQuantity>',result).group(1)
                         vm_details['memory_mb'] = int(memory_mb) if memory_mb else None
                         vm_details['status'] = vcdStatusCode2manoFormat[int(xmlroot.get('status'))]
@@ -3693,8 +3683,15 @@ class vimconnector(vimconn.vimconnector):
             # either use client provided UUID or search for a first available
             #  if both are not defined we return none
             if parent_network_uuid is not None:
-                url_list = [self.url, '/api/admin/network/', parent_network_uuid]
+                provider_network = None
+                available_networks = None
+                add_vdc_rest_url = None
+
+                url_list = [self.url, '/api/admin/vdc/', self.tenant_id, '/networks']
                 add_vdc_rest_url = ''.join(url_list)
+
+                url_list = [self.url, '/api/admin/network/', parent_network_uuid]
+                available_networks = ''.join(url_list)
 
             #Creating all networks as Direct Org VDC type networks.
             #Unused in case of Underlay (data/ptp) network interface.
@@ -4622,6 +4619,240 @@ class vimconnector(vimconn.vimconnector):
                              " for VM : {}".format(exp))
             raise vimconn.vimconnException(message=exp)
 
+
+    def reserve_memory_for_all_vms(self, vapp, memory_mb):
+        """
+            Method to reserve memory for all VMs
+            Args :
+                vapp - VApp
+                memory_mb - Memory in MB
+            Returns:
+                None
+        """
+
+        self.logger.info("Reserve memory for all VMs")
+        for vms in vapp.get_all_vms():
+            vm_id = vms.get('id').split(':')[-1]
+
+            url_rest_call = "{}/api/vApp/vm-{}/virtualHardwareSection/memory".format(self.url, vm_id)
+
+            headers = {'Accept':'application/*+xml;version=' + API_VERSION,
+                       'x-vcloud-authorization': self.client._session.headers['x-vcloud-authorization']}
+            headers['Content-Type'] = 'application/vnd.vmware.vcloud.rasdItem+xml'
+            response = self.perform_request(req_type='GET',
+                                            url=url_rest_call,
+                                            headers=headers)
+
+            if response.status_code == 403:
+                response = self.retry_rest('GET', url_rest_call)
+
+            if response.status_code != 200:
+                self.logger.error("REST call {} failed reason : {}"\
+                                  "status code : {}".format(url_rest_call,
+                                                            response.content,
+                                                            response.status_code))
+                raise vimconn.vimconnException("reserve_memory_for_all_vms : Failed to get "\
+                                               "memory")
+
+            bytexml = bytes(bytearray(response.content, encoding='utf-8'))
+            contentelem = lxmlElementTree.XML(bytexml)
+            namespaces = {prefix:uri for prefix,uri in contentelem.nsmap.iteritems() if prefix}
+            namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
+
+            # Find the reservation element in the response
+            memelem_list = contentelem.findall(".//rasd:Reservation", namespaces)
+            for memelem in memelem_list:
+                memelem.text = str(memory_mb)
+
+            newdata = lxmlElementTree.tostring(contentelem, pretty_print=True)
+
+            response = self.perform_request(req_type='PUT',
+                                            url=url_rest_call,
+                                            headers=headers,
+                                            data=newdata)
+
+            if response.status_code == 403:
+                add_headers = {'Content-Type': headers['Content-Type']}
+                response = self.retry_rest('PUT', url_rest_call, add_headers, newdata)
+
+            if response.status_code != 202:
+                self.logger.error("REST call {} failed reason : {}"\
+                                  "status code : {} ".format(url_rest_call,
+                                  response.content,
+                                  response.status_code))
+                raise vimconn.vimconnException("reserve_memory_for_all_vms : Failed to update "\
+                                               "virtual hardware memory section")
+            else:
+                mem_task = self.get_task_from_response(response.content)
+                result = self.client.get_task_monitor().wait_for_success(task=mem_task)
+                if result.get('status') == 'success':
+                    self.logger.info("reserve_memory_for_all_vms(): VM {} succeeded "\
+                                      .format(vm_id))
+                else:
+                    self.logger.error("reserve_memory_for_all_vms(): VM {} failed "\
+                                      .format(vm_id))
+
+    def connect_vapp_to_org_vdc_network(self, vapp_id, net_name):
+        """
+            Configure VApp network config with org vdc network
+            Args :
+                vapp - VApp
+            Returns:
+                None
+        """
+
+        self.logger.info("Connecting vapp {} to org vdc network {}".
+                         format(vapp_id, net_name))
+
+        url_rest_call = "{}/api/vApp/vapp-{}/networkConfigSection/".format(self.url, vapp_id)
+
+        headers = {'Accept':'application/*+xml;version=' + API_VERSION,
+                   'x-vcloud-authorization': self.client._session.headers['x-vcloud-authorization']}
+        response = self.perform_request(req_type='GET',
+                                        url=url_rest_call,
+                                        headers=headers)
+
+        if response.status_code == 403:
+            response = self.retry_rest('GET', url_rest_call)
+
+        if response.status_code != 200:
+            self.logger.error("REST call {} failed reason : {}"\
+                              "status code : {}".format(url_rest_call,
+                                                        response.content,
+                                                        response.status_code))
+            raise vimconn.vimconnException("connect_vapp_to_org_vdc_network : Failed to get "\
+                                           "network config section")
+
+        data = response.content
+        headers['Content-Type'] = 'application/vnd.vmware.vcloud.networkConfigSection+xml'
+        net_id = self.get_network_id_by_name(net_name)
+        if not net_id:
+            raise vimconn.vimconnException("connect_vapp_to_org_vdc_network : Failed to find "\
+                                           "existing network")
+
+        bytexml = bytes(bytearray(data, encoding='utf-8'))
+        newelem = lxmlElementTree.XML(bytexml)
+        namespaces = {prefix: uri for prefix, uri in newelem.nsmap.iteritems() if prefix}
+        namespaces["xmlns"] = "http://www.vmware.com/vcloud/v1.5"
+        nwcfglist = newelem.findall(".//xmlns:NetworkConfig", namespaces)
+
+        newstr = """<NetworkConfig networkName="{}">
+                  <Configuration>
+                       <ParentNetwork href="{}/api/network/{}"/>
+                       <FenceMode>bridged</FenceMode>
+                  </Configuration>
+              </NetworkConfig>
+           """.format(net_name, self.url, net_id)
+        newcfgelem = lxmlElementTree.fromstring(newstr)
+        if nwcfglist:
+            nwcfglist[0].addnext(newcfgelem)
+
+        newdata = lxmlElementTree.tostring(newelem, pretty_print=True)
+
+        response = self.perform_request(req_type='PUT',
+                                        url=url_rest_call,
+                                        headers=headers,
+                                        data=newdata)
+
+        if response.status_code == 403:
+            add_headers = {'Content-Type': headers['Content-Type']}
+            response = self.retry_rest('PUT', url_rest_call, add_headers, newdata)
+
+        if response.status_code != 202:
+            self.logger.error("REST call {} failed reason : {}"\
+                              "status code : {} ".format(url_rest_call,
+                              response.content,
+                              response.status_code))
+            raise vimconn.vimconnException("connect_vapp_to_org_vdc_network : Failed to update "\
+                                           "network config section")
+        else:
+            vapp_task = self.get_task_from_response(response.content)
+            result = self.client.get_task_monitor().wait_for_success(task=vapp_task)
+            if result.get('status') == 'success':
+                self.logger.info("connect_vapp_to_org_vdc_network(): Vapp {} connected to "\
+                                 "network {}".format(vapp_id, net_name))
+            else:
+                self.logger.error("connect_vapp_to_org_vdc_network(): Vapp {} failed to "\
+                                  "connect to network {}".format(vapp_id, net_name))
+
+    def remove_primary_network_adapter_from_all_vms(self, vapp):
+        """
+            Method to remove network adapter type to vm
+            Args :
+                vapp - VApp
+            Returns:
+                None
+        """
+
+        self.logger.info("Removing network adapter from all VMs")
+        for vms in vapp.get_all_vms():
+            vm_id = vms.get('id').split(':')[-1]
+
+            url_rest_call = "{}/api/vApp/vm-{}/networkConnectionSection/".format(self.url, vm_id)
+
+            headers = {'Accept':'application/*+xml;version=' + API_VERSION,
+                       'x-vcloud-authorization': self.client._session.headers['x-vcloud-authorization']}
+            response = self.perform_request(req_type='GET',
+                                            url=url_rest_call,
+                                            headers=headers)
+
+            if response.status_code == 403:
+                response = self.retry_rest('GET', url_rest_call)
+
+            if response.status_code != 200:
+                self.logger.error("REST call {} failed reason : {}"\
+                                  "status code : {}".format(url_rest_call,
+                                                            response.content,
+                                                            response.status_code))
+                raise vimconn.vimconnException("remove_primary_network_adapter : Failed to get "\
+                                               "network connection section")
+
+            data = response.content
+            data = data.split('<Link rel="edit"')[0]
+
+            headers['Content-Type'] = 'application/vnd.vmware.vcloud.networkConnectionSection+xml'
+
+            newdata = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                      <NetworkConnectionSection xmlns="http://www.vmware.com/vcloud/v1.5"
+                              xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"
+                              xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData"
+                              xmlns:common="http://schemas.dmtf.org/wbem/wscim/1/common"
+                              xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData"
+                              xmlns:vmw="http://www.vmware.com/schema/ovf"
+                              xmlns:ovfenv="http://schemas.dmtf.org/ovf/environment/1"
+                              xmlns:vmext="http://www.vmware.com/vcloud/extension/v1.5"
+                              xmlns:ns9="http://www.vmware.com/vcloud/versions"
+                              href="{url}" type="application/vnd.vmware.vcloud.networkConnectionSection+xml" ovf:required="false">
+                              <ovf:Info>Specifies the available VM network connections</ovf:Info>
+                             <PrimaryNetworkConnectionIndex>0</PrimaryNetworkConnectionIndex>
+                             <Link rel="edit" href="{url}" type="application/vnd.vmware.vcloud.networkConnectionSection+xml"/>
+                      </NetworkConnectionSection>""".format(url=url_rest_call)
+            response = self.perform_request(req_type='PUT',
+                                            url=url_rest_call,
+                                            headers=headers,
+                                            data=newdata)
+
+            if response.status_code == 403:
+                add_headers = {'Content-Type': headers['Content-Type']}
+                response = self.retry_rest('PUT', url_rest_call, add_headers, newdata)
+
+            if response.status_code != 202:
+                self.logger.error("REST call {} failed reason : {}"\
+                                  "status code : {} ".format(url_rest_call,
+                                  response.content,
+                                  response.status_code))
+                raise vimconn.vimconnException("remove_primary_network_adapter : Failed to update "\
+                                               "network connection section")
+            else:
+                nic_task = self.get_task_from_response(response.content)
+                result = self.client.get_task_monitor().wait_for_success(task=nic_task)
+                if result.get('status') == 'success':
+                    self.logger.info("remove_primary_network_adapter(): VM {} conneced to "\
+                                      "default NIC type".format(vm_id))
+                else:
+                    self.logger.error("remove_primary_network_adapter(): VM {} failed to "\
+                                      "connect NIC type".format(vm_id))
+
     def add_network_adapter_to_vms(self, vapp, network_name, primary_nic_index, nicIndex, net, nic_type=None):
         """
             Method to add network adapter type to vm
@@ -4634,6 +4865,8 @@ class vimconnector(vimconn.vimconnector):
                 None
         """
 
+        self.logger.info("Add network adapter to VM: network_name {} nicIndex {} nic_type {}".\
+                         format(network_name, nicIndex, nic_type))
         try:
             ip_address = None
             floating_ip = False
@@ -4678,6 +4911,7 @@ class vimconnector(vimconn.vimconnector):
                     data = response.content
                     data = data.split('<Link rel="edit"')[0]
                     if '<PrimaryNetworkConnectionIndex>' not in data:
+                        self.logger.debug("add_network_adapter PrimaryNIC not in data")
                         item = """<PrimaryNetworkConnectionIndex>{}</PrimaryNetworkConnectionIndex>
                                 <NetworkConnection network="{}">
                                 <NetworkConnectionIndex>{}</NetworkConnectionIndex>
@@ -4696,6 +4930,7 @@ class vimconnector(vimconn.vimconnector):
 
                         data = data.replace('</ovf:Info>\n','</ovf:Info>\n{}\n</NetworkConnectionSection>'.format(item))
                     else:
+                        self.logger.debug("add_network_adapter PrimaryNIC in data")
                         new_item = """<NetworkConnection network="{}">
                                     <NetworkConnectionIndex>{}</NetworkConnectionIndex>
                                     <IsConnected>true</IsConnected>
@@ -4744,7 +4979,6 @@ class vimconnector(vimconn.vimconnector):
                 for vms in vapp.get_all_vms():
                     vm_id = vms.get('id').split(':')[-1]
 
-
                     url_rest_call = "{}/api/vApp/vm-{}/networkConnectionSection/".format(self.url, vm_id)
 
                     headers = {'Accept':'application/*+xml;version=' + API_VERSION,
@@ -4765,7 +4999,12 @@ class vimconnector(vimconn.vimconnector):
                                                                         "network connection section")
                     data = response.content
                     data = data.split('<Link rel="edit"')[0]
+                    vcd_netadapter_type = nic_type
+                    if nic_type in ['SR-IOV', 'VF']:
+                        vcd_netadapter_type = "SRIOVETHERNETCARD"
+
                     if '<PrimaryNetworkConnectionIndex>' not in data:
+                        self.logger.debug("add_network_adapter PrimaryNIC not in data nic_type {}".format(nic_type))
                         item = """<PrimaryNetworkConnectionIndex>{}</PrimaryNetworkConnectionIndex>
                                 <NetworkConnection network="{}">
                                 <NetworkConnectionIndex>{}</NetworkConnectionIndex>
@@ -4773,7 +5012,7 @@ class vimconnector(vimconn.vimconnector):
                                 <IpAddressAllocationMode>{}</IpAddressAllocationMode>
                                 <NetworkAdapterType>{}</NetworkAdapterType>
                                 </NetworkConnection>""".format(primary_nic_index, network_name, nicIndex,
-                                                                               allocation_mode, nic_type)
+                                                                               allocation_mode, vcd_netadapter_type)
                         # Stub for ip_address feature
                         if ip_address:
                             ip_tag = '<IpAddress>{}</IpAddress>'.format(ip_address)
@@ -4785,13 +5024,14 @@ class vimconnector(vimconn.vimconnector):
 
                         data = data.replace('</ovf:Info>\n','</ovf:Info>\n{}\n</NetworkConnectionSection>'.format(item))
                     else:
+                        self.logger.debug("add_network_adapter PrimaryNIC in data nic_type {}".format(nic_type))
                         new_item = """<NetworkConnection network="{}">
                                     <NetworkConnectionIndex>{}</NetworkConnectionIndex>
                                     <IsConnected>true</IsConnected>
                                     <IpAddressAllocationMode>{}</IpAddressAllocationMode>
                                     <NetworkAdapterType>{}</NetworkAdapterType>
                                     </NetworkConnection>""".format(network_name, nicIndex,
-                                                                allocation_mode, nic_type)
+                                                                allocation_mode, vcd_netadapter_type)
                         # Stub for ip_address feature
                         if ip_address:
                             ip_tag = '<IpAddress>{}</IpAddress>'.format(ip_address)
@@ -6058,12 +6298,18 @@ class vimconnector(vimconn.vimconnector):
 
             Returns org and vdc object
         """
-        org = Org(self.client, resource=self.client.get_org())
-        vdc = org.get_vdc(self.tenant_name)
+        vdc = None
+        try:
+            org = Org(self.client, resource=self.client.get_org())
+            vdc = org.get_vdc(self.tenant_name)
+        except Exception as e:
+            # pyvcloud not giving a specific exception, Refresh nevertheless
+            self.logger.debug("Received exception {}, refreshing token ".format(str(e)))
 
         #Retry once, if failed by refreshing token
         if vdc is None:
             self.get_token()
+            org = Org(self.client, resource=self.client.get_org())
             vdc = org.get_vdc(self.tenant_name)
 
         return org, vdc
