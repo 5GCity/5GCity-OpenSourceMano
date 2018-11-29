@@ -1162,9 +1162,9 @@ class vim_thread(threading.Thread):
         try:
             params = task["params"]
             task_id = task["instance_action_id"] + "." + str(task["task_index"])
-            depending_task = "TASK-" + str(task.get("extra").get("depends_on")[0])
+            dep_id = "TASK-" + str(task["extra"]["depends_on"][0])
             error_text = ""
-            interfaces = task.get("depends").get(depending_task).get("vim_interfaces").keys()
+            interfaces = task.get("depends").get(dep_id).get("extra").get("interfaces").keys()
             # Bear in mind that different VIM connectors might support Classifications differently.
             # In the case of OpenStack, only the first VNF attached to the classifier will be used
             # to create the Classification(s) (the "logical source port" of the "Flow Classifier").
