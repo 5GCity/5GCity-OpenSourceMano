@@ -363,10 +363,10 @@ class WimPersistence(object):
             kwargs.setdefault('WHERE', {'wim_account.uuid': uuid})
         return self.query(FROM=_WIM_ACCOUNT_JOIN, **kwargs)
 
-    def get_wim_account_by(self, wim=None, tenant=None, **kwargs):
+    def get_wim_account_by(self, wim=None, tenant=None, uuid=None, **kwargs):
         """Similar to ``get_wim_accounts_by``, but ensuring just one result"""
         kwargs.setdefault('error_if_multiple', True)
-        return self.get_wim_accounts_by(wim, tenant, **kwargs)[0]
+        return self.get_wim_accounts_by(wim, tenant, uuid, **kwargs)[0]
 
     def get_wim_accounts(self, **kwargs):
         """Retrieve all the accounts from the database"""

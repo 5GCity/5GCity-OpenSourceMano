@@ -247,7 +247,7 @@ class WimEngine(object):
         """Find a single WIM that is able to connect all the datacenters
         listed
 
-        Raises
+        Raises:
             NoWimConnectedToDatacenters: if no WIM connected to all datacenters
                 at once is found
         """
@@ -261,14 +261,35 @@ class WimEngine(object):
         #       used here)
         return suitable_wim_ids[0]
 
+    def find_suitable_wim_account(self, datacenter_ids, tenant):
+        """Find a WIM account that is able to connect all the datacenters
+        listed
+
+        Arguments:
+            datacenter_ids (list): List of UUIDs of all the datacenters (vims),
+                that need to be connected.
+            tenant (str): UUID of the OSM tenant
+
+        Returns:
+            str: UUID of the WIM account that is able to connect all the
+                 datacenters.
+        """
+        wim_id = self.find_common_wim(datacenter_ids, tenant)
+        return self.persist.get_wim_account_by(wim_id, tenant)['uuid']
+
     def derive_wan_link(self,
+                        wim_usage,
                         instance_scenario_id, sce_net_id,
                         networks, tenant):
         """Create a instance_wim_nets record for the given information"""
-        datacenters = [n['datacenter_id'] for n in networks]
-        wim_id = self.find_common_wim(datacenters, tenant)
-
-        account = self.persist.get_wim_account_by(wim_id, tenant)
+        if sce_net_id in wim_usage:
+            account_id = wim_usage[sce_net_id]
+            account = self.persist.get_wim_account_by(uuid=account_id)
+            wim_id = account['wim_id']
+        else:
+            datacenters = [n['datacenter_id'] for n in networks]
+            wim_id = self.find_common_wim(datacenters, tenant)
+            account = self.persist.get_wim_account_by(wim_id, tenant)
 
         return {
             'uuid': str(uuid4()),
@@ -278,15 +299,17 @@ class WimEngine(object):
             'wim_account_id': account['uuid']
         }
 
-    def derive_wan_links(self, networks, tenant=None):
+    def derive_wan_links(self, wim_usage, networks, tenant=None):
         """Discover and return what are the wan_links that have to be created
         considering a set of networks (VLDs) required for a scenario instance
         (NSR).
 
         Arguments:
+            wim_usage(dict): Mapping between sce_net_id and wim_id
             networks(list): Dicts containing the information about the networks
                 that will be instantiated to materialize a Network Service
                 (scenario) instance.
+                Corresponding to the ``instance_net`` record.
 
         Returns:
             list: list of WAN links to be written to the database
@@ -302,7 +325,8 @@ class WimEngine(object):
                       if counter > 1]
 
         return [
-            self.derive_wan_link(key[0], key[1], grouped_networks[key], tenant)
+            self.derive_wan_link(wim_usage,
+                                 key[0], key[1], grouped_networks[key], tenant)
             for key in wan_groups
         ]
 
