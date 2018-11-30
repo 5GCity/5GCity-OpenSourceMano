@@ -2459,25 +2459,41 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                                                     str(nsd["id"]), str(rsp["id"]), str(iface["member-vnf-index-ref"])),
                                                 httperrors.Bad_Request)
 
-                        existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid',),
-                                                        FROM="interfaces as i join vms on i.vm_id=vms.uuid",
-                                                        WHERE={'vnf_id': vnf_index2vnf_uuid[vnf_index],
-                                                               'external_name': get_str(iface, "vnfd-connection-point-ref",
-                                                                                        255)})
-                        if not existing_ifaces:
+                        ingress_existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid',),
+                                                                FROM="interfaces as i join vms on i.vm_id=vms.uuid",
+                                                                WHERE={
+                                                                    'vnf_id': vnf_index2vnf_uuid[vnf_index],
+                                                                    'external_name': get_str(iface, "vnfd-ingress-connection-point-ref",
+                                                                                             255)})
+                        if not ingress_existing_ifaces:
                             raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'rsp[{}]':'vnfd-connection-point"
-                                                "-ref':'vnfd-connection-point-ref':'{}'. Reference to a non-existing "
+                                                "-ref':'vnfd-ingress-connection-point-ref':'{}'. Reference to a non-existing "
                                                 "connection-point name at VNFD '{}'".format(
-                                                    str(nsd["id"]), str(rsp["id"]), str(iface["vnfd-connection-point-ref"]),
-                                                    str(iface.get("vnfd-id-ref"))[:255]),
-                                                httperrors.Bad_Request)
-                        interface_uuid = existing_ifaces[0]["uuid"]
+                                str(nsd["id"]), str(rsp["id"]), str(iface["vnfd-ingress-connection-point-ref"]),
+                                str(iface.get("vnfd-id-ref"))[:255]), httperrors.Bad_Request)
+
+                        egress_existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid',),
+                                                               FROM="interfaces as i join vms on i.vm_id=vms.uuid",
+                                                               WHERE={
+                                                                   'vnf_id': vnf_index2vnf_uuid[vnf_index],
+                                                                   'external_name': get_str(iface, "vnfd-egress-connection-point-ref",
+                                                                                            255)})
+                        if not egress_existing_ifaces:
+                            raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'rsp[{}]':'vnfd-connection-point"
+                                                "-ref':'vnfd-egress-connection-point-ref':'{}'. Reference to a non-existing "
+                                                "connection-point name at VNFD '{}'".format(
+                                str(nsd["id"]), str(rsp["id"]), str(iface["vnfd-egress-connection-point-ref"]),
+                                str(iface.get("vnfd-id-ref"))[:255]), HTTP_Bad_Request)
+
+                        ingress_interface_uuid = ingress_existing_ifaces[0]["uuid"]
+                        egress_interface_uuid = egress_existing_ifaces[0]["uuid"]
                         sce_rsp_hop_uuid = str(uuid4())
                         uuid_list.append(sce_rsp_hop_uuid)
                         db_sce_rsp_hop = {
                             "uuid": sce_rsp_hop_uuid,
                             "if_order": if_order,
-                            "interface_id": interface_uuid,
+                            "ingress_interface_id": ingress_interface_uuid,
+                            "egress_interface_id": egress_interface_uuid,
                             "sce_vnf_id": vnf_index2scevnf_uuid[vnf_index],
                             "sce_rsp_id": sce_rsp_uuid,
                         }
@@ -2958,8 +2974,8 @@ def get_datacenter_by_name_uuid(mydb, tenant_id, datacenter_id_name=None, **extr
 
 
 def update(d, u):
-    '''Takes dict d and updates it with the values in dict u.'''
-    '''It merges all depth levels'''
+    """Takes dict d and updates it with the values in dict u.
+       It merges all depth levels"""
     for k, v in u.iteritems():
         if isinstance(v, collections.Mapping):
             r = update(d.get(k, {}), v)
@@ -3352,8 +3368,9 @@ def create_instance(mydb, tenant_id, instance_dict):
                 sfs_created = []
                 for cp in rsp['connection_points']:
                     count = mydb.get_rows(
-                            SELECT=('vms.count'),
-                            FROM="vms join interfaces on vms.uuid=interfaces.vm_id join sce_rsp_hops as h on interfaces.uuid=h.interface_id",
+                            SELECT='vms.count',
+                            FROM="vms join interfaces on vms.uuid=interfaces.vm_id join sce_rsp_hops as h "
+                                 "on interfaces.uuid=h.ingress_interface_id",
                             WHERE={'h.uuid': cp['uuid']})[0]['count']
                     instance_vnf = next((item for item in db_instance_vnfs if item['sce_vnf_id'] == cp['sce_vnf_id']), None)
                     instance_vms = [item for item in db_instance_vms if item['instance_vnf_id'] == instance_vnf['uuid']]
@@ -3368,6 +3385,10 @@ def create_instance(mydb, tenant_id, instance_dict):
                     for i in range(count):
                         # create sfis
                         sfi_uuid = str(uuid4())
+                        extra_params = {
+                            "ingress_interface_id": cp["ingress_interface_id"],
+                            "egress_interface_id": cp["egress_interface_id"]
+                        }
                         uuid_list.append(sfi_uuid)
                         db_sfi = {
                             "uuid": sfi_uuid,
@@ -3386,7 +3407,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                             "status": "SCHEDULED",
                             "item": "instance_sfis",
                             "item_id": sfi_uuid,
-                            "extra": yaml.safe_dump({"params": "", "depends_on": [dependencies[i]]},
+                            "extra": yaml.safe_dump({"params": extra_params, "depends_on": [dependencies[i]]},
                                                     default_flow_style=True, width=256)
                         }
                         sfis_created.append(task_index)

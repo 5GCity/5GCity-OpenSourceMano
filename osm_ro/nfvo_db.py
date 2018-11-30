@@ -21,9 +21,9 @@
 # contact with: nfvlabs@tid.es
 ##
 
-'''
+"""
 NFVO DB engine. It implements all the methods to interact with the Openmano Database
-'''
+"""
 __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$28-aug-2014 10:05:01$"
 
@@ -724,7 +724,8 @@ class nfvo_db(db_base.db_base):
                         self.cur.execute(cmd)
                         vnffg['rsps'] = self.cur.fetchall()
                         for rsp in vnffg['rsps']:
-                            cmd = "SELECT uuid,if_order,interface_id,sce_vnf_id FROM sce_rsp_hops WHERE sce_rsp_id='{}' "\
+                            cmd = "SELECT uuid,if_order,ingress_interface_id,egress_interface_id,sce_vnf_id " \
+                                  "FROM sce_rsp_hops WHERE sce_rsp_id='{}' "\
                                   "ORDER BY created_at".format(rsp['uuid'])
                             self.logger.debug(cmd)
                             self.cur.execute(cmd)

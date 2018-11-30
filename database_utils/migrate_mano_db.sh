@@ -34,7 +34,7 @@ DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=34
+LAST_DB_VERSION=35
 
 # Detect paths
 MYSQL=$(which mysql)
@@ -203,6 +203,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5070 ] && DB_VERSION=32  #0.5.70 =>  32
 #[ $OPENMANO_VER_NUM -ge 5082 ] && DB_VERSION=33  #0.5.82 =>  33
 #[ $OPENMANO_VER_NUM -ge 6000 ] && DB_VERSION=34  #0.6.00 =>  34
+#[ $OPENMANO_VER_NUM -ge 6001 ] && DB_VERSION=35  #0.6.01 =>  35
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -1296,20 +1297,18 @@ function downgrade_from_32(){
 }
 
 function upgrade_to_33(){
-    echo "      Add PDU information to 'vms"
+    echo "      Add PDU information to 'vms'"
     sql "ALTER TABLE vms ADD COLUMN pdu_type VARCHAR(255) NULL DEFAULT NULL AFTER osm_id;"
     sql "ALTER TABLE instance_nets ADD COLUMN vim_name VARCHAR(255) NULL DEFAULT NULL AFTER vim_net_id;"
     sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
          "VALUES (33, '0.33', '0.5.82', 'Add pdu information to vms', '2018-11-13');"
 }
 function downgrade_from_33(){
-    echo "      Remove back PDU information from' vms'"
+    echo "      Remove back PDU information from 'vms'"
     sql "ALTER TABLE vms DROP COLUMN pdu_type;"
     sql "ALTER TABLE instance_nets DROP COLUMN vim_name;"
     sql "DELETE FROM schema_version WHERE version_int='33';"
 }
-
-
 function upgrade_to_X(){
     echo "      change 'datacenter_nets'"
     sql "ALTER TABLE datacenter_nets ADD COLUMN vim_tenant_id VARCHAR(36) NOT NULL AFTER datacenter_id, DROP INDEX name_datacenter_id, ADD UNIQUE INDEX name_datacenter_id (name, datacenter_id, vim_tenant_id);"
@@ -1318,19 +1317,26 @@ function downgrade_from_X(){
     echo "      Change back 'datacenter_nets'"
     sql "ALTER TABLE datacenter_nets DROP COLUMN vim_tenant_id, DROP INDEX name_datacenter_id, ADD UNIQUE INDEX name_datacenter_id (name, datacenter_id);"
 }
-
 function upgrade_to_34() {
     echo "      Create databases required for WIM features"
     script="$(find "${DBUTILS}/migrations/up" -iname "34*.sql" | tail -1)"
     sql "source ${script}"
 }
-
 function downgrade_from_34() {
     echo "      Drop databases required for WIM features"
     script="$(find "${DBUTILS}/migrations/down" -iname "34*.sql" | tail -1)"
     sql "source ${script}"
 }
-
+function upgrade_to_35(){
+    echo "      Create databases required for WIM features"
+    script="$(find "${DBUTILS}/migrations/up" -iname "35*.sql" | tail -1)"
+    sql "source ${script}"
+}
+function downgrade_from_35(){
+    echo "      Drop databases required for WIM features"
+    script="$(find "${DBUTILS}/migrations/down" -iname "35*.sql" | tail -1)"
+    sql "source ${script}"
+}
 #TODO ... put functions here
 
 # echo "db version = "${DATABASE_VER_NUM}
