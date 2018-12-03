@@ -24,6 +24,7 @@
 #
 #Upgrade/Downgrade openmano database preserving the content
 #
+DBUTILS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 DBUSER="mano"
 DBPASS=""
@@ -33,7 +34,7 @@ DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=33
+LAST_DB_VERSION=34
 
 # Detect paths
 MYSQL=$(which mysql)
@@ -201,6 +202,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5061 ] && DB_VERSION=31  #0.5.61 =>  31
 #[ $OPENMANO_VER_NUM -ge 5070 ] && DB_VERSION=32  #0.5.70 =>  32
 #[ $OPENMANO_VER_NUM -ge 5082 ] && DB_VERSION=33  #0.5.82 =>  33
+#[ $OPENMANO_VER_NUM -ge 6000 ] && DB_VERSION=34  #0.6.00 =>  34
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -222,8 +224,8 @@ function upgrade_to_1(){
 }
 function downgrade_from_1(){
     # echo "    downgrade database from version 0.1 to version 0.0"
-    echo "      DROP TABLE \`schema_version\`"
-    sql "DROP TABLE \`schema_version\`;"
+    echo "      DROP TABLE IF EXISTS \`schema_version\`"
+    sql "DROP TABLE IF EXISTS \`schema_version\`;"
 }
 function upgrade_to_2(){
     # echo "    upgrade database from version 0.1 to version 0.2"
@@ -304,11 +306,11 @@ function downgrade_from_2(){
     echo "      Delete columns 'user/passwd' from 'vim_tenants'"
     sql "ALTER TABLE vim_tenants DROP COLUMN user, DROP COLUMN passwd; "
     echo "        delete tables 'datacenter_images', 'images'"
-    sql "DROP TABLE \`datacenters_images\`;"
-    sql "DROP TABLE \`images\`;"
+    sql "DROP TABLE IF EXISTS \`datacenters_images\`;"
+    sql "DROP TABLE IF EXISTS \`images\`;"
     echo "        delete tables 'datacenter_flavors', 'flavors'"
-    sql "DROP TABLE \`datacenters_flavors\`;"
-    sql "DROP TABLE \`flavors\`;"
+    sql "DROP TABLE IF EXISTS \`datacenters_flavors\`;"
+    sql "DROP TABLE IF EXISTS \`flavors\`;"
     sql "DELETE FROM schema_version WHERE version_int='2';"
 }
 
@@ -622,7 +624,7 @@ function upgrade_to_12(){
 function downgrade_from_12(){
     # echo "    downgrade database from version 0.12 to version 0.11"
     echo "      delete ip_profiles table, and remove ip_address column in 'interfaces' and 'sce_interfaces'"
-    sql "DROP TABLE ip_profiles;"
+    sql "DROP TABLE IF EXISTS ip_profiles;"
     sql "ALTER TABLE interfaces DROP COLUMN ip_address;"
     sql "ALTER TABLE sce_interfaces DROP COLUMN ip_address;"
     sql "DELETE FROM schema_version WHERE version_int='12';"
@@ -1006,8 +1008,8 @@ function downgrade_from_26(){
 	    "REFERENCES scenarios (uuid);"
 
     echo "      Delete table instance_actions"
-    sql "DROP TABLE vim_actions"
-    sql "DROP TABLE instance_actions"
+    sql "DROP TABLE IF EXISTS vim_actions"
+    sql "DROP TABLE IF EXISTS instance_actions"
     sql "DELETE FROM schema_version WHERE version_int='26';"
 }
 
@@ -1220,24 +1222,24 @@ function upgrade_to_28(){
 function downgrade_from_28(){
     echo "      [Undo adding the VNFFG tables]"
     echo "      Dropping instance_sfps"
-    sql "DROP TABLE instance_sfps;"
+    sql "DROP TABLE IF EXISTS instance_sfps;"
     echo "      Dropping sce_classifications"
-    sql "DROP TABLE instance_classifications;"
+    sql "DROP TABLE IF EXISTS instance_classifications;"
     echo "      Dropping instance_sfs"
-    sql "DROP TABLE instance_sfs;"
+    sql "DROP TABLE IF EXISTS instance_sfs;"
     echo "      Dropping instance_sfis"
-    sql "DROP TABLE instance_sfis;"
+    sql "DROP TABLE IF EXISTS instance_sfis;"
     echo "      Dropping sce_classifier_matches"
     echo "      [Undo adding the VNFFG-SFC instance mapping tables]"
-    sql "DROP TABLE sce_classifier_matches;"
+    sql "DROP TABLE IF EXISTS sce_classifier_matches;"
     echo "      Dropping sce_classifiers"
-    sql "DROP TABLE sce_classifiers;"
+    sql "DROP TABLE IF EXISTS sce_classifiers;"
     echo "      Dropping sce_rsp_hops"
-    sql "DROP TABLE sce_rsp_hops;"
+    sql "DROP TABLE IF EXISTS sce_rsp_hops;"
     echo "      Dropping sce_rsps"
-    sql "DROP TABLE sce_rsps;"
+    sql "DROP TABLE IF EXISTS sce_rsps;"
     echo "      Dropping sce_vnffgs"
-    sql "DROP TABLE sce_vnffgs;"
+    sql "DROP TABLE IF EXISTS sce_vnffgs;"
     echo "      [Altering vim_actions table]"
     sql "ALTER TABLE vim_actions MODIFY COLUMN item ENUM('datacenters_flavors','datacenter_images','instance_nets','instance_vms','instance_interfaces') NOT NULL COMMENT 'table where the item is stored'"
     sql "DELETE FROM schema_version WHERE version_int='28';"
@@ -1316,6 +1318,19 @@ function downgrade_from_X(){
     echo "      Change back 'datacenter_nets'"
     sql "ALTER TABLE datacenter_nets DROP COLUMN vim_tenant_id, DROP INDEX name_datacenter_id, ADD UNIQUE INDEX name_datacenter_id (name, datacenter_id);"
 }
+
+function upgrade_to_34() {
+    echo "      Create databases required for WIM features"
+    script="$(find "${DBUTILS}/migrations/up" -iname "34*.sql" | tail -1)"
+    sql "source ${script}"
+}
+
+function downgrade_from_34() {
+    echo "      Drop databases required for WIM features"
+    script="$(find "${DBUTILS}/migrations/down" -iname "34*.sql" | tail -1)"
+    sql "source ${script}"
+}
+
 #TODO ... put functions here
 
 # echo "db version = "${DATABASE_VER_NUM}

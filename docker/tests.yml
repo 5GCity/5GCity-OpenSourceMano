@@ -1,0 +1,37 @@
+# This file is intended to be used by the developer in the local machine
+# in order to run the tests in isolation
+# To do so, cd into osm_ro and run:
+# docker-compose -f ../docker/tests.yml run --rm tox -c <folder to be tested, eg. wim>
+version: '2'
+services:
+  test-db:
+    image: mysql:5
+    container_name: test-db
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=osm4u
+      - MYSQL_USER=mano
+      - MYSQL_PASSWORD=manopw
+      - MYSQL_DATABASE=mano_db
+  tox:
+    container_name: tox
+    depends_on:
+      - test-db
+    build:
+      context: ../
+      dockerfile: docker/tests.dockerfile
+    restart: always
+    environment:
+      - RO_DB_ROOT_PASSWORD=osm4u
+      - TEST_DB_HOST=test-db
+      - TEST_DB_USER=mano
+      - TEST_DB_PASSWORD=manopw
+      - TEST_DB_DATABASE=mano_db
+    ports:
+      - "9090:9090"
+    volumes:
+      - ..:/opt/openmano
+      - /tmp/osm/openmano/logs:/var/log/osm
+    entrypoint:
+      - tox
+    working_dir: /opt/openmano/osm_ro

@@ -44,6 +44,8 @@ import yaml
 import random
 import re
 import copy
+from pprint import pformat
+from types import StringTypes
 
 from novaclient import client as nClient, exceptions as nvExceptions
 from keystoneauth1.identity import v2, v3
@@ -76,6 +78,18 @@ supportedClassificationTypes = ['legacy_flow_classifier']
 #global var to have a timeout creating and deleting volumes
 volume_timeout = 600
 server_timeout = 600
+
+
+class SafeDumper(yaml.SafeDumper):
+    def represent_data(self, data):
+        # Openstack APIs use custom subclasses of dict and YAML safe dumper
+        # is designed to not handle that (reference issue 142 of pyyaml)
+        if isinstance(data, dict) and data.__class__ != dict:
+            # A simple solution is to convert those items back to dicts
+            data = dict(data.items())
+
+        return super(SafeDumper, self).represent_data(data)
+
 
 class vimconnector(vimconn.vimconnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None,
@@ -158,11 +172,30 @@ class vimconnector(vimconn.vimconnector):
             vimconn.vimconnector.__setitem__(self, index, value)
         self.session['reload_client'] = True
 
+    def serialize(self, value):
+        """Serialization of python basic types.
+
+        In the case value is not serializable a message will be logged and a
+        simple representation of the data that cannot be converted back to
+        python is returned.
+        """
+        if isinstance(value, StringTypes):
+            return value
+
+        try:
+            return yaml.dump(value, Dumper=SafeDumper,
+                             default_flow_style=True, width=256)
+        except yaml.representer.RepresenterError:
+                self.logger.debug(
+                    'The following entity cannot be serialized in YAML:'
+                    '\n\n%s\n\n', pformat(value), exc_info=True)
+                return str(value)
+
     def _reload_connection(self):
         '''Called before any operation, it check if credentials has changed
         Throw keystoneclient.apiclient.exceptions.AuthorizationFailure
         '''
-        #TODO control the timing and possible token timeout, but it seams that python client does this task for us :-) 
+        #TODO control the timing and possible token timeout, but it seams that python client does this task for us :-)
         if self.session['reload_client']:
             if self.config.get('APIversion'):
                 self.api_version3 = self.config['APIversion'] == 'v3.3' or self.config['APIversion'] == '3'
@@ -563,13 +596,13 @@ class vimconnector(vimconn.vimconnector):
                 net_id:         #VIM id of this network
                     status:     #Mandatory. Text with one of:
                                 #  DELETED (not found at vim)
-                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...) 
+                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
                                 #  OTHER (Vim reported other status not understood)
                                 #  ERROR (VIM indicates an ERROR status)
-                                #  ACTIVE, INACTIVE, DOWN (admin down), 
+                                #  ACTIVE, INACTIVE, DOWN (admin down),
                                 #  BUILD (on building process)
                                 #
-                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR 
+                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
                     vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
 
         '''
@@ -586,10 +619,9 @@ class vimconnector(vimconn.vimconnector):
 
                 if net['status'] == "ACTIVE" and not net_vim['admin_state_up']:
                     net['status'] = 'DOWN'
-                try:
-                    net['vim_info'] = yaml.safe_dump(net_vim, default_flow_style=True, width=256)
-                except yaml.representer.RepresenterError:
-                    net['vim_info'] = str(net_vim)
+
+                net['vim_info'] = self.serialize(net_vim)
+
                 if net_vim.get('fault'):  #TODO
                     net['error_msg'] = str(net_vim['fault'])
             except vimconn.vimconnNotFoundException as e:
@@ -1271,13 +1303,13 @@ class vimconnector(vimconn.vimconnector):
         Params:
             vm_id: uuid of the VM
             console_type, can be:
-                "novnc" (by default), "xvpvnc" for VNC types, 
+                "novnc" (by default), "xvpvnc" for VNC types,
                 "rdp-html5" for RDP types, "spice-html5" for SPICE types
         Returns dict with the console parameters:
                 protocol: ssh, ftp, http, https, ...
-                server:   usually ip address 
-                port:     the http, ssh, ... port 
-                suffix:   extra text, e.g. the http path and query string   
+                server:   usually ip address
+                port:     the http, ssh, ... port
+                suffix:   extra text, e.g. the http path and query string
         '''
         self.logger.debug("Getting VM CONSOLE from VIM")
         try:
@@ -1377,14 +1409,14 @@ class vimconnector(vimconn.vimconnector):
                 vm_id:          #VIM id of this Virtual Machine
                     status:     #Mandatory. Text with one of:
                                 #  DELETED (not found at vim)
-                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...) 
+                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
                                 #  OTHER (Vim reported other status not understood)
                                 #  ERROR (VIM indicates an ERROR status)
-                                #  ACTIVE, PAUSED, SUSPENDED, INACTIVE (not running), 
+                                #  ACTIVE, PAUSED, SUSPENDED, INACTIVE (not running),
                                 #  CREATING (on building process), ERROR
                                 #  ACTIVE:NoMgmtIP (Active but any of its interface has an IP address
                                 #
-                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR 
+                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
                     vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
                     interfaces:
                      -  vim_info:         #Text with plain information obtained from vim (yaml.safe_dump)
@@ -1407,10 +1439,9 @@ class vimconnector(vimconn.vimconnector):
                 else:
                     vm['status']    = "OTHER"
                     vm['error_msg'] = "VIM status reported " + vm_vim['status']
-                try:
-                    vm['vim_info']  = yaml.safe_dump(vm_vim, default_flow_style=True, width=256)
-                except yaml.representer.RepresenterError:
-                    vm['vim_info'] = str(vm_vim)
+
+                vm['vim_info'] = self.serialize(vm_vim)
+
                 vm["interfaces"] = []
                 if vm_vim.get('fault'):
                     vm['error_msg'] = str(vm_vim['fault'])
@@ -1420,20 +1451,17 @@ class vimconnector(vimconn.vimconnector):
                     port_dict = self.neutron.list_ports(device_id=vm_id)
                     for port in port_dict["ports"]:
                         interface={}
-                        try:
-                            interface['vim_info'] = yaml.safe_dump(port, default_flow_style=True, width=256)
-                        except yaml.representer.RepresenterError:
-                            interface['vim_info'] = str(port)
+                        interface['vim_info'] = self.serialize(port)
                         interface["mac_address"] = port.get("mac_address")
                         interface["vim_net_id"] = port["network_id"]
                         interface["vim_interface_id"] = port["id"]
-                        # check if OS-EXT-SRV-ATTR:host is there, 
+                        # check if OS-EXT-SRV-ATTR:host is there,
                         # in case of non-admin credentials, it will be missing
                         if vm_vim.get('OS-EXT-SRV-ATTR:host'):
                             interface["compute_node"] = vm_vim['OS-EXT-SRV-ATTR:host']
                         interface["pci"] = None
 
-                        # check if binding:profile is there, 
+                        # check if binding:profile is there,
                         # in case of non-admin credentials, it will be missing
                         if port.get('binding:profile'):
                             if port['binding:profile'].get('pci_slot'):

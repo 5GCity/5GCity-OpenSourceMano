@@ -565,7 +565,168 @@ class openmanoclient():
         if mano_response.status_code==200:
             return content
         else:
-            raise OpenmanoResponseException(str(content))        
+            raise OpenmanoResponseException(str(content))
+
+    # WIMS
+
+    def list_wims(self, all_tenants=False, **kwargs):
+        '''Obtain a list of wims, that are the WIM information at openmano
+        Params: can be filtered by 'uuid','name','wim_url','type'
+        Return: Raises an exception on error
+                Obtain a dictionary with format {'wims':[{wim1_info},{wim2_info},...]}}
+        '''
+        return self._list_item("wims", all_tenants, filter_dict=kwargs)
+
+    def get_wim(self, uuid=None, name=None, all_tenants=False):
+        '''Obtain the information of a wim
+        Params: uuid or/and name. If only name is supplied, there must be only one or an exception is raised
+        Return: Raises an exception on error, not found, found several
+                Obtain a dictionary with format {'wim':{wim_info}}
+        '''
+        return self._get_item("wims", uuid, name, all_tenants)
+
+    def delete_wim(self, uuid=None, name=None):
+        '''Delete a wim
+        Params: uuid or/and name. If only name is supplied, there must be only one or an exception is raised
+        Return: Raises an exception on error, not found, found several, not free
+                Obtain a dictionary with format {'result': text indicating deleted}
+        '''
+        if not uuid:
+            # check that exist
+            uuid = self._get_item_uuid("wims", uuid, name, all_tenants=True)
+        return self._del_item("wims", uuid, name, all_tenants=None)
+
+    def create_wim(self, descriptor=None, descriptor_format=None, name=None, wim_url=None, **kwargs):
+        # , type="openvim", public=False, description=None):
+        '''Creates a wim
+        Params: must supply a descriptor or/and just a name and a wim_url
+            descriptor: with format {'wim':{new_wim_info}}
+                new_wim_info must contain 'name', 'wim_url', and optionally 'description'
+                must be a dictionary or a json/yaml text.
+            name: the wim name. Overwrite descriptor name if any
+            wim_url: the wim URL. Overwrite descriptor vim_url if any
+            wim_type: the WIM type, can be tapi, odl, onos. Overwrite descriptor type if any
+            public: boolean, by default not public
+            description: wim description. Overwrite descriptor description if any
+            config: dictionary with extra configuration for the concrete wim
+        Return: Raises an exception on error
+                Obtain a dictionary with format {'wim:{new_wim_info}}
+        '''
+        if isinstance(descriptor, str):
+            descriptor = self.parse(descriptor, descriptor_format)
+        elif descriptor:
+            pass
+        elif name and wim_url:
+            descriptor = {"wim": {"name": name, "wim_url": wim_url}}
+        else:
+            raise OpenmanoBadParamsException("Missing descriptor, or name and wim_url")
+
+        if 'wim' not in descriptor or len(descriptor) != 1:
+            raise OpenmanoBadParamsException("Descriptor must contain only one 'wim' field")
+        if name:
+            descriptor['wim']['name'] = name
+        if wim_url:
+            descriptor['wim']['wim_url'] = wim_url
+        for param in kwargs:
+            descriptor['wim'][param] = kwargs[param]
+
+        return self._create_item("wims", descriptor, all_tenants=None)
+
+    def edit_wim(self, uuid=None, name=None, descriptor=None, descriptor_format=None, all_tenants=False,
+                        **kwargs):
+        '''Edit the parameters of a wim
+        Params: must supply a descriptor or/and a parameter to change
+            uuid or/and name. If only name is supplied, there must be only one or an exception is raised
+            descriptor: with format {'wim':{params to change info}}
+                must be a dictionary or a json/yaml text.
+            parameters to change can be supplied by the descriptor or as parameters:
+                new_name: the wim name
+                wim_url: the wim URL
+                wim_type: the wim type, can be tapi, onos, odl
+                public: boolean, available to other tenants
+                description: wim description
+        Return: Raises an exception on error, not found or found several
+                Obtain a dictionary with format {'wim':{new_wim_info}}
+        '''
+        if isinstance(descriptor, str):
+            descriptor = self.parse(descriptor, descriptor_format)
+        elif descriptor:
+            pass
+        elif kwargs:
+            descriptor = {"wim": {}}
+        else:
+            raise OpenmanoBadParamsException("Missing descriptor")
+
+        if 'wim' not in descriptor or len(descriptor) != 1:
+            raise OpenmanoBadParamsException("Descriptor must contain only one 'wim' field")
+        for param in kwargs:
+            if param == 'new_name':
+                descriptor['wim']['name'] = kwargs[param]
+            else:
+                descriptor['wim'][param] = kwargs[param]
+        return self._edit_item("wims", descriptor, uuid, name, all_tenants=None)
+
+    def attach_wim(self, uuid=None, name=None, descriptor=None, descriptor_format=None, wim_user=None,
+                          wim_password=None, wim_tenant_name=None, wim_tenant_id=None):
+        # check that exist
+        uuid = self._get_item_uuid("wims", uuid, name, all_tenants=True)
+        tenant_text = "/" + self._get_tenant()
+
+        if isinstance(descriptor, str):
+            descriptor = self.parse(descriptor, descriptor_format)
+        elif descriptor:
+            pass
+        elif wim_user or wim_password or wim_tenant_name or wim_tenant_id:
+            descriptor = {"wim": {}}
+        else:
+            raise OpenmanoBadParamsException("Missing descriptor or params")
+
+        if wim_user or wim_password or wim_tenant_name or wim_tenant_id:
+            # print args.name
+            try:
+                if wim_user:
+                    descriptor['wim']['wim_user'] = wim_user
+                if wim_password:
+                    descriptor['wim']['wim_password'] = wim_password
+                if wim_tenant_name:
+                    descriptor['wim']['wim_tenant_name'] = wim_tenant_name
+                if wim_tenant_id:
+                    descriptor['wim']['wim_tenant'] = wim_tenant_id
+            except (KeyError, TypeError) as e:
+                if str(e) == 'wim':
+                    error_pos = "missing field 'wim'"
+                else:
+                    error_pos = "wrong format"
+                raise OpenmanoBadParamsException("Wrong wim descriptor: " + error_pos)
+
+        payload_req = yaml.safe_dump(descriptor)
+        # print payload_req
+        URLrequest = "{}{}/wims/{}".format(self.endpoint_url, tenant_text, uuid)
+        self.logger.debug("openmano POST %s %s", URLrequest, payload_req)
+        mano_response = requests.post(URLrequest, headers=self.headers_req, data=payload_req)
+        self.logger.debug("openmano response: %s", mano_response.text)
+
+        content = self._parse_yaml(mano_response.text, response=True)
+        if mano_response.status_code == 200:
+            return content
+        else:
+            raise OpenmanoResponseException(str(content))
+
+    def detach_wim(self, uuid=None, name=None):
+        if not uuid:
+            # check that exist
+            uuid = self._get_item_uuid("wims", uuid, name, all_tenants=False)
+        tenant_text = "/" + self._get_tenant()
+        URLrequest = "{}{}/wims/{}".format(self.endpoint_url, tenant_text, uuid)
+        self.logger.debug("openmano DELETE %s", URLrequest)
+        mano_response = requests.delete(URLrequest, headers=self.headers_req)
+        self.logger.debug("openmano response: %s", mano_response.text)
+
+        content = self._parse_yaml(mano_response.text, response=True)
+        if mano_response.status_code == 200:
+            return content
+        else:
+            raise OpenmanoResponseException(str(content))
 
     #VNFS
     def list_vnfs(self, all_tenants=False, **kwargs):

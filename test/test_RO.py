@@ -2287,6 +2287,72 @@ def test_vim(args):
     return executed, failed
 
 
+def test_wim(args):
+    global test_config
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/osm_ro")
+    import openmanoclient
+    executed = 0
+    failed = 0
+    test_config["client"] = openmanoclient.openmanoclient(
+        endpoint_url=args.endpoint_url,
+        tenant_name=args.tenant_name,
+        datacenter_name=args.datacenter,
+        debug=args.debug, logger=test_config["logger_name"])
+    clsmembers = inspect.getmembers(sys.modules[__name__], inspect.isclass)
+    # If only want to obtain a tests list print it and exit
+    if args.list_tests:
+        tests_names = []
+        for cls in clsmembers:
+            if cls[0].startswith('test_WIM'):
+                tests_names.append(cls[0])
+
+        msg = "The 'wim' set tests are:\n\t" + ', '.join(sorted(tests_names)) +\
+              "\nNOTE: The test test_VIM_tenant_operations will fail in case the used datacenter is type OpenStack " \
+              "unless RO has access to the admin endpoint. Therefore this test is excluded by default"
+        print(msg)
+        logger.info(msg)
+        sys.exit(0)
+
+    # Create the list of tests to be run
+    code_based_tests = []
+    if args.tests:
+        for test in args.tests:
+            for t in test.split(','):
+                matches_code_based_tests = [item for item in clsmembers if item[0] == t]
+                if len(matches_code_based_tests) > 0:
+                    code_based_tests.append(matches_code_based_tests[0][1])
+                else:
+                    logger.critical("Test '{}' is not among the possible ones".format(t))
+                    sys.exit(1)
+    if not code_based_tests:
+        # include all tests
+        for cls in clsmembers:
+            # We exclude 'test_VIM_tenant_operations' unless it is specifically requested by the user
+            if cls[0].startswith('test_VIM') and cls[0] != 'test_VIM_tenant_operations':
+                code_based_tests.append(cls[1])
+
+    logger.debug("tests to be executed: {}".format(code_based_tests))
+
+    # TextTestRunner stream is set to /dev/null in order to avoid the method to directly print the result of tests.
+    # This is handled in the tests using logging.
+    stream = open('/dev/null', 'w')
+
+    # Run code based tests
+    basic_tests_suite = unittest.TestSuite()
+    for test in code_based_tests:
+        basic_tests_suite.addTest(unittest.makeSuite(test))
+    result = unittest.TextTestRunner(stream=stream, failfast=failfast).run(basic_tests_suite)
+    executed += result.testsRun
+    failed += len(result.failures) + len(result.errors)
+    if failfast and failed:
+        sys.exit(1)
+    if len(result.failures) > 0:
+        logger.debug("failures : {}".format(result.failures))
+    if len(result.errors) > 0:
+        logger.debug("errors : {}".format(result.errors))
+    return executed, failed
+
+
 def test_deploy(args):
     global test_config
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/osm_ro")
@@ -2426,6 +2492,19 @@ if __name__=="__main__":
     # Optional arguments
     vimconn_parser.add_argument('-u', '--url', dest='endpoint_url', default='http://localhost:9090/openmano',
                                help="Set the openmano server url. By default 'http://localhost:9090/openmano'")
+
+    # WIM test set
+    # -------------------
+    vimconn_parser = subparsers.add_parser('wim', parents=[parent_parser], help="test wim")
+    vimconn_parser.set_defaults(func=test_wim)
+
+    # Mandatory arguments
+    mandatory_arguments = vimconn_parser.add_argument_group('mandatory arguments')
+    mandatory_arguments.add_argument('-d', '--datacenter', required=True, help='Set the datacenter to test')
+
+    # Optional arguments
+    vimconn_parser.add_argument('-u', '--url', dest='endpoint_url', default='http://localhost:9090/openmano',
+                                help="Set the openmano server url. By default 'http://localhost:9090/openmano'")
 
     argcomplete.autocomplete(parser)
     args = parser.parse_args()

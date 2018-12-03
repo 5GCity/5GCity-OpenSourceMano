@@ -24,7 +24,7 @@
 ##
 
 """
-openmano client used to interact with openmano-server (openmanod) 
+openmano client used to interact with openmano-server (openmanod)
 """
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ = "$09-oct-2014 09:09:48$"
@@ -65,6 +65,10 @@ def config(args):
         mano_tenant_name = "None"
         mano_datacenter_id = "None"
         mano_datacenter_name = "None"
+        # WIM additions
+        logger.debug("resolving WIM names")
+        mano_wim_id = "None"
+        mano_wim_name = "None"
         try:
             mano_tenant_id = _get_item_uuid("tenants", mano_tenant)
             URLrequest = "http://%s:%s/openmano/tenants/%s" %(mano_host, mano_port, mano_tenant_id)
@@ -79,17 +83,35 @@ def config(args):
             if "error" not in content:
                 mano_datacenter_id = content["datacenter"]["uuid"]
                 mano_datacenter_name = content["datacenter"]["name"]
+
+            # WIM
+            URLrequest = "http://%s:%s/openmano/%s/wims/%s" % (
+            mano_host, mano_port, mano_tenant_id, mano_wim)
+            mano_response = requests.get(URLrequest)
+            logger.debug("openmano response: %s", mano_response.text)
+            content = mano_response.json()
+            if "error" not in content:
+                mano_wim_id = content["wim"]["uuid"]
+                mano_wim_name = content["wim"]["name"]
+
         except OpenmanoCLIError:
             pass
         print "OPENMANO_TENANT: %s" %mano_tenant
         print "    Id: %s" %mano_tenant_id
-        print "    Name: %s" %mano_tenant_name 
+        print "    Name: %s" %mano_tenant_name
         print "OPENMANO_DATACENTER: %s" %str (mano_datacenter)
         print "    Id: %s" %mano_datacenter_id
-        print "    Name: %s" %mano_datacenter_name 
+        print "    Name: %s" %mano_datacenter_name
+        # WIM
+        print "OPENMANO_WIM: %s" %str (mano_wim)
+        print "    Id: %s" %mano_wim_id
+        print "    Name: %s" %mano_wim_name
+
     else:
         print "OPENMANO_TENANT: %s" %mano_tenant
         print "OPENMANO_DATACENTER: %s" %str (mano_datacenter)
+        # WIM
+        print "OPENMANO_WIM: %s" %str (mano_wim)
 
 def _print_verbose(mano_response, verbose_level=0):
     content = mano_response.json()
@@ -98,7 +120,7 @@ def _print_verbose(mano_response, verbose_level=0):
         #print "Non expected format output"
         print str(content)
         return result
-    
+
     val=content.values()[0]
     if type(val)==str:
         print val
@@ -111,7 +133,7 @@ def _print_verbose(mano_response, verbose_level=0):
         #print "Non expected dict/list format output"
         print str(content)
         return result
-    
+
     #print content_list
     if verbose_level==None:
         verbose_level=0
@@ -163,7 +185,7 @@ def parser_json_yaml(file_name):
         f.close()
     except Exception as e:
         return (False, str(e))
-           
+
     #Read and parse file
     if file_name[-5:]=='.yaml' or file_name[-4:]=='.yml' or (file_name[-5:]!='.json' and '\t' not in text):
         try:
@@ -176,7 +198,7 @@ def parser_json_yaml(file_name):
             return (False, "Error loading file '"+file_name+"' yaml format error" + error_pos)
     else: #json
         try:
-            config = json.loads(text) 
+            config = json.loads(text)
         except Exception as e:
             return (False, "Error loading file '"+file_name+"' json format error " + str(e) )
 
@@ -234,7 +256,7 @@ def _get_item_uuid(item, item_name_id, tenant=None):
     elif found > 1:
         raise OpenmanoCLIError("%d %s found with name '%s'. uuid must be used" %(found, item, item_name_id))
     return uuid
-# 
+#
 # def check_valid_uuid(uuid):
 #     id_schema = {"type" : "string", "pattern": "^[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$"}
 #     try:
@@ -242,7 +264,7 @@ def _get_item_uuid(item, item_name_id, tenant=None):
 #         return True
 #     except js_e.ValidationError:
 #         return False
-    
+
 def _get_tenant(tenant_name_id = None):
     if not tenant_name_id:
         tenant_name_id = mano_tenant
@@ -256,6 +278,14 @@ def _get_datacenter(datacenter_name_id = None, tenant = "any"):
         if not datacenter_name_id:
             raise OpenmanoCLIError("neither 'OPENMANO_DATACENTER' environment variable is set nor --datacenter option is used")
     return _get_item_uuid("datacenters", datacenter_name_id, tenant)
+
+# WIM
+def _get_wim(wim_name_id = None, tenant = "any"):
+    if not wim_name_id:
+        wim_name_id = mano_wim
+        if not wim_name_id:
+            raise OpenmanoCLIError("neither 'OPENMANO_WIM' environment variable is set nor --wim option is used")
+    return _get_item_uuid("wims", wim_name_id, tenant)
 
 def vnf_create(args):
     #print "vnf-create",args
@@ -357,11 +387,11 @@ def vnf_create(args):
             elif str(e) == 'image checksum':  error_pos= "missing field 'vnf':'VNFC'['image checksum']"
             else:                       error_pos="wrong format"
             print "Wrong VNF descriptor: " + error_pos
-            return -1 
+            return -1
     payload_req = json.dumps(myvnf)
-        
+
     #print payload_req
-        
+
     URLrequest = "http://{}:{}/openmano{}/{}/{token}".format(mano_host, mano_port, api_version, tenant, token=token)
     logger.debug("openmano request: %s", payload_req)
     mano_response = requests.post(URLrequest, headers = headers_req, data=payload_req)
@@ -486,7 +516,7 @@ def scenario_create(args):
         nsd['description'] = args.description
     payload_req = yaml.safe_dump(myscenario, explicit_start=True, indent=4, default_flow_style=False, tags=False,
                                  encoding='utf-8', allow_unicode=True)
-    
+
     # print payload_req
     URLrequest = "http://{host}:{port}/openmano{api}/{tenant}/{token}".format(
         host=mano_host, port=mano_port, api=api_version, tenant=tenant, token=token)
@@ -607,26 +637,26 @@ def scenario_deploy(args):
 #         action[actionCmd]["datacenter"] = args.datacenter
 #     elif mano_datacenter != None:
 #         action[actionCmd]["datacenter"] = mano_datacenter
-#         
+#
 #     if args.description:
 #         action[actionCmd]["description"] = args.description
 #     payload_req = json.dumps(action, indent=4)
 #     #print payload_req
-# 
+#
 #     URLrequest = "http://%s:%s/openmano/%s/scenarios/%s/action" %(mano_host, mano_port, mano_tenant, args.scenario)
 #     logger.debug("openmano request: %s", payload_req)
 #     mano_response = requests.post(URLrequest, headers = headers_req, data=payload_req)
 #     logger.debug("openmano response: %s", mano_response.text )
 #     if args.verbose==None:
 #         args.verbose=0
-#     
+#
 #     result = 0 if mano_response.status_code==200 else mano_response.status_code
 #     content = mano_response.json()
 #     #print json.dumps(content, indent=4)
 #     if args.verbose >= 3:
 #         print yaml.safe_dump(content, indent=4, default_flow_style=False)
 #         return result
-# 
+#
 #     if mano_response.status_code == 200:
 #         myoutput = "%s %s" %(content['uuid'].ljust(38),content['name'].ljust(20))
 #         if args.verbose >=1:
@@ -655,7 +685,7 @@ def scenario_verify(args):
     logger.debug("openmano request: %s", payload_req)
     mano_response = requests.post(URLrequest, headers = headers_req, data=payload_req)
     logger.debug("openmano response: %s", mano_response.text )
-    
+
     result = 0 if mano_response.status_code==200 else mano_response.status_code
     content = mano_response.json()
     #print json.dumps(content, indent=4)
@@ -708,7 +738,7 @@ def instance_create(args):
                 net_scenario   = net_tuple[0].strip()
                 net_datacenter = net_tuple[1].strip()
                 if net_scenario not in myInstance["instance"]["networks"]:
-                    myInstance["instance"]["networks"][net_scenario] = {} 
+                    myInstance["instance"]["networks"][net_scenario] = {}
                 if "sites" not in myInstance["instance"]["networks"][net_scenario]:
                     myInstance["instance"]["networks"][net_scenario]["sites"] = [ {} ]
                 myInstance["instance"]["networks"][net_scenario]["sites"][0]["netmap-use"] = net_datacenter
@@ -729,7 +759,7 @@ def instance_create(args):
                     print "error at netmap-create. Expected net-scenario=net-datacenter or net-scenario. (%s)?" % net_comma
                     return
                 if net_scenario not in myInstance["instance"]["networks"]:
-                    myInstance["instance"]["networks"][net_scenario] = {} 
+                    myInstance["instance"]["networks"][net_scenario] = {}
                 if "sites" not in myInstance["instance"]["networks"][net_scenario]:
                     myInstance["instance"]["networks"][net_scenario]["sites"] = [ {} ]
                 myInstance["instance"]["networks"][net_scenario]["sites"][0]["netmap-create"] = net_datacenter
@@ -766,7 +796,7 @@ def instance_create(args):
         except Exception as e:
             print "Cannot obtain any public ssh key. Error '{}'. Try not using --keymap-auto".format(str(e))
             return 1
-        
+
         if "cloud-config" not in myInstance["instance"]:
             myInstance["instance"]["cloud-config"] = {}
         cloud_config = myInstance["instance"]["cloud-config"]
@@ -775,8 +805,8 @@ def instance_create(args):
         if user:
             if "users" not in cloud_config:
                 cloud_config["users"] = []
-            cloud_config["users"].append({"name": user, "key-pairs": keys })                    
-                        
+            cloud_config["users"].append({"name": user, "key-pairs": keys })
+
     payload_req = yaml.safe_dump(myInstance, explicit_start=True, indent=4, default_flow_style=False, tags=False, encoding='utf-8', allow_unicode=True)
     logger.debug("openmano request: %s", payload_req)
     URLrequest = "http://%s:%s/openmano/%s/instances" %(mano_host, mano_port, tenant)
@@ -784,7 +814,7 @@ def instance_create(args):
     logger.debug("openmano response: %s", mano_response.text )
     if args.verbose==None:
         args.verbose=0
-    
+
     result = 0 if mano_response.status_code==200 else mano_response.status_code
     content = mano_response.json()
     #print json.dumps(content, indent=4)
@@ -933,7 +963,7 @@ def instance_scenario_action(args):
         action["vnfs"] = args.vnf
     if args.vm:
         action["vms"] = args.vm
-    
+
     headers_req = {'content-type': 'application/json'}
     payload_req = json.dumps(action, indent=4)
     URLrequest = "http://%s:%s/openmano/%s/instances/%s/action" %(mano_host, mano_port, tenant, toact)
@@ -969,11 +999,11 @@ def tenant_create(args):
     headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
     tenant_dict={"name": args.name}
     if args.description!=None:
-        tenant_dict["description"] = args.description 
+        tenant_dict["description"] = args.description
     payload_req = json.dumps( {"tenant": tenant_dict })
-    
+
     #print payload_req
-        
+
     URLrequest = "http://%s:%s/openmano/tenants" %(mano_host, mano_port)
     logger.debug("openmano request: %s", payload_req)
     mano_response = requests.post(URLrequest, headers=headers_req, data=payload_req)
@@ -1018,7 +1048,7 @@ def datacenter_attach(args):
     tenant = _get_tenant()
     datacenter = _get_datacenter(args.name)
     headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
-    
+
     datacenter_dict={}
     if args.vim_tenant_id != None:
         datacenter_dict['vim_tenant'] = args.vim_tenant_id
@@ -1034,7 +1064,7 @@ def datacenter_attach(args):
     payload_req = json.dumps( {"datacenter": datacenter_dict })
 
     #print payload_req
-        
+
     URLrequest = "http://%s:%s/openmano/%s/datacenters/%s" %(mano_host, mano_port, tenant, datacenter)
     logger.debug("openmano request: %s", payload_req)
     mano_response = requests.post(URLrequest, headers=headers_req, data=payload_req)
@@ -1103,11 +1133,11 @@ def datacenter_create(args):
     headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
     datacenter_dict={"name": args.name, "vim_url": args.url}
     if args.description!=None:
-        datacenter_dict["description"] = args.description 
+        datacenter_dict["description"] = args.description
     if args.type!=None:
-        datacenter_dict["type"] = args.type 
+        datacenter_dict["type"] = args.type
     if args.url!=None:
-        datacenter_dict["vim_url_admin"] = args.url_admin 
+        datacenter_dict["vim_url_admin"] = args.url_admin
     if args.config!=None:
         datacenter_dict["config"] = _load_file_or_yaml(args.config)
     if args.sdn_controller!=None:
@@ -1117,9 +1147,9 @@ def datacenter_create(args):
             datacenter_dict['config'] = {}
         datacenter_dict['config']['sdn-controller'] = sdn_controller
     payload_req = json.dumps( {"datacenter": datacenter_dict })
-    
+
     #print payload_req
-        
+
     URLrequest = "http://%s:%s/openmano/datacenters" %(mano_host, mano_port)
     logger.debug("openmano request: %s", payload_req)
     mano_response = requests.post(URLrequest, headers=headers_req, data=payload_req)
@@ -1149,9 +1179,9 @@ def datacenter_delete(args):
 def datacenter_list(args):
     #print "datacenter-list",args
     tenant='any' if args.all else _get_tenant()
-    
+
     if args.name:
-        toshow = _get_item_uuid("datacenters", args.name, tenant) 
+        toshow = _get_item_uuid("datacenters", args.name, tenant)
         URLrequest = "http://%s:%s/openmano/%s/datacenters/%s" %(mano_host, mano_port, tenant, toshow)
     else:
         URLrequest = "http://%s:%s/openmano/%s/datacenters" %(mano_host, mano_port, tenant)
@@ -1502,7 +1532,7 @@ def datacenter_net_action(args):
     elif args.action == "net-delete":
         args.netmap = args.net
         args.all = False
-          
+
     args.action = "netmap" + args.action[3:]
     args.vim_name=None
     args.vim_id=None
@@ -1519,13 +1549,13 @@ def datacenter_netmap_action(args):
         args.verbose=0
     headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
     URLrequest = "http://%s:%s/openmano/%s/datacenters/%s/netmaps" %(mano_host, mano_port, tenant, datacenter)
-        
+
     if args.action=="netmap-list":
         if args.netmap:
             URLrequest += "/" + args.netmap
             args.verbose += 1
         mano_response = requests.get(URLrequest)
-            
+
     elif args.action=="netmap-delete":
         if args.netmap and args.all:
             print "you can not use a netmap name and the option --all at the same time"
@@ -1533,7 +1563,7 @@ def datacenter_netmap_action(args):
         if args.netmap:
             force_text= "Delete default netmap '%s' from datacenter '%s' (y/N)? " % (args.netmap, datacenter)
             URLrequest += "/" + args.netmap
-        elif args.all: 
+        elif args.all:
             force_text="Delete all default netmaps from datacenter '%s' (y/N)? " % (datacenter)
         else:
             print "you must specify a netmap name or the option --all"
@@ -1569,7 +1599,7 @@ def datacenter_netmap_action(args):
             payload["netmap"]["vim_name"] = args.vim_name
         payload_req = json.dumps(payload)
         logger.debug("openmano request: %s", payload_req)
-        
+
         if args.action=="netmap-edit" and not args.force:
             if len(payload["netmap"]) == 0:
                 print "You must supply some parameter to edit"
@@ -1599,7 +1629,7 @@ def element_edit(args):
     if args.element[:-1] not in payload:
         payload = {args.element[:-1]: payload }
     payload_req = json.dumps(payload)
-    
+
     #print payload_req
     if not args.force or (args.name==None and args.filer==None):
         r = raw_input(" Edit " + args.element[:-1] + " " + args.name + " (y/N)? ")
@@ -1665,6 +1695,260 @@ def datacenter_edit(args):
     return _print_verbose(mano_response, args.verbose)
 
 
+# WIM
+def wim_account_create(args):
+    tenant = _get_tenant()
+    wim = _get_wim(args.name)
+    headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
+
+    wim_dict = {}
+    if args.account_name is not None:
+        wim_dict['name'] = args.account_name
+    if args.user is not None:
+        wim_dict['user'] = args.user
+    if args.password is not None:
+        wim_dict['password'] = args.password
+    if args.config is not None:
+        wim_dict["config"] = _load_file_or_yaml(args.config)
+
+    payload_req = json.dumps({"wim_account": wim_dict})
+
+    URLrequest = "http://%s:%s/openmano/%s/wims/%s" % (mano_host, mano_port, tenant, wim)
+    logger.debug("openmano request: %s", payload_req)
+    mano_response = requests.post(URLrequest, headers=headers_req, data=payload_req)
+    logger.debug("openmano response: %s", mano_response.text)
+    result = _print_verbose(mano_response, args.verbose)
+    # provide addional information if error
+    if mano_response.status_code != 200:
+        content = mano_response.json()
+        if "already in use for  'name'" in content['error']['description'] and \
+                "to database wim_tenants table" in content['error']['description']:
+            print "Try to specify a different name with --wim-tenant-name"
+    return result
+
+
+def wim_account_delete(args):
+    if args.all:
+        tenant = "any"
+    else:
+        tenant = _get_tenant()
+    wim = _get_wim(args.name, tenant)
+    headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
+    URLrequest = "http://%s:%s/openmano/%s/wims/%s" % (mano_host, mano_port, tenant, wim)
+    mano_response = requests.delete(URLrequest, headers=headers_req)
+    logger.debug("openmano response: %s", mano_response.text)
+    content = mano_response.json()
+    # print json.dumps(content, indent=4)
+    result = 0 if mano_response.status_code == 200 else mano_response.status_code
+    if mano_response.status_code == 200:
+        print content['result']
+    else:
+        print content['error']['description']
+    return result
+
+
+def wim_account_edit(args):
+    tenant = _get_tenant()
+    wim = _get_wim(args.name)
+    headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
+
+    wim_dict = {}
+    if not args.account_name:
+        wim_dict['name'] = args.vim_tenant_name
+    if not args.user:
+        wim_dict['user'] = args.user
+    if not args.password:
+        wim_dict['password'] = args.password
+    if not args.config:
+        wim_dict["config"] = _load_file_or_yaml(args.config)
+
+    payload_req = json.dumps({"wim_account": wim_dict})
+
+    # print payload_req
+
+    URLrequest = "http://%s:%s/openmano/%s/wims/%s" % (mano_host, mano_port, tenant, wim)
+    logger.debug("openmano request: %s", payload_req)
+    mano_response = requests.post(URLrequest, headers=headers_req, data=payload_req)
+    logger.debug("openmano response: %s", mano_response.text)
+    result = _print_verbose(mano_response, args.verbose)
+    # provide addional information if error
+    if mano_response.status_code != 200:
+        content = mano_response.json()
+        if "already in use for  'name'" in content['error']['description'] and \
+                "to database wim_tenants table" in content['error']['description']:
+            print "Try to specify a different name with --wim-tenant-name"
+    return result
+
+def wim_create(args):
+    headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
+    wim_dict = {"name": args.name, "wim_url": args.url}
+    if args.description != None:
+        wim_dict["description"] = args.description
+    if args.type != None:
+        wim_dict["type"] = args.type
+    if args.config != None:
+        wim_dict["config"] = _load_file_or_yaml(args.config)
+
+    payload_req = json.dumps({"wim": wim_dict})
+
+    URLrequest = "http://%s:%s/openmano/wims" % (mano_host, mano_port)
+    logger.debug("openmano request: %s", payload_req)
+    mano_response = requests.post(URLrequest, headers=headers_req, data=payload_req)
+    logger.debug("openmano response: %s", mano_response.text)
+    return _print_verbose(mano_response, args.verbose)
+
+
+def wim_edit(args):
+    tenant = _get_tenant()
+    element = _get_item_uuid('wims', args.name, tenant)
+    headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
+    URLrequest = "http://%s:%s/openmano/wims/%s" % (mano_host, mano_port, element)
+
+    has_arguments = False
+    if args.file != None:
+        has_arguments = True
+        payload = _load_file_or_yaml(args.file)
+    else:
+        payload = {}
+
+    if not has_arguments:
+        raise OpenmanoCLIError("At least one argument must be provided to modify the wim")
+
+    if 'wim' not in payload:
+        payload = {'wim': payload}
+    payload_req = json.dumps(payload)
+
+    # print payload_req
+    if not args.force or (args.name == None and args.filer == None):
+        r = raw_input(" Edit wim " + args.name + " (y/N)? ")
+        if len(r) > 0 and r[0].lower() == "y":
+            pass
+        else:
+            return 0
+    logger.debug("openmano request: %s", payload_req)
+    mano_response = requests.put(URLrequest, headers=headers_req, data=payload_req)
+    logger.debug("openmano response: %s", mano_response.text)
+    if args.verbose == None:
+        args.verbose = 0
+    if args.name != None:
+        args.verbose += 1
+    return _print_verbose(mano_response, args.verbose)
+
+
+def wim_delete(args):
+    # print "wim-delete",args
+    todelete = _get_item_uuid("wims", args.name, "any")
+    if not args.force:
+        r = raw_input("Delete wim %s (y/N)? " % (args.name))
+        if not (len(r) > 0 and r[0].lower() == "y"):
+            return 0
+    URLrequest = "http://%s:%s/openmano/wims/%s" % (mano_host, mano_port, todelete)
+    mano_response = requests.delete(URLrequest)
+    logger.debug("openmano response: %s", mano_response.text)
+    result = 0 if mano_response.status_code == 200 else mano_response.status_code
+    content = mano_response.json()
+    # print json.dumps(content, indent=4)
+    if mano_response.status_code == 200:
+        print content['result']
+    else:
+        print content['error']['description']
+    return result
+
+
+def wim_list(args):
+    # print "wim-list",args
+    tenant = 'any' if args.all else _get_tenant()
+
+    if args.name:
+        toshow = _get_item_uuid("wims", args.name, tenant)
+        URLrequest = "http://%s:%s/openmano/%s/wims/%s" % (mano_host, mano_port, tenant, toshow)
+    else:
+        URLrequest = "http://%s:%s/openmano/%s/wims" % (mano_host, mano_port, tenant)
+    mano_response = requests.get(URLrequest)
+    logger.debug("openmano response: %s", mano_response.text)
+    if args.verbose == None:
+        args.verbose = 0
+    if args.name != None:
+        args.verbose += 1
+    return _print_verbose(mano_response, args.verbose)
+
+
+def wim_port_mapping_set(args):
+    tenant = _get_tenant()
+    wim = _get_wim(args.name, tenant)
+    headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
+
+    if not args.file:
+        raise OpenmanoCLIError(
+            "No yaml/json has been provided specifying the WIM port mapping")
+    wim_port_mapping = _load_file_or_yaml(args.file)
+
+    payload_req = json.dumps({"wim_port_mapping": wim_port_mapping})
+
+    # read
+    URLrequest = "http://%s:%s/openmano/%s/wims/%s/port_mapping" % (mano_host, mano_port, tenant, wim)
+    mano_response = requests.get(URLrequest)
+    logger.debug("openmano response: %s", mano_response.text)
+    port_mapping = mano_response.json()
+
+    if mano_response.status_code != 200:
+        str(mano_response.json())
+        raise OpenmanoCLIError("openmano client error: {}".format(port_mapping['error']['description']))
+    # TODO: check this if statement
+    if len(port_mapping["wim_port_mapping"]) > 0:
+        if not args.force:
+            r = raw_input("WIM %s already contains a port mapping. Overwrite? (y/N)? " % (wim))
+            if not (len(r) > 0 and r[0].lower() == "y"):
+                return 0
+
+        # clear
+        URLrequest = "http://%s:%s/openmano/%s/wims/%s/port_mapping" % (mano_host, mano_port, tenant, wim)
+        mano_response = requests.delete(URLrequest)
+        logger.debug("openmano response: %s", mano_response.text)
+        if mano_response.status_code != 200:
+            return _print_verbose(mano_response, args.verbose)
+
+    # set
+    URLrequest = "http://%s:%s/openmano/%s/wims/%s/port_mapping" % (mano_host, mano_port, tenant, wim)
+    logger.debug("openmano request: %s", payload_req)
+    mano_response = requests.post(URLrequest, headers=headers_req, data=payload_req)
+    logger.debug("openmano response: %s", mano_response.text)
+    return _print_verbose(mano_response, 4)
+
+
+def wim_port_mapping_list(args):
+    tenant = _get_tenant()
+    wim = _get_wim(args.name, tenant)
+
+    URLrequest = "http://%s:%s/openmano/%s/wims/%s/port_mapping" % (mano_host, mano_port, tenant, wim)
+    mano_response = requests.get(URLrequest)
+    logger.debug("openmano response: %s", mano_response.text)
+
+    return _print_verbose(mano_response, 4)
+
+
+def wim_port_mapping_clear(args):
+    tenant = _get_tenant()
+    wim = _get_wim(args.name, tenant)
+
+    if not args.force:
+        r = raw_input("Clear WIM port mapping for wim %s (y/N)? " % (wim))
+        if not (len(r) > 0 and r[0].lower() == "y"):
+            return 0
+
+    URLrequest = "http://%s:%s/openmano/%s/wims/%s/port_mapping" % (mano_host, mano_port, tenant, wim)
+    mano_response = requests.delete(URLrequest)
+    logger.debug("openmano response: %s", mano_response.text)
+    content = mano_response.json()
+    # print json.dumps(content, indent=4)
+    result = 0 if mano_response.status_code == 200 else mano_response.status_code
+    if mano_response.status_code == 200:
+        print content['result']
+    else:
+        print content['error']['description']
+    return result
+
+
 def version(args):
     headers_req = {'Accept': 'application/json', 'content-type': 'application/json'}
     URLrequest = "http://%s:%s/openmano/version" % (mano_host, mano_port)
@@ -1679,19 +1963,21 @@ global mano_port
 global mano_tenant
 
 if __name__=="__main__":
-    
+
     mano_tenant = os.getenv('OPENMANO_TENANT', None)
     mano_host = os.getenv('OPENMANO_HOST',"localhost")
     mano_port = os.getenv('OPENMANO_PORT',"9090")
     mano_datacenter = os.getenv('OPENMANO_DATACENTER',None)
-    
+    # WIM env variable for default WIM
+    mano_wim = os.getenv('OPENMANO_WIM', None)
+
     main_parser = ThrowingArgumentParser(description='User program to interact with OPENMANO-SERVER (openmanod)')
     main_parser.add_argument('--version', action='version', help="get version of this client",
                             version='%(prog)s client version ' + __version__ +
                                     " (Note: use '%(prog)s version' to get server version)")
 
     subparsers = main_parser.add_subparsers(help='commands')
-    
+
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument('--verbose', '-v', action='count', help="increase verbosity level. Use several times")
     parent_parser.add_argument('--debug', '-d', action='store_true', help="show debug information")
@@ -1717,13 +2003,13 @@ if __name__=="__main__":
     vnf_list_parser.add_argument("-a", "--all", action="store_true", help="shows all vnfs, not only the owned or public ones")
     #vnf_list_parser.add_argument('--descriptor', help="prints the VNF descriptor", action="store_true")
     vnf_list_parser.set_defaults(func=vnf_list)
-    
+
     vnf_delete_parser = subparsers.add_parser('vnf-delete', parents=[parent_parser], help="deletes a vnf from the catalogue")
     vnf_delete_parser.add_argument("name", action="store", help="name or uuid of the VNF to be deleted")
     vnf_delete_parser.add_argument("-f", "--force", action="store_true", help="forces deletion without asking")
     vnf_delete_parser.add_argument("-a", "--all", action="store_true", help="allow delete not owned or privated one")
     vnf_delete_parser.set_defaults(func=vnf_delete)
-    
+
     scenario_create_parser = subparsers.add_parser('scenario-create', parents=[parent_parser], help="adds a scenario into the OPENMANO DB")
     scenario_create_parser.add_argument("file", action="store", help="location of the YAML file describing the scenario").completer = FilesCompleter
     scenario_create_parser.add_argument("--name", action="store", help="name of the scenario (if it exists in the YAML scenario, it is overwritten)")
@@ -1735,7 +2021,7 @@ if __name__=="__main__":
     #scenario_list_parser.add_argument('--descriptor', help="prints the scenario descriptor", action="store_true")
     scenario_list_parser.add_argument("-a", "--all", action="store_true", help="shows all scenarios, not only the owned or public ones")
     scenario_list_parser.set_defaults(func=scenario_list)
-    
+
     scenario_delete_parser = subparsers.add_parser('scenario-delete', parents=[parent_parser], help="deletes a scenario from the OPENMANO DB")
     scenario_delete_parser.add_argument("name", action="store", help="name or uuid of the scenario to be deleted")
     scenario_delete_parser.add_argument("-f", "--force", action="store_true", help="forces deletion without asking")
@@ -1749,12 +2035,12 @@ if __name__=="__main__":
     scenario_deploy_parser.add_argument("--datacenter", action="store", help="specifies the datacenter. Needed if several datacenters are available")
     scenario_deploy_parser.add_argument("--description", action="store", help="description of the instance")
     scenario_deploy_parser.set_defaults(func=scenario_deploy)
-    
+
     scenario_deploy_parser = subparsers.add_parser('scenario-verify', help="verifies if a scenario can be deployed (deploys it and deletes it)")
     scenario_deploy_parser.add_argument("scenario", action="store", help="name or uuid of the scenario to be verified")
     scenario_deploy_parser.add_argument('--debug', '-d', action='store_true', help="show debug information")
     scenario_deploy_parser.set_defaults(func=scenario_verify)
-    
+
     instance_scenario_create_parser = subparsers.add_parser('instance-scenario-create', parents=[parent_parser], help="deploys a scenario")
     instance_scenario_create_parser.add_argument("file", nargs='?', help="descriptor of the instance. Must be a file or yaml/json text")
     instance_scenario_create_parser.add_argument("--scenario", action="store", help="name or uuid of the scenario to be deployed")
@@ -1778,7 +2064,7 @@ if __name__=="__main__":
     instance_scenario_delete_parser.add_argument("-f", "--force", action="store_true", help="forces deletion without asking")
     instance_scenario_delete_parser.add_argument("-a", "--all", action="store_true", help="allow delete not owned or privated one")
     instance_scenario_delete_parser.set_defaults(func=instance_scenario_delete)
-    
+
     instance_scenario_action_parser = subparsers.add_parser('instance-scenario-action', parents=[parent_parser], help="invoke an action over part or the whole scenario instance")
     instance_scenario_action_parser.add_argument("name", action="store", help="name or uuid of the scenario instance")
     instance_scenario_action_parser.add_argument("action", action="store", type=str, \
@@ -1798,7 +2084,7 @@ if __name__=="__main__":
     #instance_scenario_status_parser = subparsers.add_parser('instance-scenario-status', help="show the status of a scenario instance")
     #instance_scenario_status_parser.add_argument("name", action="store", help="name or uuid of the scenario instance")
     #instance_scenario_status_parser.set_defaults(func=instance_scenario_status)
-    
+
     tenant_create_parser = subparsers.add_parser('tenant-create', parents=[parent_parser], help="creates a new tenant")
     tenant_create_parser.add_argument("name", action="store", help="name for the tenant")
     tenant_create_parser.add_argument("--description", action="store", help="description of the tenant")
@@ -1958,6 +2244,128 @@ if __name__=="__main__":
     sdn_controller_delete_parser.set_defaults(func=sdn_controller_delete)
     # =======================
 
+    # WIM ======================= WIM section==================
+
+    # WIM create
+    wim_create_parser = subparsers.add_parser('wim-create',
+                                              parents=[parent_parser], help="creates a new wim")
+    wim_create_parser.add_argument("name", action="store",
+                                   help="name for the wim")
+    wim_create_parser.add_argument("url", action="store",
+                                   help="url for the wim")
+    wim_create_parser.add_argument("--type", action="store",
+                                   help="wim type: tapi, onos or odl (default)")
+    wim_create_parser.add_argument("--config", action="store",
+                                   help="additional configuration in json/yaml format")
+    wim_create_parser.add_argument("--description", action="store",
+                                   help="description of the wim")
+    wim_create_parser.set_defaults(func=wim_create)
+
+    # WIM delete
+    wim_delete_parser = subparsers.add_parser('wim-delete',
+                                              parents=[parent_parser], help="deletes a wim from the catalogue")
+    wim_delete_parser.add_argument("name", action="store",
+                                   help="name or uuid of the wim to be deleted")
+    wim_delete_parser.add_argument("-f", "--force", action="store_true",
+                                   help="forces deletion without asking")
+    wim_delete_parser.set_defaults(func=wim_delete)
+
+    # WIM edit
+    wim_edit_parser = subparsers.add_parser('wim-edit',
+                                            parents=[parent_parser], help="edits a wim")
+    wim_edit_parser.add_argument("name", help="name or uuid of the wim")
+    wim_edit_parser.add_argument("--file",
+                                 help="json/yaml text or file with the changes")\
+                                .completer = FilesCompleter
+    wim_edit_parser.add_argument("-f", "--force", action="store_true",
+                                 help="do not prompt for confirmation")
+    wim_edit_parser.set_defaults(func=wim_edit)
+
+    # WIM list
+    wim_list_parser = subparsers.add_parser('wim-list',
+                                            parents=[parent_parser],
+                                            help="lists information about registered wims")
+    wim_list_parser.add_argument("name", nargs='?',
+                                 help="name or uuid of the wim")
+    wim_list_parser.add_argument("-a", "--all", action="store_true",
+                                 help="shows all wims, not only wims attached to tenant")
+    wim_list_parser.set_defaults(func=wim_list)
+
+    # WIM account create
+    wim_attach_parser = subparsers.add_parser('wim-account-create', parents=
+    [parent_parser], help="associates a wim account to the operating tenant")
+    wim_attach_parser.add_argument("name", help="name or uuid of the wim")
+    wim_attach_parser.add_argument('--account-name', action='store',
+                                   help="specify a name for the wim account.")
+    wim_attach_parser.add_argument("--user", action="store",
+                                   help="user credentials for the wim account")
+    wim_attach_parser.add_argument("--password", action="store",
+                                   help="password credentials for the wim account")
+    wim_attach_parser.add_argument("--config", action="store",
+                                   help="additional configuration in json/yaml format")
+    wim_attach_parser.set_defaults(func=wim_account_create)
+
+    # WIM account delete
+    wim_detach_parser = subparsers.add_parser('wim-account-delete',
+                                        parents=[parent_parser],
+                                        help="removes the association "
+                                                "between a wim account and the operating tenant")
+    wim_detach_parser.add_argument("name", help="name or uuid of the wim")
+    wim_detach_parser.add_argument("-a", "--all", action="store_true",
+                                   help="removes all associations from this wim")
+    wim_detach_parser.add_argument("-f", "--force", action="store_true",
+                                   help="forces delete without asking")
+    wim_detach_parser.set_defaults(func=wim_account_delete)
+
+    # WIM account edit
+    wim_attach_edit_parser = subparsers.add_parser('wim-account-edit', parents=
+    [parent_parser], help="modifies the association of a wim account to the operating tenant")
+    wim_attach_edit_parser.add_argument("name", help="name or uuid of the wim")
+    wim_attach_edit_parser.add_argument('--account-name', action='store',
+                                   help="specify a name for the wim account.")
+    wim_attach_edit_parser.add_argument("--user", action="store",
+                                   help="user credentials for the wim account")
+    wim_attach_edit_parser.add_argument("--password", action="store",
+                                   help="password credentials for the wim account")
+    wim_attach_edit_parser.add_argument("--config", action="store",
+                                   help="additional configuration in json/yaml format")
+    wim_attach_edit_parser.set_defaults(func=wim_account_edit)
+
+    # WIM port mapping set
+    wim_port_mapping_set_parser = subparsers.add_parser('wim-port-mapping-set',
+                                                        parents=[parent_parser],
+                                                        help="Load a file with the mappings "
+                                                                "of ports of a WAN switch that is "
+                                                                "connected to a PoP and the ports "
+                                                                "of the switch controlled by the PoP")
+    wim_port_mapping_set_parser.add_argument("name", action="store",
+                                             help="specifies the wim")
+    wim_port_mapping_set_parser.add_argument("file",
+                                             help="json/yaml text or file with the wim port mapping")\
+        .completer = FilesCompleter
+    wim_port_mapping_set_parser.add_argument("-f", "--force",
+                                             action="store_true", help="forces overwriting without asking")
+    wim_port_mapping_set_parser.set_defaults(func=wim_port_mapping_set)
+
+    # WIM port mapping list
+    wim_port_mapping_list_parser = subparsers.add_parser('wim-port-mapping-list',
+            parents=[parent_parser], help="Show the port mappings for a wim")
+    wim_port_mapping_list_parser.add_argument("name", action="store",
+                                              help="specifies the wim")
+    wim_port_mapping_list_parser.set_defaults(func=wim_port_mapping_list)
+
+    # WIM port mapping clear
+    wim_port_mapping_clear_parser = subparsers.add_parser('wim-port-mapping-clear',
+            parents=[parent_parser], help="Clean the port mapping in a wim")
+    wim_port_mapping_clear_parser.add_argument("name", action="store",
+                                               help="specifies the wim")
+    wim_port_mapping_clear_parser.add_argument("-f", "--force",
+                                               action="store_true",
+                                               help="forces clearing without asking")
+    wim_port_mapping_clear_parser.set_defaults(func=wim_port_mapping_clear)
+
+    # =======================================================
+
     action_dict={'net-update': 'retrieves external networks from datacenter',
                  'net-edit': 'edits an external network',
                  'net-delete': 'deletes an external network',
@@ -2062,7 +2470,7 @@ if __name__=="__main__":
             vim_item_create_parser.set_defaults(func=vim_action, item=item, action="create")
 
     argcomplete.autocomplete(main_parser)
-    
+
     try:
         args = main_parser.parse_args()
         #logging info
@@ -2088,7 +2496,7 @@ if __name__=="__main__":
     except OpenmanoCLIError as e:
         print str(e)
         result = -5
-    
+
     #print result
     exit(result)
 
