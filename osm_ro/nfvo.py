@@ -4711,6 +4711,8 @@ def instance_action_get(mydb, nfvo_tenant, instance_id, action_id):
             raise NfvoException("Not found any action with this criteria", httperrors.Not_Found)
         vim_wim_actions = mydb.get_rows(FROM="vim_wim_actions", WHERE={"instance_action_id": action_id})
         rows[0]["vim_wim_actions"] = vim_wim_actions
+        # for backward compatibility set vim_actions = vim_wim_actions
+        rows[0]["vim_actions"] = vim_wim_actions
     return {"actions": rows}
 
 
