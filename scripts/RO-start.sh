@@ -14,13 +14,12 @@ function is_db_created() {
     db_user=$3
     db_pswd=$4
     db_name=$5
+    db_version=$6  # minimun database version
 
-    RESULT=`mysqlshow -h"$db_host" -P"$db_port" -u"$db_user" -p"$db_pswd" | grep -v Wildcard | grep -o $db_name`
-    if [ "$RESULT" == "$db_name" ]; then
-
-        RESULT=`mysqlshow -h"$db_host" -P"$db_port" -u"$db_user" -p"$db_pswd" "$db_name" | grep -v Wildcard | grep schema_version`
-        #TODO validate version
-        if [ -n "$RESULT" ]; then
+    if mysqlshow -h"$db_host" -P"$db_port" -u"$db_user" -p"$db_pswd" | grep -v Wildcard | grep -q -e "$db_name" ; then
+        if echo "SELECT * FROM schema_version WHERE version='$db_version'" |
+                mysql -h"$db_host" -P"$db_port" -u"$db_user" -p"$db_pswd" "$db_name" |
+                grep -q -e "$db_version" ; then
             echo " DB $db_name exists and inited"
             return 0
         else
@@ -90,7 +89,7 @@ wait_db "$RO_DB_HOST" "$RO_DB_PORT" || exit 1
 echo "3/4 Init database"
 RO_PATH=`python -c 'import osm_ro; print(osm_ro.__path__[0])'`
 echo "RO_PATH: $RO_PATH"
-if ! is_db_created "$RO_DB_HOST" "$RO_DB_PORT" "$RO_DB_USER" "$RO_DB_PASSWORD" "$RO_DB_NAME"
+if ! is_db_created "$RO_DB_HOST" "$RO_DB_PORT" "$RO_DB_USER" "$RO_DB_PASSWORD" "$RO_DB_NAME" "0.27"
 then
     if [ -n "$RO_DB_ROOT_PASSWORD" ] ; then
         mysqladmin -h"$RO_DB_HOST" -uroot -p"$RO_DB_ROOT_PASSWORD" create "$RO_DB_NAME"
@@ -102,14 +101,15 @@ then
     ${RO_PATH}/database_utils/init_mano_db.sh  -u "$RO_DB_USER" -p "$RO_DB_PASSWORD" -h "$RO_DB_HOST" \
         -P "${RO_DB_PORT}" -d "${RO_DB_NAME}" || exit 1
 else
-    echo "    migrage database version"
+    echo "  migrate database version"
     ${RO_PATH}/database_utils/migrate_mano_db.sh -u "$RO_DB_USER" -p "$RO_DB_PASSWORD" -h "$RO_DB_HOST" \
         -P "$RO_DB_PORT" -d "$RO_DB_NAME"
 fi
 
 OVIM_PATH=`python -c 'import lib_osm_openvim; print(lib_osm_openvim.__path__[0])'`
 echo "OVIM_PATH: $OVIM_PATH"
-if ! is_db_created "$RO_DB_OVIM_HOST" "$RO_DB_OVIM_PORT" "$RO_DB_OVIM_USER" "$RO_DB_OVIM_PASSWORD" "$RO_DB_OVIM_NAME"
+if ! is_db_created "$RO_DB_OVIM_HOST" "$RO_DB_OVIM_PORT" "$RO_DB_OVIM_USER" "$RO_DB_OVIM_PASSWORD" "$RO_DB_OVIM_NAME" \
+    "0.22"
 then
     if [ -n "$RO_DB_OVIM_ROOT_PASSWORD" ] ; then
         mysqladmin -h"$RO_DB_OVIM_HOST" -uroot -p"$RO_DB_OVIM_ROOT_PASSWORD" create "$RO_DB_OVIM_NAME"
@@ -123,7 +123,7 @@ then
     ${OVIM_PATH}/database_utils/init_vim_db.sh  -u "$RO_DB_OVIM_USER" -p "$RO_DB_OVIM_PASSWORD" -h "$RO_DB_OVIM_HOST" \
         -P "${RO_DB_OVIM_PORT}" -d "${RO_DB_OVIM_NAME}" || exit 1
 else
-    echo "    migrage database version"
+    echo "  migrate database version"
     ${OVIM_PATH}/database_utils/migrate_vim_db.sh -u "$RO_DB_OVIM_USER" -p "$RO_DB_OVIM_PASSWORD" -h "$RO_DB_OVIM_HOST"\
         -P "$RO_DB_OVIM_PORT" -d "$RO_DB_OVIM_NAME"
 fi
