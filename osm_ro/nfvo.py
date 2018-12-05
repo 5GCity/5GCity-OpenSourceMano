@@ -4507,7 +4507,7 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                 iface2iface = {}
                 where = {"item": "instance_vms", "item_id": target_vm["uuid"], "action": "CREATE"}
 
-                vim_action_to_clone = mydb.get_rows(FROM="vim_actions", WHERE=where)
+                vim_action_to_clone = mydb.get_rows(FROM="vim_wim_actions", WHERE=where)
                 if not vim_action_to_clone:
                     raise NfvoException("Cannot find the vim_action at database with {}".format(where), httperrors.Internal_Server_Error)
                 vim_action_to_clone = vim_action_to_clone[0]
