@@ -4605,7 +4605,7 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
             # {"instance_sfs": db_instance_sfs},
             # {"instance_classifications": db_instance_classifications},
             # {"instance_sfps": db_instance_sfps},
-            {"vim_actions": db_vim_actions}
+            {"vim_wim_actions": db_vim_actions}
         ]
         logger.debug("create_vdu done DB tables: %s",
                      yaml.safe_dump(db_tables, indent=4, default_flow_style=False))
