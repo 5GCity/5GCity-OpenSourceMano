@@ -169,10 +169,10 @@ class db_base():
     def escape(self, value):
         return self.con.escape(value)
 
-
     def escape_string(self, value):
+        if isinstance(value, "unicode"):
+            value = value.encode("utf8")
         return self.con.escape_string(value)
-
 
     def get_db_version(self):
         ''' Obtain the database schema version.
@@ -274,13 +274,13 @@ class db_base():
                 httperrors.Internal_Server_Error)
 
     def __str2db_format(self, data):
-        '''Convert string data to database format.
+        """Convert string data to database format.
         If data is None it returns the 'Null' text,
         otherwise it returns the text surrounded by quotes ensuring internal quotes are escaped.
-        '''
-        if data==None:
+        """
+        if data is None:
             return 'Null'
-        elif isinstance(data[1], str):
+        elif isinstance(data[1], (str, unicode)):
             return json.dumps(data)
         else:
             return json.dumps(str(data))
@@ -294,9 +294,9 @@ class db_base():
         B can be also a dict with special keys:
             {"INCREMENT": NUMBER}, then it produce "A=A+NUMBER"
         """
-        if data[1] == None:
+        if data[1] is None:
             return str(data[0]) + "=Null"
-        elif isinstance(data[1], str):
+        elif isinstance(data[1], (str, unicode)):
             return str(data[0]) + '=' + json.dumps(data[1])
         elif isinstance(data[1], dict):
             if "INCREMENT" in data[1]:
@@ -341,9 +341,13 @@ class db_base():
                     for v2 in v:
                         if v2 is None:
                             cmd2.append(k.replace("=", " is").replace("<>", " is not") + " Null")
+                        elif isinstance(v2, (str, unicode)):
+                            cmd2.append(k + json.dumps(v2))
                         else:
                             cmd2.append(k + json.dumps(str(v2)))
                     cmd.append("(" + " OR ".join(cmd2) + ")")
+                elif isinstance(v, (str, unicode)):
+                    cmd.append(k + json.dumps(v))
                 else:
                     cmd.append(k + json.dumps(str(v)))
         elif isinstance(data, (tuple, list)):

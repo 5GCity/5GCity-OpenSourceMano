@@ -50,8 +50,8 @@ import osm_ro
 
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ = "$26-aug-2014 11:09:29$"
-__version__ = "0.6.00"
-version_date = "Nov 2018"
+__version__ = "0.6.01"
+version_date = "Dec 2018"
 database_version = 34      # expected database schema version
 
 global global_config
