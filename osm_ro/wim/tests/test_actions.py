@@ -47,7 +47,7 @@ from ...tests.db_helpers import (
     disable_foreign_keys,
     uuid,
 )
-from ..persistence import WimPersistence
+from ..persistence import WimPersistence, preprocess_record
 from ..wan_link_actions import WanLinkCreate, WanLinkDelete
 from ..wimconn import WimConnectorError
 
@@ -118,22 +118,118 @@ class TestCreate(TestActionsWithDb):
         self.assertIn('issue with the local networks', action.error_msg)
         self.assertIn('SCHEDULED_DELETION', action.error_msg)
 
-    def prepare_create__sdn(self):
-        db_state = [{'nfvo_tenants': eg.tenant()}] + eg.wim_set()
+    def prepare_create__rules(self):
+        db_state = eg.consistent_set(num_wims=1, num_tenants=1,
+                                     num_datacenters=2,
+                                     external_ports_config=True)
 
-        instance_nets = eg.instance_nets(num_datacenters=2, num_links=1)
-        port_mappings = [
-            eg.wim_port_mapping(0, 0),
-            eg.wim_port_mapping(0, 1)
-        ]
-        instance_action = eg.instance_action(action_id='ACTION-000')
+        instance_nets = eg.instance_nets(num_datacenters=2, num_links=1,
+                                         status='ACTIVE')
         for i, net in enumerate(instance_nets):
-            net['status'] = 'ACTIVE'
+            net['vim_info'] = {}
+            net['vim_info']['provider:physical_network'] = 'provider'
+            net['vim_info']['encapsulation_type'] = 'vlan'
+            net['vim_info']['encapsulation_id'] = i
+            net['sdn_net_id'] = uuid('sdn-net%d' % i)
+
+        instance_action = eg.instance_action(action_id='ACTION-000')
+
+        db_state += [
+            {'instance_wim_nets': eg.instance_wim_nets()},
+            {'instance_nets': [preprocess_record(r) for r in instance_nets]},
+            {'instance_actions': instance_action}]
+
+        action = WanLinkCreate(
+            eg.wim_actions('CREATE', action_id='ACTION-000')[0])
+        # --> ensure it is in the database for updates --> #
+        action_record = action.as_record()
+        action_record['extra'] = json.dumps(action_record['extra'])
+        db_state += [{'vim_wim_actions': action_record}]
+
+        return db_state, action
+
+    @disable_foreign_keys
+    def test_process__rules(self):
+        # Given we want 1 WAN link between 2 datacenters
+        # and the local network in each datacenter is already created
+        db_state, action = self.prepare_create__rules()
+        self.populate(db_state)
+
+        instance_action = self.persist.get_by_uuid(
+            'instance_actions', action.instance_action_id)
+        number_done = instance_action['number_done']
+        number_failed = instance_action['number_failed']
+
+        # If the connector works fine
+        with patch.object(self.connector, 'create_connectivity_service',
+                          lambda *_, **__: (uuid('random-id'), None)):
+            # When we try to process a CREATE action that refers to the same
+            # instance_scenario_id and sce_net_id
+            action.process(self.connector, self.persist, self.ovim)
+
+        # Then the action should be succeeded
+        db_action = self.persist.query_one('vim_wim_actions', WHERE={
+            'instance_action_id': action.instance_action_id,
+            'task_index': action.task_index})
+        self.assertEqual(db_action['status'], 'DONE')
+
+        instance_action = self.persist.get_by_uuid(
+            'instance_actions', action.instance_action_id)
+        self.assertEqual(instance_action['number_done'], number_done + 1)
+        self.assertEqual(instance_action['number_failed'], number_failed)
+
+    @disable_foreign_keys
+    def test_process__rules_fail(self):
+        # Given we want 1 WAN link between 2 datacenters
+        # and the local network in each datacenter is already created
+        db_state, action = self.prepare_create__rules()
+        self.populate(db_state)
+
+        instance_action = self.persist.get_by_uuid(
+            'instance_actions', action.instance_action_id)
+        number_done = instance_action['number_done']
+        number_failed = instance_action['number_failed']
+
+        # If the connector raises an error
+        with patch.object(self.connector, 'create_connectivity_service',
+                          MagicMock(side_effect=WimConnectorError('foobar'))):
+            # When we try to process a CREATE action that refers to the same
+            # instance_scenario_id and sce_net_id
+            action.process(self.connector, self.persist, self.ovim)
+
+        # Then the action should be fail
+        db_action = self.persist.query_one('vim_wim_actions', WHERE={
+            'instance_action_id': action.instance_action_id,
+            'task_index': action.task_index})
+        self.assertEqual(db_action['status'], 'FAILED')
+
+        instance_action = self.persist.get_by_uuid(
+            'instance_actions', action.instance_action_id)
+        self.assertEqual(instance_action['number_done'], number_done)
+        self.assertEqual(instance_action['number_failed'], number_failed + 1)
+
+    def prepare_create__sdn(self):
+        db_state = eg.consistent_set(num_wims=1, num_tenants=1,
+                                     num_datacenters=2,
+                                     external_ports_config=False)
+
+        # Make sure all port_mappings are predictable
+        switch = 'AA:AA:AA:AA:AA:AA:AA:AA'
+        port = 1
+        port_mappings = next(r['wim_port_mappings']
+                             for r in db_state if 'wim_port_mappings' in r)
+        for mapping in port_mappings:
+            mapping['pop_switch_dpid'] = switch
+            mapping['pop_switch_port'] = port
+
+        instance_action = eg.instance_action(action_id='ACTION-000')
+        instance_nets = eg.instance_nets(num_datacenters=2, num_links=1,
+                                         status='ACTIVE')
+        for i, net in enumerate(instance_nets):
             net['sdn_net_id'] = uuid('sdn-net%d' % i)
 
         db_state += [{'instance_nets': instance_nets},
                      {'instance_wim_nets': eg.instance_wim_nets()},
-                     {'wim_port_mappings': port_mappings},
                      {'instance_actions': instance_action}]
 
         action = WanLinkCreate(
@@ -141,15 +237,21 @@ class TestCreate(TestActionsWithDb):
         # --> ensure it is in the database for updates --> #
         action_record = action.as_record()
         action_record['extra'] = json.dumps(action_record['extra'])
-        self.populate([{'vim_wim_actions': action_record}])
+        db_state += [{'vim_wim_actions': action_record}]
 
-        return db_state, action
+        ovim_patch = patch.object(
+            self.ovim, 'get_ports', MagicMock(return_value=[{
+                'switch_dpid': switch,
+                'switch_port': port,
+            }]))
+
+        return db_state, action, ovim_patch
 
     @disable_foreign_keys
     def test_process__sdn(self):
         # Given we want 1 WAN link between 2 datacenters
         # and the local network in each datacenter is already created
-        db_state, action = self.prepare_create__sdn()
+        db_state, action, ovim_patch = self.prepare_create__sdn()
         self.populate(db_state)
 
         instance_action = self.persist.get_by_uuid(
@@ -160,12 +262,6 @@ class TestCreate(TestActionsWithDb):
         connector_patch = patch.object(
             self.connector, 'create_connectivity_service',
             lambda *_, **__: (uuid('random-id'), None))
-
-        ovim_patch = patch.object(
-            self.ovim, 'get_ports', MagicMock(return_value=[{
-                'switch_dpid': 'AA:AA:AA:AA:AA:AA:AA:AA',
-                'switch_port': 1,
-            }]))
 
         # If the connector works fine
         with connector_patch, ovim_patch:
@@ -188,7 +284,7 @@ class TestCreate(TestActionsWithDb):
     def test_process__sdn_fail(self):
         # Given we want 1 WAN link between 2 datacenters
         # and the local network in each datacenter is already created
-        db_state, action = self.prepare_create__sdn()
+        db_state, action, ovim_patch = self.prepare_create__sdn()
         self.populate(db_state)
 
         instance_action = self.persist.get_by_uuid(
@@ -199,12 +295,6 @@ class TestCreate(TestActionsWithDb):
         connector_patch = patch.object(
             self.connector, 'create_connectivity_service',
             MagicMock(side_effect=WimConnectorError('foobar')))
-
-        ovim_patch = patch.object(
-            self.ovim, 'get_ports', MagicMock(return_value=[{
-                'switch_dpid': 'AA:AA:AA:AA:AA:AA:AA:AA',
-                'switch_port': 1,
-            }]))
 
         # If the connector throws an error
         with connector_patch, ovim_patch:
@@ -243,29 +333,32 @@ class TestDelete(TestActionsWithDb):
         assert action.is_done
 
     def prepare_delete(self):
-        db_state = [{'nfvo_tenants': eg.tenant()}] + eg.wim_set()
+        db_state = eg.consistent_set(num_wims=1, num_tenants=1,
+                                     num_datacenters=2,
+                                     external_ports_config=True)
 
-        instance_nets = eg.instance_nets(num_datacenters=2, num_links=1)
-        port_mappings = [
-            eg.wim_port_mapping(0, 0),
-            eg.wim_port_mapping(0, 1)
-        ]
-        instance_action = eg.instance_action(action_id='ACTION-000')
+        instance_nets = eg.instance_nets(num_datacenters=2, num_links=1,
+                                         status='ACTIVE')
         for i, net in enumerate(instance_nets):
-            net['status'] = 'ACTIVE'
+            net['vim_info'] = {}
+            net['vim_info']['provider:physical_network'] = 'provider'
+            net['vim_info']['encapsulation_type'] = 'vlan'
+            net['vim_info']['encapsulation_id'] = i
             net['sdn_net_id'] = uuid('sdn-net%d' % i)
 
-        db_state += [{'instance_nets': instance_nets},
-                     {'instance_wim_nets': eg.instance_wim_nets()},
-                     {'wim_port_mappings': port_mappings},
-                     {'instance_actions': instance_action}]
+        instance_action = eg.instance_action(action_id='ACTION-000')
+
+        db_state += [
+            {'instance_wim_nets': eg.instance_wim_nets()},
+            {'instance_nets': [preprocess_record(r) for r in instance_nets]},
+            {'instance_actions': instance_action}]
 
         action = WanLinkDelete(
             eg.wim_actions('DELETE', action_id='ACTION-000')[0])
         # --> ensure it is in the database for updates --> #
         action_record = action.as_record()
         action_record['extra'] = json.dumps(action_record['extra'])
-        self.populate([{'vim_wim_actions': action_record}])
+        db_state += [{'vim_wim_actions': action_record}]
 
         return db_state, action
 
@@ -331,8 +424,9 @@ class TestDelete(TestActionsWithDb):
     def test_create_and_delete(self):
         # Given a CREATE action was well succeeded
         db_state, delete_action = self.prepare_delete()
-        delete_action.save(self.persist, task_index=1)
         self.populate(db_state)
+
+        delete_action.save(self.persist, task_index=1)
         create_action = self.create_action()
 
         connector_patch = patch.multiple(
@@ -341,13 +435,7 @@ class TestDelete(TestActionsWithDb):
             create_connectivity_service=(
                 lambda *_, **__: (uuid('random-id'), None)))
 
-        ovim_patch = patch.object(
-            self.ovim, 'get_ports', MagicMock(return_value=[{
-                'switch_dpid': 'AA:AA:AA:AA:AA:AA:AA:AA',
-                'switch_port': 1,
-            }]))
-
-        with connector_patch, ovim_patch:
+        with connector_patch:  # , ovim_patch:
             create_action.process(self.connector, self.persist, self.ovim)
 
         # When we try to process a CREATE action that refers to the same

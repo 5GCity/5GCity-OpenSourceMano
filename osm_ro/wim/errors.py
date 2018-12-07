@@ -178,3 +178,12 @@ class WimAccountNotActive(HttpMappedError, KeyError):
         message += ('\nThe thread responsible for processing the actions have '
                     'suddenly stopped, or have never being spawned')
         super(WimAccountNotActive, self).__init__(message, http_code)
+
+
+class NoExternalPortFound(HttpMappedError):
+    """No external port associated to the instance_net"""
+
+    def __init__(self, instance_net):
+        super(NoExternalPortFound, self).__init__(
+            '{} uuid({})'.format(self.__class__.__doc__, instance_net['uuid']),
+            http_code=Not_Found)
