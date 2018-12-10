@@ -51,7 +51,7 @@ from time import time, sleep
 from six import reraise
 from six.moves import queue
 
-from . import wan_link_actions, wimconn_odl  # wimconn_tapi
+from . import wan_link_actions, wimconn_odl, wimconn_dynpac # wimconn_tapi
 from ..utils import ensure, partition, pipe
 from .actions import IGNORE, PENDING, REFRESH
 from .errors import (
@@ -71,6 +71,7 @@ CONNECTORS = {
     "odl": wimconn_odl.OdlConnector,
     # "tapi": wimconn_tapi
     # Add extra connectors here
+    "dynpac": wimconn_dynpac.DynpacConnector
 }
 
 
