@@ -120,6 +120,9 @@ class WimHandler(BaseHandler):
     def http_get_wim(self, tenant_id, wim_id):
         tenant_id = None if tenant_id == 'any' else tenant_id
         wim = self.engine.get_wim(wim_id, tenant_id)
+        mappings = self.engine.get_wim_port_mappings(wim_id)
+        wim['config'] = utils.merge_dicts(wim.get('config', {}) or {},
+                                          wim_port_mapping=mappings)
         return format_out({'wim': wim})
 
     @route('POST', '/wims')

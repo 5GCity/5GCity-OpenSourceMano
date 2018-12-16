@@ -48,12 +48,17 @@ import logging
 from contextlib import contextmanager
 from itertools import groupby
 from operator import itemgetter
+from sys import exc_info
 from uuid import uuid4
+
+from six import reraise
 
 from ..utils import remove_none_items
 from .actions import Action
 from .errors import (
+    DbBaseException,
     NoWimConnectedToDatacenters,
+    UnexpectedDatabaseError,
     WimAccountNotActive
 )
 from .wim_thread import WimThread
@@ -76,10 +81,29 @@ class WimEngine(object):
         Please check the wim schema to have more information about
         ``properties``.
 
+        The ``config`` property might contain a ``wim_port_mapping`` dict,
+        In this case, the method ``create_wim_port_mappings`` will be
+        automatically invoked.
+
         Returns:
             str: uuid of the newly created WIM record
         """
-        return self.persist.create_wim(properties)
+        port_mapping = ((properties.get('config', {}) or {})
+                        .pop('wim_port_mapping', {}))
+        uuid = self.persist.create_wim(properties)
+
+        if port_mapping:
+            try:
+                self.create_wim_port_mappings(uuid, port_mapping)
+            except DbBaseException:
+                # Rollback
+                self.delete_wim(uuid)
+                ex = UnexpectedDatabaseError('Failed to create port mappings'
+                                             'Rolling back wim creation')
+                self.logger.exception(str(ex))
+                reraise(ex.__class__, ex, exc_info()[2])
+
+        return uuid
 
     def get_wim(self, uuid_or_name, tenant_id=None):
         """Retrieve existing WIM record by name or id.
@@ -95,8 +119,35 @@ class WimEngine(object):
 
         ``properties`` is a dictionary with the properties being changed,
         if a property is not present, the old value will be preserved
+
+        Similarly to create_wim, the ``config`` property might contain a
+        ``wim_port_mapping`` dict, In this case, port mappings will be
+        automatically updated.
         """
-        return self.persist.update_wim(uuid_or_name, properties)
+        port_mapping = ((properties.get('config', {}) or {})
+                        .pop('wim_port_mapping', {}))
+        orig_props = self.persist.get_by_name_or_uuid('wims', uuid_or_name)
+        uuid = orig_props['uuid']
+
+        response = self.persist.update_wim(uuid, properties)
+
+        if port_mapping:
+            try:
+                # It is very complex to diff and update individually all the
+                # port mappings. Therefore a practical approach is just delete
+                # and create it again.
+                self.persist.delete_wim_port_mappings(uuid)
+                # ^  Calling from persistence avoid reloading twice the thread
+                self.create_wim_port_mappings(uuid, port_mapping)
+            except DbBaseException:
+                # Rollback
+                self.update_wim(uuid_or_name, orig_props)
+                ex = UnexpectedDatabaseError('Failed to update port mappings'
+                                             'Rolling back wim updates\n')
+                self.logger.exception(str(ex))
+                reraise(ex.__class__, ex, exc_info()[2])
+
+        return response
 
     def delete_wim(self, uuid_or_name):
         """Kill the corresponding wim threads and erase the WIM record"""

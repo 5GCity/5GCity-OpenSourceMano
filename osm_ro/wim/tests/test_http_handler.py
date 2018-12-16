@@ -137,6 +137,44 @@ class TestHttpHandler(TestCaseWithDatabasePerTest):
             merge_dicts(eg.wim(1), name='My-New-Name'),
             response.json['wim'])
 
+    def test_edit_wim__port_mappings(self):
+        # Given a WIM exists in the database
+        self.populate()
+        # when a PUT /wims/<wim_id> request arrives
+        wim_id = uuid('wim1')
+        response = self.app.put_json(
+            '/wims/{}'.format(wim_id), {
+                'wim': dict(
+                    name='My-New-Name',
+                    config={'wim_port_mapping': [{
+                        'datacenter_name': 'dc0',
+                        'pop_wan_mappings': [{
+                            'pop_switch_dpid': '00:AA:11:BB:22:CC:33:DD',
+                            'pop_switch_port': 1,
+                            'wan_service_mapping_info': {
+                                'mapping_type': 'dpid-port',
+                                'wan_switch_dpid': 'BB:BB:BB:BB:BB:BB:BB:0A',
+                                'wan_switch_port': 1
+                            }
+                        }]}]
+                    }
+                )
+            }
+        )
+
+        # then the request should be well succeeded
+        self.assertEqual(response.status_code, OK)
+        # and the registered wim (wim1) should be present
+        self.assertDictContainsSubset(
+            merge_dicts(eg.wim(1), name='My-New-Name'),
+            response.json['wim'])
+        # and the port mappings hould be updated
+        mappings = response.json['wim']['config']['wim_port_mapping']
+        self.assertEqual(len(mappings), 1)
+        self.assertEqual(
+            mappings[0]['pop_wan_mappings'][0]['pop_switch_dpid'],
+            '00:AA:11:BB:22:CC:33:DD')
+
     def test_delete_wim(self):
         # Given a WIM exists in the database
         self.populate()
@@ -177,6 +215,35 @@ class TestHttpHandler(TestCaseWithDatabasePerTest):
         # then the request should be well succeeded
         self.assertEqual(response.status_code, OK)
         self.assertEqual(response.json['wim']['name'], 'wim999')
+
+    def test_create_wim__port_mappings(self):
+        self.populate()
+        # when a POST /wims request arrives with the right payload
+        response = self.app.post_json(
+            '/wims', {
+                'wim': merge_dicts(
+                    eg.wim(999),
+                    config={'wim_port_mapping': [{
+                        'datacenter_name': 'dc0',
+                        'pop_wan_mappings': [{
+                            'pop_switch_dpid': 'AA:AA:AA:AA:AA:AA:AA:01',
+                            'pop_switch_port': 1,
+                            'wan_service_mapping_info': {
+                                'mapping_type': 'dpid-port',
+                                'wan_switch_dpid': 'BB:BB:BB:BB:BB:BB:BB:01',
+                                'wan_switch_port': 1
+                            }
+                        }]}]
+                    }
+                )
+            }
+        )
+
+        # then the request should be well succeeded
+        self.assertEqual(response.status_code, OK)
+        self.assertEqual(response.json['wim']['name'], 'wim999')
+        self.assertEqual(
+            len(response.json['wim']['config']['wim_port_mapping']), 1)
 
     def test_create_wim_account(self):
         # Given a WIM and a NFVO tenant exist but are not associated

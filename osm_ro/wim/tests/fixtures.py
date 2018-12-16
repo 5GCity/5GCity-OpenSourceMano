@@ -167,7 +167,7 @@ def processed_port_mapping(wim, datacenter,
     return {
         'wim_id': uuid('wim%d' % wim),
         'datacenter_id': uuid('dc%d' % datacenter),
-        'wan_pop_port_mappings': [
+        'pop_wan_mappings': [
             {'pop_switch_dpid': pop_dpid,
              'pop_switch_port': wim + 1 + i,
              'wan_service_endpoint_id':
