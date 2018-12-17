@@ -1056,6 +1056,7 @@ instance_scenario_create_schema_v01 = {
                                             "type": "object",
                                             "properties": {
                                                 "vim-network-name": name_schema,
+                                                "vim-network-id": name_schema,
                                                 "ip-profile": ip_profile_schema,
                                                 "name": name_schema,
                                             }
@@ -1080,7 +1081,8 @@ instance_scenario_create_schema_v01 = {
                                         "properties":{
                                             "ip_address": ip_schema,
                                             "datacenter": name_schema,
-                                            "vim-network-name": name_schema
+                                            "vim-network-name": name_schema,
+                                            "vim-network-id": name_schema
                                         },
                                         "patternProperties":{
                                             ".": {"type": "string"}
@@ -1105,6 +1107,7 @@ instance_scenario_create_schema_v01 = {
                                             #In oder words, it is the same as 'try to map to the VIM network (netmap-use) if exist, and if not create the network (netmap-create)
                                             "netmap-use": name_schema, #
                                             "vim-network-name": name_schema, #override network name
+                                            "vim-network-id": name_schema,
                                             #"ip-profile": ip_profile_schema,
                                             "datacenter": name_schema,
                                         }

@@ -3123,6 +3123,8 @@ def create_instance(mydb, tenant_id, instance_dict):
                     raise NfvoException("Invalid net id or name '{}' at instance:vnfs:networks".format(net_id), httperrors.Bad_Request)
                 if net_instance_desc.get("vim-network-name"):
                     scenario_net["vim-network-name"] = net_instance_desc["vim-network-name"]
+                if net_instance_desc.get("vim-network-id"):
+                    scenario_net["vim-network-id"] = net_instance_desc["vim-network-id"]
                 if net_instance_desc.get("name"):
                     scenario_net["name"] = net_instance_desc["name"]
                 if 'ip-profile' in net_instance_desc:
@@ -3634,8 +3636,12 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         }
         db_instance_nets.append(db_net)
 
+        lookfor_filter = {}
         if net.get("vim-network-name"):
-            lookfor_filter = {"name": net["vim-network-name"]}
+            lookfor_filter["name"] = net["vim-network-name"]
+        if net.get("vim-network-id"):
+            lookfor_filter["id"] = net["vim-network-id"]
+        if lookfor_filter:
             task_action = "FIND"
             task_extra = {"params": (lookfor_filter,)}
         else:
