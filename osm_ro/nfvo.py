@@ -3253,7 +3253,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                     lookfor_network = True
                     lookfor_filter["name"] = sce_net.get("vim_network_name")
                 elif sce_net["external"]:
-                    if sce_net['vim_id'] is not None:
+                    if sce_net.get('vim_id'):
                         # there is a netmap at datacenter_nets database   # TODO REVISE!!!!
                         create_network = False
                         lookfor_network = True
