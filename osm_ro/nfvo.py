@@ -343,7 +343,7 @@ def get_imagelist(mydb, vnf_id, nfvo_tenant=None):
     image_list = []
     vms = mydb.get_rows(SELECT=('image_id','image_list'), FROM='vms', WHERE={'vnf_id': vnf_id})
     for vm in vms:
-        if vm["image_id"] not in image_list:
+        if vm["image_id"] and vm["image_id"] not in image_list:
             image_list.append(vm["image_id"])
         if vm["image_list"]:
             vm_image_list = yaml.load(vm["image_list"])
@@ -1068,6 +1068,11 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                     device["image checksum"] = str(volume["image-checksum"])
 
                             devices.append(device)
+
+                if not db_vm.get("image_id"):
+                    if not db_vm["pdu_type"]:
+                        raise NfvoException("Not defined image for VDU")
+                    # create a fake image
 
                 # cloud-init
                 boot_data = {}

@@ -34,7 +34,7 @@ DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=35
+LAST_DB_VERSION=36
 
 # Detect paths
 MYSQL=$(which mysql)
@@ -204,6 +204,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5082 ] && DB_VERSION=33  #0.5.82 =>  33
 #[ $OPENMANO_VER_NUM -ge 6000 ] && DB_VERSION=34  #0.6.00 =>  34
 #[ $OPENMANO_VER_NUM -ge 6001 ] && DB_VERSION=35  #0.6.01 =>  35
+#[ $OPENMANO_VER_NUM -ge 6003 ] && DB_VERSION=35  #0.6.03 =>  36
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -1337,6 +1338,26 @@ function downgrade_from_35(){
     script="$(find "${DBUTILS}/migrations/down" -iname "35*.sql" | tail -1)"
     sql "source ${script}"
 }
+function upgrade_to_36(){
+    echo "      Allow null for image_id at 'vms'"
+    sql "ALTER TABLE vms ALTER image_id DROP DEFAULT;"
+    sql "ALTER TABLE vms CHANGE COLUMN image_id image_id VARCHAR(36) NULL COMMENT 'Link to image table' AFTER " \
+        "flavor_id;"
+    echo "      Enlarge config at 'wims' and 'wim_accounts'"
+    sql "ALTER TABLE wims CHANGE COLUMN config config TEXT NULL DEFAULT NULL AFTER wim_url;"
+    sql "ALTER TABLE wim_accounts CHANGE COLUMN config config TEXT NULL DEFAULT NULL AFTER password;"
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
+         "VALUES (36, '0.36', '0.6.03', 'Allow vm without image_id for PDUs', '2018-12-19');"
+}
+function downgrade_from_36(){
+    echo "      Force back not null for image_id at 'vms'"
+    sql "ALTER TABLE vms ALTER image_id DROP DEFAULT;"
+    sql "ALTER TABLE vms CHANGE COLUMN image_id image_id VARCHAR(36) NOT NULL COMMENT 'Link to image table' AFTER " \
+        "flavor_id;"
+    # For downgrade do not restore wims/wim_accounts config to varchar 4000
+    sql "DELETE FROM schema_version WHERE version_int='36';"
+}
+
 #TODO ... put functions here
 
 # echo "db version = "${DATABASE_VER_NUM}

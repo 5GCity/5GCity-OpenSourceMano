@@ -629,18 +629,22 @@ class nfvo_db(db_base.db_base):
                             else:
                                 del vm["image_list"]
                             if datacenter_vim_id!=None:
-                                cmd = "SELECT vim_id FROM datacenters_images WHERE image_id='{}' AND datacenter_vim_id='{}'".format(vm['image_id'],datacenter_vim_id)
-                                self.logger.debug(cmd)
-                                self.cur.execute(cmd)
-                                if self.cur.rowcount==1:
-                                    vim_image_dict = self.cur.fetchone()
-                                    vm['vim_image_id']=vim_image_dict['vim_id']
-                                cmd = "SELECT vim_id FROM datacenters_flavors WHERE flavor_id='{}' AND datacenter_vim_id='{}'".format(vm['flavor_id'],datacenter_vim_id)
-                                self.logger.debug(cmd)
-                                self.cur.execute(cmd)
-                                if self.cur.rowcount==1:
-                                    vim_flavor_dict = self.cur.fetchone()
-                                    vm['vim_flavor_id']=vim_flavor_dict['vim_id']
+                                if vm['image_id']:
+                                    cmd = "SELECT vim_id FROM datacenters_images WHERE image_id='{}' AND " \
+                                          "datacenter_vim_id='{}'".format(vm['image_id'], datacenter_vim_id)
+                                    self.logger.debug(cmd)
+                                    self.cur.execute(cmd)
+                                    if self.cur.rowcount==1:
+                                        vim_image_dict = self.cur.fetchone()
+                                        vm['vim_image_id']=vim_image_dict['vim_id']
+                                if vm['flavor_id']:
+                                    cmd = "SELECT vim_id FROM datacenters_flavors WHERE flavor_id='{}' AND " \
+                                          "datacenter_vim_id='{}'".format(vm['flavor_id'], datacenter_vim_id)
+                                    self.logger.debug(cmd)
+                                    self.cur.execute(cmd)
+                                    if self.cur.rowcount==1:
+                                        vim_flavor_dict = self.cur.fetchone()
+                                        vm['vim_flavor_id']=vim_flavor_dict['vim_id']
 
                             #interfaces
                             cmd = "SELECT uuid,internal_name,external_name,net_id,type,vpci,mac,bw,model,ip_address," \
