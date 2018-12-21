@@ -161,7 +161,8 @@ DBHOST_="" && [ -n "$DBHOST" ] && DBHOST_="-h$DBHOST"
 DBPORT_="-P$DBPORT"
 
 echo "    loading ${DIRNAME}/mano_db_structure.sql"
-sed -e "s/{{mano_db}}/$DBNAME/" ${DIRNAME}/mano_db_structure.sql |  mysql $DEF_EXTRA_FILE_PARAM
+sed -e "s/{{mano_db}}/$DBNAME/" ${DIRNAME}/mano_db_structure.sql | mysql $DEF_EXTRA_FILE_PARAM ||
+    ! echo "ERROR at init $DBNAME" || exit 1
 
 echo "    migrage database version"
 # echo "${DIRNAME}/migrate_mano_db.sh $DBHOST_ $DBPORT_ $DBUSER_ $DBPASS_ -d$DBNAME $QUIET_MODE $DB_VERSION"

@@ -17,7 +17,12 @@ function is_db_created() {
     db_version=$6  # minimun database version
 
     if mysqlshow -h"$db_host" -P"$db_port" -u"$db_user" -p"$db_pswd" | grep -v Wildcard | grep -q -e "$db_name" ; then
-        if echo "SELECT * FROM schema_version WHERE version='$db_version'" |
+        if echo "SELECT * FROM schema_version WHERE version='0'" |
+                mysql -h"$db_host" -P"$db_port" -u"$db_user" -p"$db_pswd" "$db_name" |
+                grep -q -e "init" ; then
+            echo " DB $db_name exists BUT failed in previous init"
+            return 1
+        elif echo "SELECT * FROM schema_version WHERE version='$db_version'" |
                 mysql -h"$db_host" -P"$db_port" -u"$db_user" -p"$db_pswd" "$db_name" |
                 grep -q -e "$db_version" ; then
             echo " DB $db_name exists and inited"
@@ -103,7 +108,7 @@ then
 else
     echo "  migrate database version"
     ${RO_PATH}/database_utils/migrate_mano_db.sh -u "$RO_DB_USER" -p "$RO_DB_PASSWORD" -h "$RO_DB_HOST" \
-        -P "$RO_DB_PORT" -d "$RO_DB_NAME"
+        -P "$RO_DB_PORT" -d "$RO_DB_NAME" -b /var/log/osm
 fi
 
 OVIM_PATH=`python -c 'import lib_osm_openvim; print(lib_osm_openvim.__path__[0])'`
@@ -125,7 +130,7 @@ then
 else
     echo "  migrate database version"
     ${OVIM_PATH}/database_utils/migrate_vim_db.sh -u "$RO_DB_OVIM_USER" -p "$RO_DB_OVIM_PASSWORD" -h "$RO_DB_OVIM_HOST"\
-        -P "$RO_DB_OVIM_PORT" -d "$RO_DB_OVIM_NAME"
+        -P "$RO_DB_OVIM_PORT" -d "$RO_DB_OVIM_NAME" -b /var/log/osm
 fi
 
 

@@ -19,11 +19,11 @@
 * contact with: nfvlabs@tid.es
 **/
 
--- MySQL dump 10.13  Distrib 5.7.20, for Linux (x86_64)
+-- MySQL dump 10.13  Distrib 5.7.24, for Linux (x86_64)
 --
 -- Host: localhost    Database: {{mano_db}}
 -- ------------------------------------------------------
--- Server version	5.7.20-0ubuntu0.16.04.1
+-- Server version	5.7.24
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -42,7 +42,7 @@
 
 /*!40000 DROP DATABASE IF EXISTS `{{mano_db}}`*/;
 
-CREATE DATABASE /*!32312 IF NOT EXISTS*/ `{{mano_db}}` /*!40100 DEFAULT CHARACTER SET latin1 */;
+CREATE DATABASE /*!32312 IF NOT EXISTS*/ `{{mano_db}}` /*!40100 DEFAULT CHARACTER SET utf8 */;
 
 USE `{{mano_db}}`;
 
@@ -229,6 +229,37 @@ CREATE TABLE `instance_actions` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `instance_classifications`
+--
+
+DROP TABLE IF EXISTS `instance_classifications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `instance_classifications` (
+  `uuid` varchar(36) NOT NULL,
+  `instance_scenario_id` varchar(36) NOT NULL,
+  `vim_classification_id` varchar(36) DEFAULT NULL,
+  `sce_classifier_match_id` varchar(36) DEFAULT NULL,
+  `datacenter_id` varchar(36) DEFAULT NULL,
+  `datacenter_tenant_id` varchar(36) DEFAULT NULL,
+  `status` enum('ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
+  `error_msg` varchar(1024) DEFAULT NULL,
+  `vim_info` text,
+  `created_at` double NOT NULL,
+  `modified_at` double DEFAULT NULL,
+  PRIMARY KEY (`uuid`),
+  KEY `FK_instance_classifications_instance_scenarios` (`instance_scenario_id`),
+  KEY `FK_instance_classifications_sce_classifier_matches` (`sce_classifier_match_id`),
+  KEY `FK_instance_classifications_datacenters` (`datacenter_id`),
+  KEY `FK_instance_classifications_datacenter_tenants` (`datacenter_tenant_id`),
+  CONSTRAINT `FK_instance_classifications_datacenter_tenants` FOREIGN KEY (`datacenter_tenant_id`) REFERENCES `datacenter_tenants` (`uuid`),
+  CONSTRAINT `FK_instance_classifications_datacenters` FOREIGN KEY (`datacenter_id`) REFERENCES `datacenters` (`uuid`),
+  CONSTRAINT `FK_instance_classifications_instance_scenarios` FOREIGN KEY (`instance_scenario_id`) REFERENCES `instance_scenarios` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_instance_classifications_sce_classifier_matches` FOREIGN KEY (`sce_classifier_match_id`) REFERENCES `sce_classifier_matches` (`uuid`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `instance_interfaces`
 --
 
@@ -271,6 +302,7 @@ DROP TABLE IF EXISTS `instance_nets`;
 CREATE TABLE `instance_nets` (
   `uuid` varchar(36) NOT NULL,
   `vim_net_id` varchar(128) DEFAULT NULL,
+  `vim_name` varchar(255) DEFAULT NULL,
   `instance_scenario_id` varchar(36) DEFAULT NULL,
   `sce_net_id` varchar(36) DEFAULT NULL,
   `net_id` varchar(36) DEFAULT NULL,
@@ -329,6 +361,99 @@ CREATE TABLE `instance_scenarios` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `instance_sfis`
+--
+
+DROP TABLE IF EXISTS `instance_sfis`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `instance_sfis` (
+  `uuid` varchar(36) NOT NULL,
+  `instance_scenario_id` varchar(36) NOT NULL,
+  `vim_sfi_id` varchar(36) DEFAULT NULL,
+  `sce_rsp_hop_id` varchar(36) DEFAULT NULL,
+  `datacenter_id` varchar(36) DEFAULT NULL,
+  `datacenter_tenant_id` varchar(36) DEFAULT NULL,
+  `status` enum('ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
+  `error_msg` varchar(1024) DEFAULT NULL,
+  `vim_info` text,
+  `created_at` double NOT NULL,
+  `modified_at` double DEFAULT NULL,
+  PRIMARY KEY (`uuid`),
+  KEY `FK_instance_sfis_instance_scenarios` (`instance_scenario_id`),
+  KEY `FK_instance_sfis_sce_rsp_hops` (`sce_rsp_hop_id`),
+  KEY `FK_instance_sfis_datacenters` (`datacenter_id`),
+  KEY `FK_instance_sfis_datacenter_tenants` (`datacenter_tenant_id`),
+  CONSTRAINT `FK_instance_sfis_datacenter_tenants` FOREIGN KEY (`datacenter_tenant_id`) REFERENCES `datacenter_tenants` (`uuid`),
+  CONSTRAINT `FK_instance_sfis_datacenters` FOREIGN KEY (`datacenter_id`) REFERENCES `datacenters` (`uuid`),
+  CONSTRAINT `FK_instance_sfis_instance_scenarios` FOREIGN KEY (`instance_scenario_id`) REFERENCES `instance_scenarios` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_instance_sfis_sce_rsp_hops` FOREIGN KEY (`sce_rsp_hop_id`) REFERENCES `sce_rsp_hops` (`uuid`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `instance_sfps`
+--
+
+DROP TABLE IF EXISTS `instance_sfps`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `instance_sfps` (
+  `uuid` varchar(36) NOT NULL,
+  `instance_scenario_id` varchar(36) NOT NULL,
+  `vim_sfp_id` varchar(36) DEFAULT NULL,
+  `sce_rsp_id` varchar(36) DEFAULT NULL,
+  `datacenter_id` varchar(36) DEFAULT NULL,
+  `datacenter_tenant_id` varchar(36) DEFAULT NULL,
+  `status` enum('ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
+  `error_msg` varchar(1024) DEFAULT NULL,
+  `vim_info` text,
+  `created_at` double NOT NULL,
+  `modified_at` double DEFAULT NULL,
+  PRIMARY KEY (`uuid`),
+  KEY `FK_instance_sfps_instance_scenarios` (`instance_scenario_id`),
+  KEY `FK_instance_sfps_sce_rsps` (`sce_rsp_id`),
+  KEY `FK_instance_sfps_datacenters` (`datacenter_id`),
+  KEY `FK_instance_sfps_datacenter_tenants` (`datacenter_tenant_id`),
+  CONSTRAINT `FK_instance_sfps_datacenter_tenants` FOREIGN KEY (`datacenter_tenant_id`) REFERENCES `datacenter_tenants` (`uuid`),
+  CONSTRAINT `FK_instance_sfps_datacenters` FOREIGN KEY (`datacenter_id`) REFERENCES `datacenters` (`uuid`),
+  CONSTRAINT `FK_instance_sfps_instance_scenarios` FOREIGN KEY (`instance_scenario_id`) REFERENCES `instance_scenarios` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_instance_sfps_sce_rsps` FOREIGN KEY (`sce_rsp_id`) REFERENCES `sce_rsps` (`uuid`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `instance_sfs`
+--
+
+DROP TABLE IF EXISTS `instance_sfs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `instance_sfs` (
+  `uuid` varchar(36) NOT NULL,
+  `instance_scenario_id` varchar(36) NOT NULL,
+  `vim_sf_id` varchar(36) DEFAULT NULL,
+  `sce_rsp_hop_id` varchar(36) DEFAULT NULL,
+  `datacenter_id` varchar(36) DEFAULT NULL,
+  `datacenter_tenant_id` varchar(36) DEFAULT NULL,
+  `status` enum('ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
+  `error_msg` varchar(1024) DEFAULT NULL,
+  `vim_info` text,
+  `created_at` double NOT NULL,
+  `modified_at` double DEFAULT NULL,
+  PRIMARY KEY (`uuid`),
+  KEY `FK_instance_sfs_instance_scenarios` (`instance_scenario_id`),
+  KEY `FK_instance_sfs_sce_rsp_hops` (`sce_rsp_hop_id`),
+  KEY `FK_instance_sfs_datacenters` (`datacenter_id`),
+  KEY `FK_instance_sfs_datacenter_tenants` (`datacenter_tenant_id`),
+  CONSTRAINT `FK_instance_sfs_datacenter_tenants` FOREIGN KEY (`datacenter_tenant_id`) REFERENCES `datacenter_tenants` (`uuid`),
+  CONSTRAINT `FK_instance_sfs_datacenters` FOREIGN KEY (`datacenter_id`) REFERENCES `datacenters` (`uuid`),
+  CONSTRAINT `FK_instance_sfs_instance_scenarios` FOREIGN KEY (`instance_scenario_id`) REFERENCES `instance_scenarios` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_instance_sfs_sce_rsp_hops` FOREIGN KEY (`sce_rsp_hop_id`) REFERENCES `sce_rsp_hops` (`uuid`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `instance_vms`
 --
 
@@ -340,6 +465,7 @@ CREATE TABLE `instance_vms` (
   `instance_vnf_id` varchar(36) NOT NULL,
   `vm_id` varchar(36) DEFAULT NULL,
   `vim_vm_id` varchar(128) DEFAULT NULL,
+  `vim_name` varchar(255) DEFAULT NULL,
   `status` enum('ACTIVE:NoMgmtIP','ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
   `error_msg` varchar(1024) DEFAULT NULL,
   `vim_info` text,
@@ -382,6 +508,39 @@ CREATE TABLE `instance_vnfs` (
   CONSTRAINT `FK_instance_vnfs_sce_vnfs` FOREIGN KEY (`sce_vnf_id`) REFERENCES `sce_vnfs` (`uuid`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `FK_instance_vnfs_vnfs` FOREIGN KEY (`vnf_id`) REFERENCES `vnfs` (`uuid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='Instances of VNFs as part of a scenario';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `instance_wim_nets`
+--
+
+DROP TABLE IF EXISTS `instance_wim_nets`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `instance_wim_nets` (
+  `uuid` varchar(36) NOT NULL,
+  `wim_internal_id` varchar(128) DEFAULT NULL COMMENT 'Internal ID used by the WIM to refer to the network',
+  `instance_scenario_id` varchar(36) DEFAULT NULL,
+  `sce_net_id` varchar(36) DEFAULT NULL,
+  `wim_id` varchar(36) DEFAULT NULL,
+  `wim_account_id` varchar(36) NOT NULL,
+  `status` enum('ACTIVE','INACTIVE','DOWN','BUILD','ERROR','WIM_ERROR','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
+  `error_msg` varchar(1024) DEFAULT NULL,
+  `wim_info` text,
+  `multipoint` enum('true','false') NOT NULL DEFAULT 'false',
+  `created` enum('true','false') NOT NULL DEFAULT 'false' COMMENT 'Created or already exists at WIM',
+  `created_at` double NOT NULL,
+  `modified_at` double DEFAULT NULL,
+  PRIMARY KEY (`uuid`),
+  KEY `FK_instance_wim_nets_instance_scenarios` (`instance_scenario_id`),
+  KEY `FK_instance_wim_nets_sce_nets` (`sce_net_id`),
+  KEY `FK_instance_wim_nets_wims` (`wim_id`),
+  KEY `FK_instance_wim_nets_wim_accounts` (`wim_account_id`),
+  CONSTRAINT `FK_instance_wim_nets_instance_scenarios` FOREIGN KEY (`instance_scenario_id`) REFERENCES `instance_scenarios` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_instance_wim_nets_sce_nets` FOREIGN KEY (`sce_net_id`) REFERENCES `sce_nets` (`uuid`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `FK_instance_wim_nets_wim_accounts` FOREIGN KEY (`wim_account_id`) REFERENCES `wim_accounts` (`uuid`),
+  CONSTRAINT `FK_instance_wim_nets_wims` FOREIGN KEY (`wim_id`) REFERENCES `wims` (`uuid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='Instances of wim networks';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -474,6 +633,7 @@ DROP TABLE IF EXISTS `nets`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `nets` (
   `uuid` varchar(36) NOT NULL,
+  `osm_id` varchar(255) DEFAULT NULL,
   `vnf_id` varchar(36) NOT NULL,
   `name` varchar(255) NOT NULL,
   `type` enum('bridge','data','ptp') NOT NULL DEFAULT 'data' COMMENT 'Type of network',
@@ -505,6 +665,58 @@ CREATE TABLE `nfvo_tenants` (
   PRIMARY KEY (`uuid`),
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='Scenarios defined by the user';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `sce_classifier_matches`
+--
+
+DROP TABLE IF EXISTS `sce_classifier_matches`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `sce_classifier_matches` (
+  `uuid` varchar(36) NOT NULL,
+  `ip_proto` varchar(2) NOT NULL,
+  `source_ip` varchar(16) NOT NULL,
+  `destination_ip` varchar(16) NOT NULL,
+  `source_port` varchar(5) NOT NULL,
+  `destination_port` varchar(5) NOT NULL,
+  `sce_classifier_id` varchar(36) NOT NULL,
+  `created_at` double NOT NULL,
+  `modified_at` double DEFAULT NULL,
+  PRIMARY KEY (`uuid`),
+  KEY `FK_classifiers_classifier_match` (`sce_classifier_id`),
+  CONSTRAINT `FK_sce_classifiers_classifier_match` FOREIGN KEY (`sce_classifier_id`) REFERENCES `sce_classifiers` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `sce_classifiers`
+--
+
+DROP TABLE IF EXISTS `sce_classifiers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `sce_classifiers` (
+  `uuid` varchar(36) NOT NULL,
+  `tenant_id` varchar(36) DEFAULT NULL,
+  `name` varchar(255) NOT NULL,
+  `sce_vnffg_id` varchar(36) NOT NULL,
+  `sce_rsp_id` varchar(36) NOT NULL,
+  `sce_vnf_id` varchar(36) NOT NULL,
+  `interface_id` varchar(36) NOT NULL,
+  `created_at` double NOT NULL,
+  `modified_at` double DEFAULT NULL,
+  PRIMARY KEY (`uuid`),
+  KEY `FK_sce_vnffgs_classifier` (`sce_vnffg_id`),
+  KEY `FK_sce_rsps_classifier` (`sce_rsp_id`),
+  KEY `FK_sce_vnfs_classifier` (`sce_vnf_id`),
+  KEY `FK_interfaces_classifier` (`interface_id`),
+  CONSTRAINT `FK_interfaces_classifier` FOREIGN KEY (`interface_id`) REFERENCES `interfaces` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_sce_rsps_classifier` FOREIGN KEY (`sce_rsp_id`) REFERENCES `sce_rsps` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_sce_vnffgs_classifier` FOREIGN KEY (`sce_vnffg_id`) REFERENCES `sce_vnffgs` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_sce_vnfs_classifier` FOREIGN KEY (`sce_vnf_id`) REFERENCES `sce_vnfs` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -541,12 +753,14 @@ DROP TABLE IF EXISTS `sce_nets`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `sce_nets` (
   `uuid` varchar(36) NOT NULL,
+  `osm_id` varchar(255) DEFAULT NULL,
   `name` varchar(255) NOT NULL,
   `scenario_id` varchar(36) DEFAULT NULL COMMENT 'NULL if net is matched to several scenarios',
   `type` enum('bridge','data','ptp') NOT NULL DEFAULT 'data' COMMENT 'Type of network',
   `multipoint` enum('true','false') NOT NULL DEFAULT 'true',
   `external` enum('true','false') NOT NULL DEFAULT 'false' COMMENT 'If external, net is already present at VIM',
   `description` varchar(255) DEFAULT NULL,
+  `vim_network_name` varchar(255) DEFAULT NULL,
   `created_at` double NOT NULL,
   `modified_at` double DEFAULT NULL,
   `graph` varchar(2000) DEFAULT NULL,
@@ -554,6 +768,74 @@ CREATE TABLE `sce_nets` (
   KEY `FK_sce_nets_scenarios` (`scenario_id`),
   CONSTRAINT `FK_sce_nets_scenarios` FOREIGN KEY (`scenario_id`) REFERENCES `scenarios` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='Networks in a scenario definition. It only considers networks among VNFs. Networks among internal VMs are only considered in tble ''nets''.';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `sce_rsp_hops`
+--
+
+DROP TABLE IF EXISTS `sce_rsp_hops`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `sce_rsp_hops` (
+  `uuid` varchar(36) NOT NULL,
+  `if_order` int(11) NOT NULL DEFAULT '0',
+  `interface_id` varchar(36) NOT NULL,
+  `sce_vnf_id` varchar(36) NOT NULL,
+  `sce_rsp_id` varchar(36) NOT NULL,
+  `created_at` double NOT NULL,
+  `modified_at` double DEFAULT NULL,
+  PRIMARY KEY (`uuid`),
+  KEY `FK_interfaces_rsp_hop` (`interface_id`),
+  KEY `FK_sce_vnfs_rsp_hop` (`sce_vnf_id`),
+  KEY `FK_sce_rsps_rsp_hop` (`sce_rsp_id`),
+  CONSTRAINT `FK_interfaces_rsp_hop` FOREIGN KEY (`interface_id`) REFERENCES `interfaces` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_sce_rsps_rsp_hop` FOREIGN KEY (`sce_rsp_id`) REFERENCES `sce_rsps` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_sce_vnfs_rsp_hop` FOREIGN KEY (`sce_vnf_id`) REFERENCES `sce_vnfs` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `sce_rsps`
+--
+
+DROP TABLE IF EXISTS `sce_rsps`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `sce_rsps` (
+  `uuid` varchar(36) NOT NULL,
+  `tenant_id` varchar(36) DEFAULT NULL,
+  `name` varchar(255) NOT NULL,
+  `sce_vnffg_id` varchar(36) NOT NULL,
+  `created_at` double NOT NULL,
+  `modified_at` double DEFAULT NULL,
+  PRIMARY KEY (`uuid`),
+  KEY `FK_sce_vnffgs_rsp` (`sce_vnffg_id`),
+  CONSTRAINT `FK_sce_vnffgs_rsp` FOREIGN KEY (`sce_vnffg_id`) REFERENCES `sce_vnffgs` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `sce_vnffgs`
+--
+
+DROP TABLE IF EXISTS `sce_vnffgs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `sce_vnffgs` (
+  `uuid` varchar(36) NOT NULL,
+  `tenant_id` varchar(36) DEFAULT NULL,
+  `name` varchar(255) NOT NULL,
+  `description` varchar(255) DEFAULT NULL,
+  `vendor` varchar(255) DEFAULT NULL,
+  `scenario_id` varchar(36) NOT NULL,
+  `created_at` double NOT NULL,
+  `modified_at` double DEFAULT NULL,
+  PRIMARY KEY (`uuid`),
+  KEY `FK_scenarios_sce_vnffg` (`scenario_id`),
+  KEY `FK_scenarios_vnffg` (`tenant_id`),
+  CONSTRAINT `FK_scenarios_vnffg` FOREIGN KEY (`tenant_id`) REFERENCES `scenarios` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -565,7 +847,7 @@ DROP TABLE IF EXISTS `sce_vnfs`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `sce_vnfs` (
   `uuid` varchar(36) NOT NULL,
-  `member_vnf_index` smallint(6) DEFAULT NULL,
+  `member_vnf_index` varchar(255) DEFAULT NULL,
   `name` varchar(255) NOT NULL,
   `scenario_id` varchar(36) NOT NULL,
   `vnf_id` varchar(36) NOT NULL,
@@ -668,19 +950,21 @@ CREATE TABLE `uuids` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `vim_actions`
+-- Table structure for table `vim_wim_actions`
 --
 
-DROP TABLE IF EXISTS `vim_actions`;
+DROP TABLE IF EXISTS `vim_wim_actions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `vim_actions` (
+CREATE TABLE `vim_wim_actions` (
   `instance_action_id` varchar(36) NOT NULL,
   `task_index` int(6) NOT NULL,
-  `datacenter_vim_id` varchar(36) NOT NULL,
+  `datacenter_vim_id` varchar(36) DEFAULT NULL,
   `vim_id` varchar(64) DEFAULT NULL,
+  `wim_account_id` varchar(36) DEFAULT NULL,
+  `wim_internal_id` varchar(64) DEFAULT NULL,
   `action` varchar(36) NOT NULL COMMENT 'CREATE,DELETE,START,STOP...',
-  `item` enum('datacenters_flavors','datacenter_images','instance_nets','instance_vms','instance_interfaces') NOT NULL COMMENT 'table where the item is stored',
+  `item` enum('datacenters_flavors','datacenter_images','instance_nets','instance_vms','instance_interfaces','instance_wim_nets') NOT NULL COMMENT 'table where the item is stored',
   `item_id` varchar(36) DEFAULT NULL COMMENT 'uuid of the entry in the table',
   `status` enum('SCHEDULED','BUILD','DONE','FAILED','SUPERSEDED') NOT NULL DEFAULT 'SCHEDULED',
   `extra` text COMMENT 'json with params:, depends_on: for the task',
@@ -690,8 +974,11 @@ CREATE TABLE `vim_actions` (
   PRIMARY KEY (`task_index`,`instance_action_id`),
   KEY `FK_actions_instance_actions` (`instance_action_id`),
   KEY `FK_actions_vims` (`datacenter_vim_id`),
+  KEY `item_type_id` (`item`,`item_id`),
+  KEY `FK_actions_wims` (`wim_account_id`),
   CONSTRAINT `FK_actions_instance_actions` FOREIGN KEY (`instance_action_id`) REFERENCES `instance_actions` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `FK_actions_vims` FOREIGN KEY (`datacenter_vim_id`) REFERENCES `datacenter_tenants` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE
+  CONSTRAINT `FK_actions_vims` FOREIGN KEY (`datacenter_vim_id`) REFERENCES `datacenter_tenants` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_actions_wims` FOREIGN KEY (`wim_account_id`) REFERENCES `wim_accounts` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='Table with the individual VIM actions.';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -705,11 +992,13 @@ DROP TABLE IF EXISTS `vms`;
 CREATE TABLE `vms` (
   `uuid` varchar(36) NOT NULL,
   `osm_id` varchar(255) DEFAULT NULL,
+  `pdu_type` varchar(255) DEFAULT NULL,
   `name` varchar(255) NOT NULL,
   `vnf_id` varchar(36) NOT NULL,
   `count` smallint(6) NOT NULL DEFAULT '1',
   `flavor_id` varchar(36) NOT NULL COMMENT 'Link to flavor table',
   `image_id` varchar(36) NOT NULL COMMENT 'Link to image table',
+  `image_list` text COMMENT 'Alternative images',
   `image_path` varchar(100) DEFAULT NULL COMMENT 'Path where the image of the VM is located',
   `boot_data` text,
   `description` varchar(255) DEFAULT NULL,
@@ -757,7 +1046,104 @@ CREATE TABLE `vnfs` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping routines for database '{{mano_db}}'
+-- Table structure for table `wim_accounts`
+--
+
+DROP TABLE IF EXISTS `wim_accounts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `wim_accounts` (
+  `uuid` varchar(36) NOT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  `wim_id` varchar(36) NOT NULL,
+  `created` enum('true','false') NOT NULL DEFAULT 'false',
+  `user` varchar(64) DEFAULT NULL,
+  `password` varchar(64) DEFAULT NULL,
+  `config` varchar(4000) DEFAULT NULL,
+  `created_at` double NOT NULL,
+  `modified_at` double DEFAULT NULL,
+  PRIMARY KEY (`uuid`),
+  UNIQUE KEY `wim_name` (`wim_id`,`name`),
+  KEY `FK_wim_accounts_wims` (`wim_id`),
+  CONSTRAINT `FK_wim_accounts_wims` FOREIGN KEY (`wim_id`) REFERENCES `wims` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='WIM accounts by the user';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `wim_nfvo_tenants`
+--
+
+DROP TABLE IF EXISTS `wim_nfvo_tenants`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `wim_nfvo_tenants` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `nfvo_tenant_id` varchar(36) NOT NULL,
+  `wim_id` varchar(36) NOT NULL,
+  `wim_account_id` varchar(36) NOT NULL,
+  `created_at` double NOT NULL,
+  `modified_at` double DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `wim_nfvo_tenant` (`wim_id`,`nfvo_tenant_id`),
+  KEY `FK_wims_nfvo_tenants` (`wim_id`),
+  KEY `FK_wim_accounts_nfvo_tenants` (`wim_account_id`),
+  KEY `FK_nfvo_tenants_wim_accounts` (`nfvo_tenant_id`),
+  CONSTRAINT `FK_nfvo_tenants_wim_accounts` FOREIGN KEY (`nfvo_tenant_id`) REFERENCES `nfvo_tenants` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_wim_accounts_nfvo_tenants` FOREIGN KEY (`wim_account_id`) REFERENCES `wim_accounts` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_wims_nfvo_tenants` FOREIGN KEY (`wim_id`) REFERENCES `wims` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=86 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='WIM accounts mapping to NFVO tenants';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `wim_port_mappings`
+--
+
+DROP TABLE IF EXISTS `wim_port_mappings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `wim_port_mappings` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `wim_id` varchar(36) NOT NULL,
+  `datacenter_id` varchar(36) NOT NULL,
+  `pop_switch_dpid` varchar(64) NOT NULL,
+  `pop_switch_port` varchar(64) NOT NULL,
+  `wan_service_endpoint_id` varchar(256) NOT NULL COMMENT 'this field contains a unique identifier used to check the mapping_info consistency',
+  `wan_service_mapping_info` text,
+  `created_at` double NOT NULL,
+  `modified_at` double DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_datacenter_port_mapping` (`datacenter_id`,`pop_switch_dpid`,`pop_switch_port`),
+  UNIQUE KEY `unique_wim_port_mapping` (`wim_id`,`wan_service_endpoint_id`),
+  KEY `FK_wims_wim_physical_connections` (`wim_id`),
+  KEY `FK_datacenters_wim_port_mappings` (`datacenter_id`),
+  CONSTRAINT `FK_datacenters_wim_port_mappings` FOREIGN KEY (`datacenter_id`) REFERENCES `datacenters` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_wims_wim_port_mappings` FOREIGN KEY (`wim_id`) REFERENCES `wims` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='WIM port mappings managed by the WIM.';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `wims`
+--
+
+DROP TABLE IF EXISTS `wims`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `wims` (
+  `uuid` varchar(36) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `description` varchar(255) DEFAULT NULL,
+  `type` varchar(36) NOT NULL DEFAULT 'odl',
+  `wim_url` varchar(150) NOT NULL,
+  `config` varchar(4000) DEFAULT NULL,
+  `created_at` double NOT NULL,
+  `modified_at` double DEFAULT NULL,
+  PRIMARY KEY (`uuid`),
+  UNIQUE KEY `name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='WIMs managed by the NFVO.';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping routines for database 'mano_db'
 --
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -769,17 +1155,17 @@ CREATE TABLE `vnfs` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2017-11-23 10:24:39
+-- Dump completed on 2018-12-10  9:58:03
 
 
 
 
 
--- MySQL dump 10.13  Distrib 5.7.20, for Linux (x86_64)
+-- MySQL dump 10.13  Distrib 5.7.24, for Linux (x86_64)
 --
 -- Host: localhost    Database: {{mano_db}}
 -- ------------------------------------------------------
--- Server version	5.7.20-0ubuntu0.16.04.1
+-- Server version	5.7.24
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -798,7 +1184,44 @@ CREATE TABLE `vnfs` (
 
 LOCK TABLES `schema_version` WRITE;
 /*!40000 ALTER TABLE `schema_version` DISABLE KEYS */;
-INSERT INTO `schema_version` VALUES (1,'0.1','0.2.2','insert schema_version','2015-05-08'),(2,'0.2','0.2.5','new tables images,flavors','2015-07-13'),(3,'0.3','0.3.3','alter vim_tenant tables','2015-07-28'),(4,'0.4','0.3.5','enlarge graph field at sce_vnfs/nets','2015-10-20'),(5,'0.5','0.4.1','Add mac address for bridge interfaces','2015-12-14'),(6,'0.6','0.4.2','Adding VIM status info','2015-12-22'),(7,'0.7','0.4.3','Changing created_at time at database','2016-01-25'),(8,'0.8','0.4.32','Enlarging name at database','2016-02-01'),(9,'0.9','0.4.33','Add ACTIVE:NoMgmtIP to instance_vms table','2016-02-05'),(10,'0.10','0.4.36','tenant management of vnfs,scenarios','2016-03-08'),(11,'0.11','0.4.43','remove unique name at scenarios,instance_scenarios','2016-07-18'),(12,'0.12','0.4.46','create ip_profiles table, with foreign keys to all nets tables, and add ip_address column to interfaces and sce_interfaces','2016-08-29'),(13,'0.13','0.4.47','insert cloud-config at scenarios,instance_scenarios','2016-08-30'),(14,'0.14','0.4.57','remove unique index vim_net_id, instance_scenario_id','2016-09-26'),(15,'0.15','0.4.59','add columns universal_name and checksum at table images, add unique index universal_name_checksum, and change location to allow NULL; change column image_path in table vms to allow NULL','2016-09-27'),(16,'0.16','0.5.2','enlarge vim_tenant_name and id. New config at datacenter_tenants','2016-10-11'),(17,'0.17','0.5.3','Extra description json format of additional devices in datacenter_flavors','2016-12-20'),(18,'0.18','0.5.4','Add columns \'floating_ip\' and \'port_security\' at tables \'interfaces\' and \'instance_interfaces\'','2017-01-09'),(19,'0.19','0.5.5','Extra Boot-data content at VNFC (vms)','2017-01-11'),(20,'0.20','0.5.9','Added columns to store dataplane connectivity info','2017-03-13'),(21,'0.21','0.5.15','Edit instance_nets to allow instance_scenario_id=None and enlarge column dns_address at table ip_profiles','2017-06-02'),(22,'0.22','0.5.16','Changed type of ram in flavors from SMALLINT to MEDIUMINT','2017-06-02'),(23,'0.23','0.5.20','Changed type of ram in flavors from SMALLINT to MEDIUMINT','2017-08-29'),(24,'0.24','0.5.21','Added vnfd fields','2017-08-29'),(25,'0.25','0.5.22','Added osm_id to vnfs,scenarios','2017-09-01'),(26,'0.26','0.5.23','Several changes','2017-09-09'),(27,'0.27','0.5.25','Added encrypted_RO_priv_key,RO_pub_key to table nfvo_tenants','2017-09-29');
+INSERT INTO `schema_version` VALUES
+(0,'0.0','0.0.0','Database in init process','2015-05-08'),
+(1,'0.1','0.2.2','insert schema_version','2015-05-08'),
+(2,'0.2','0.2.5','new tables images,flavors','2015-07-13'),
+(3,'0.3','0.3.3','alter vim_tenant tables','2015-07-28'),
+(4,'0.4','0.3.5','enlarge graph field at sce_vnfs/nets','2015-10-20'),
+(5,'0.5','0.4.1','Add mac address for bridge interfaces','2015-12-14'),
+(6,'0.6','0.4.2','Adding VIM status info','2015-12-22'),
+(7,'0.7','0.4.3','Changing created_at time at database','2016-01-25'),
+(8,'0.8','0.4.32','Enlarging name at database','2016-02-01'),
+(9,'0.9','0.4.33','Add ACTIVE:NoMgmtIP to instance_vms table','2016-02-05'),
+(10,'0.10','0.4.36','tenant management of vnfs,scenarios','2016-03-08'),
+(11,'0.11','0.4.43','remove unique name at scenarios,instance_scenarios','2016-07-18'),
+(12,'0.12','0.4.46','create ip_profiles table, with foreign keys to all nets tables, and add ip_address column to interfaces and sce_interfaces','2016-08-29'),
+(13,'0.13','0.4.47','insert cloud-config at scenarios,instance_scenarios','2016-08-30'),
+(14,'0.14','0.4.57','remove unique index vim_net_id, instance_scenario_id','2016-09-26'),
+(15,'0.15','0.4.59','add columns universal_name and checksum at table images, add unique index universal_name_checksum, and change location to allow NULL; change column image_path in table vms to allow NULL','2016-09-27'),
+(16,'0.16','0.5.2','enlarge vim_tenant_name and id. New config at datacenter_tenants','2016-10-11'),
+(17,'0.17','0.5.3','Extra description json format of additional devices in datacenter_flavors','2016-12-20'),
+(18,'0.18','0.5.4','Add columns \'floating_ip\' and \'port_security\' at tables \'interfaces\' and \'instance_interfaces\'','2017-01-09'),
+(19,'0.19','0.5.5','Extra Boot-data content at VNFC (vms)','2017-01-11'),
+(20,'0.20','0.5.9','Added columns to store dataplane connectivity info','2017-03-13'),
+(21,'0.21','0.5.15','Edit instance_nets to allow instance_scenario_id=None and enlarge column dns_address at table ip_profiles','2017-06-02'),
+(22,'0.22','0.5.16','Changed type of ram in flavors from SMALLINT to MEDIUMINT','2017-06-02'),
+(23,'0.23','0.5.20','Changed type of ram in flavors from SMALLINT to MEDIUMINT','2017-08-29'),
+(24,'0.24','0.5.21','Added vnfd fields','2017-08-29'),
+(25,'0.25','0.5.22','Added osm_id to vnfs,scenarios','2017-09-01'),
+(26,'0.26','0.5.23','Several changes','2017-09-09'),
+(27,'0.27','0.5.25','Added encrypted_RO_priv_key,RO_pub_key to table nfvo_tenants','2017-09-29'),
+(28,'0.28','0.5.28','Adding VNFFG-related tables','2017-11-20'),
+(29,'0.29','0.5.59','Change member_vnf_index to str accordingly to the model','2018-04-11'),
+(30,'0.30','0.5.60','Add image_list to vms','2018-04-24'),
+(31,'0.31','0.5.61','Add vim_network_name to sce_nets','2018-05-03'),
+(32,'0.32','0.5.70','Add vim_name to instance vms','2018-06-28'),
+(33,'0.33','0.5.82','Add pdu information to vms','2018-11-13'),
+(34,'0.34','0.6.00','Added WIM tables','2018-09-10'),
+(35,'0.35','0.6.02','Adding ingress and egress ports for RSPs','2018-12-11'),
+(36,'0.36','0.6.03','Allow vm without image_id for PDUs','2018-12-19');
 /*!40000 ALTER TABLE `schema_version` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -811,4 +1234,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2017-11-23 10:24:39
+-- Dump completed on 2018-12-10  9:58:03

@@ -33,6 +33,8 @@ DBHOST=""
 DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
+BACKUP_DIR=""
+BACKUP_FILE=""
 #TODO update it with the last database version
 LAST_DB_VERSION=36
 
@@ -51,11 +53,12 @@ function usage(){
     echo -e "     -P PORT  database port. '$DBPORT' by default"
     echo -e "     -h HOST  database host. 'localhost' by default"
     echo -e "     -d NAME  database name. '$DBNAME' by default.  Prompts if DB access fails"
+    echo -e "     -b DIR   backup folder where to create rollback backup file"
     echo -e "     -q --quiet: Do not prompt for credentials and exit if cannot access to database"
     echo -e "     --help   shows this help"
 }
 
-while getopts ":u:p:P:h:d:q-:" o; do
+while getopts ":u:p:b:P:h:d:q-:" o; do
     case "${o}" in
         u)
             DBUSER="$OPTARG"
@@ -71,6 +74,9 @@ while getopts ":u:p:P:h:d:q-:" o; do
             ;;
         h)
             DBHOST="$OPTARG"
+            ;;
+        b)
+            BACKUP_DIR="$OPTARG"
             ;;
         q)
             export QUIET_MODE=yes
@@ -143,29 +149,12 @@ done
 DBCMD="mysql $DEF_EXTRA_FILE_PARAM $DBNAME"
 #echo DBCMD $DBCMD
 
-#GET DATABASE VERSION
 #check that the database seems a openmano database
 if ! echo -e "show create table vnfs;\nshow create table scenarios" | $DBCMD >/dev/null 2>&1
 then
     echo "    database $DBNAME does not seem to be an openmano database" >&2
     exit 1;
 fi
-
-if ! echo 'show create table schema_version;' | $DBCMD >/dev/null 2>&1
-then
-    DATABASE_VER="0.0"
-    DATABASE_VER_NUM=0
-else
-    DATABASE_VER_NUM=`echo "select max(version_int) from schema_version;" | $DBCMD | tail -n+2` 
-    DATABASE_VER=`echo "select version from schema_version where version_int='$DATABASE_VER_NUM';" | $DBCMD | tail -n+2` 
-    [ "$DATABASE_VER_NUM" -lt 0 -o "$DATABASE_VER_NUM" -gt 100 ] &&
-        echo "    Error can not get database version ($DATABASE_VER?)" >&2 && exit 1
-    #echo "_${DATABASE_VER_NUM}_${DATABASE_VER}"
-fi
-
-[ "$DATABASE_VER_NUM" -gt "$LAST_DB_VERSION" ] &&
-    echo "Database has been upgraded with a newer version of this script. Use this version to downgrade" >&2 &&
-    exit 1
 
 #GET DATABASE TARGET VERSION
 #DB_VERSION=0
@@ -1360,19 +1349,31 @@ function downgrade_from_36(){
 
 #TODO ... put functions here
 
-# echo "db version = "${DATABASE_VER_NUM}
-[ $DB_VERSION -eq $DATABASE_VER_NUM ] && echo "    current database version '$DATABASE_VER_NUM' is ok" && exit 0
 
-# Create a backup database content
-TEMPFILE2="$(mktemp -q --tmpdir "backupdb.XXXXXX.sql")"
-trap 'rm -f "$TEMPFILE2"' EXIT
-mysqldump $DEF_EXTRA_FILE_PARAM --add-drop-table --add-drop-database --routines --databases $DBNAME > $TEMPFILE2
+function del_schema_version_process()
+{
+    echo "DELETE FROM schema_version WHERE version_int='0';" | $DBCMD ||
+        ! echo "    ERROR writing on schema_version" >&2 || exit 1
+}
+
+function set_schema_version_process()
+{
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES "\
+        "(0, '0.0', '0.0.0', 'migration from $DATABASE_VER_NUM to $DB_VERSION backup: $BACKUP_FILE',"\
+        "'$(date +%Y-%m-%d)');" | $DBCMD ||
+        ! echo  "    Cannot set database at migration process writing into schema_version" >&2 || exit 1
+
+}
 
 function rollback_db()
 {
-    cat $TEMPFILE2 | mysql $DEF_EXTRA_FILE_PARAM && echo "    Aborted! Rollback database OK" ||
-        echo "    Aborted! Rollback database FAIL"
-    exit 1
+    if echo $DATABASE_PROCESS | grep -q init ; then   # Empty database. No backup needed
+        echo "    Aborted! Rollback database not needed" && exit 1
+    else   # migration a non empty database or Recovering a migration process
+        cat $BACKUP_FILE | mysql $DEF_EXTRA_FILE_PARAM && echo "    Aborted! Rollback database OK" &&
+            del_schema_version_process && rm -f "$BACKUP_FILE" && exit 1
+        echo "    Aborted! Rollback database FAIL" && exit 1
+    fi
 }
 
 function sql()    # send a sql command
@@ -1381,27 +1382,86 @@ function sql()    # send a sql command
     return 0
 }
 
-#UPGRADE DATABASE step by step
-while [ $DB_VERSION -gt $DATABASE_VER_NUM ]
-do
-    echo "    upgrade database from version '$DATABASE_VER_NUM' to '$((DATABASE_VER_NUM+1))'"
-    DATABASE_VER_NUM=$((DATABASE_VER_NUM+1))
-    upgrade_to_${DATABASE_VER_NUM}
-    #FILE_="${DIRNAME}/upgrade_to_${DATABASE_VER_NUM}.sh"
-    #[ ! -x "$FILE_" ] && echo "Error, can not find script '$FILE_' to upgrade" >&2 && exit -1
-    #$FILE_ || exit -1  # if fail return
-done
+function migrate()
+{
+    #UPGRADE DATABASE step by step
+    while [ $DB_VERSION -gt $DATABASE_VER_NUM ]
+    do
+        echo "    upgrade database from version '$DATABASE_VER_NUM' to '$((DATABASE_VER_NUM+1))'"
+        DATABASE_VER_NUM=$((DATABASE_VER_NUM+1))
+        upgrade_to_${DATABASE_VER_NUM}
+        #FILE_="${DIRNAME}/upgrade_to_${DATABASE_VER_NUM}.sh"
+        #[ ! -x "$FILE_" ] && echo "Error, can not find script '$FILE_' to upgrade" >&2 && exit -1
+        #$FILE_ || exit -1  # if fail return
+    done
 
-#DOWNGRADE DATABASE step by step
-while [ $DB_VERSION -lt $DATABASE_VER_NUM ]
-do
-    echo "    downgrade database from version '$DATABASE_VER_NUM' to '$((DATABASE_VER_NUM-1))'"
-    #FILE_="${DIRNAME}/downgrade_from_${DATABASE_VER_NUM}.sh"
-    #[ ! -x "$FILE_" ] && echo "Error, can not find script '$FILE_' to downgrade" >&2 && exit -1
-    #$FILE_ || exit -1  # if fail return
-    downgrade_from_${DATABASE_VER_NUM}
-    DATABASE_VER_NUM=$((DATABASE_VER_NUM-1))
-done
+    #DOWNGRADE DATABASE step by step
+    while [ $DB_VERSION -lt $DATABASE_VER_NUM ]
+    do
+        echo "    downgrade database from version '$DATABASE_VER_NUM' to '$((DATABASE_VER_NUM-1))'"
+        #FILE_="${DIRNAME}/downgrade_from_${DATABASE_VER_NUM}.sh"
+        #[ ! -x "$FILE_" ] && echo "Error, can not find script '$FILE_' to downgrade" >&2 && exit -1
+        #$FILE_ || exit -1  # if fail return
+        downgrade_from_${DATABASE_VER_NUM}
+        DATABASE_VER_NUM=$((DATABASE_VER_NUM-1))
+    done
+}
+
+
+# check if current database is ok
+function check_migration_needed()
+{
+    DATABASE_VER_NUM=`echo "select max(version_int) from schema_version;" | $DBCMD | tail -n+2` ||
+    ! echo "    ERROR cannot read from schema_version" || exit 1
+
+    if [[ -z "$DATABASE_VER_NUM" ]] || [[ "$DATABASE_VER_NUM" -lt 0 ]] || [[ "$DATABASE_VER_NUM" -gt 100 ]] ; then
+        echo "    Error can not get database version ($DATABASE_VER_NUM?)" >&2
+        exit 1
+    fi
+
+    [[ $DB_VERSION -eq $DATABASE_VER_NUM ]] && echo "    current database version '$DATABASE_VER_NUM' is ok" && return 1
+    [[ "$DATABASE_VER_NUM" -gt "$LAST_DB_VERSION" ]] &&
+        echo "Database has been upgraded with a newer version of this script. Use this version to downgrade" >&2 &&
+        exit 1
+    return 0
+}
+
+DATABASE_PROCESS=`echo "select comments from schema_version where version_int=0;" | $DBCMD | tail -n+2` ||
+    ! echo "    ERROR cannot read from schema_version" || exit 1
+if [[ -z "$DATABASE_PROCESS" ]] ; then  # migration a non empty database
+    check_migration_needed || exit 0
+    # Create a backup database content
+    [[ -n "$BACKUP_DIR" ]] && BACKUP_FILE="$(mktemp -q  "${BACKUP_DIR}/backupdb.XXXXXX.sql")"
+    [[ -z "$BACKUP_DIR" ]] && BACKUP_FILE="$(mktemp -q --tmpdir "backupdb.XXXXXX.sql")"
+    mysqldump $DEF_EXTRA_FILE_PARAM --add-drop-table --add-drop-database --routines --databases $DBNAME > $BACKUP_FILE ||
+        ! echo "Cannot create Backup file '$BACKUP_FILE'" >&2 || exit 1
+    echo "    Backup file '$BACKUP_FILE' created"
+    # Set schema version
+    set_schema_version_process
+    migrate
+    del_schema_version_process
+    rm -f "$BACKUP_FILE"
+elif echo $DATABASE_PROCESS | grep -q init ; then   # Empty database. No backup needed
+    echo "    Migrating an empty database"
+    if check_migration_needed ; then
+        migrate
+    fi
+    del_schema_version_process
+
+else  # Recover Migration process
+    BACKUP_FILE=${DATABASE_PROCESS##*backup: }
+    [[ -f "$BACKUP_FILE" ]] || ! echo "Previous migration process fail and cannot recover backup file '$BACKUP_FILE'" >&2 ||
+        exit 1
+    echo "    Previous migration was killed. Restoring database from rollback file'$BACKUP_FILE'"
+    cat $BACKUP_FILE | mysql $DEF_EXTRA_FILE_PARAM || ! echo "    Cannot load backup file '$BACKUP_FILE'" >&2 || exit 1
+    if check_migration_needed ; then
+        set_schema_version_process
+        migrate
+    fi
+    del_schema_version_process
+    rm -f "$BACKUP_FILE"
+fi
+exit 0
 
 #echo done
 
