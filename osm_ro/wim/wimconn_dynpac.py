@@ -43,7 +43,8 @@ class WimError(Enum):
     CLEAR_ALL = 'Unable to clear all the services',
     UNKNOWN_ACTION = 'Unknown action invoked.',
     BACKUP = 'Unable to get the backup parameter.',
-    UNSUPPORTED_FEATURE = "Unsupported feature"
+    UNSUPPORTED_FEATURE = "Unsupported feature",
+    UNAUTHORIZED = "Failed while authenticating"
 
 
 class WimAPIActions(Enum):
@@ -59,6 +60,7 @@ class DynpacConnector(WimConnector):
     __supported_encapsulation_types = ["dot1q"]
     __WIM_LOGGER = 'openmano.wimconn.dynpac'
     __ENCAPSULATION_TYPE_PARAM = "service_endpoint_encapsulation_type"
+    __ENCAPSULATION_INFO_PARAM = "service_endpoint_encapsulation_info"
     __BACKUP_PARAM = "backup"
     __BANDWIDTH_PARAM = "bandwidth"
     __SERVICE_ENDPOINT_PARAM = "service_endpoint_id"
@@ -149,6 +151,19 @@ class DynpacConnector(WimConnector):
 
     def check_connectivity(self):
         endpoint = "{}/checkConnectivity".format(self.__wim_url)
+
+        try:
+            response = requests.get(endpoint)
+            http_code = response.status_code
+        except requests.exceptions.RequestException as e:
+            self.__exception(e.message, http_code=503)
+
+        if http_code != 200:
+            self.__exception(WimError.UNREACHABLE, http_code=http_code)
+        self.logger.info("Connectivity checked")
+
+    def check_credentials(self):
+        endpoint = "{}/checkCredentials".format(self.__wim_url)
         auth = (self.__user, self.__passwd)
 
         try:
@@ -158,8 +173,8 @@ class DynpacConnector(WimConnector):
             self.__exception(e.message, http_code=503)
 
         if http_code != 200:
-            self.__exception(WimError.UNREACHABLE, http_code=http_code)
-        self.logger.info("Connectivity checked")
+            self.__exception(WimError.UNAUTHORIZED, http_code=http_code)
+        self.logger.info("Credentials checked")
 
     # Private functions
     def __exception(self, x, **kwargs):
@@ -207,11 +222,11 @@ class DynpacConnector(WimConnector):
             "connection_points": [{
                 "wan_switch_dpid": selected_ports[0].get(self.__SW_ID_PARAM),
                 "wan_switch_port": selected_ports[0].get(self.__SW_PORT_PARAM),
-                "wan_vlan": connection_points[0].get(self.__VLAN_PARAM)
+                "wan_vlan": connection_points[0].get(self.__ENCAPSULATION_INFO_PARAM).get(self.__VLAN_PARAM)
             }, {
                 "wan_switch_dpid": selected_ports[1].get(self.__SW_ID_PARAM),
                 "wan_switch_port": selected_ports[1].get(self.__SW_PORT_PARAM),
-                "wan_vlan":	connection_points[1].get(self.__VLAN_PARAM)
+                "wan_vlan":	connection_points[1].get(self.__ENCAPSULATION_INFO_PARAM).get(self.__VLAN_PARAM)
             }],
             "bandwidth": kwargs.get(self.__BANDWIDTH_PARAM),
             "service_type": service_type,
