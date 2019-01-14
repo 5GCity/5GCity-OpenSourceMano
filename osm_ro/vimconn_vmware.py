@@ -3695,7 +3695,7 @@ class vimconnector(vimconn.vimconnector):
 
             #Creating all networks as Direct Org VDC type networks.
             #Unused in case of Underlay (data/ptp) network interface.
-            fence_mode="bridged"
+            fence_mode="isolated"
             is_inherited='false'
             dns_list = dns_address.split(";")
             dns1 = dns_list[0]
@@ -3720,13 +3720,12 @@ class vimconnector(vimconn.vimconnector):
                                                 </IpRanges>
                                             </IpScope>
                                         </IpScopes>
-                                        <ParentNetwork href="{9:s}"/>
-                                        <FenceMode>{10:s}</FenceMode>
+                                        <FenceMode>{9:s}</FenceMode>
                                     </Configuration>
-                                    <IsShared>{11:s}</IsShared>
+                                    <IsShared>{10:s}</IsShared>
                         </OrgVdcNetwork> """.format(escape(network_name), is_inherited, gateway_address,
                                                     subnet_address, dns1, dns2_text, dhcp_enabled,
-                                                    dhcp_start_address, dhcp_end_address, available_networks,
+                                                    dhcp_start_address, dhcp_end_address,
                                                     fence_mode, isshared)
 
             headers['Content-Type'] = 'application/vnd.vmware.vcloud.orgVdcNetwork+xml'
