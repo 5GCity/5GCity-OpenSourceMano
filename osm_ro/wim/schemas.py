@@ -39,17 +39,87 @@ from ..openmano_schemas import (
 )
 
 # WIM -------------------------------------------------------------------------
-wim_types = ["tapi", "onos", "odl"]
+wim_types = ["tapi", "onos", "odl", "dynpac"]
+
+dpid_type = {
+    "type": "string",
+    "pattern":
+        "^[0-9a-zA-Z]+(:[0-9a-zA-Z]+)*$"
+}
+
+port_type = {
+    "oneOf": [
+        {"type": "string",
+         "minLength": 1,
+         "maxLength": 5},
+        {"type": "integer",
+         "minimum": 1,
+         "maximum": 65534}
+    ]
+}
+
+wim_port_mapping_desc = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "datacenter_name": nameshort_schema,
+            "pop_wan_mappings": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "pop_switch_dpid": dpid_type,
+                        "pop_switch_port": port_type,
+                        "wan_service_endpoint_id": name_schema,
+                        "wan_service_mapping_info": {
+                            "type": "object",
+                            "properties": {
+                                "mapping_type": name_schema,
+                                "wan_switch_dpid": dpid_type,
+                                "wan_switch_port": port_type
+                            },
+                            "additionalProperties": True,
+                            "required": ["mapping_type"]
+                        }
+                    },
+                    "oneOf": [
+                        {
+                            "required": [
+                                "pop_switch_dpid",
+                                "pop_switch_port",
+                                "wan_service_endpoint_id"
+                            ]
+                        },
+                        {
+                            "required": [
+                                "pop_switch_dpid",
+                                "pop_switch_port",
+                                "wan_service_mapping_info"
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "required": ["datacenter_name", "pop_wan_mappings"]
+    }
+}
 
 wim_schema_properties = {
     "name": name_schema,
     "description": description_schema,
     "type": {
         "type": "string",
-        "enum": ["tapi", "onos", "odl"]
+        "enum": ["tapi", "onos", "odl", "dynpac"]
     },
     "wim_url": description_schema,
-    "config": {"type": "object"}
+    "config": {
+        "type": "object",
+        "properties": {
+            "wim_port_mapping": wim_port_mapping_desc
+        }
+    }
 }
 
 wim_schema = {
@@ -103,75 +173,12 @@ wim_account_schema = {
     "additionalProperties": False
 }
 
-dpid_type = {
-    "type": "string",
-    "pattern":
-        "^[0-9a-zA-Z]+(:[0-9a-zA-Z]+)*$"
-}
-
-port_type = {
-    "oneOf": [
-        {"type": "string",
-         "minLength": 1,
-         "maxLength": 5},
-        {"type": "integer",
-         "minimum": 1,
-         "maximum": 65534}
-    ]
-}
-
 wim_port_mapping_schema = {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "title": "wim mapping information schema",
     "type": "object",
     "properties": {
-        "wim_port_mapping": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "datacenter_name": nameshort_schema,
-                    "pop_wan_mappings": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "pop_switch_dpid": dpid_type,
-                                "pop_switch_port": port_type,
-                                "wan_service_endpoint_id": name_schema,
-                                "wan_service_mapping_info": {
-                                    "type": "object",
-                                    "properties": {
-                                        "mapping_type": name_schema,
-                                        "wan_switch_dpid": dpid_type,
-                                        "wan_switch_port": port_type
-                                    },
-                                    "additionalProperties": True,
-                                    "required": ["mapping_type"]
-                                }
-                            },
-                            "oneOf": [
-                                {
-                                    "required": [
-                                        "pop_switch_dpid",
-                                        "pop_switch_port",
-                                        "wan_service_endpoint_id"
-                                    ]
-                                },
-                                {
-                                    "required": [
-                                        "pop_switch_dpid",
-                                        "pop_switch_port",
-                                        "wan_service_mapping_info"
-                                    ]
-                                }
-                            ]
-                        }
-                    }
-                },
-                "required": ["datacenter_name", "pop_wan_mappings"]
-            }
-        }
+        "wim_port_mapping": wim_port_mapping_desc
     },
     "required": ["wim_port_mapping"]
 }

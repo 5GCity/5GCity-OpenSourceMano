@@ -163,8 +163,7 @@ class TestWimEngine(unittest.TestCase):
         # When we receive a list of 4 instance nets, representing
         # 2 VLDs connecting 2 datacenters each
         instance_nets = eg.instance_nets(2, 2)
-        wan_links = engine.derive_wan_links(
-            instance_nets, uuid('tenant0'))
+        wan_links = engine.derive_wan_links({}, instance_nets, uuid('tenant0'))
 
         # Then we should derive 2 wan_links with the same instance_scenario_id
         # and different scenario_network_id

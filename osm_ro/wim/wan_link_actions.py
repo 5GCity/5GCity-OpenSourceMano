@@ -33,15 +33,19 @@
 ##
 # pylint: disable=E1101,E0203,W0201
 import json
+from pprint import pformat
+from sys import exc_info
 from time import time
+
+from six import reraise
 
 from ..utils import filter_dict_keys as filter_keys
 from ..utils import merge_dicts, remove_none_items, safe_get, truncate
 from .actions import CreateAction, DeleteAction, FindAction
 from .errors import (
     InconsistentState,
-    MultipleRecordsFound,
     NoRecordFound,
+    NoExternalPortFound
 )
 from wimconn import WimConnectorError
 
@@ -157,60 +161,164 @@ class WanLinkCreate(RefreshMixin, CreateAction):
         Returns:
             dict: Record representing the wan_port_mapping associated to the
                   given instance_net. The expected fields are:
-                  **wim_id**, **datacenter_id**, **pop_switch_id** (the local
+                  **wim_id**, **datacenter_id**, **pop_switch_dpid** (the local
                   network is expected to be connected at this switch),
                   **pop_switch_port**, **wan_service_endpoint_id**,
                   **wan_service_mapping_info**.
         """
-        wim_account = persistence.get_wim_account_by(uuid=self.wim_account_id)
+        # First, we need to find a route from the datacenter to the outside
+        # world. For that, we can use the rules given in the datacenter
+        # configuration:
+        datacenter_id = instance_net['datacenter_id']
+        datacenter = persistence.get_datacenter_by(datacenter_id)
+        rules = safe_get(datacenter, 'config.external_connections', {}) or {}
+        vim_info = instance_net.get('vim_info', {}) or {}
+        # Alternatively, we can look for it, using the SDN assist
+        external_port = (self._evaluate_rules(rules, vim_info) or
+                         self._get_port_sdn(ovim, instance_net))
 
-        # TODO: make more generic to support networks that are not created with
-        # the SDN assist. This method should have a consistent way of getting
-        # the endpoint for all different types of networks used in the VIM
-        # (provider networks, SDN assist, overlay networks, ...)
-        if instance_net.get('sdn_net_id'):
-            return self._get_connection_point_info_sdn(
-                persistence, ovim, instance_net, wim_account['wim_id'])
-        else:
-            raise InconsistentState(
-                'The field `instance_nets.sdn_net_id` was expected to be '
-                'found in the database for the record %s after the network '
-                'become active, but it is still NULL', instance_net['uuid'])
+        if not external_port:
+            raise NoExternalPortFound(instance_net)
 
-    def _get_connection_point_info_sdn(self, persistence, ovim,
-                                       instance_net, wim_id):
+        # Then, we find the WAN switch that is connected to this external port
+        try:
+            wim_account = persistence.get_wim_account_by(
+                uuid=self.wim_account_id)
+
+            criteria = {
+                'wim_id': wim_account['wim_id'],
+                'pop_switch_dpid': external_port[0],
+                'pop_switch_port': external_port[1],
+                'datacenter_id': datacenter_id}
+
+            wan_port_mapping = persistence.query_one(
+                FROM='wim_port_mappings',
+                WHERE=criteria)
+        except NoRecordFound:
+            ex = InconsistentState('No WIM port mapping found:'
+                                   'wim_account: {}\ncriteria:\n{}'.format(
+                                       self.wim_account_id, pformat(criteria)))
+            reraise(ex.__class__, ex, exc_info()[2])
+
+        # It is important to return encapsulation information if present
+        mapping = merge_dicts(
+            wan_port_mapping.get('wan_service_mapping_info'),
+            filter_keys(vim_info, ('encapsulation_type', 'encapsulation_id'))
+        )
+
+        return merge_dicts(wan_port_mapping, wan_service_mapping_info=mapping)
+
+    def _get_port_sdn(self, ovim, instance_net):
         criteria = {'net_id': instance_net['sdn_net_id']}
-        local_port_mapping = ovim.get_ports(filter=criteria)
+        try:
+            local_port_mapping = ovim.get_ports(filter=criteria)
 
-        if len(local_port_mapping) > 1:
-            raise MultipleRecordsFound(criteria, 'ovim.ports')
-        local_port_mapping = local_port_mapping[0]
+            if local_port_mapping:
+                return (local_port_mapping[0]['switch_dpid'],
+                        local_port_mapping[0]['switch_port'])
+        except:  # noqa
+            self.logger.exception('Problems when calling OpenVIM')
 
-        criteria = {
-            'wim_id': wim_id,
-            'pop_switch_dpid': local_port_mapping['switch_dpid'],
-            'pop_switch_port': local_port_mapping['switch_port'],
-            'datacenter_id': instance_net['datacenter_id']}
+        self.logger.debug('No ports found using criteria:\n%r\n.', criteria)
+        return None
 
-        wan_port_mapping = persistence.query_one(
-            FROM='wim_port_mappings',
-            WHERE=criteria)
+    def _evaluate_rules(self, rules, vim_info):
+        """Given a ``vim_info`` dict from a ``instance_net`` record, evaluate
+        the set of rules provided during the VIM/datacenter registration to
+        determine an external port used to connect that VIM/datacenter to
+        other ones where different parts of the NS will be instantiated.
 
-        if local_port_mapping.get('vlan'):
-            wan_port_mapping['wan_service_mapping_info']['vlan'] = (
-                local_port_mapping['vlan'])
+        For example, considering a VIM/datacenter is registered like the
+        following::
 
-        return wan_port_mapping
+            vim_record = {
+              "uuid": ...
+              ...  # Other properties associated with the VIM/datacenter
+              "config": {
+                ...  # Other configuration
+                "external_connections": [
+                  {
+                    "condition": {
+                      "provider:physical_network": "provider_net1",
+                      ...  # This method will look up all the keys listed here
+                           # in the instance_nets.vim_info dict and compare the
+                           # values. When all the values match, the associated
+                           # vim_external_port will be selected.
+                    },
+                    "vim_external_port": {"switch": "switchA", "port": "portB"}
+                  },
+                  ...  # The user can provide as many rules as needed, however
+                       # only the first one to match will be applied.
+                ]
+              }
+            }
+
+        When an ``instance_net`` record is instantiated in that datacenter with
+        the following information::
+
+            instance_net = {
+              "uuid": ...
+              ...
+              "vim_info": {
+                ...
+                "provider_physical_network": "provider_net1",
+              }
+            }
+
+        Then, ``switchA`` and ``portB`` will be used to stablish the WAN
+        connection.
+
+        Arguments:
+            rules (list): Set of dicts containing the keys ``condition`` and
+                ``vim_external_port``. This list should be extracted from
+                ``vim['config']['external_connections']`` (as stored in the
+                database).
+            vim_info (dict): Information given by the VIM Connector, against
+               which the rules will be evaluated.
+
+        Returns:
+            tuple: switch id (local datacenter switch) and port or None if
+                the rule does not match.
+        """
+        rule = next((r for r in rules if self._evaluate_rule(r, vim_info)), {})
+        if 'vim_external_port' not in rule:
+            self.logger.debug('No external port found.\n'
+                              'rules:\n%r\nvim_info:\n%r\n\n', rules, vim_info)
+            return None
+
+        return (rule['vim_external_port']['switch'],
+                rule['vim_external_port']['port'])
+
+    @staticmethod
+    def _evaluate_rule(rule, vim_info):
+        """Evaluate the conditions from a single rule to ``vim_info`` and
+        determine if the rule should be applicable or not.
+
+        Please check :obj:`~._evaluate_rules` for more information.
+
+        Arguments:
+            rule (dict): Data structure containing the keys ``condition`` and
+                ``vim_external_port``. This should be one of the elements in
+                ``vim['config']['external_connections']`` (as stored in the
+                database).
+            vim_info (dict): Information given by the VIM Connector, against
+               which the rules will be evaluated.
+
+        Returns:
+            True or False: If all the conditions are met.
+        """
+        condition = rule.get('condition', {}) or {}
+        return all(safe_get(vim_info, k) == v for k, v in condition.items())
 
     @staticmethod
     def _derive_connection_point(wan_info):
         point = {'service_endpoint_id': wan_info['wan_service_endpoint_id']}
         # TODO: Cover other scenarios, e.g. VXLAN.
         details = wan_info.get('wan_service_mapping_info', {})
-        if 'vlan' in details:
+        if details.get('encapsulation_type') == 'vlan':
             point['service_endpoint_encapsulation_type'] = 'dot1q'
             point['service_endpoint_encapsulation_info'] = {
-                'vlan': details['vlan']
+                'vlan': details['encapsulation_id']
             }
         else:
             point['service_endpoint_encapsulation_type'] = 'none'
@@ -247,7 +355,8 @@ class WanLinkCreate(RefreshMixin, CreateAction):
                 connection_points
                 # TODO: other properties, e.g. bandwidth
             )
-        except (WimConnectorError, InconsistentState) as ex:
+        except (WimConnectorError, InconsistentState,
+                NoExternalPortFound) as ex:
             self.logger.exception(ex)
             return self.fail(
                 persistence,

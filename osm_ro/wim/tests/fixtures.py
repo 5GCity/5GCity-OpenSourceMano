@@ -36,7 +36,9 @@
 from __future__ import unicode_literals
 
 import json
+from itertools import izip
 from time import time
+from textwrap import wrap
 
 from six.moves import range
 
@@ -86,11 +88,28 @@ def wim_set(identifier=0, tenant=0):
     ]
 
 
-def datacenter(identifier):
+def _datacenter_to_switch_port(dc_id, port=None):
+    digits = 16
+    switch = ':'.join(wrap(('%0' + str(digits) + 'x') % int(dc_id), 2))
+    return (switch, str((port or int(dc_id)) + 1))
+
+
+def datacenter(identifier, external_ports_config=False):
+    config = '' if not external_ports_config else json.dumps({
+        'external_connections': [
+            {'condition': {
+                'provider:physical_network': 'provider',
+                'encapsulation_type': 'vlan'},
+                'vim_external_port':
+                dict(izip(('switch', 'port'),
+                          _datacenter_to_switch_port(identifier)))}
+        ]})
+
     return {'uuid': uuid('dc%d' % identifier),
             'name': 'dc%d' % identifier,
             'type': 'openvim',
-            'vim_url': 'localhost'}
+            'vim_url': 'localhost',
+            'config': config}
 
 
 def datacenter_account(datacenter, tenant):
@@ -107,7 +126,7 @@ def datacenter_tenant_association(datacenter, tenant):
                 uuid('dc-account%d%d' % (tenant, datacenter))}
 
 
-def datacenter_set(identifier, tenant):
+def datacenter_set(identifier=0, tenant=0):
     """Records necessary to create a datacenter and connect it to a tenant"""
     return [
         {'datacenters': [datacenter(identifier)]},
@@ -119,17 +138,19 @@ def datacenter_set(identifier, tenant):
 
 
 def wim_port_mapping(wim, datacenter,
-                     pop_dpid='AA:AA:AA:AA:AA:AA:AA:AA', pop_port=0,
-                     wan_dpid='BB:BB:BB:BB:BB:BB:BB:BB', wan_port=0):
+                     pop_dpid='AA:AA:AA:AA:AA:AA:AA:AA', pop_port=None,
+                     wan_dpid='BB:BB:BB:BB:BB:BB:BB:BB', wan_port=None):
     mapping_info = {'mapping_type': 'dpid-port',
                     'wan_switch_dpid': wan_dpid,
-                    'wan_switch_port': wan_port + datacenter + 1}
+                    'wan_switch_port': (str(wan_port) if wan_port else
+                                        str(int(datacenter) + int(wim) + 1))}
     id_ = 'dpid-port|' + sha1(json.dumps(mapping_info, sort_keys=True))
 
     return {'wim_id': uuid('wim%d' % wim),
             'datacenter_id': uuid('dc%d' % datacenter),
             'pop_switch_dpid': pop_dpid,
-            'pop_switch_port': pop_port + wim + 1,
+            'pop_switch_port': (str(pop_port) if pop_port else
+                                str(int(datacenter) + int(wim) + 1)),
             # ^  Datacenter router have one port managed by each WIM
             'wan_service_endpoint_id': id_,
             # ^  WIM managed router have one port connected to each DC
@@ -146,7 +167,7 @@ def processed_port_mapping(wim, datacenter,
     return {
         'wim_id': uuid('wim%d' % wim),
         'datacenter_id': uuid('dc%d' % datacenter),
-        'wan_pop_port_mappings': [
+        'pop_wan_mappings': [
             {'pop_switch_dpid': pop_dpid,
              'pop_switch_port': wim + 1 + i,
              'wan_service_endpoint_id':
@@ -161,7 +182,8 @@ def processed_port_mapping(wim, datacenter,
 
 
 def consistent_set(num_wims=NUM_WIMS, num_tenants=NUM_TENANTS,
-                   num_datacenters=NUM_DATACENTERS):
+                   num_datacenters=NUM_DATACENTERS,
+                   external_ports_config=False):
     return [
         {'nfvo_tenants': [tenant(i) for i in range(num_tenants)]},
         {'wims': [wim(j) for j in range(num_wims)]},
@@ -176,7 +198,7 @@ def consistent_set(num_wims=NUM_WIMS, num_tenants=NUM_TENANTS,
             for j in range(num_wims)
         ]},
         {'datacenters': [
-            datacenter(k)
+            datacenter(k, external_ports_config)
             for k in range(num_datacenters)
         ]},
         {'datacenter_tenants': [
@@ -190,14 +212,15 @@ def consistent_set(num_wims=NUM_WIMS, num_tenants=NUM_TENANTS,
             for k in range(num_datacenters)
         ]},
         {'wim_port_mappings': [
-            wim_port_mapping(j, k)
+            (wim_port_mapping(j, k, *_datacenter_to_switch_port(k))
+             if external_ports_config else wim_port_mapping(j, k))
             for j in range(num_wims)
             for k in range(num_datacenters)
         ]},
     ]
 
 
-def instance_nets(num_datacenters=2, num_links=2):
+def instance_nets(num_datacenters=2, num_links=2, status='BUILD'):
     """Example of multi-site deploy with N datacenters and M WAN links between
     them (e.g M = 2 -> back and forth)
     """
@@ -209,7 +232,7 @@ def instance_nets(num_datacenters=2, num_links=2):
          # ^  instance_scenario_id == NS Record id
          'sce_net_id': uuid('vld%d' % l),
          # ^  scenario net id == VLD id
-         'status': 'BUILD',
+         'status': status,
          'vim_net_id': None,
          'created': True}
         for k in range(num_datacenters)

@@ -326,12 +326,11 @@ class WimPersistence(object):
         where = {'uuid': wim['uuid']}
 
         # unserialize config, edit and serialize it again
-        if wim_descriptor.get('config'):
-            new_config_dict = wim_descriptor["config"]
-            config_dict = remove_none_items(merge_dicts(
-                wim.get('config') or {}, new_config_dict))
-            wim_descriptor['config'] = (
-                _serialize(config_dict) if config_dict else None)
+        new_config_dict = wim_descriptor.get('config', {}) or {}
+        config_dict = remove_none_items(merge_dicts(
+            wim.get('config', {}) or {}, new_config_dict))
+        wim_descriptor['config'] = (
+            _serialize(config_dict) if config_dict else None)
 
         with self.lock:
             self.db.update_rows('wims', wim_descriptor, where)
@@ -363,10 +362,10 @@ class WimPersistence(object):
             kwargs.setdefault('WHERE', {'wim_account.uuid': uuid})
         return self.query(FROM=_WIM_ACCOUNT_JOIN, **kwargs)
 
-    def get_wim_account_by(self, wim=None, tenant=None, **kwargs):
+    def get_wim_account_by(self, wim=None, tenant=None, uuid=None, **kwargs):
         """Similar to ``get_wim_accounts_by``, but ensuring just one result"""
         kwargs.setdefault('error_if_multiple', True)
-        return self.get_wim_accounts_by(wim, tenant, **kwargs)[0]
+        return self.get_wim_accounts_by(wim, tenant, uuid, **kwargs)[0]
 
     def get_wim_accounts(self, **kwargs):
         """Retrieve all the accounts from the database"""
@@ -508,8 +507,12 @@ class WimPersistence(object):
 
         See :obj:`~.query` for additional keyword arguments.
         """
-        kwargs.update(datacenter=datacenter, tenant=tenant)
-        return self.query(_DATACENTER_JOIN, **kwargs)
+        if tenant:
+            kwargs.update(datacenter=datacenter, tenant=tenant)
+            return self.query(_DATACENTER_JOIN, **kwargs)
+        else:
+            return [self.get_by_name_or_uuid('datacenters',
+                                             datacenter, **kwargs)]
 
     def get_datacenter_by(self, datacenter=None, tenant=None, **kwargs):
         """Similar to ``get_datacenters_by``, but ensuring just one result"""
@@ -622,7 +625,7 @@ class WimPersistence(object):
         return [
             {'wim_id': key[0],
              'datacenter_id': key[1],
-             'wan_pop_port_mappings': [
+             'pop_wan_mappings': [
                  filter_out_dict_keys(mapping, (
                      'id', 'wim_id', 'datacenter_id',
                      'created_at', 'modified_at'))

@@ -61,6 +61,7 @@ from .http_tools import errors as httperrors
 from .wim.engine import WimEngine
 from .wim.persistence import WimPersistence
 from copy import deepcopy
+from pprint import pformat
 #
 
 global global_config
@@ -3055,6 +3056,8 @@ def create_instance(mydb, tenant_id, instance_dict):
     # Auxiliary dictionaries from x to y
     sce_net2instance = {}
     net2task_id = {'scenario': {}}
+    # Mapping between local networks and WIMs
+    wim_usage = {}
 
     def ip_profile_IM2RO(ip_profile_im):
         # translate from input format to database format
@@ -3199,6 +3202,18 @@ def create_instance(mydb, tenant_id, instance_dict):
                             break
             if not involved_datacenters:
                 involved_datacenters.append(default_datacenter_id)
+
+            # --> WIM
+            # TODO: use this information during network creation
+            wim_account_id = None
+            if len(involved_datacenters) > 1 and 'uuid' in sce_net:
+                # OBS: sce_net without uuid are used internally to VNFs
+                # and the assumption is that VNFs will not be split among
+                # different datacenters
+                wim_account_id = wim_engine.find_suitable_wim_account(
+                    involved_datacenters, tenant_id)
+                wim_usage[sce_net['uuid']] = wim_account_id
+            # <-- WIM
 
             descriptor_net = {}
             if instance_dict.get("networks") and instance_dict["networks"].get(sce_net["name"]):
@@ -3527,7 +3542,8 @@ def create_instance(mydb, tenant_id, instance_dict):
         db_instance_action["number_tasks"] = task_index
 
         # --> WIM
-        wan_links = wim_engine.derive_wan_links(db_instance_nets, tenant_id)
+        logger.debug('wim_usage:\n%s\n\n', pformat(wim_usage))
+        wan_links = wim_engine.derive_wan_links(wim_usage, db_instance_nets, tenant_id)
         wim_actions = wim_engine.create_actions(wan_links)
         wim_actions, db_instance_action = (
             wim_engine.incorporate_actions(wim_actions, db_instance_action))

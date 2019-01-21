@@ -170,7 +170,7 @@ class TestWimPersistence(TestCaseWithDatabasePerTest):
                 self.assertIsNot(wim, None)
 
             # and a array of pairs 'wan' <> 'pop' connections
-            pairs = chain(*(m['wan_pop_port_mappings'] for m in mappings))
+            pairs = chain(*(m['pop_wan_mappings'] for m in mappings))
             self.assertEqual(len(list(pairs)), 2 * eg.NUM_WIMS)
 
     def test_get_wim_port_mappings_multiple(self):
@@ -198,14 +198,14 @@ class TestWimPersistence(TestCaseWithDatabasePerTest):
         self.assertEqual(mappings[0]['wim_id'], uuid('wim0'))
         self.assertEqual(mappings[0]['datacenter_id'], uuid('dc0'))
 
-        self.assertEqual(len(mappings[0]['wan_pop_port_mappings']), 3)
+        self.assertEqual(len(mappings[0]['pop_wan_mappings']), 3)
 
         # when we retreive the mappings for more then one wim/datacenter
         # the grouping should still work properly
         mappings = self.persist.get_wim_port_mappings(
             wim=['wim0', 'wim1'], datacenter=['dc0', 'dc1'])
         self.assertEqual(len(mappings), 4)
-        pairs = chain(*(m['wan_pop_port_mappings'] for m in mappings))
+        pairs = chain(*(m['pop_wan_mappings'] for m in mappings))
         self.assertEqual(len(list(pairs)), 6)
 
     def test_get_actions_in_group(self):

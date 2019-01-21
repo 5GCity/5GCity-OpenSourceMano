@@ -48,12 +48,17 @@ import logging
 from contextlib import contextmanager
 from itertools import groupby
 from operator import itemgetter
+from sys import exc_info
 from uuid import uuid4
+
+from six import reraise
 
 from ..utils import remove_none_items
 from .actions import Action
 from .errors import (
+    DbBaseException,
     NoWimConnectedToDatacenters,
+    UnexpectedDatabaseError,
     WimAccountNotActive
 )
 from .wim_thread import WimThread
@@ -76,10 +81,29 @@ class WimEngine(object):
         Please check the wim schema to have more information about
         ``properties``.
 
+        The ``config`` property might contain a ``wim_port_mapping`` dict,
+        In this case, the method ``create_wim_port_mappings`` will be
+        automatically invoked.
+
         Returns:
             str: uuid of the newly created WIM record
         """
-        return self.persist.create_wim(properties)
+        port_mapping = ((properties.get('config', {}) or {})
+                        .pop('wim_port_mapping', {}))
+        uuid = self.persist.create_wim(properties)
+
+        if port_mapping:
+            try:
+                self.create_wim_port_mappings(uuid, port_mapping)
+            except DbBaseException:
+                # Rollback
+                self.delete_wim(uuid)
+                ex = UnexpectedDatabaseError('Failed to create port mappings'
+                                             'Rolling back wim creation')
+                self.logger.exception(str(ex))
+                reraise(ex.__class__, ex, exc_info()[2])
+
+        return uuid
 
     def get_wim(self, uuid_or_name, tenant_id=None):
         """Retrieve existing WIM record by name or id.
@@ -95,8 +119,35 @@ class WimEngine(object):
 
         ``properties`` is a dictionary with the properties being changed,
         if a property is not present, the old value will be preserved
+
+        Similarly to create_wim, the ``config`` property might contain a
+        ``wim_port_mapping`` dict, In this case, port mappings will be
+        automatically updated.
         """
-        return self.persist.update_wim(uuid_or_name, properties)
+        port_mapping = ((properties.get('config', {}) or {})
+                        .pop('wim_port_mapping', {}))
+        orig_props = self.persist.get_by_name_or_uuid('wims', uuid_or_name)
+        uuid = orig_props['uuid']
+
+        response = self.persist.update_wim(uuid, properties)
+
+        if port_mapping:
+            try:
+                # It is very complex to diff and update individually all the
+                # port mappings. Therefore a practical approach is just delete
+                # and create it again.
+                self.persist.delete_wim_port_mappings(uuid)
+                # ^  Calling from persistence avoid reloading twice the thread
+                self.create_wim_port_mappings(uuid, port_mapping)
+            except DbBaseException:
+                # Rollback
+                self.update_wim(uuid_or_name, orig_props)
+                ex = UnexpectedDatabaseError('Failed to update port mappings'
+                                             'Rolling back wim updates\n')
+                self.logger.exception(str(ex))
+                reraise(ex.__class__, ex, exc_info()[2])
+
+        return response
 
     def delete_wim(self, uuid_or_name):
         """Kill the corresponding wim threads and erase the WIM record"""
@@ -247,7 +298,7 @@ class WimEngine(object):
         """Find a single WIM that is able to connect all the datacenters
         listed
 
-        Raises
+        Raises:
             NoWimConnectedToDatacenters: if no WIM connected to all datacenters
                 at once is found
         """
@@ -261,14 +312,35 @@ class WimEngine(object):
         #       used here)
         return suitable_wim_ids[0]
 
+    def find_suitable_wim_account(self, datacenter_ids, tenant):
+        """Find a WIM account that is able to connect all the datacenters
+        listed
+
+        Arguments:
+            datacenter_ids (list): List of UUIDs of all the datacenters (vims),
+                that need to be connected.
+            tenant (str): UUID of the OSM tenant
+
+        Returns:
+            str: UUID of the WIM account that is able to connect all the
+                 datacenters.
+        """
+        wim_id = self.find_common_wim(datacenter_ids, tenant)
+        return self.persist.get_wim_account_by(wim_id, tenant)['uuid']
+
     def derive_wan_link(self,
+                        wim_usage,
                         instance_scenario_id, sce_net_id,
                         networks, tenant):
         """Create a instance_wim_nets record for the given information"""
-        datacenters = [n['datacenter_id'] for n in networks]
-        wim_id = self.find_common_wim(datacenters, tenant)
-
-        account = self.persist.get_wim_account_by(wim_id, tenant)
+        if sce_net_id in wim_usage:
+            account_id = wim_usage[sce_net_id]
+            account = self.persist.get_wim_account_by(uuid=account_id)
+            wim_id = account['wim_id']
+        else:
+            datacenters = [n['datacenter_id'] for n in networks]
+            wim_id = self.find_common_wim(datacenters, tenant)
+            account = self.persist.get_wim_account_by(wim_id, tenant)
 
         return {
             'uuid': str(uuid4()),
@@ -278,15 +350,17 @@ class WimEngine(object):
             'wim_account_id': account['uuid']
         }
 
-    def derive_wan_links(self, networks, tenant=None):
+    def derive_wan_links(self, wim_usage, networks, tenant=None):
         """Discover and return what are the wan_links that have to be created
         considering a set of networks (VLDs) required for a scenario instance
         (NSR).
 
         Arguments:
+            wim_usage(dict): Mapping between sce_net_id and wim_id
             networks(list): Dicts containing the information about the networks
                 that will be instantiated to materialize a Network Service
                 (scenario) instance.
+                Corresponding to the ``instance_net`` record.
 
         Returns:
             list: list of WAN links to be written to the database
@@ -302,7 +376,8 @@ class WimEngine(object):
                       if counter > 1]
 
         return [
-            self.derive_wan_link(key[0], key[1], grouped_networks[key], tenant)
+            self.derive_wan_link(wim_usage,
+                                 key[0], key[1], grouped_networks[key], tenant)
             for key in wan_groups
         ]
 
