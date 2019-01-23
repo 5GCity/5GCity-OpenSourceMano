@@ -160,6 +160,10 @@ class vim_thread(threading.Thread):
             vim_config['datacenter_tenant_id'] = vim.get('datacenter_tenant_id')
             vim_config['datacenter_id'] = vim.get('datacenter_id')
 
+            # get port_mapping
+            vim_config["wim_external_ports"] = self.ovim.get_of_port_mappings(
+                db_filter={"region": vim_config['datacenter_id'], "pci": None})
+
             self.vim = vim_module[vim["type"]].vimconnector(
                 uuid=vim['datacenter_id'], name=vim['datacenter_name'],
                 tenant_id=vim['vim_tenant_id'], tenant_name=vim['vim_tenant_name'],
@@ -995,10 +999,11 @@ class vim_thread(threading.Thread):
             # CREATE
             params = task["params"]
             action_text = "creating VIM"
-            vim_net_id = self.vim.new_network(*params)
+            vim_net_id = self.vim.new_network(*params[0:2])
 
             net_name = params[0]
             net_type = params[1]
+            wim_account_name = params[3]
 
             sdn_controller = self.vim.config.get('sdn-controller')
             if sdn_controller and (net_type == "data" or net_type == "ptp"):
@@ -1013,6 +1018,28 @@ class vim_thread(threading.Thread):
                 action_text = "creating SDN"
                 with self.db_lock:
                     sdn_net_id = self.ovim.new_network(network)
+
+                if wim_account_name and self.vim.config["wim_external_ports"]:
+                    # add external port to connect WIM. Try with compute node __WIM:wim_name and __WIM
+                    action_text = "attaching external port to ovim network"
+                    sdn_port_name = sdn_net_id + "." + task["vim_id"]
+                    sdn_port_name = sdn_port_name[:63]
+                    sdn_port_data = {
+                        "compute_node": "__WIM:" + wim_account_name[0:58],
+                        "pci": None,
+                        "vlan": network["vlan"],
+                        "net_id": sdn_net_id,
+                        "region": self.vim["config"]["datacenter_id"],
+                        "name": sdn_port_name,
+                    }
+                    try:
+                        sdn_external_port_id = self.ovim.new_external_port(sdn_port_data)
+                    except ovimException:
+                        sdn_port_data["compute_node"] = "__WIM"
+                        sdn_external_port_id = self.ovim.new_external_port(sdn_port_data)
+                    self.logger.debug("Added sdn_external_port {} to sdn_network {}".format(sdn_external_port_id,
+                                                                                            sdn_net_id))
+
             task["status"] = "DONE"
             task["extra"]["vim_info"] = {}
             task["extra"]["sdn_net_id"] = sdn_net_id

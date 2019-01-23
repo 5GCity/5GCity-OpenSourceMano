@@ -225,6 +225,8 @@ def expand_brackets(text):
     :param text:
     :return:
     """
+    if text is None:
+        return (None, )
     start = text.find("[")
     end = text.find("]")
     if start < 0 or end < 0:

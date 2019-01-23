@@ -3205,13 +3205,15 @@ def create_instance(mydb, tenant_id, instance_dict):
 
             # --> WIM
             # TODO: use this information during network creation
-            wim_account_id = None
+            wim_account_id = wim_account_name = None
             if len(involved_datacenters) > 1 and 'uuid' in sce_net:
                 # OBS: sce_net without uuid are used internally to VNFs
                 # and the assumption is that VNFs will not be split among
                 # different datacenters
-                wim_account_id = wim_engine.find_suitable_wim_account(
+                wim_account = wim_engine.find_suitable_wim_account(
                     involved_datacenters, tenant_id)
+                wim_account_id = wim_account['uuid']
+                wim_account_name = wim_account['name']
                 wim_usage[sce_net['uuid']] = wim_account_id
             # <-- WIM
 
@@ -3303,7 +3305,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                 task_extra = {}
                 if create_network:
                     task_action = "CREATE"
-                    task_extra["params"] = (net_vim_name, net_type, sce_net.get('ip_profile', None))
+                    task_extra["params"] = (net_vim_name, net_type, sce_net.get('ip_profile', None), wim_account_name)
                     if lookfor_network:
                         task_extra["find"] = (lookfor_filter,)
                 elif lookfor_network:
@@ -5550,9 +5552,8 @@ def datacenter_sdn_port_mapping_set(mydb, tenant_id, datacenter_id, sdn_port_map
             pci = port.get("pci")
             element["switch_port"] = port.get("switch_port")
             element["switch_mac"] = port.get("switch_mac")
-            if not pci or not (element["switch_port"] or element["switch_mac"]):
-                raise NfvoException ("The mapping must contain the 'pci' and at least one of the elements 'switch_port'"
-                                     " or 'switch_mac'", httperrors.Bad_Request)
+            if not element["switch_port"] and not element["switch_mac"]:
+                raise NfvoException ("The mapping must contain 'switch_port' or 'switch_mac'", httperrors.Bad_Request)
             for pci_expanded in utils.expand_brackets(pci):
                 element["pci"] = pci_expanded
                 maps.append(dict(element))

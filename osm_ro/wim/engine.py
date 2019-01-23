@@ -322,11 +322,11 @@ class WimEngine(object):
             tenant (str): UUID of the OSM tenant
 
         Returns:
-            str: UUID of the WIM account that is able to connect all the
+            object with the WIM account that is able to connect all the
                  datacenters.
         """
         wim_id = self.find_common_wim(datacenter_ids, tenant)
-        return self.persist.get_wim_account_by(wim_id, tenant)['uuid']
+        return self.persist.get_wim_account_by(wim_id, tenant)
 
     def derive_wan_link(self,
                         wim_usage,

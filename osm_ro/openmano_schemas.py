@@ -1224,7 +1224,7 @@ sdn_port_mapping_schema  = {
                         "items": {
                             "type": "object",
                             "properties": {
-                                "pci": pci_extended_schema,       # pci_schema,
+                                "pci": {"OneOf": [{"type": "null"}, pci_extended_schema]},       # pci_schema,
                                 "switch_port": nameshort_schema,
                                 "switch_mac": mac_schema
                             },
