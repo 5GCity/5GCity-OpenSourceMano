@@ -1976,7 +1976,7 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             # In networking-sfc the MPLS encapsulation is legacy
             # should be used when no full SFC Encapsulation is intended
-            sfc_encap = 'mpls'
+            correlation = 'mpls'
             if sfc_encap:
                 correlation = 'nsh'
             sfp_dict = {'name': name,
