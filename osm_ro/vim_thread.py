@@ -1003,7 +1003,9 @@ class vim_thread(threading.Thread):
 
             net_name = params[0]
             net_type = params[1]
-            wim_account_name = params[3]
+            wim_account_name = None
+            if len(params) >= 4:
+                wim_account_name = params[3]
 
             sdn_controller = self.vim.config.get('sdn-controller')
             if sdn_controller and (net_type == "data" or net_type == "ptp"):
