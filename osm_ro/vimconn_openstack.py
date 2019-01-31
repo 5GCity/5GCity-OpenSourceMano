@@ -109,7 +109,11 @@ class vimconnector(vimconn.vimconnector):
 
         if config.get('dataplane_net_vlan_range') is not None:
             #validate vlan ranges provided by user
-            self._validate_vlan_ranges(config.get('dataplane_net_vlan_range'))
+            self._validate_vlan_ranges(config.get('dataplane_net_vlan_range'), 'dataplane_net_vlan_range')
+
+        if config.get('multisegment_vlan_range') is not None:
+            #validate vlan ranges provided by user
+            self._validate_vlan_ranges(config.get('multisegment_vlan_range'), 'multisegment_vlan_range')
 
         vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
                                       config)
@@ -488,20 +492,63 @@ class vimconnector(vimconn.vimconnector):
             self._format_exception(e)
 
     def new_network(self,net_name, net_type, ip_profile=None, shared=False, vlan=None):
-        '''Adds a tenant network to VIM. Returns the network identifier'''
+        """Adds a tenant network to VIM
+        Params:
+            'net_name': name of the network
+            'net_type': one of:
+                'bridge': overlay isolated network
+                'data':   underlay E-LAN network for Passthrough and SRIOV interfaces
+                'ptp':    underlay E-LINE network for Passthrough and SRIOV interfaces.
+            'ip_profile': is a dict containing the IP parameters of the network
+                'ip_version': can be "IPv4" or "IPv6" (Currently only IPv4 is implemented)
+                'subnet_address': ip_prefix_schema, that is X.X.X.X/Y
+                'gateway_address': (Optional) ip_schema, that is X.X.X.X
+                'dns_address': (Optional) comma separated list of ip_schema, e.g. X.X.X.X[,X,X,X,X]
+                'dhcp_enabled': True or False
+                'dhcp_start_address': ip_schema, first IP to grant
+                'dhcp_count': number of IPs to grant.
+            'shared': if this network can be seen/use by other tenants/organization
+            'vlan': in case of a data or ptp net_type, the intended vlan tag to be used for the network
+        Returns a tuple with the network identifier and created_items, or raises an exception on error
+            created_items can be None or a dictionary where this method can include key-values that will be passed to
+            the method delete_network. Can be used to store created segments, created l2gw connections, etc.
+            Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
+            as not present.
+        """
         self.logger.debug("Adding a new network to VIM name '%s', type '%s'", net_name, net_type)
-        #self.logger.debug(">>>>>>>>>>>>>>>>>> IP profile %s", str(ip_profile))
+        # self.logger.debug(">>>>>>>>>>>>>>>>>> IP profile %s", str(ip_profile))
         try:
             new_net = None
+            created_items = {}
             self._reload_connection()
             network_dict = {'name': net_name, 'admin_state_up': True}
             if net_type=="data" or net_type=="ptp":
                 if self.config.get('dataplane_physical_net') == None:
                     raise vimconn.vimconnConflictException("You must provide a 'dataplane_physical_net' at config value before creating sriov network")
-                network_dict["provider:physical_network"] = self.config['dataplane_physical_net'] #"physnet_sriov" #TODO physical
-                network_dict["provider:network_type"]     = "vlan"
-                if vlan!=None:
-                    network_dict["provider:network_type"] = vlan
+                if not self.config.get('multisegment_support'):
+                    network_dict["provider:physical_network"] = self.config[
+                        'dataplane_physical_net']  # "physnet_sriov" #TODO physical
+                    network_dict["provider:network_type"] = "vlan"
+                    if vlan!=None:
+                        network_dict["provider:network_type"] = vlan
+                else:
+                    ###### Multi-segment case ######
+                    segment_list = []
+                    segment1_dict = {}
+                    segment1_dict["provider:physical_network"] = ''
+                    segment1_dict["provider:network_type"]     = 'vxlan'
+                    segment_list.append(segment1_dict)
+                    segment2_dict = {}
+                    segment2_dict["provider:physical_network"] = self.config['dataplane_physical_net']
+                    segment2_dict["provider:network_type"]     = "vlan"
+                    if self.config.get('multisegment_vlan_range'):
+                        vlanID = self._generate_multisegment_vlanID()
+                        segment2_dict["provider:segmentation_id"] = vlanID
+                    # else
+                    #     raise vimconn.vimconnConflictException(
+                    #         "You must provide 'multisegment_vlan_range' at config dict before creating a multisegment network")
+                    segment_list.append(segment2_dict)
+                    network_dict["segments"] = segment_list
 
                 ####### VIO Specific Changes #########
                 if self.vim_type == "VIO":
@@ -513,12 +560,12 @@ class vimconnector(vimconn.vimconnector):
                                 "'dataplane_net_vlan_range' in format [start_ID - end_ID]"\
                                 "at config value before creating sriov network with vlan tag")
 
-                        network_dict["provider:segmentation_id"] = self._genrate_vlanID()
+                        network_dict["provider:segmentation_id"] = self._generate_vlanID()
 
-            network_dict["shared"]=shared
-            new_net=self.neutron.create_network({'network':network_dict})
-            #print new_net
-            #create subnetwork, even if there is no profile
+            network_dict["shared"] = shared
+            new_net = self.neutron.create_network({'network':network_dict})
+            # print new_net
+            # create subnetwork, even if there is no profile
             if not ip_profile:
                 ip_profile = {}
             if not ip_profile.get('subnet_address'):
@@ -527,7 +574,7 @@ class vimconnector(vimconn.vimconnector):
                 ip_profile['subnet_address'] = "192.168.{}.0/24".format(subnet_rand)
             if 'ip_version' not in ip_profile:
                 ip_profile['ip_version'] = "IPv4"
-            subnet = {"name":net_name+"-subnet",
+            subnet = {"name": net_name+"-subnet",
                     "network_id": new_net["network"]["id"],
                     "ip_version": 4 if ip_profile['ip_version']=="IPv4" else 6,
                     "cidr": ip_profile['subnet_address']
@@ -555,8 +602,29 @@ class vimconnector(vimconn.vimconnector):
                 subnet['allocation_pools'][0]['end'] = ip_str
             #self.logger.debug(">>>>>>>>>>>>>>>>>> Subnet: %s", str(subnet))
             self.neutron.create_subnet({"subnet": subnet} )
-            return new_net["network"]["id"]
+
+            if net_type == "data" and self.config.get('multisegment_support'):
+                if self.config.get('l2gw_support'):
+                    l2gw_list = self.neutron.list_l2_gateways().get("l2_gateways", ())
+                    for l2gw in l2gw_list:
+                        l2gw_conn = {}
+                        l2gw_conn["l2_gateway_id"] = l2gw["id"]
+                        l2gw_conn["network_id"] = new_net["network"]["id"]
+                        l2gw_conn["segmentation_id"] = str(vlanID)
+                        new_l2gw_conn = self.neutron.create_l2_gateway_connection({"l2_gateway_connection": l2gw_conn})
+                        created_items["l2gwconn:" + str(new_l2gw_conn["l2_gateway_connection"]["id"])] = True
+            return new_net["network"]["id"], created_items
         except Exception as e:
+            #delete l2gw connections (if any) before deleting the network
+            for k, v in created_items.items():
+                if not v:  # skip already deleted
+                    continue
+                try:
+                    k_item, _, k_id = k.partition(":")
+                    if k_item == "l2gwconn":
+                        self.neutron.delete_l2_gateway_connection(k_id)
+                except Exception as e2:
+                    self.logger.error("Error deleting l2 gateway connection: {}: {}".format(type(e2).__name__, e2))
             if new_net:
                 self.neutron.delete_network(new_net['network']['id'])
             self._format_exception(e)
@@ -611,11 +679,28 @@ class vimconnector(vimconn.vimconnector):
         net["encapsulation_id"] = net.get('provider:segmentation_id')
         return net
 
-    def delete_network(self, net_id):
-        '''Deletes a tenant network from VIM. Returns the old network identifier'''
+    def delete_network(self, net_id, created_items=None):
+        """
+        Removes a tenant network from VIM and its associated elements
+        :param net_id: VIM identifier of the network, provided by method new_network
+        :param created_items: dictionary with extra items to be deleted. provided by method new_network
+        Returns the network identifier or raises an exception upon error or when network is not found
+        """
         self.logger.debug("Deleting network '%s' from VIM", net_id)
+        if created_items == None:
+            created_items = {}
         try:
             self._reload_connection()
+            #delete l2gw connections (if any) before deleting the network
+            for k, v in created_items.items():
+                if not v:  # skip already deleted
+                    continue
+                try:
+                    k_item, _, k_id = k.partition(":")
+                    if k_item == "l2gwconn":
+                        self.neutron.delete_l2_gateway_connection(k_id)
+                except Exception as e:
+                    self.logger.error("Error deleting l2 gateway connection: {}: {}".format(type(e).__name__, e))
             #delete VM ports attached to this networks before the network
             ports = self.neutron.list_ports(network_id=net_id)
             for p in ports['ports']:
@@ -1625,7 +1710,7 @@ class vimconnector(vimconn.vimconnector):
         #TODO insert exception vimconn.HTTP_Unauthorized
 
     ####### VIO Specific Changes #########
-    def _genrate_vlanID(self):
+    def _generate_vlanID(self):
         """
          Method to get unused vlanID
             Args:
@@ -1655,35 +1740,69 @@ class vimconnector(vimconn.vimconnector):
                 " All given Vlan IDs {} are in use.".format(self.config.get('dataplane_net_vlan_range')))
 
 
-    def _validate_vlan_ranges(self, dataplane_net_vlan_range):
+    def _generate_multisegment_vlanID(self):
+        """
+         Method to get unused vlanID
+            Args:
+                None
+            Returns:
+                vlanID
+        """
+        #Get used VLAN IDs
+        usedVlanIDs = []
+        networks = self.get_network_list()
+        for net in networks:
+            if net.get('provider:network_type') == "vlan" and net.get('provider:segmentation_id'):
+                usedVlanIDs.append(net.get('provider:segmentation_id'))
+            elif net.get('segments'):
+                for segment in net.get('segments'):
+                    if segment.get('provider:network_type') == "vlan" and segment.get('provider:segmentation_id'):
+                        usedVlanIDs.append(segment.get('provider:segmentation_id'))
+        used_vlanIDs = set(usedVlanIDs)
+
+        #find unused VLAN ID
+        for vlanID_range in self.config.get('multisegment_vlan_range'):
+            try:
+                start_vlanid , end_vlanid = map(int, vlanID_range.replace(" ", "").split("-"))
+                for vlanID in xrange(start_vlanid, end_vlanid + 1):
+                    if vlanID not in used_vlanIDs:
+                        return vlanID
+            except Exception as exp:
+                raise vimconn.vimconnException("Exception {} occurred while generating VLAN ID.".format(exp))
+        else:
+            raise vimconn.vimconnConflictException("Unable to create the VLAN segment."\
+                " All VLAN IDs {} are in use.".format(self.config.get('multisegment_vlan_range')))
+
+
+    def _validate_vlan_ranges(self, input_vlan_range, text_vlan_range):
         """
         Method to validate user given vlanID ranges
             Args:  None
             Returns: None
         """
-        for vlanID_range in dataplane_net_vlan_range:
+        for vlanID_range in input_vlan_range:
             vlan_range = vlanID_range.replace(" ", "")
             #validate format
             vlanID_pattern = r'(\d)*-(\d)*$'
             match_obj = re.match(vlanID_pattern, vlan_range)
             if not match_obj:
-                raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}.You must provide "\
-                "'dataplane_net_vlan_range' in format [start_ID - end_ID].".format(vlanID_range))
+                raise vimconn.vimconnConflictException("Invalid VLAN range for {}: {}.You must provide "\
+                "'{}' in format [start_ID - end_ID].".format(text_vlan_range, vlanID_range, text_vlan_range))
 
             start_vlanid , end_vlanid = map(int,vlan_range.split("-"))
             if start_vlanid <= 0 :
-                raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}."\
+                raise vimconn.vimconnConflictException("Invalid VLAN range for {}: {}."\
                 "Start ID can not be zero. For VLAN "\
-                "networks valid IDs are 1 to 4094 ".format(vlanID_range))
+                "networks valid IDs are 1 to 4094 ".format(text_vlan_range, vlanID_range))
             if end_vlanid > 4094 :
-                raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}."\
+                raise vimconn.vimconnConflictException("Invalid VLAN range for {}: {}."\
                 "End VLAN ID can not be greater than 4094. For VLAN "\
-                "networks valid IDs are 1 to 4094 ".format(vlanID_range))
+                "networks valid IDs are 1 to 4094 ".format(text_vlan_range, vlanID_range))
 
             if start_vlanid > end_vlanid:
-                raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}."\
-                    "You must provide a 'dataplane_net_vlan_range' in format start_ID - end_ID and "\
-                    "start_ID < end_ID ".format(vlanID_range))
+                raise vimconn.vimconnConflictException("Invalid VLAN range for {}: {}."\
+                    "You must provide '{}' in format start_ID - end_ID and "\
+                    "start_ID < end_ID ".format(text_vlan_range, vlanID_range, text_vlan_range))
 
 #NOT USED FUNCTIONS
 

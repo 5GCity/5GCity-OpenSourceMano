@@ -2408,7 +2408,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                                                 str(iface.get("vnfd-id-ref"))[:255]),
                                             httperrors.Bad_Request)
                     interface_uuid = existing_ifaces[0]["uuid"]
-                    if existing_ifaces[0]["iface_type"] == "data" and not db_sce_net["type"]:
+                    if existing_ifaces[0]["iface_type"] == "data":
                         db_sce_net["type"] = "data"
                     sce_interface_uuid = str(uuid4())
                     uuid_list.append(sce_net_uuid)
@@ -2634,7 +2634,7 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
             #We should use the dictionary as input parameter for new_network
             #print myNetDict
             if not sce_net["external"]:
-                network_id = myvim.new_network(myNetName, myNetType, myNetIPProfile)
+                network_id, _ = myvim.new_network(myNetName, myNetType, myNetIPProfile)
                 #print "New VIM network created for scenario %s. Network id:  %s" % (scenarioDict['name'],network_id)
                 sce_net['vim_id'] = network_id
                 auxNetDict['scenario'][sce_net['uuid']] = network_id
@@ -2667,7 +2667,7 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
                 #print myNetDict
                 #TODO:
                 #We should use the dictionary as input parameter for new_network
-                network_id = myvim.new_network(myNetName, myNetType, myNetIPProfile)
+                network_id, _  = myvim.new_network(myNetName, myNetType, myNetIPProfile)
                 #print "VIM network id for scenario %s: %s" % (scenarioDict['name'],network_id)
                 net['vim_id'] = network_id
                 if sce_vnf['uuid'] not in auxNetDict:
@@ -5450,7 +5450,7 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
             net_public = net.pop("shared", False)
             net_ipprofile = net.pop("ip_profile", None)
             net_vlan = net.pop("vlan", None)
-            content = myvim.new_network(net_name, net_type, net_ipprofile, shared=net_public, vlan=net_vlan) #, **net)
+            content, _ = myvim.new_network(net_name, net_type, net_ipprofile, shared=net_public, vlan=net_vlan) #, **net)
 
             #If the datacenter has a SDN controller defined and the network is of dataplane type, then create the sdn network
             if get_sdn_controller_id(mydb, datacenter) != None and (net_type == 'data' or net_type == 'ptp'):
@@ -5464,7 +5464,7 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
                     sdn_network['type'] = net_type
                     sdn_network['name'] = net_name
                     sdn_network['region'] = datacenter_tenant_id
-                    ovim_content = ovim.new_network(sdn_network)
+                    ovim_content  = ovim.new_network(sdn_network)
                 except ovimException as e:
                     logger.error("ovimException creating SDN network={} ".format(
                         sdn_network) + str(e), exc_info=True)

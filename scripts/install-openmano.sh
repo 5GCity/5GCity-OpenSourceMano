@@ -270,10 +270,11 @@ then
 
     # install openstack client needed for using openstack as a VIM
     [ "$_DISTRO" == "Ubuntu" ] && install_packages "python-novaclient python-keystoneclient python-glanceclient "\
-                                                   "python-neutronclient python-cinderclient python-openstackclient"
+                                                   "python-neutronclient python-cinderclient python-openstackclient "\
+                                                   "python-networking-l2gw"
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-devel" && easy_install \
         python-novaclient python-keystoneclient python-glanceclient python-neutronclient python-cinderclient \
-        python-openstackclient #TODO revise if gcc python-pip is needed
+        python-openstackclient python-networking-l2gw #TODO revise if gcc python-pip is needed
 fi  # [[ -z "$NO_PACKAGES" ]]
 
 if [[ -z $NOCLONE ]]; then

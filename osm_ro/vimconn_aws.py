@@ -299,11 +299,16 @@ class vimconnector(vimconn.vimconnector):
                     'count': number of IPs to grant.
             'shared': if this network can be seen/use by other tenants/organization
             'vlan': in case of a data or ptp net_type, the intended vlan tag to be used for the network
-        Returns the network identifier on success or raises and exception on failure
+        Returns a tuple with the network identifier and created_items, or raises an exception on error
+            created_items can be None or a dictionary where this method can include key-values that will be passed to
+            the method delete_network. Can be used to store created segments, created l2gw connections, etc.
+            Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
+            as not present.
         """
 
         self.logger.debug("Adding a subnet to VPC")
         try:
+            created_items = {}
             self._reload_connection()
             subnet = None
             vpc_id = self.vpc_id
@@ -314,7 +319,7 @@ class vimconnector(vimconn.vimconnector):
                 subnet_list = self.subnet_sizes(len(self.get_availability_zones_list()), vpc['cidr_block'])
                 cidr_block = list(set(subnet_list) - set(self.get_network_details({'tenant_id': vpc['id']}, detail='cidr_block')))[0]
             subnet = self.conn_vpc.create_subnet(vpc_id, cidr_block)
-            return subnet.id
+            return subnet.id, created_items
         except Exception as e:
             self.format_vimconn_exception(e)
 
@@ -384,8 +389,11 @@ class vimconnector(vimconn.vimconnector):
         except Exception as e:
             self.format_vimconn_exception(e)
 
-    def delete_network(self, net_id):
-        """Deletes a tenant network from VIM
+    def delete_network(self, net_id, created_items=None):
+        """
+        Removes a tenant network from VIM and its associated elements
+        :param net_id: VIM identifier of the network, provided by method new_network
+        :param created_items: dictionary with extra items to be deleted. provided by method new_network
         Returns the network identifier or raises an exception upon error or when network is not found
         """
 

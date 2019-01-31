@@ -500,17 +500,35 @@ class vimconnector(vimconn.vimconnector):
 
         return vdclist
 
-    def new_network(self, net_name, net_type, ip_profile=None, shared=False):
+    def new_network(self, net_name, net_type, ip_profile=None, shared=False, vlan=None):
         """Adds a tenant network to VIM
-            net_name is the name
-            net_type can be 'bridge','data'.'ptp'.
-            ip_profile is a dict containing the IP parameters of the network
-            shared is a boolean
-        Returns the network identifier"""
+        Params:
+            'net_name': name of the network
+            'net_type': one of:
+                'bridge': overlay isolated network
+                'data':   underlay E-LAN network for Passthrough and SRIOV interfaces
+                'ptp':    underlay E-LINE network for Passthrough and SRIOV interfaces.
+            'ip_profile': is a dict containing the IP parameters of the network
+                'ip_version': can be "IPv4" or "IPv6" (Currently only IPv4 is implemented)
+                'subnet_address': ip_prefix_schema, that is X.X.X.X/Y
+                'gateway_address': (Optional) ip_schema, that is X.X.X.X
+                'dns_address': (Optional) comma separated list of ip_schema, e.g. X.X.X.X[,X,X,X,X]
+                'dhcp_enabled': True or False
+                'dhcp_start_address': ip_schema, first IP to grant
+                'dhcp_count': number of IPs to grant.
+            'shared': if this network can be seen/use by other tenants/organization
+            'vlan': in case of a data or ptp net_type, the intended vlan tag to be used for the network
+        Returns a tuple with the network identifier and created_items, or raises an exception on error
+            created_items can be None or a dictionary where this method can include key-values that will be passed to
+            the method delete_network. Can be used to store created segments, created l2gw connections, etc.
+            Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
+            as not present.
+        """
 
         self.logger.debug("new_network tenant {} net_type {} ip_profile {} shared {}"
                           .format(net_name, net_type, ip_profile, shared))
 
+        created_items = {}
         isshared = 'false'
         if shared:
             isshared = 'true'
@@ -524,7 +542,7 @@ class vimconnector(vimconn.vimconnector):
         network_uuid = self.create_network(network_name=net_name, net_type=net_type,
                                            ip_profile=ip_profile, isshared=isshared)
         if network_uuid is not None:
-            return network_uuid
+            return network_uuid, created_items
         else:
             raise vimconn.vimconnUnexpectedResponse("Failed create a new network {}".format(net_name))
 
@@ -771,11 +789,12 @@ class vimconnector(vimconn.vimconnector):
 
         return filter_dict
 
-    def delete_network(self, net_id):
+    def delete_network(self, net_id, created_items=None):
         """
-            Method Deletes a tenant network from VIM, provide the network id.
-
-            Returns the network identifier or raise an exception
+        Removes a tenant network from VIM and its associated elements
+        :param net_id: VIM identifier of the network, provided by method new_network
+        :param created_items: dictionary with extra items to be deleted. provided by method new_network
+        Returns the network identifier or raises an exception upon error or when network is not found
         """
 
         # ############# Stub code for SRIOV #################

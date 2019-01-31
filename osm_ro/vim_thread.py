@@ -990,7 +990,7 @@ class vim_thread(threading.Thread):
             # CREATE
             params = task["params"]
             action_text = "creating VIM"
-            vim_net_id = self.vim.new_network(*params[0:3])
+            vim_net_id, created_items = self.vim.new_network(*params[0:3])
 
             net_name = params[0]
             net_type = params[1]
@@ -1039,6 +1039,7 @@ class vim_thread(threading.Thread):
             task["extra"]["vim_info"] = {}
             task["extra"]["sdn_net_id"] = sdn_net_id
             task["extra"]["created"] = True
+            task["extra"]["created_items"] = created_items
             task["error_msg"] = None
             task["vim_id"] = vim_net_id
             instance_element_update = {"vim_net_id": vim_net_id, "sdn_net_id": sdn_net_id, "status": "BUILD",
@@ -1068,7 +1069,7 @@ class vim_thread(threading.Thread):
                         self.ovim.delete_port(port['uuid'], idempotent=True)
                     self.ovim.delete_network(sdn_net_id, idempotent=True)
             if net_vim_id:
-                self.vim.delete_network(net_vim_id)
+                self.vim.delete_network(net_vim_id, task["extra"].get("created_items"))
             task["status"] = "DONE"
             task["error_msg"] = None
             return True, None

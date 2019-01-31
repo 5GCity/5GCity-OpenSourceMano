@@ -209,9 +209,33 @@ class vimconnector(vimconn.vimconnector):
     #      os.remove("manage_bridge_OSM")
 
     def new_network(self, net_name, net_type, ip_profile=None, shared=False, vlan=None):  # , **vim_specific):
-        """Returns the network identifier"""
+        """Adds a tenant network to VIM
+        Params:
+            'net_name': name of the network
+            'net_type': one of:
+                'bridge': overlay isolated network
+                'data':   underlay E-LAN network for Passthrough and SRIOV interfaces
+                'ptp':    underlay E-LINE network for Passthrough and SRIOV interfaces.
+            'ip_profile': is a dict containing the IP parameters of the network
+                'ip_version': can be "IPv4" or "IPv6" (Currently only IPv4 is implemented)
+                'subnet_address': ip_prefix_schema, that is X.X.X.X/Y
+                'gateway_address': (Optional) ip_schema, that is X.X.X.X
+                'dns_address': (Optional) comma separated list of ip_schema, e.g. X.X.X.X[,X,X,X,X]
+                'dhcp_enabled': True or False
+                'dhcp_start_address': ip_schema, first IP to grant
+                'dhcp_count': number of IPs to grant.
+            'shared': if this network can be seen/use by other tenants/organization
+            'vlan': in case of a data or ptp net_type, the intended vlan tag to be used for the network
+        Returns a tuple with the network identifier and created_items, or raises an exception on error
+            created_items can be None or a dictionary where this method can include key-values that will be passed to
+            the method delete_network. Can be used to store created segments, created l2gw connections, etc.
+            Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
+            as not present.
+        """
+
         # oca library method cannot be used in this case (problem with cluster parameters)
         try:
+            created_items = {}
             # vlan = str(random.randint(self.config["vlan"]["start-range"], self.config["vlan"]["finish-range"]))
             # self.create_bridge_host(vlan)
             bridge_config = self.config["bridge_service"]
@@ -262,7 +286,7 @@ class vimconnector(vimconn.vimconnector):
             </methodCall>'.format(self.user, self.passwd, config, self.config["cluster"]["id"])
             r = requests.post(self.url, params)
             obj = untangle.parse(str(r.content))
-            return obj.methodResponse.params.param.value.array.data.value[1].i4.cdata.encode('utf-8')
+            return obj.methodResponse.params.param.value.array.data.value[1].i4.cdata.encode('utf-8'), created_items
         except Exception as e:
             self.logger.error("Create new network error: " + str(e))
             raise vimconn.vimconnException(e)
@@ -328,9 +352,12 @@ class vimconnector(vimconn.vimconnector):
                 self.logger.error("Get network " + str(net_id) + " error): " + str(e))
                 raise vimconn.vimconnException(e)
 
-    def delete_network(self, net_id):
-        """Deletes a tenant network from VIM
-            Returns the network identifier
+    def delete_network(self, net_id, created_items=None):
+        """
+        Removes a tenant network from VIM and its associated elements
+        :param net_id: VIM identifier of the network, provided by method new_network
+        :param created_items: dictionary with extra items to be deleted. provided by method new_network
+        Returns the network identifier or raises an exception upon error or when network is not found
         """
         try:
             # self.delete_bridge_host()

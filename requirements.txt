@@ -11,6 +11,7 @@ python-novaclient
 python-keystoneclient
 python-glanceclient
 python-neutronclient
+networking-l2gw
 python-cinderclient
 pyvcloud==19.1.1
 pyvmomi

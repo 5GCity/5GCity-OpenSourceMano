@@ -31,6 +31,7 @@ _requirements = [
     "python-glanceclient",
     "python-neutronclient",
     "python-cinderclient",
+    "networking-l2gw",
     #"pyvcloud",
     #"progressbar",
     "prettytable",
