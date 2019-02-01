@@ -372,11 +372,12 @@ class vimconnector(vimconn.vimconnector):
             template_name = flavor_data["name"][:-4]
             name = 'NAME = "{}" '.format(template_name)
             cpu = 'CPU = "{}" '.format(flavor_data["vcpus"])
+            vcpu = 'VCPU = "{}" '.format(flavor_data["vcpus"])
             memory = 'MEMORY = "{}" '.format(flavor_data["ram"])
             context = 'CONTEXT = [NETWORK = "YES",SSH_PUBLIC_KEY = "$USER[SSH_PUBLIC_KEY]" ] '
             graphics = 'GRAPHICS = [ LISTEN = "0.0.0.0", TYPE = "VNC" ] '
             sched_requeriments = 'CLUSTER_ID={}'.format(self.config["cluster"]["id"])
-            template = name + cpu + memory + context + graphics + sched_requeriments
+            template = name + cpu + vcpu + memory + context + graphics + sched_requeriments
             template_id = oca.VmTemplate.allocate(client, template)
             return template_id
         except Exception as e:
@@ -470,12 +471,12 @@ class vimconnector(vimconn.vimconnector):
             for template in listaTemplate:
                 if str(template.id) == str(flavor_id):
                     cpu = ' CPU = "{}"'.format(template.template.cpu)
+                    vcpu = ' VCPU = "{}"'.format(template.template.cpu)
                     memory = ' MEMORY = "{}"'.format(template.template.memory)
                     context = ' CONTEXT = [NETWORK = "YES",SSH_PUBLIC_KEY = "$USER[SSH_PUBLIC_KEY]" ]'
                     graphics = ' GRAPHICS = [ LISTEN = "0.0.0.0", TYPE = "VNC" ]'
                     disk = ' DISK = [ IMAGE_ID = {}]'.format(image_id)
-                    sched_requeriments = ' SCHED_REQUIREMENTS = "CLUSTER_ID={}"'.format(self.config["cluster"]["id"])
-                    template_updated = cpu + memory + context + graphics + disk + sched_requeriments
+                    template_updated = cpu + vcpu + memory + context + graphics + disk 
                     networkListVim = oca.VirtualNetworkPool(client)
                     networkListVim.info()
                     network = ""
@@ -491,6 +492,13 @@ class vimconnector(vimconn.vimconnector):
                         if not network_found:
                             raise vimconn.vimconnNotFoundException("Network {} not found".format(net["net_id"]))
                         template_updated += network
+                    if isinstance(cloud_config, dict):
+                        if cloud_config.get("user-data"):
+                            if isinstance(cloud_config["user-data"], str):
+                                template_updated += cloud_config["user-data"]
+                            else:
+                                for u in cloud_config["user-data"]:
+                                    template_updated += u
                     oca.VmTemplate.update(template, template_updated)
                     self.logger.info(
                         "Instanciating in OpenNebula a new VM name:{} id:{}".format(template.name, template.id))
