@@ -127,6 +127,7 @@ class vimconnector(vimconn.vimconnector):
         self.persistent_info = persistent_info
         self.availability_zone = persistent_info.get('availability_zone', None)
         self.session = persistent_info.get('session', {'reload_client': True})
+        self.my_tenant_id = self.session.get('my_tenant_id')
         self.nova = self.session.get('nova')
         self.neutron = self.session.get('neutron')
         self.cinder = self.session.get('cinder')
@@ -143,6 +144,11 @@ class vimconnector(vimconn.vimconnector):
             self.endpoint_type = None
 
         self.logger = logging.getLogger('openmano.vim.openstack')
+
+        # allow security_groups to be a list or a single string
+        if isinstance(self.config.get('security_groups'), str):
+            self.config['security_groups'] = [self.config['security_groups']]
+        self.security_groups_id = None
 
         ####### VIO Specific Changes #########
         if self.vim_type == "VIO":
@@ -247,13 +253,17 @@ class vimconnector(vimconn.vimconnector):
             self.nova = self.session['nova'] = nClient.Client(str(version), session=sess, endpoint_type=self.endpoint_type, region_name=region_name)
             self.neutron = self.session['neutron'] = neClient.Client('2.0', session=sess, endpoint_type=self.endpoint_type, region_name=region_name)
             self.cinder = self.session['cinder'] = cClient.Client(2, session=sess, endpoint_type=self.endpoint_type, region_name=region_name)
+            try:
+                self.my_tenant_id = self.session['my_tenant_id'] = sess.get_project_id()
+            except Exception as e:
+                self.logger.error("Cannot get project_id from session", exc_info=True)
             if self.endpoint_type == "internalURL":
                 glance_service_id = self.keystone.services.list(name="glance")[0].id
                 glance_endpoint = self.keystone.endpoints.list(glance_service_id, interface="internal")[0].url
             else:
                 glance_endpoint = None
             self.glance = self.session['glance'] = glClient.Client(2, session=sess, endpoint=glance_endpoint)
-            #using version 1 of glance client in new_image()
+            # using version 1 of glance client in new_image()
             # self.glancev1 = self.session['glancev1'] = glClient.Client('1', session=sess,
             #                                                            endpoint=glance_endpoint)
             self.session['reload_client'] = False
@@ -261,6 +271,7 @@ class vimconnector(vimconn.vimconnector):
             # add availablity zone info inside  self.persistent_info
             self._set_availablity_zones()
             self.persistent_info['availability_zone'] = self.availability_zone
+            self.security_groups_id = None  # force to get again security_groups_ids next time they are needed
 
     def __net_os2mano(self, net_list_dict):
         '''Transform the net openstack format to mano format
@@ -400,6 +411,30 @@ class vimconnector(vimconn.vimconnector):
         else:  # ()
             self.logger.error("General Exception " + str(exception), exc_info=True)
             raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))
+
+    def _get_ids_from_name(self):
+        """
+         Obtain ids from name of tenant and security_groups. Store at self .security_groups_id"
+        :return: None
+        """
+        # get tenant_id if only tenant_name is supplied
+        self._reload_connection()
+        if not self.my_tenant_id:
+            raise vimconn.vimconnConnectionException("Error getting tenant information from name={} id={}".
+                                                     format(self.tenant_name, self.tenant_id))
+        if self.config.get('security_groups') and not self.security_groups_id:
+            # convert from name to id
+            neutron_sg_list = self.neutron.list_security_groups(tenant_id=self.my_tenant_id)["security_groups"]
+
+            self.security_groups_id = []
+            for sg in self.config.get('security_groups'):
+                for neutron_sg in neutron_sg_list:
+                    if sg in (neutron_sg["id"], neutron_sg["name"]):
+                        self.security_groups_id.append(neutron_sg["id"])
+                        break
+                else:
+                    self.security_groups_id = None
+                    raise vimconn.vimconnConnectionException("Not found security group {} for this tenant".format(sg))
 
     def get_tenant_list(self, filter_dict={}):
         '''Obtain tenants of VIM
@@ -1050,15 +1085,22 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             # metadata_vpci = {}   # For a specific neutron plugin
             block_device_mapping = None
+
             for net in net_list:
                 if not net.get("net_id"):   # skip non connected iface
                     continue
 
-                port_dict={
+                port_dict = {
                     "network_id": net["net_id"],
                     "name": net.get("name"),
                     "admin_state_up": True
                 }
+                if self.config.get("security_groups") and net.get("port_security") is not False and \
+                        not self.config.get("no_port_security_extension"):
+                    if not self.security_groups_id:
+                        self._get_ids_from_name()
+                    port_dict["security_groups"] = self.security_groups_id
+
                 if net["type"]=="virtual":
                     pass
                     # if "vpci" in net:
@@ -1135,9 +1177,6 @@ class vimconnector(vimconn.vimconnector):
             self.logger.debug("name '%s' image_id '%s'flavor_id '%s' net_list_vim '%s' description '%s'",
                               name, image_id, flavor_id, str(net_list_vim), description)
 
-            security_groups = self.config.get('security_groups')
-            if type(security_groups) is str:
-                security_groups = ( security_groups, )
             # cloud config
             config_drive, userdata = self._create_user_data(cloud_config)
 
@@ -1181,10 +1220,12 @@ class vimconnector(vimconn.vimconnector):
             self.logger.debug("nova.servers.create({}, {}, {}, nics={}, security_groups={}, "
                               "availability_zone={}, key_name={}, userdata={}, config_drive={}, "
                               "block_device_mapping={})".format(name, image_id, flavor_id, net_list_vim,
-                                                                security_groups, vm_av_zone, self.config.get('keypair'),
-                                                                userdata, config_drive, block_device_mapping))
+                                                                self.config.get("security_groups"), vm_av_zone,
+                                                                self.config.get('keypair'), userdata, config_drive,
+                                                                block_device_mapping))
             server = self.nova.servers.create(name, image_id, flavor_id, nics=net_list_vim,
-                                              security_groups=security_groups,
+                                              security_groups=self.config.get("security_groups"),
+                                              # TODO remove security_groups in future versions. Already at neutron port
                                               availability_zone=vm_av_zone,
                                               key_name=self.config.get('keypair'),
                                               userdata=userdata,
