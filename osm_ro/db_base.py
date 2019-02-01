@@ -170,7 +170,7 @@ class db_base():
         return self.con.escape(value)
 
     def escape_string(self, value):
-        if isinstance(value, "unicode"):
+        if isinstance(value, unicode):
             value = value.encode("utf8")
         return self.con.escape_string(value)
 
