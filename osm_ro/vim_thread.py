@@ -999,7 +999,7 @@ class vim_thread(threading.Thread):
             # CREATE
             params = task["params"]
             action_text = "creating VIM"
-            vim_net_id = self.vim.new_network(*params[0:2])
+            vim_net_id = self.vim.new_network(*params[0:3])
 
             net_name = params[0]
             net_type = params[1]
