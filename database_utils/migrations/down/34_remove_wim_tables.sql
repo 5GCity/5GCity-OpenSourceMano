@@ -15,7 +15,11 @@ ALTER TABLE `vim_wim_actions` MODIFY `item` enum(
   'datacenter_images',
   'instance_nets',
   'instance_vms',
-  'instance_interfaces') NOT NULL
+  'instance_interfaces',
+  'instance_sfis',
+  'instance_sfs',
+  'instance_classifications',
+  'instance_sfps') NOT NULL
   COMMENT 'table where the item is stored';
 ALTER TABLE `vim_wim_actions` MODIFY `datacenter_vim_id` varchar(36) NOT NULL;
 ALTER TABLE `vim_wim_actions` DROP `wim_internal_id`, DROP `wim_account_id`;

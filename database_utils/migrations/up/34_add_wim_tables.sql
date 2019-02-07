@@ -118,6 +118,10 @@ ALTER TABLE `vim_wim_actions`
     'instance_nets',
     'instance_vms',
     'instance_interfaces',
+    'instance_sfis',
+    'instance_sfs',
+    'instance_classifications',
+    'instance_sfps',
     'instance_wim_nets') NOT NULL
   COMMENT 'table where the item is stored';
 ALTER TABLE `vim_wim_actions`

@@ -36,7 +36,7 @@ QUIET_MODE=""
 BACKUP_DIR=""
 BACKUP_FILE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=36
+LAST_DB_VERSION=37
 
 # Detect paths
 MYSQL=$(which mysql)
@@ -193,7 +193,8 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5082 ] && DB_VERSION=33  #0.5.82 =>  33
 #[ $OPENMANO_VER_NUM -ge 6000 ] && DB_VERSION=34  #0.6.00 =>  34
 #[ $OPENMANO_VER_NUM -ge 6001 ] && DB_VERSION=35  #0.6.01 =>  35
-#[ $OPENMANO_VER_NUM -ge 6003 ] && DB_VERSION=35  #0.6.03 =>  36
+#[ $OPENMANO_VER_NUM -ge 6003 ] && DB_VERSION=36  #0.6.03 =>  36
+#[ $OPENMANO_VER_NUM -ge 6009 ] && DB_VERSION=37  #0.6.09 =>  37
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -1345,6 +1346,21 @@ function downgrade_from_36(){
         "flavor_id;"
     # For downgrade do not restore wims/wim_accounts config to varchar 4000
     sql "DELETE FROM schema_version WHERE version_int='36';"
+}
+function upgrade_to_37(){
+    echo "      Adding the enum tags for SFC"
+    sql "ALTER TABLE vim_wim_actions " \
+        "MODIFY COLUMN item " \
+        "ENUM('datacenters_flavors','datacenter_images','instance_nets','instance_vms','instance_interfaces'," \
+            "'instance_sfis','instance_sfs','instance_classifications','instance_sfps','instance_wim_nets') " \
+        "NOT NULL COMMENT 'table where the item is stored';"
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) " \
+         "VALUES (37, '0.37', '0.6.09', 'Adding the enum tags for SFC', '2019-02-07');"
+}
+function downgrade_from_37(){
+    echo "      Adding the enum tags for SFC isn't going to be reversed"
+    # It doesn't make sense to reverse to a bug state.
+    sql "DELETE FROM schema_version WHERE version_int='37';"
 }
 
 #TODO ... put functions here
