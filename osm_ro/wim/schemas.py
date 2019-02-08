@@ -83,7 +83,7 @@ wim_port_mapping_desc = {
                             "required": ["mapping_type"]
                         }
                     },
-                    "oneOf": [
+                    "anyOf": [
                         {
                             "required": [
                                 "pop_switch_dpid",

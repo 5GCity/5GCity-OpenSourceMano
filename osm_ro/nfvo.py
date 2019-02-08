@@ -151,14 +151,12 @@ def get_non_used_wim_name(wim_name, wim_id, tenant_name, tenant_id):
 
 def start_service(mydb, persistence=None, wim=None):
     global db, global_config
-    db = nfvo_db.nfvo_db()
+    db = nfvo_db.nfvo_db(lock=db_lock)
+    mydb.lock = db_lock
     db.connect(global_config['db_host'], global_config['db_user'], global_config['db_passwd'], global_config['db_name'])
     global ovim
 
-    if persistence:
-        persistence.lock = db_lock
-    else:
-        persistence = WimPersistence(db, lock=db_lock)
+    persistence = persistence or  WimPersistence(db)
 
     # Initialize openvim for SDN control
     # TODO: Avoid static configuration by adding new parameters to openmanod.cfg

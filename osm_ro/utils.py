@@ -32,13 +32,19 @@ __date__ ="$08-sep-2014 12:21:22$"
 import datetime
 import time
 import warnings
-from functools import reduce
+from functools import reduce, partial, wraps
 from itertools import tee
 
+import six
 from six.moves import filter, filterfalse
 
 from jsonschema import exceptions as js_e
 from jsonschema import validate as js_v
+
+if six.PY3:
+    from inspect import getfullargspec as getspec
+else:
+    from inspect import getargspec as getspec
 
 #from bs4 import BeautifulSoup
 
@@ -347,3 +353,60 @@ def safe_get(target, key_path, default=None):
     keys = key_path.split('.')
     target = reduce(lambda acc, key: acc.get(key) or {}, keys[:-1], target)
     return target.get(keys[-1], default)
+
+
+class Attempt(object):
+    """Auxiliary class to be used in an attempt to retry executing a failing
+    procedure
+
+    Attributes:
+        count (int): 0-based "retries" counter
+        max_attempts (int): maximum number of "retries" allowed
+        info (dict): extra information about the specific attempt
+            (can be used to produce more meaningful error messages)
+    """
+    __slots__ = ('count', 'max', 'info')
+
+    MAX = 3
+
+    def __init__(self, count=0, max_attempts=MAX, info=None):
+        self.count = count
+        self.max = max_attempts
+        self.info = info or {}
+
+    @property
+    def countdown(self):
+        """Like count, but in the opposite direction"""
+        return self.max - self.count
+
+    @property
+    def number(self):
+        """1-based counter"""
+        return self.count + 1
+
+
+def inject_args(fn=None, **args):
+    """Partially apply keyword arguments in a function, but only if the function
+    define them in the first place
+    """
+    if fn is None:  # Allows calling the decorator directly or with parameters
+        return partial(inject_args, **args)
+
+    spec = getspec(fn)
+    return wraps(fn)(partial(fn, **filter_dict_keys(args, spec.args)))
+
+
+def get_arg(name, fn, args, kwargs):
+    """Find the value of an argument for a function, given its argument list.
+
+    This function can be used to display more meaningful errors for debugging
+    """
+    if name in kwargs:
+        return kwargs[name]
+
+    spec = getspec(fn)
+    if name in spec.args:
+        i = spec.args.index(name)
+        return args[i] if i < len(args) else None
+
+    return None
