@@ -227,11 +227,10 @@ class vimconnector(vimconn.vimconnector):
                                    tenant_name=self.tenant_name,
                                    tenant_id=self.tenant_id)
             sess = session.Session(auth=auth, verify=self.verify)
+            # addedd region_name to keystone, nova, neutron and cinder to support distributed cloud for Wind River Titanium cloud and StarlingX
+            region_name = self.config.get('region_name')
             if self.api_version3:
-                if self.config.get('region_name'):
-                    self.keystone = ksClient_v3.Client(session=sess, endpoint_type=self.endpoint_type, region_name=self.config['region_name'])
-                else:
-                    self.keystone = ksClient_v3.Client(session=sess, endpoint_type=self.endpoint_type)
+                self.keystone = ksClient_v3.Client(session=sess, endpoint_type=self.endpoint_type, region_name=region_name)
             else:
                 self.keystone = ksClient_v2.Client(session=sess, endpoint_type=self.endpoint_type)
             self.session['keystone'] = self.keystone
@@ -244,15 +243,10 @@ class vimconnector(vimconn.vimconnector):
             version = self.config.get("microversion")
             if not version:
                 version = "2.1"
-            # Added region to support Distributed cloud as implemented in WindRiver Titanium Cloud and StarlingX
-            if self.config.get('region_name'):
-                self.nova = self.session['nova'] = nClient.Client(str(version), session=sess, endpoint_type=self.endpoint_type, region_name=self.config['region_name'])
-                self.neutron = self.session['neutron'] = neClient.Client('2.0', session=sess, endpoint_type=self.endpoint_type, region_name=self.config['region_name'])
-                self.cinder = self.session['cinder'] = cClient.Client(2, session=sess, endpoint_type=self.endpoint_type, region_name=self.config['region_name'])
-            else:
-                self.nova = self.session['nova'] = nClient.Client(str(version), session=sess, endpoint_type=self.endpoint_type)
-                self.neutron = self.session['neutron'] = neClient.Client('2.0', session=sess, endpoint_type=self.endpoint_type)
-                self.cinder = self.session['cinder'] = cClient.Client(2, session=sess, endpoint_type=self.endpoint_type)
+            # addedd region_name to keystone, nova, neutron and cinder to support distributed cloud for Wind River Titanium cloud and StarlingX
+            self.nova = self.session['nova'] = nClient.Client(str(version), session=sess, endpoint_type=self.endpoint_type, region_name=region_name)
+            self.neutron = self.session['neutron'] = neClient.Client('2.0', session=sess, endpoint_type=self.endpoint_type, region_name=region_name)
+            self.cinder = self.session['cinder'] = cClient.Client(2, session=sess, endpoint_type=self.endpoint_type, region_name=region_name)
             if self.endpoint_type == "internalURL":
                 glance_service_id = self.keystone.services.list(name="glance")[0].id
                 glance_endpoint = self.keystone.endpoints.list(glance_service_id, interface="internal")[0].url
