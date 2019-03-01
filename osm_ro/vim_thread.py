@@ -1222,26 +1222,31 @@ class vim_thread(threading.Thread):
             ip_proto = int(params.get("ip_proto"))
             source_ip = params.get("source_ip")
             destination_ip = params.get("destination_ip")
-            if ip_proto == 1:
-                ip_proto = 'icmp'
-            elif ip_proto == 6:
-                ip_proto = 'tcp'
-            elif ip_proto == 17:
-                ip_proto = 'udp'
-            if '/' not in source_ip:
-                source_ip += '/32'
-            if '/' not in destination_ip:
-                destination_ip += '/32'
-            definition = {
-                "logical_source_port": interfaces[0],
-                "protocol": ip_proto,
-                "source_ip_prefix": source_ip,
-                "destination_ip_prefix": destination_ip,
-                "source_port_range_min": params.get("source_port"),
-                "source_port_range_max": params.get("source_port"),
-                "destination_port_range_min": params.get("destination_port"),
-                "destination_port_range_max": params.get("destination_port"),
-            }
+            source_port = params.get("source_port")
+            destination_port = params.get("destination_port")
+            definition = {"logical_source_port": interfaces[0]}
+            if ip_proto:
+                if ip_proto == 1:
+                    ip_proto = 'icmp'
+                elif ip_proto == 6:
+                    ip_proto = 'tcp'
+                elif ip_proto == 17:
+                    ip_proto = 'udp'
+                definition["protocol"] = ip_proto
+            if source_ip:
+                if '/' not in source_ip:
+                    source_ip += '/32'
+                definition["source_ip_prefix"] = source_ip
+            if source_port:
+                definition["source_port_range_min"] = source_port
+                definition["source_port_range_max"] = source_port
+            if destination_port:
+                definition["destination_port_range_min"] = destination_port
+                definition["destination_port_range_max"] = destination_port
+            if destination_ip:
+                if '/' not in destination_ip:
+                    destination_ip += '/32'
+                definition["destination_ip_prefix"] = destination_ip
 
             vim_classification_id = self.vim.new_classification(
                 name, 'legacy_flow_classifier', definition)
