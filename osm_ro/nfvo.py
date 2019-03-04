@@ -305,6 +305,9 @@ def clean_db(mydb):
         nb_deleted += len(actions_to_delete)
         if len(actions_to_delete) < 100:
             break
+    # clean locks
+    mydb.update_rows("vim_wim_actions", UPDATE={"worker": None}, WHERE={"worker<>": None})
+
     if nb_deleted:
         logger.debug("Removed {} unused vim_wim_actions".format(nb_deleted))
 
@@ -3224,8 +3227,16 @@ def create_instance(mydb, tenant_id, instance_dict):
             # <-- WIM
 
             descriptor_net = {}
-            if instance_dict.get("networks") and instance_dict["networks"].get(sce_net["name"]):
-                descriptor_net = instance_dict["networks"][sce_net["name"]]
+            if instance_dict.get("networks"):
+                if sce_net.get("uuid") in instance_dict["networks"]:
+                    descriptor_net = instance_dict["networks"][sce_net["uuid"]]
+                    descriptor_net_name = sce_net["uuid"]
+                elif sce_net.get("osm_id") in instance_dict["networks"]:
+                    descriptor_net = instance_dict["networks"][sce_net["osm_id"]]
+                    descriptor_net_name = sce_net["osm_id"]
+                elif sce_net["name"] in instance_dict["networks"]:
+                    descriptor_net = instance_dict["networks"][sce_net["name"]]
+                    descriptor_net_name = sce_net["name"]
             net_name = descriptor_net.get("vim-network-name")
             # add datacenters from instantiation parameters
             if descriptor_net.get("sites"):
@@ -3234,6 +3245,22 @@ def create_instance(mydb, tenant_id, instance_dict):
                         involved_datacenters.append(site["datacenter"])
             sce_net2instance[sce_net_uuid] = {}
             net2task_id['scenario'][sce_net_uuid] = {}
+
+            use_network = None
+            related_network = None
+            if descriptor_net.get("use-network"):
+                target_instance_nets = mydb.get_rows(
+                    SELECT="related",
+                    FROM="instance_nets",
+                    WHERE={"instance_scenario_id": descriptor_net["use-network"]["instance_scenario_id"],
+                           "osm_id":  descriptor_net["use-network"]["osm_id"]},
+                )
+                if not target_instance_nets:
+                    raise NfvoException(
+                        "Cannot find the target network at instance:networks[{}]:use-network".format(descriptor_net_name),
+                        httperrors.Bad_Request)
+                else:
+                    use_network = target_instance_nets[0]["related"]
 
             if sce_net["external"]:
                 number_mgmt_networks += 1
@@ -3322,8 +3349,12 @@ def create_instance(mydb, tenant_id, instance_dict):
                 net_uuid = str(uuid4())
                 uuid_list.append(net_uuid)
                 sce_net2instance[sce_net_uuid][datacenter_id] = net_uuid
+                if not related_network:   # all db_instance_nets will have same related
+                    related_network = use_network or net_uuid
                 db_net = {
                     "uuid": net_uuid,
+                    "osm_id": sce_net.get("osm_id") or sce_net["name"],
+                    "related": related_network,
                     'vim_net_id': None,
                     "vim_name": net_vim_name,
                     "instance_scenario_id": instance_uuid,
@@ -3342,6 +3373,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                     "action": task_action,
                     "item": "instance_nets",
                     "item_id": net_uuid,
+                    "related": related_network,
                     "extra": yaml.safe_dump(task_extra, default_flow_style=True, width=256)
                 }
                 net2task_id['scenario'][sce_net_uuid][datacenter_id] = task_index
@@ -3422,6 +3454,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                         uuid_list.append(sfi_uuid)
                         db_sfi = {
                             "uuid": sfi_uuid,
+                            "related": sfi_uuid,
                             "instance_scenario_id": instance_uuid,
                             'sce_rsp_hop_id': cp['uuid'],
                             'datacenter_id': datacenter_id,
@@ -3437,6 +3470,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                             "status": "SCHEDULED",
                             "item": "instance_sfis",
                             "item_id": sfi_uuid,
+                            "related": sfi_uuid,
                             "extra": yaml.safe_dump({"params": extra_params, "depends_on": [dependencies[i]]},
                                                     default_flow_style=True, width=256)
                         }
@@ -3448,6 +3482,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                     uuid_list.append(sf_uuid)
                     db_sf = {
                         "uuid": sf_uuid,
+                        "related": sf_uuid,
                         "instance_scenario_id": instance_uuid,
                         'sce_rsp_hop_id': cp['uuid'],
                         'datacenter_id': datacenter_id,
@@ -3463,6 +3498,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                         "status": "SCHEDULED",
                         "item": "instance_sfs",
                         "item_id": sf_uuid,
+                        "related": sf_uuid,
                         "extra": yaml.safe_dump({"params": "", "depends_on": sfis_created},
                                                 default_flow_style=True, width=256)
                     }
@@ -3493,6 +3529,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                         uuid_list.append(classification_uuid)
                         db_classification = {
                             "uuid": classification_uuid,
+                            "related": classification_uuid,
                             "instance_scenario_id": instance_uuid,
                             'sce_classifier_match_id': match['uuid'],
                             'datacenter_id': datacenter_id,
@@ -3515,6 +3552,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                             "status": "SCHEDULED",
                             "item": "instance_classifications",
                             "item_id": classification_uuid,
+                            "related": classification_uuid,
                             "extra": yaml.safe_dump({"params": classification_params, "depends_on": [dependencies[i]]},
                                                     default_flow_style=True, width=256)
                         }
@@ -3527,6 +3565,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                 uuid_list.append(sfp_uuid)
                 db_sfp = {
                     "uuid": sfp_uuid,
+                    "related": sfp_uuid,
                     "instance_scenario_id": instance_uuid,
                     'sce_rsp_id': rsp['uuid'],
                     'datacenter_id': datacenter_id,
@@ -3542,6 +3581,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                     "status": "SCHEDULED",
                     "item": "instance_sfps",
                     "item_id": sfp_uuid,
+                    "related": sfp_uuid,
                     "extra": yaml.safe_dump({"params": "", "depends_on": sfs_created + classifications_created},
                                             default_flow_style=True, width=256)
                 }
@@ -3657,6 +3697,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         vnf_net2instance[sce_vnf['uuid']][net['uuid']] = net_uuid
         db_net = {
             "uuid": net_uuid,
+            "related": net_uuid,
             'vim_net_id': None,
             "vim_name": net_name,
             "instance_scenario_id": instance_uuid,
@@ -3687,6 +3728,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
             "action": task_action,
             "item": "instance_nets",
             "item_id": net_uuid,
+            "related": net_uuid,
             "extra": yaml.safe_dump(task_extra, default_flow_style=True, width=256)
         }
         task_index += 1
@@ -3926,6 +3968,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
             uuid_list.append(vm_uuid)
             db_vm = {
                 "uuid": vm_uuid,
+                "related": vm_uuid,
                 'instance_vnf_id': vnf_uuid,
                 # TODO delete "vim_vm_id": vm_id,
                 "vm_id": vm["uuid"],
@@ -3965,6 +4008,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                 "status": "SCHEDULED",
                 "item": "instance_vms",
                 "item_id": vm_uuid,
+                "related": vm_uuid,
                 "extra": yaml.safe_dump({"params": task_params, "depends_on": task_depends_on},
                                         default_flow_style=True, width=256)
             }
@@ -4042,6 +4086,7 @@ def delete_instance(mydb, tenant_id, instance_id):
             "status": "SCHEDULED",
             "item": "instance_sfps",
             "item_id": sfp["uuid"],
+            "related": sfp["related"],
             "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
         }
         task_index += 1
@@ -4082,6 +4127,7 @@ def delete_instance(mydb, tenant_id, instance_id):
             "status": "SCHEDULED",
             "item": "instance_classifications",
             "item_id": classification["uuid"],
+            "related": classification["related"],
             "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
         }
         task_index += 1
@@ -4120,6 +4166,7 @@ def delete_instance(mydb, tenant_id, instance_id):
             "status": "SCHEDULED",
             "item": "instance_sfs",
             "item_id": sf["uuid"],
+            "related": sf["related"],
             "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
         }
         task_index += 1
@@ -4158,6 +4205,7 @@ def delete_instance(mydb, tenant_id, instance_id):
             "status": "SCHEDULED",
             "item": "instance_sfis",
             "item_id": sfi["uuid"],
+            "related": sfi["related"],
             "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
         }
         task_index += 1
@@ -4199,6 +4247,7 @@ def delete_instance(mydb, tenant_id, instance_id):
                 "status": "SCHEDULED",
                 "item": "instance_vms",
                 "item_id": vm["uuid"],
+                "related": vm["related"],
                 "extra": yaml.safe_dump({"params": vm["interfaces"], "depends_on": sfi_dependencies},
                                         default_flow_style=True, width=256)
             }
@@ -4253,6 +4302,7 @@ def delete_instance(mydb, tenant_id, instance_id):
             "status": "SCHEDULED",
             "item": "instance_nets",
             "item_id": net["uuid"],
+            "related": net["related"],
             "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
         }
         task_index += 1
@@ -4552,6 +4602,7 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                         "status": "SCHEDULED",
                         "item": "instance_vms",
                         "item_id": vdu_id,
+                        "related": vm["related"],
                         "extra": yaml.safe_dump({"params": vm_interfaces},
                                                 default_flow_style=True, width=256)
                     }
@@ -4642,6 +4693,7 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                         "status": "SCHEDULED",
                         "item": "instance_vms",
                         "item_id": vm_uuid,
+                        "related": target_vm["related"],
                         # ALF
                         # ALF
                         # TODO examinar parametros, quitar MAC o incrementar. Incrementar IP y colocar las dependencias con ACTION-asdfasd.

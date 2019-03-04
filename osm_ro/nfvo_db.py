@@ -964,7 +964,7 @@ class nfvo_db(db_base.db_base):
 
             # instance vms
             cmd = "SELECT iv.uuid as uuid, vim_vm_id, status, error_msg, vim_info, iv.created_at as "\
-                    "created_at, name, vms.osm_id as vdu_osm_id, vim_name, vms.uuid as vm_uuid"\
+                    "created_at, name, vms.osm_id as vdu_osm_id, vim_name, vms.uuid as vm_uuid, related"\
                     " FROM instance_vms as iv join vms on iv.vm_id=vms.uuid "\
                     " WHERE instance_vnf_id='{}' ORDER BY iv.created_at".format(vnf['uuid'])
             self.logger.debug(cmd)
@@ -1002,7 +1002,7 @@ class nfvo_db(db_base.db_base):
         #where_text = "instance_nets.instance_scenario_id='"+ instance_dict['uuid'] + "'"
         cmd = "SELECT inets.uuid as uuid,vim_net_id,status,error_msg,vim_info,created, sce_net_id, " \
                 "net_id as vnf_net_id, datacenter_id, datacenter_tenant_id, sdn_net_id, " \
-                "snets.osm_id as ns_net_osm_id, nets.osm_id as vnf_net_osm_id, inets.vim_name " \
+                "snets.osm_id as ns_net_osm_id, nets.osm_id as vnf_net_osm_id, inets.vim_name, related " \
                 "FROM instance_nets as inets left join sce_nets as snets on inets.sce_net_id=snets.uuid " \
                 "left join nets on inets.net_id=nets.uuid " \
                 "WHERE instance_scenario_id='{}' ORDER BY inets.created_at".format(instance_dict['uuid'])
@@ -1012,7 +1012,7 @@ class nfvo_db(db_base.db_base):
 
         #instance_sfps
         cmd = "SELECT uuid,vim_sfp_id,sce_rsp_id,datacenter_id,"\
-                "datacenter_tenant_id,status,error_msg,vim_info"\
+                "datacenter_tenant_id,status,error_msg,vim_info, related"\
                 " FROM instance_sfps" \
                 " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid'])
         self.logger.debug(cmd)
@@ -1022,7 +1022,7 @@ class nfvo_db(db_base.db_base):
         # for sfp in instance_dict['sfps']:
         #instance_sfs
         cmd = "SELECT uuid,vim_sf_id,sce_rsp_hop_id,datacenter_id,"\
-                "datacenter_tenant_id,status,error_msg,vim_info"\
+                "datacenter_tenant_id,status,error_msg,vim_info, related"\
                 " FROM instance_sfs" \
                 " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid']) # TODO: replace instance_scenario_id with instance_sfp_id
         self.logger.debug(cmd)
@@ -1032,7 +1032,7 @@ class nfvo_db(db_base.db_base):
         #for sf in instance_dict['sfs']:
         #instance_sfis
         cmd = "SELECT uuid,vim_sfi_id,sce_rsp_hop_id,datacenter_id,"\
-                "datacenter_tenant_id,status,error_msg,vim_info"\
+                "datacenter_tenant_id,status,error_msg,vim_info, related"\
                 " FROM instance_sfis" \
                 " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid']) # TODO: replace instance_scenario_id with instance_sf_id
         self.logger.debug(cmd)
@@ -1042,7 +1042,7 @@ class nfvo_db(db_base.db_base):
 
         #instance_classifications
         cmd = "SELECT uuid,vim_classification_id,sce_classifier_match_id,datacenter_id,"\
-                "datacenter_tenant_id,status,error_msg,vim_info"\
+                "datacenter_tenant_id,status,error_msg,vim_info, related"\
                 " FROM instance_classifications" \
                 " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid'])
         self.logger.debug(cmd)

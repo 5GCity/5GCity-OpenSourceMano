@@ -562,7 +562,7 @@ class db_base():
             INSERT: dictionary with the key:value to insert
             table: table where to insert
             add_uuid: if True, it will create an uuid key entry at INSERT if not provided
-            created_time: time to add to the created_time column
+            created_time: time to add to the created_at column
         It checks presence of uuid and add one automatically otherwise
         Return: uuid
         '''
@@ -591,7 +591,7 @@ class db_base():
         cmd= "INSERT INTO " + table +" SET " + \
             ",".join(map(self.__tuple2db_format_set, INSERT.iteritems() ))
         if created_time:
-            cmd += ",created_at=%f" % created_time
+            cmd += ",created_at={time},modified_at={time}".format(time=created_time)
         if confidential_data:
             index = cmd.find("SET")
             subcmd = cmd[:index] + 'SET...'
@@ -627,7 +627,7 @@ class db_base():
 
     @retry
     @with_transaction
-    def update_rows(self, table, UPDATE, WHERE, modified_time=0, attempt=_ATTEMPT):
+    def update_rows(self, table, UPDATE, WHERE, modified_time=None, attempt=_ATTEMPT):
         """ Update one or several rows of a table.
         :param UPDATE: dictionary with the changes. dict keys are database columns that will be set with the dict values
         :param table: database table to update
@@ -638,11 +638,12 @@ class db_base():
                 keys can be suffixed by >,<,<>,>=,<= so that this is used to compare key and value instead of "="
                 The special keys "OR", "AND" with a dict value is used to create a nested WHERE
             If a list, each item will be a dictionary that will be concatenated with OR
-        :param modified_time: Can contain the time to be set to the table row
+        :param modified_time: Can contain the time to be set to the table row.
+            None to set automatically, 0 to do not modify it
         :return: the number of updated rows, raises exception upon error
         """
-        if table in self.tables_with_created_field and modified_time==0:
-            modified_time=time.time()
+        if table in self.tables_with_created_field and modified_time is None:
+            modified_time = time.time()
 
         return self._update_rows(table, UPDATE, WHERE, modified_time)
 

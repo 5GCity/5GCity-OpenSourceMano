@@ -1094,6 +1094,16 @@ instance_scenario_create_schema_v01 = {
                                 },
                                 "wim_account": {"oneOf": [boolean_schema, id_schema, null_schema]},
                                 "ip-profile": ip_profile_schema,
+                                "use-network": {
+                                    "type": "object",
+                                    "properties": {
+                                        "instance_scenario_id": id_schema,
+                                        # "member_vnf_index": name_schema,  # if not null, network inside VNF
+                                        "osm_id": name_schema,  # sce_network osm_id or name
+                                    },
+                                    "additionalProperties": False,
+                                    "required": ["instance_scenario_id", "osm_id"]
+                                },
                                 #if the network connects VNFs deployed at different sites, you must specify one entry per site that this network connect to
                                 "sites": {
                                     "type":"array",

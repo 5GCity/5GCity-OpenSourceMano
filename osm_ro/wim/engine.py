@@ -331,7 +331,7 @@ class WimEngine(object):
     def derive_wan_link(self,
                         wim_usage,
                         instance_scenario_id, sce_net_id,
-                        networks, tenant):
+                        networks, tenant, related=None):
         """Create a instance_wim_nets record for the given information"""
         if sce_net_id in wim_usage:
             account_id = wim_usage[sce_net_id]
@@ -347,7 +347,8 @@ class WimEngine(object):
             'instance_scenario_id': instance_scenario_id,
             'sce_net_id': sce_net_id,
             'wim_id': wim_id,
-            'wim_account_id': account['uuid']
+            'wim_account_id': account['uuid'],
+            related: related
         }
 
     def derive_wan_links(self, wim_usage, networks, tenant=None):
@@ -366,6 +367,9 @@ class WimEngine(object):
             list: list of WAN links to be written to the database
         """
         # Group networks by key=(instance_scenario_id, sce_net_id)
+        related = None
+        if networks:
+            related = networks[0].get("related")
         filtered = _filter_multi_vim(networks)
         grouped_networks = _group_networks(filtered)
         datacenters_per_group = _count_datacenters(grouped_networks)
@@ -377,7 +381,7 @@ class WimEngine(object):
         # Keys are tuples(instance_scenario_id, sce_net_id)
         return [
             self.derive_wan_link(wim_usage,
-                                 key[0], key[1], grouped_networks[key], tenant)
+                                 key[0], key[1], grouped_networks[key], tenant, related)
             for key in wan_groups if wim_usage.get(key[1]) is not False
         ]
 

@@ -36,7 +36,7 @@ QUIET_MODE=""
 BACKUP_DIR=""
 BACKUP_FILE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=37
+LAST_DB_VERSION=38
 
 # Detect paths
 MYSQL=$(which mysql)
@@ -195,6 +195,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 6001 ] && DB_VERSION=35  #0.6.01 =>  35
 #[ $OPENMANO_VER_NUM -ge 6003 ] && DB_VERSION=36  #0.6.03 =>  36
 #[ $OPENMANO_VER_NUM -ge 6009 ] && DB_VERSION=37  #0.6.09 =>  37
+#[ $OPENMANO_VER_NUM -ge 6011 ] && DB_VERSION=38  #0.6.11 =>  38
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -1361,6 +1362,49 @@ function downgrade_from_37(){
     echo "      Adding the enum tags for SFC isn't going to be reversed"
     # It doesn't make sense to reverse to a bug state.
     sql "DELETE FROM schema_version WHERE version_int='37';"
+}
+function upgrade_to_38(){
+    echo "      Change vim_wim_actions, add worker, related"
+    sql "ALTER TABLE vim_wim_actions ADD COLUMN worker VARCHAR(64) NULL AFTER task_index, " \
+	    "ADD COLUMN related VARCHAR(36) NULL AFTER worker, " \
+	    "CHANGE COLUMN status status ENUM('SCHEDULED','BUILD','DONE','FAILED','SUPERSEDED','FINISHED') " \
+	    "NOT NULL DEFAULT 'SCHEDULED' AFTER item_id;"
+	sql "UPDATE vim_wim_actions set related=item_id;"
+	echo "      Change DONE to FINISHED when DELETE has been completed"
+	sql "UPDATE vim_wim_actions as v1 join vim_wim_actions as v2 on (v1.action='CREATE' or v1.action='FIND') and " \
+	    "v2.action='DELETE' and (v2.status='SUPERSEDED' or v2.status='DONE') and v1.item_id=v2.item_id " \
+        "SET v1.status='FINISHED', v2.status='FINISHED';"
+    echo "      Add osm_id to instance_nets"
+    sql "ALTER TABLE instance_nets ADD COLUMN osm_id VARCHAR(255) NULL AFTER uuid;"
+    echo "      Add related to instance_xxxx"
+    for table in instance_classifications instance_nets instance_sfis instance_sfps instance_sfs \
+        instance_vms
+    do
+        sql "ALTER TABLE $table ADD COLUMN related VARCHAR(36) NULL AFTER vim_info;"
+    	sql "UPDATE $table set related=uuid;"
+    done
+    sql "ALTER TABLE instance_wim_nets ADD COLUMN related VARCHAR(36) NULL AFTER wim_info;"
+ 	sql "UPDATE instance_wim_nets set related=uuid;"
+
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) " \
+        "VALUES (38, '0.38', '0.6.11', 'Adding related to vim_wim_actions', '2019-03-07');"
+
+}
+function downgrade_from_38(){
+    echo "      Change vim_wim_actions, delete worker, related"
+	sql "UPDATE vim_wim_actions SET status='DONE' WHERE status='FINISHED';"
+    sql "ALTER TABLE vim_wim_actions DROP COLUMN worker, DROP COLUMN related, " \
+	    "CHANGE COLUMN status status ENUM('SCHEDULED','BUILD','DONE','FAILED','SUPERSEDED') " \
+	    "NOT NULL DEFAULT 'SCHEDULED' AFTER item_id;"
+    echo "      Remove related from instance_xxxx"
+    for table in instance_classifications instance_nets instance_wim_netsinstance_sfis instance_sfps instance_sfs \
+        instance_vms
+    do
+        sql "ALTER TABLE $table DROP COLUMN related;"
+    done
+    echo "      Remove osm_id from instance_nets"
+    sql "ALTER TABLE instance_nets DROP COLUMN osm_id;"
+    sql "DELETE FROM schema_version WHERE version_int='38';"
 }
 
 #TODO ... put functions here
