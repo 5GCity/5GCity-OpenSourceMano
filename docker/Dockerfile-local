@@ -14,6 +14,7 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install python-cffi libmysqlclient-dev libssl-dev libffi-dev python-mysqldb && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install python-openstacksdk python-openstackclient && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install python-networkx && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y install genisoimage && \
     DEBIAN_FRONTEND=noninteractive pip2 install untangle && \
     DEBIAN_FRONTEND=noninteractive pip2 install -e git+https://github.com/python-oca/python-oca#egg=oca && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install mysql-client

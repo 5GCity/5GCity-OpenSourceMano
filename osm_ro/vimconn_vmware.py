@@ -29,6 +29,9 @@ from progressbar import Percentage, Bar, ETA, FileTransferSpeed, ProgressBar
 
 import vimconn
 import os
+import shutil
+import subprocess
+import tempfile
 import traceback
 import itertools
 import requests
@@ -1034,8 +1037,7 @@ class vimconnector(vimconn.vimconnector):
         """
         for catalog in catalogs:
             if catalog['name'] == catalog_name:
-                return True
-        return False
+                return catalog['id']
 
     def create_vimcatalog(self, vca=None, catalog_name=None):
         """ Create new catalog entry in vCloud director.
@@ -1045,16 +1047,19 @@ class vimconnector(vimconn.vimconnector):
                 catalog_name catalog that client wish to create.   Note no validation done for a name.
                 Client must make sure that provide valid string representation.
 
-             Return (bool) True if catalog created.
+             Returns catalog id if catalog created else None.
 
         """
         try:
-            result = vca.create_catalog(catalog_name, catalog_name)
-            if result is not None:
-                return True
+            lxml_catalog_element = vca.create_catalog(catalog_name, catalog_name)
+            if lxml_catalog_element:
+                id_attr_value = lxml_catalog_element.get('id')  # 'urn:vcloud:catalog:7490d561-d384-4dac-8229-3575fd1fc7b4'
+                return id_attr_value.split(':')[-1]
             catalogs = vca.list_catalogs()
-        except:
-            return False
+        except Exception as ex:
+            self.logger.error(
+                'create_vimcatalog(): Creation of catalog "{}" failed with error: {}'.format(catalog_name, ex))
+            raise
         return self.catalog_exists(catalog_name, catalogs)
 
     # noinspection PyIncorrectDocstring
@@ -1324,8 +1329,7 @@ class vimconnector(vimconn.vimconnector):
 
         if len(catalogs) == 0:
             self.logger.info("Creating a new catalog entry {} in vcloud director".format(catalog_name))
-            result = self.create_vimcatalog(org, catalog_md5_name)
-            if not result:
+            if self.create_vimcatalog(org, catalog_md5_name) is None:
                 raise vimconn.vimconnException("Failed create new catalog {} ".format(catalog_md5_name))
 
             result = self.upload_vimimage(vca=org, catalog_name=catalog_md5_name,
@@ -1345,8 +1349,7 @@ class vimconnector(vimconn.vimconnector):
 
         # if we didn't find existing catalog we create a new one and upload image.
         self.logger.debug("Creating new catalog entry {} - {}".format(catalog_name, catalog_md5_name))
-        result = self.create_vimcatalog(org, catalog_md5_name)
-        if not result:
+        if self.create_vimcatalog(org, catalog_md5_name) is None:
             raise vimconn.vimconnException("Failed create new catalog {} ".format(catalog_md5_name))
 
         result = self.upload_vimimage(vca=org, catalog_name=catalog_md5_name,
@@ -1967,7 +1970,32 @@ class vimconnector(vimconn.vimconnector):
 
             # cloud-init for ssh-key injection
             if cloud_config:
-                self.cloud_init(vapp,cloud_config)
+                # Create a catalog which will be carrying the config drive ISO
+                # This catalog is deleted during vApp deletion. The catalog name carries
+                # vApp UUID and thats how it gets identified during its deletion.
+                config_drive_catalog_name = 'cfg_drv-' + vapp_uuid
+                self.logger.info('new_vminstance(): Creating catalog "{}" to carry config drive ISO'.format(
+                    config_drive_catalog_name))
+                config_drive_catalog_id = self.create_vimcatalog(org, config_drive_catalog_name)
+                if config_drive_catalog_id is None:
+                    error_msg = "new_vminstance(): Failed to create new catalog '{}' to carry the config drive " \
+                                "ISO".format(config_drive_catalog_name)
+                    raise Exception(error_msg)
+
+                # Create config-drive ISO
+                _, userdata = self._create_user_data(cloud_config)
+                # self.logger.debug('new_vminstance(): The userdata for cloud-init: {}'.format(userdata))
+                iso_path = self.create_config_drive_iso(userdata)
+                self.logger.debug('new_vminstance(): The ISO is successfully created. Path: {}'.format(iso_path))
+
+                self.logger.info('new_vminstance(): uploading iso to catalog {}'.format(config_drive_catalog_name))
+                self.upload_iso_to_catalog(config_drive_catalog_id, iso_path)
+                # Attach the config-drive ISO to the VM
+                self.logger.info('new_vminstance(): Attaching the config-drive ISO to the VM')
+                # The ISO remains in INVALID_STATE right after the PUT request (its a blocking call though)
+                time.sleep(5)
+                self.insert_media_to_vm(vapp, config_drive_catalog_id)
+                shutil.rmtree(os.path.dirname(iso_path), ignore_errors=True)
 
             # If VM has PCI devices or SRIOV reserve memory for VM
             if reserve_memory:
@@ -1984,7 +2012,11 @@ class vimconnector(vimconn.vimconnector):
                 self.logger.error("new_vminstance(): failed to power on vApp "\
                                                      "{}".format(vmname_andid))
 
-        except Exception as exp :
+        except Exception as exp:
+            try:
+                self.delete_vminstance(vapp_uuid)
+            except Exception as exp2:
+                self.logger.error("new_vminstance rollback fail {}".format(exp2))
             # it might be a case if specific mandatory entry in dict is empty or some other pyVcloud exception
             self.logger.error("new_vminstance(): Failed create new vm instance {} with exception {}"
                               .format(name, exp))
@@ -2104,6 +2136,80 @@ class vimconnector(vimconn.vimconnector):
         else:
             raise vimconn.vimconnUnexpectedResponse("new_vminstance(): Failed create new vm instance {}".format(name))
 
+    def create_config_drive_iso(self, user_data):
+        tmpdir = tempfile.mkdtemp()
+        iso_path = os.path.join(tmpdir, 'ConfigDrive.iso')
+        latest_dir = os.path.join(tmpdir, 'openstack', 'latest')
+        os.makedirs(latest_dir)
+        with open(os.path.join(latest_dir, 'meta_data.json'), 'w') as meta_file_obj, \
+                open(os.path.join(latest_dir, 'user_data'), 'w') as userdata_file_obj:
+            userdata_file_obj.write(user_data)
+            meta_file_obj.write(json.dumps({"availability_zone": "nova",
+                                            "launch_index": 0,
+                                            "name": "ConfigDrive",
+                                            "uuid": str(uuid.uuid4())}
+                                           )
+                                )
+        genisoimage_cmd = 'genisoimage -J -r -V config-2 -o {iso_path} {source_dir_path}'.format(
+            iso_path=iso_path, source_dir_path=tmpdir)
+        self.logger.info('create_config_drive_iso(): Creating ISO by running command "{}"'.format(genisoimage_cmd))
+        try:
+            FNULL = open(os.devnull, 'w')
+            subprocess.check_call(genisoimage_cmd, shell=True, stdout=FNULL)
+        except subprocess.CalledProcessError as e:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+            error_msg = 'create_config_drive_iso(): Exception while running genisoimage command: {}'.format(e)
+            self.logger.error(error_msg)
+            raise Exception(error_msg)
+        return iso_path
+
+    def upload_iso_to_catalog(self, catalog_id, iso_file_path):
+        if not os.path.isfile(iso_file_path):
+            error_msg = "upload_iso_to_catalog(): Given iso file is not present. Given path: {}".format(iso_file_path)
+            self.logger.error(error_msg)
+            raise Exception(error_msg)
+        iso_file_stat = os.stat(iso_file_path)
+        xml_media_elem = '''<?xml version="1.0" encoding="UTF-8"?>
+                            <Media
+                                xmlns="http://www.vmware.com/vcloud/v1.5"
+                                name="{iso_name}"
+                                size="{iso_size}"
+                                imageType="iso">
+                                <Description>ISO image for config-drive</Description>
+                            </Media>'''.format(iso_name=os.path.basename(iso_file_path), iso_size=iso_file_stat.st_size)
+        headers = {'Accept':'application/*+xml;version=' + API_VERSION,
+                   'x-vcloud-authorization': self.client._session.headers['x-vcloud-authorization']}
+        headers['Content-Type'] = 'application/vnd.vmware.vcloud.media+xml'
+        catalog_href = self.url + '/api/catalog/' + catalog_id + '/action/upload'
+        response = self.perform_request(req_type='POST', url=catalog_href, headers=headers, data=xml_media_elem)
+
+        if response.status_code != 201:
+            error_msg = "upload_iso_to_catalog(): Failed to POST an action/upload request to {}".format(catalog_href)
+            self.logger.error(error_msg)
+            raise Exception(error_msg)
+
+        catalogItem = XmlElementTree.fromstring(response.content)
+        entity = [child for child in catalogItem if child.get("type") == "application/vnd.vmware.vcloud.media+xml"][0]
+        entity_href = entity.get('href')
+
+        response = self.perform_request(req_type='GET', url=entity_href, headers=headers)
+        if response.status_code != 200:
+            raise Exception("upload_iso_to_catalog(): Failed to GET entity href {}".format(entity_href))
+
+        match = re.search(r'<Files>\s+?<File.+?href="(.+?)"/>\s+?</File>\s+?</Files>', response.text, re.DOTALL)
+        if match:
+            media_upload_href = match.group(1)
+        else:
+            raise Exception('Could not parse the upload URL for the media file from the last response')
+
+        headers['Content-Type'] = 'application/octet-stream'
+        response = self.perform_request(req_type='PUT',
+                                        url=media_upload_href,
+                                        headers=headers,
+                                        data=open(iso_file_path, 'rb'))
+
+        if response.status_code != 200:
+            raise Exception('PUT request to "{}" failed'.format(media_upload_href))
 
     def get_vcd_availibility_zones(self,respool_href, headers):
         """ Method to find presence of av zone is VIM resource pool
@@ -2713,6 +2819,17 @@ class vimconnector(vimconn.vimconnector):
                         self.logger.debug("delete_vminstance(): Failed delete uuid {} ".format(vm__vim_uuid))
                     else:
                         self.logger.info("Deleted vm instance {} sccessfully".format(vm__vim_uuid))
+                        config_drive_catalog_name, config_drive_catalog_id = 'cfg_drv-' + vm__vim_uuid, None
+                        catalog_list = self.get_image_list()
+                        try:
+                            config_drive_catalog_id = [catalog_['id'] for catalog_ in catalog_list
+                                                       if catalog_['name'] == config_drive_catalog_name][0]
+                        except IndexError:
+                            pass
+                        if config_drive_catalog_id:
+                            self.logger.debug('delete_vminstance(): Found a config drive catalog {} matching '
+                                              'vapp_name"{}". Deleting it.'.format(config_drive_catalog_id, vapp_name))
+                            self.delete_image(config_drive_catalog_id)
                         return vm__vim_uuid
         except:
             self.logger.debug(traceback.format_exc())
@@ -6212,10 +6329,17 @@ class vimconnector(vimconn.vimconnector):
             if iso_name and media_id:
                 data ="""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                      <ns6:MediaInsertOrEjectParams
-                     xmlns="http://www.vmware.com/vcloud/versions" xmlns:ns2="http://schemas.dmtf.org/ovf/envelope/1" xmlns:ns3="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData" xmlns:ns4="http://schemas.dmtf.org/wbem/wscim/1/common" xmlns:ns5="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData" xmlns:ns6="http://www.vmware.com/vcloud/v1.5" xmlns:ns7="http://www.vmware.com/schema/ovf" xmlns:ns8="http://schemas.dmtf.org/ovf/environment/1" xmlns:ns9="http://www.vmware.com/vcloud/extension/v1.5">
+                     xmlns="http://www.vmware.com/vcloud/versions" xmlns:ns2="http://schemas.dmtf.org/ovf/envelope/1" 
+                     xmlns:ns3="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData" 
+                     xmlns:ns4="http://schemas.dmtf.org/wbem/wscim/1/common" 
+                     xmlns:ns5="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData" 
+                     xmlns:ns6="http://www.vmware.com/vcloud/v1.5" 
+                     xmlns:ns7="http://www.vmware.com/schema/ovf" 
+                     xmlns:ns8="http://schemas.dmtf.org/ovf/environment/1" 
+                     xmlns:ns9="http://www.vmware.com/vcloud/extension/v1.5">
                      <ns6:Media
                         type="application/vnd.vmware.vcloud.media+xml"
-                        name="{}.iso"
+                        name="{}"
                         id="urn:vcloud:media:{}"
                         href="https://{}/api/media/{}"/>
                      </ns6:MediaInsertOrEjectParams>""".format(iso_name, media_id,
@@ -6233,9 +6357,10 @@ class vimconnector(vimconn.vimconnector):
                                                     headers=headers)
 
                     if response.status_code != 202:
-                        self.logger.error("Failed to insert CD-ROM to vm")
-                        raise vimconn.vimconnException("insert_media_to_vm() : Failed to insert"\
-                                                                                    "ISO image to vm")
+                        error_msg = "insert_media_to_vm() : Failed to insert CD-ROM to vm. Reason {}. " \
+                                    "Status code {}".format(response.text, response.status_code)
+                        self.logger.error(error_msg)
+                        raise vimconn.vimconnException(error_msg)
                     else:
                         task = self.get_task_from_response(response.content)
                         result = self.client.get_task_monitor().wait_for_success(task=task)

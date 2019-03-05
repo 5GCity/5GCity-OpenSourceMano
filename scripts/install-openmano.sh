@@ -259,6 +259,8 @@ then
     pip2 install progressbar || exit 1
     pip2 install prettytable || exit 1
     pip2 install pyvmomi || exit 1
+    [ "$_DISTRO" == "Ubuntu" ] && install_packages "genisoimage"
+    [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "genisoimage"
 
     # required for OpenNebula connector
     pip2 install untangle || exit 1

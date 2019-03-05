@@ -18,5 +18,6 @@ pyvmomi
 progressbar
 prettytable
 boto
+genisoimage
 untangle
 oca
