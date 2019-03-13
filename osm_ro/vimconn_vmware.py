@@ -76,7 +76,7 @@ DEFAULT_IP_PROFILE = {'dhcp_count':50,
 INTERVAL_TIME = 5
 MAX_WAIT_TIME = 1800
 
-API_VERSION = '5.9'
+API_VERSION = '31.0'
 
 __author__ = "Mustafa Bayramov, Arpita Kate, Sachin Bhangare, Prakash Kasar"
 __date__ = "$09-Mar-2018 11:09:29$"
@@ -297,13 +297,13 @@ class vimconnector(vimconn.vimconnector):
             Returns:
                 The return client object that latter can be used to connect to vcloud director as admin for provider vdc
         """
-
         self.logger.debug("Logging into vCD {} as admin.".format(self.org_name))
 
         try:
             host = self.url
             org = 'System'
             client_as_admin = Client(host, verify_ssl_certs=False)
+            client_as_admin.set_highest_supported_version()
             client_as_admin.set_credentials(BasicLoginCredentials(self.admin_user, org, self.admin_password))
         except Exception as e:
             raise vimconn.vimconnException(
@@ -317,13 +317,13 @@ class vimconnector(vimconn.vimconnector):
             Returns:
                 The return client object that latter can be used to connect to vCloud director as admin for VDC
         """
-
         try:
             self.logger.debug("Logging into vCD {} as {} to datacenter {}.".format(self.org_name,
                                                                                       self.user,
                                                                                       self.org_name))
             host = self.url
             client = Client(host, verify_ssl_certs=False)
+            client.set_highest_supported_version()
             client.set_credentials(BasicLoginCredentials(self.user, self.org_name, self.passwd))
         except:
             raise vimconn.vimconnConnectionException("Can't connect to a vCloud director org: "
