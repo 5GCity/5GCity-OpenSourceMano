@@ -59,6 +59,8 @@ schema_version_2={"type":"integer","minimum":2,"maximum":2}
 log_level_schema={"type":"string", "enum":["DEBUG", "INFO", "WARNING","ERROR","CRITICAL"]}
 checksum_schema={"type":"string", "pattern":"^[0-9a-fA-F]{32}$"}
 size_schema={"type":"integer","minimum":1,"maximum":100}
+boolean_schema = {"type": "boolean"}
+null_schema = {"type": "null"}
 
 metadata_schema={
     "type":"object",
@@ -83,7 +85,7 @@ config_schema = {
         "http_port": port_schema,
         "http_admin_port": port_schema,
         "http_host": nameshort_schema,
-        "auto_push_VNF_to_VIMs": {"type":"boolean"},
+        "auto_push_VNF_to_VIMs": boolean_schema,
         "vnf_repository": path_schema,
         "db_host": nameshort_schema,
         "db_user": nameshort_schema,
@@ -100,7 +102,7 @@ config_schema = {
         "vim_tenant_name": nameshort_schema,
         "mano_tenant_name": nameshort_schema,
         "mano_tenant_id": id_schema,
-        "http_console_proxy": {"type":"boolean"},
+        "http_console_proxy": boolean_schema,
         "http_console_host": nameshort_schema,
         "http_console_ports": {
             "type": "array",
@@ -262,7 +264,7 @@ datacenter_action_schema = {
                 "net": name_schema,  #name or uuid of net to change
                 "name": name_schema,
                 "description": description_schema,
-                "shared": {"type": "boolean"}
+                "shared": boolean_schema
             },
             "minProperties": 1,
             "additionalProperties": False
@@ -311,8 +313,8 @@ dhcp_schema = {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type": "object",
     "properties":{
-        "enabled": {"type": "boolean"},
-        "start-address": {"OneOf": [{"type": "null"}, ip_schema]},
+        "enabled": boolean_schema,
+        "start-address": {"OneOf": [null_schema, ip_schema]},
         "count": integer0_schema
     },
     # "required": ["start-address", "count"],
@@ -431,7 +433,7 @@ external_connection_schema_v02 = {
     "type":"object",
     "properties":{
         "name": name_schema,
-        "mgmt": {"type":"boolean"},
+        "mgmt": boolean_schema,
         "type": {"type": "string", "enum":["e-line", "e-lan"]},
         "implementation": {"type": "string", "enum":["overlay", "underlay"]},
         "VNFC": name_schema,
@@ -468,8 +470,8 @@ bridge_interfaces_schema={
             "vpci":pci_schema,
             "mac_address": mac_schema,
             "model": {"type":"string", "enum":["virtio","e1000","ne2k_pci","pcnet","rtl8139", "paravirt"]},
-            "port-security": {"type" : "boolean"},
-            "floating-ip": {"type" : "boolean"}
+            "port-security": boolean_schema,
+            "floating-ip": boolean_schema,
         },
         "additionalProperties": False,
         "required": ["name"]
@@ -539,7 +541,7 @@ boot_data_vdu_schema  = {
         "user-data": {"type" : "string"},  # scrip to run
         "config-files": {"type": "array", "items": config_files_schema},
         # NOTE: “user-data” are mutually exclusive with users and config-files because user/files are injected using user-data
-        "boot-data-drive": {"type": "boolean"},
+        "boot-data-drive": boolean_schema,
     },
     "additionalProperties": False,
 }
@@ -604,8 +606,8 @@ vnfd_schema_v01 = {
                 "description": description_schema,
 
                 "class": nameshort_schema,
-                "public": {"type" : "boolean"},
-                "physical": {"type" : "boolean"},
+                "public": boolean_schema,
+                "physical": boolean_schema,
                 "default_user": name_schema,
                 "tenant_id": id_schema, #only valid for admin
                 "external-connections": {"type" : "array", "items": external_connection_schema, "minItems":1},
@@ -633,8 +635,8 @@ vnfd_schema_v02 = {
                 "name": name_schema,
                 "description": description_schema,
                 "class": nameshort_schema,
-                "public": {"type" : "boolean"},
-                "physical": {"type" : "boolean"},
+                "public": boolean_schema,
+                "physical": boolean_schema,
                 "tenant_id": id_schema, #only valid for admin
                 "external-connections": {"type" : "array", "items": external_connection_schema, "minItems":1},
                 "internal-connections": {"type" : "array", "items": internal_connection_schema_v02, "minItems":1},
@@ -683,7 +685,7 @@ nsd_schema_v01 = {
         "name":name_schema,
         "description": description_schema,
         "tenant_id": id_schema, #only valid for admin
-        "public": {"type": "boolean"},
+        "public": boolean_schema,
         "topology":{
             "type":"object",
             "properties":{
@@ -739,7 +741,7 @@ nsd_schema_v02 = {
                 "name": name_schema,
                 "description": description_schema,
                 "tenant_id": id_schema, #only valid for admin
-                "public": {"type": "boolean"},
+                "public": boolean_schema,
                 "vnfs": {
                     "type":"object",
                     "patternProperties":{
@@ -762,7 +764,7 @@ nsd_schema_v02 = {
                             "properties":{
                                 "interfaces":{"type":"array", "minLength":1},
                                 "type": {"type": "string", "enum":["dataplane", "bridge"]},
-                                "external" : {"type": "boolean"},
+                                "external" : boolean_schema,
                                 "graph": graph_schema
                             },
                             "required": ["interfaces"]
@@ -792,7 +794,7 @@ nsd_schema_v03 = {
                 "name": name_schema,
                 "description": description_schema,
                 "tenant_id": id_schema, #only valid for admin
-                "public": {"type": "boolean"},
+                "public": boolean_schema,
                 "cloud-config": cloud_config_schema, #common for all vnfs in the scenario
                 #"datacenter": name_schema,
                 "vnfs": {
@@ -855,7 +857,7 @@ nsd_schema_v03 = {
                                 },
                                 "type": {"type": "string", "enum":["e-line", "e-lan"]},
                                 "implementation": {"type": "string", "enum":["overlay", "underlay"]},
-                                "external" : {"type": "boolean"},
+                                "external" : boolean_schema,
                                 "graph": graph_schema,
                                 "ip-profile": ip_profile_schema
                             },
@@ -977,7 +979,7 @@ instance_scenario_object = {
                 "type": "object",
                 "properties": {
                     "name": name_schema,
-                    "external": {"type": "boolean"},
+                    "external": boolean_schema,
                     "type": {"enum": ["bridge", "ptp", "data"]},  # for overlay, underlay E-LINE, underlay E-LAN
                 },
                 "additionalProperties": False,
@@ -1003,9 +1005,10 @@ instance_scenario_create_schema_v01 = {
                 "name": name_schema,
                 "description":description_schema,
                 "datacenter": name_schema,
+                "wim_account": {"oneOf": [boolean_schema, id_schema, null_schema]},
                 "scenario" : {"oneOff": [name_schema, instance_scenario_object]},  # can be an UUID or name or a dict
                 "action":{"enum": ["deploy","reserve","verify" ]},
-                "connect_mgmt_interfaces": {"oneOf": [{"type":"boolean"}, {"type":"object"}]},# can be true or a dict with datacenter: net_name
+                "connect_mgmt_interfaces": {"oneOf": [boolean_schema, {"type":"object"}]},# can be true or a dict with datacenter: net_name
                 "cloud-config": cloud_config_schema, #common to all vnfs in the instance scenario
                 "vnfs":{             #mapping from scenario to datacenter
                     "type": "object",
@@ -1041,7 +1044,7 @@ instance_scenario_create_schema_v01 = {
                                                         ".": {
                                                             "ip_address": ip_schema,
                                                             "mac_address": mac_schema,
-                                                            "floating-ip": {"type": "boolean"},
+                                                            "floating-ip": boolean_schema,
                                                         }
                                                     }
                                                 }
@@ -1089,6 +1092,7 @@ instance_scenario_create_schema_v01 = {
                                         }
                                     }
                                 },
+                                "wim_account": {"oneOf": [boolean_schema, id_schema, null_schema]},
                                 "ip-profile": ip_profile_schema,
                                 #if the network connects VNFs deployed at different sites, you must specify one entry per site that this network connect to
                                 "sites": {
@@ -1100,7 +1104,7 @@ instance_scenario_create_schema_v01 = {
                                             # By default for an scenario 'external' network openmano looks for an existing VIM network to map this external scenario network,
                                             # for other networks openamno creates at VIM
                                             # Use netmap-create to force to create an external scenario network
-                                            "netmap-create": {"oneOf":[name_schema,{"type": "null"}]}, #datacenter network to use. Null if must be created as an internal net
+                                            "netmap-create": {"oneOf":[name_schema,null_schema]}, #datacenter network to use. Null if must be created as an internal net
                                             #netmap-use:   Indicates an existing VIM network that must be used for this scenario network.
                                             #Can use both the VIM network name (if it is not ambiguous) or the VIM net UUID
                                             #If both 'netmap-create' and 'netmap-use'are supplied, netmap-use precedes, but if fails openmano follows the netmap-create
@@ -1131,13 +1135,13 @@ instance_scenario_action_schema = {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type": "object",
     "properties": {
-        "start": {"type": "null"},
-        "pause": {"type": "null"},
-        "resume": {"type": "null"},
-        "shutoff": {"type": "null"},
-        "shutdown": {"type": "null"},
-        "forceOff": {"type": "null"},
-        "rebuild": {"type": "null"},
+        "start": null_schema,
+        "pause": null_schema,
+        "resume": null_schema,
+        "shutoff": null_schema,
+        "shutdown": null_schema,
+        "forceOff": null_schema,
+        "rebuild": null_schema,
         "reboot": {
             "type": ["object", "null"],
         },
@@ -1224,7 +1228,7 @@ sdn_port_mapping_schema  = {
                         "items": {
                             "type": "object",
                             "properties": {
-                                "pci": {"OneOf": [{"type": "null"}, pci_extended_schema]},       # pci_schema,
+                                "pci": {"OneOf": [null_schema, pci_extended_schema]},       # pci_schema,
                                 "switch_port": nameshort_schema,
                                 "switch_mac": mac_schema
                             },

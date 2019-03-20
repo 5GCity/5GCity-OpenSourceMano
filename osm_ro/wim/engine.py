@@ -356,7 +356,7 @@ class WimEngine(object):
         (NSR).
 
         Arguments:
-            wim_usage(dict): Mapping between sce_net_id and wim_id
+            wim_usage(dict): Mapping between sce_net_id and wim_id. If wim_id is False, means not create wam_links
             networks(list): Dicts containing the information about the networks
                 that will be instantiated to materialize a Network Service
                 (scenario) instance.
@@ -374,11 +374,11 @@ class WimEngine(object):
         wan_groups = [key
                       for key, counter in datacenters_per_group
                       if counter > 1]
-
+        # Keys are tuples(instance_scenario_id, sce_net_id)
         return [
             self.derive_wan_link(wim_usage,
                                  key[0], key[1], grouped_networks[key], tenant)
-            for key in wan_groups
+            for key in wan_groups if wim_usage.get(key[1]) is not False
         ]
 
     def create_action(self, wan_link):
@@ -511,7 +511,7 @@ def _group_networks(networks):
             (scenario) instance.
     Returns:
         dict: Keys are tuples (instance_scenario_id, sce_net_id) and values
-            are lits of networks.
+            are list of networks.
     """
     criteria = itemgetter('instance_scenario_id', 'sce_net_id')
 

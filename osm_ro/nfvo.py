@@ -2998,6 +2998,7 @@ def create_instance(mydb, tenant_id, instance_dict):
     myvims = {}
     myvim_threads_id = {}
     datacenter = instance_dict.get("datacenter")
+    default_wim_account = instance_dict.get("wim_account")
     default_datacenter_id, vim = get_datacenter_by_name_uuid(mydb, tenant_id, datacenter)
     myvims[default_datacenter_id] = vim
     myvim_threads_id[default_datacenter_id], _ = get_vim_thread(mydb, tenant_id, default_datacenter_id)
@@ -3163,7 +3164,9 @@ def create_instance(mydb, tenant_id, instance_dict):
         # However, this is not possible yet.
         for net_name, net_instance_desc in instance_dict.get("networks", {}).iteritems():
             for scenario_net in scenarioDict['nets']:
-                if net_name == scenario_net["name"]:
+                if net_name == scenario_net.get("name") or net_name == scenario_net.get("osm_id") or net_name == scenario_net.get("uuid"):
+                    if "wim_account" in net_instance_desc and net_instance_desc["wim_account"] is not None:
+                        scenario_net["wim_account"] = net_instance_desc["wim_account"]
                     if 'ip-profile' in net_instance_desc:
                         ipprofile_db = ip_profile_IM2RO(net_instance_desc['ip-profile'])
                         if 'ip_profile' not in scenario_net:
@@ -3200,19 +3203,28 @@ def create_instance(mydb, tenant_id, instance_dict):
                             break
             if not involved_datacenters:
                 involved_datacenters.append(default_datacenter_id)
+            target_wim_account = scenario_net.get("wim_account", default_wim_account)
 
             # --> WIM
             # TODO: use this information during network creation
             wim_account_id = wim_account_name = None
             if len(involved_datacenters) > 1 and 'uuid' in sce_net:
-                # OBS: sce_net without uuid are used internally to VNFs
-                # and the assumption is that VNFs will not be split among
-                # different datacenters
-                wim_account = wim_engine.find_suitable_wim_account(
-                    involved_datacenters, tenant_id)
-                wim_account_id = wim_account['uuid']
-                wim_account_name = wim_account['name']
-                wim_usage[sce_net['uuid']] = wim_account_id
+                if target_wim_account is None or target_wim_account is True:  # automatic selection of WIM
+                    # OBS: sce_net without uuid are used internally to VNFs
+                    # and the assumption is that VNFs will not be split among
+                    # different datacenters
+                    wim_account = wim_engine.find_suitable_wim_account(
+                        involved_datacenters, tenant_id)
+                    wim_account_id = wim_account['uuid']
+                    wim_account_name = wim_account['name']
+                    wim_usage[sce_net['uuid']] = wim_account_id
+                elif isinstance(target_wim_account, str):     # manual selection of WIM
+                    wim_account.persist.get_wim_account_by(target_wim_account, tenant_id)
+                    wim_account_id = wim_account['uuid']
+                    wim_account_name = wim_account['name']
+                    wim_usage[sce_net['uuid']] = wim_account_id
+                else:  # not WIM usage
+                    wim_usage[sce_net['uuid']] = False
             # <-- WIM
 
             descriptor_net = {}
