@@ -3018,7 +3018,7 @@ class vimconnector(vimconn.vimconnector):
         else:
             self.logger.error("action_vminstance: Failed to {} vApp: {}".format(action, vapp_name))
 
-    def get_vminstance_console(self, vm_id, console_type="vnc"):
+    def get_vminstance_console(self, vm_id, console_type="novnc"):
         """
         Get a console for the virtual machine
         Params:
@@ -3032,7 +3032,57 @@ class vimconnector(vimconn.vimconnector):
                 port:     the http, ssh, ... port
                 suffix:   extra text, e.g. the http path and query string
         """
-        raise vimconn.vimconnNotImplemented("Should have implemented this")
+        console_dict = {}
+
+        if console_type==None or console_type=='novnc':
+
+            url_rest_call = "{}/api/vApp/vm-{}/screen/action/acquireMksTicket".format(self.url, vm_id)
+
+            headers = {'Accept':'application/*+xml;version=' + API_VERSION,
+                       'x-vcloud-authorization': self.client._session.headers['x-vcloud-authorization']}
+            response = self.perform_request(req_type='POST',
+                                         url=url_rest_call,
+                                           headers=headers)
+
+            if response.status_code == 403:
+                response = self.retry_rest('GET', url_rest_call)
+
+            if response.status_code != 200:
+                self.logger.error("REST call {} failed reason : {}"\
+                                  "status code : {}".format(url_rest_call,
+                                                         response.content,
+                                                    response.status_code))
+                raise vimconn.vimconnException("get_vminstance_console : Failed to get "\
+                                                                     "VM Mks ticket details")
+            s = re.search("<Host>(.*?)</Host>",response.content)
+            console_dict['server'] = s.group(1) if s else None
+            s1 = re.search("<Port>(\d+)</Port>",response.content)
+            console_dict['port'] = s1.group(1) if s1 else None
+
+
+            url_rest_call = "{}/api/vApp/vm-{}/screen/action/acquireTicket".format(self.url, vm_id)
+
+            headers = {'Accept':'application/*+xml;version=' + API_VERSION,
+                       'x-vcloud-authorization': self.client._session.headers['x-vcloud-authorization']}
+            response = self.perform_request(req_type='POST',
+                                         url=url_rest_call,
+                                           headers=headers)
+
+            if response.status_code == 403:
+                response = self.retry_rest('GET', url_rest_call)
+
+            if response.status_code != 200:
+                self.logger.error("REST call {} failed reason : {}"\
+                                  "status code : {}".format(url_rest_call,
+                                                         response.content,
+                                                    response.status_code))
+                raise vimconn.vimconnException("get_vminstance_console : Failed to get "\
+                                                                     "VM console details")
+            s = re.search(">.*?/(vm-\d+.*)</",response.content)
+            console_dict['suffix'] = s.group(1) if s else None
+            console_dict['protocol'] = "https"
+
+        return console_dict
 
     # NOT USED METHODS in current version
 
