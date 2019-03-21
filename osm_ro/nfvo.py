@@ -2440,7 +2440,6 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                 db_sce_vnffgs.append(db_sce_vnffg)
 
                 # deal with rsps
-                db_sce_rsps = []
                 for rsp in vnffg.get("rsp").itervalues():
                     sce_rsp_uuid = str(uuid4())
                     uuid_list.append(sce_rsp_uuid)
@@ -2451,7 +2450,6 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                         "id": get_str(rsp, "id", 255), # only useful to link with classifiers; will be removed later in the code
                     }
                     db_sce_rsps.append(db_sce_rsp)
-                    db_sce_rsp_hops = []
                     for iface in rsp.get("vnfd-connection-point-ref").itervalues():
                         vnf_index = str(iface['member-vnf-index-ref'])
                         if_order = int(iface['order'])
@@ -2504,7 +2502,6 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                         db_sce_rsp_hops.append(db_sce_rsp_hop)
 
                 # deal with classifiers
-                db_sce_classifiers = []
                 for classifier in vnffg.get("classifier").itervalues():
                     sce_classifier_uuid = str(uuid4())
                     uuid_list.append(sce_classifier_uuid)
@@ -2543,7 +2540,6 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                     db_sce_classifier["sce_rsp_id"] = rsp["uuid"]
                     db_sce_classifiers.append(db_sce_classifier)
 
-                    db_sce_classifier_matches = []
                     for match in classifier.get("match-attributes").itervalues():
                         sce_classifier_match_uuid = str(uuid4())
                         uuid_list.append(sce_classifier_match_uuid)
