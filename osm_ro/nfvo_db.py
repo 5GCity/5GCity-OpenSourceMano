@@ -491,7 +491,7 @@ class nfvo_db(db_base.db_base):
         return item_changed
 
 #     def get_instance_scenario(self, instance_scenario_id, tenant_id=None):
-#         '''Obtain the scenario instance information, filtering by one or serveral of the tenant, uuid or name
+#         '''Obtain the scenario instance information, filtering by one or several of the tenant, uuid or name
 #         instance_scenario_id is the uuid or the name if it is not a valid uuid format
 #         Only one scenario isntance must mutch the filtering or an error is returned
 #         '''
@@ -543,7 +543,7 @@ class nfvo_db(db_base.db_base):
     @retry
     @with_transaction(cursor='dict')
     def get_scenario(self, scenario_id, tenant_id=None, datacenter_vim_id=None, datacenter_id=None):
-        '''Obtain the scenario information, filtering by one or serveral of the tenant, uuid or name
+        '''Obtain the scenario information, filtering by one or several of the tenant, uuid or name
         scenario_id is the uuid or the name if it is not a valid uuid format
         if datacenter_vim_id,d datacenter_id is provided, it supply aditional vim_id fields with the matching vim uuid
         Only one scenario must mutch the filtering or an error is returned
@@ -1057,7 +1057,7 @@ class nfvo_db(db_base.db_base):
     @retry(command='delete', extra='No dependences can avoid deleting!!!!')
     @with_transaction(cursor='dict')
     def delete_instance_scenario(self, instance_id, tenant_id=None):
-        '''Deletes a instance_Scenario, filtering by one or serveral of the tenant, uuid or name
+        '''Deletes a instance_Scenario, filtering by one or several of the tenant, uuid or name
         instance_id is the uuid or the name if it is not a valid uuid format
         Only one instance_scenario must mutch the filtering or an error is returned
         '''

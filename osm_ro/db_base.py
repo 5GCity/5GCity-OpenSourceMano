@@ -752,12 +752,12 @@ class db_base():
             return rows
 
     @retry
-    def get_table_by_uuid_name(self, table, uuid_name, error_item_text=None, allow_serveral=False, WHERE_OR={}, WHERE_AND_OR="OR", attempt=_ATTEMPT):
+    def get_table_by_uuid_name(self, table, uuid_name, error_item_text=None, allow_several=False, WHERE_OR={}, WHERE_AND_OR="OR", attempt=_ATTEMPT):
         ''' Obtain One row from a table based on name or uuid.
         Attribute:
             table: string of table name
             uuid_name: name or uuid. If not uuid format is found, it is considered a name
-            allow_severeral: if False return ERROR if more than one row are founded
+            allow_several: if False return ERROR if more than one row are found
             error_item_text: in case of error it identifies the 'item' name for a proper output text
             'WHERE_OR': dict of key:values, translated to key=value OR ... (Optional)
             'WHERE_AND_OR: str 'AND' or 'OR'(by default) mark the priority to 'WHERE AND (WHERE_OR)' or (WHERE) OR WHERE_OR' (Optional
@@ -784,9 +784,9 @@ class db_base():
             number = self.cur.rowcount
             if number == 0:
                 raise db_base_Exception("No {} found with {} '{}'".format(error_item_text, what, uuid_name), http_code=httperrors.Not_Found)
-            elif number > 1 and not allow_serveral:
+            elif number > 1 and not allow_several:
                 raise db_base_Exception("More than one {} found with {} '{}'".format(error_item_text, what, uuid_name), http_code=httperrors.Conflict)
-            if allow_serveral:
+            if allow_several:
                 rows = self.cur.fetchall()
             else:
                 rows = self.cur.fetchone()
