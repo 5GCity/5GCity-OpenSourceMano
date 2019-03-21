@@ -3203,7 +3203,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                             break
             if not involved_datacenters:
                 involved_datacenters.append(default_datacenter_id)
-            target_wim_account = scenario_net.get("wim_account", default_wim_account)
+            target_wim_account = sce_net.get("wim_account", default_wim_account)
 
             # --> WIM
             # TODO: use this information during network creation
