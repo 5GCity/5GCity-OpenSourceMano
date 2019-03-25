@@ -3588,12 +3588,14 @@ def create_instance(mydb, tenant_id, instance_dict):
         returned_instance = mydb.get_instance_scenario(instance_uuid)
         returned_instance["action_id"] = instance_action_id
         return returned_instance
-    except (NfvoException, vimconn.vimconnException, db_base_Exception) as e:
+    except (NfvoException, vimconn.vimconnException, wimconn.WimConnectorError, db_base_Exception) as e:
         message = rollback(mydb, myvims, rollbackList)
         if isinstance(e, db_base_Exception):
             error_text = "database Exception"
         elif isinstance(e, vimconn.vimconnException):
             error_text = "VIM Exception"
+        elif isinstance(e, wimconn.WimConnectorError):
+            error_text = "WIM Exception"
         else:
             error_text = "Exception"
         error_text += " {} {}. {}".format(type(e).__name__, str(e), message)
