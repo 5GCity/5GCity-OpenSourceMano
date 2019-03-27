@@ -21,7 +21,14 @@ RUN apt-get update && \
 
 COPY . /root/RO
 
-RUN /root/RO/scripts/install-osm-im.sh --develop && \
+RUN apt-get -y install python-requests && \
+    mkdir -p /root/fos && \
+    cd  /root/fos && \
+    git clone https://github.com/eclipse/fog05 && \
+    cd fog05/src/api/python/rest_api/ && \
+    python setup.py install && \
+    cd ~ && \
+    /root/RO/scripts/install-osm-im.sh --develop && \
     /root/RO/scripts/install-lib-osm-openvim.sh --develop && \
     make -C /root/RO prepare && \
     mkdir -p /var/log/osm && \
