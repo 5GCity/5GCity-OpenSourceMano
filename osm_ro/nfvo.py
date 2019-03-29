@@ -1291,8 +1291,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                             "'member-vdus':'{vdu}'. Reference to a non-existing vdu".format(
                                                 vnf=vnfd_id, pg=pg_name, vdu=vdu_id),
                                             httperrors.Bad_Request)
-                    if vdu_id2db_table_index[vdu_id]:
-                        db_vms[vdu_id2db_table_index[vdu_id]]["availability_zone"] = pg_name
+                    db_vms[vdu_id2db_table_index[vdu_id]]["availability_zone"] = pg_name
                     # TODO consider the case of isolation and not colocation
                     # if pg.get("strategy") == "ISOLATION":
 
