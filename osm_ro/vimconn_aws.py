@@ -604,7 +604,7 @@ class vimconnector(vimconn.vimconnector):
                     name
                     net_id - subnet_id from AWS
                     vpci - (optional) virtual vPCI address to assign at the VM. Can be ignored depending on VIM capabilities
-                    model: (optional and only have sense for type==virtual) interface model: virtio, e2000, ...
+                    model: (optional and only have sense for type==virtual) interface model: virtio, e1000, ...
                     mac_address: (optional) mac address to assign to this interface
                     type: (mandatory) can be one of:
                         virtual, in this case always connected to a network of type 'net_type=bridge'

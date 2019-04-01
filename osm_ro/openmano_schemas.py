@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openmano
 # All Rights Reserved.
 #
@@ -22,7 +22,7 @@
 ##
 
 '''
-JSON schemas used by openmano httpserver.py module to parse the different files and messages sent through the API 
+JSON schemas used by openmano httpserver.py module to parse the different files and messages sent through the API
 '''
 __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$09-oct-2014 09:09:48$"
@@ -37,7 +37,8 @@ description_schema={"type" : ["string","null"], "maxLength":255, "pattern" : "^[
 id_schema_fake = {"type" : "string", "minLength":2, "maxLength":36 }  #"pattern": "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
 id_schema = {"type" : "string", "pattern": "^[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$"}
 pci_schema={"type":"string", "pattern":"^[0-9a-fA-F]{4}(:[0-9a-fA-F]{2}){2}\.[0-9a-fA-F]$"}
-pci_extended_schema = {"type": "string", "pattern": "^[0-9a-fA-F.:-\[\]]$"}
+# allows [] for wildcards. For that reason huge length limit is set
+pci_extended_schema = {"type": "string", "pattern": "^[0-9a-fA-F.:-\[\]]{12,40}$"}
 
 http_schema={"type":"string", "pattern":"^https?://[^'\"=]+$"}
 bandwidth_schema={"type":"string", "pattern" : "^[0-9]+ *([MG]bps)?$"}
@@ -47,7 +48,7 @@ integer1_schema={"type":"integer","minimum":1}
 path_schema={"type":"string", "pattern":"^(\.){0,2}(/[^/\"':{}\(\)]+)+$"}
 vlan_schema={"type":"integer","minimum":1,"maximum":4095}
 vlan1000_schema={"type":"integer","minimum":1000,"maximum":4095}
-mac_schema={"type":"string", "pattern":"^[0-9a-fA-F][02468aceACE](:[0-9a-fA-F]{2}){5}$"}  #must be unicast LSB bit of MSB byte ==0 
+mac_schema={"type":"string", "pattern":"^[0-9a-fA-F][02468aceACE](:[0-9a-fA-F]{2}){5}$"}  #must be unicast LSB bit of MSB byte ==0
 #mac_schema={"type":"string", "pattern":"^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$"}
 ip_schema={"type":"string","pattern":"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"}
 ip_prefix_schema={"type":"string","pattern":"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/(30|[12]?[0-9])$"}
@@ -98,13 +99,13 @@ config_schema = {
         "vim_name": nameshort_schema,
         "vim_tenant_name": nameshort_schema,
         "mano_tenant_name": nameshort_schema,
-        "mano_tenant_id": id_schema, 
+        "mano_tenant_id": id_schema,
         "http_console_proxy": {"type":"boolean"},
         "http_console_host": nameshort_schema,
         "http_console_ports": {
-            "type": "array", 
+            "type": "array",
             "items": {"OneOf": [
-                port_schema, 
+                port_schema,
                 {"type": "object", "properties": {"from": port_schema, "to": port_schema}, "required": ["from", "to"]}
             ]}
         },
@@ -112,12 +113,14 @@ config_schema = {
         "log_socket_level": log_level_schema,
         "log_level_db": log_level_schema,
         "log_level_vim": log_level_schema,
+        "log_level_wim": log_level_schema,
         "log_level_nfvo": log_level_schema,
         "log_level_http": log_level_schema,
         "log_level_console": log_level_schema,
         "log_level_ovim": log_level_schema,
         "log_file_db": path_schema,
         "log_file_vim": path_schema,
+        "log_file_wim": path_schema,
         "log_file_nfvo": path_schema,
         "log_file_http": path_schema,
         "log_file_console": path_schema,
@@ -285,15 +288,17 @@ datacenter_associate_schema={
     "type":"object",
     "properties":{
         "datacenter":{
-            "type":"object",
-            "properties":{
+            "type": "object",
+            "properties": {
+                "name": name_schema,
+                "vim_id": id_schema,
                 "vim_tenant": name_schema,
                 "vim_tenant_name": name_schema,
                 "vim_username": nameshort_schema,
                 "vim_password": nameshort_schema,
                 "config": {"type": "object"}
             },
-#            "required": ["vim_tenant"],
+            # "required": ["vim_tenant"],
             "additionalProperties": True
         }
     },
@@ -310,7 +315,7 @@ dhcp_schema = {
         "start-address": {"OneOf": [{"type": "null"}, ip_schema]},
         "count": integer0_schema
     },
-    "required": ["enabled", "start-address", "count"],
+    # "required": ["start-address", "count"],
 }
 
 ip_profile_schema = {
@@ -318,7 +323,7 @@ ip_profile_schema = {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type": "object",
     "properties": {
-        "ip-version": {"type": "string", "enum": ["IPv4","IPv6"]},
+        "ip-version": {"type": "string", "enum": ["IPv4", "IPv6"]},
         "subnet-address": ip_prefix_schema,
         "gateway-address": ip_schema,
         "dns-address": {"oneOf": [ip_schema,     # for backward compatibility
@@ -427,7 +432,7 @@ external_connection_schema_v02 = {
     "properties":{
         "name": name_schema,
         "mgmt": {"type":"boolean"},
-        "type": {"type": "string", "enum":["e-line", "e-lan"]}, 
+        "type": {"type": "string", "enum":["e-line", "e-lan"]},
         "implementation": {"type": "string", "enum":["overlay", "underlay"]},
         "VNFC": name_schema,
         "local_iface_name": name_schema ,
@@ -462,7 +467,7 @@ bridge_interfaces_schema={
             "bandwidth":bandwidth_schema,
             "vpci":pci_schema,
             "mac_address": mac_schema,
-            "model": {"type":"string", "enum":["virtio","e1000","ne2k_pci","pcnet","rtl8139"]},
+            "model": {"type":"string", "enum":["virtio","e1000","ne2k_pci","pcnet","rtl8139", "paravirt"]},
             "port-security": {"type" : "boolean"},
             "floating-ip": {"type" : "boolean"}
         },
@@ -484,6 +489,7 @@ devices_schema={
             "size": size_schema,
             "vpci":pci_schema,
             "xml":xml_text_schema,
+            "name": name_schema,
         },
         "additionalProperties": False,
         "required": ["type"]
@@ -576,7 +582,7 @@ vnfc_schema = {
         "bridge-ifaces": bridge_interfaces_schema,
         "devices": devices_schema,
         "boot-data" : boot_data_vdu_schema
-        
+
     },
     "required": ["name"],
     "oneOf": [
@@ -763,7 +769,7 @@ nsd_schema_v02 = {
                         },
                     }
                 },
-            
+
             },
             "required": ["vnfs", "name"],
             "additionalProperties": False
@@ -814,7 +820,7 @@ nsd_schema_v03 = {
                                                         "properties":{
                                                             "VNFC": name_schema,
                                                             "local_iface_name": name_schema,
-                                                            "ip_address": ip_schema
+                                                            "ip_address": ip_schema,
                                                         },
                                                         "required": ["VNFC", "local_iface_name"],
                                                     }
@@ -857,7 +863,7 @@ nsd_schema_v03 = {
                         },
                     }
                 },
-            
+
             },
             "required": ["vnfs", "networks","name"],
             "additionalProperties": False
@@ -959,19 +965,45 @@ scenario_action_schema = {
     "additionalProperties": False
 }
 
-instance_scenario_create_schema_v01 = {
-    "title":"instance scenario create information schema v0.1",
+instance_scenario_object = {
+    "title": "scenario object used to create an instance not based on any nsd",
     "$schema": "http://json-schema.org/draft-04/schema#",
-    "type":"object",
-    "properties":{
+    "type": "object",
+    "properties": {
+        "nets": {
+            "type": "array",
+            "minLength": 1,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": name_schema,
+                    "external": {"type": "boolean"},
+                    "type": {"enum": ["bridge", "ptp", "data"]},  # for overlay, underlay E-LINE, underlay E-LAN
+                },
+                "additionalProperties": False,
+                "required": ["name", "external", "type"]
+            }
+        }
+    },
+    "additionalProperties": False,
+    "required": ["nets"]
+}
+
+instance_scenario_create_schema_v01 = {
+    "title": "instance scenario create information schema v0.1",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type": "object",
+    "properties": {
         "schema_version": {"type": "string", "enum": ["0.1"]},
-        "instance":{
-            "type":"object",
-            "properties":{
-                "name":name_schema,
+        "instance": {
+            "type": "object",
+            "properties": {
+                "mgmt_keys": {"type": "array", "items": {"type":"string"}},
+                "vduImage": name_schema,
+                "name": name_schema,
                 "description":description_schema,
                 "datacenter": name_schema,
-                "scenario" : name_schema, #can be an UUID or name
+                "scenario" : {"oneOff": [name_schema, instance_scenario_object]},  # can be an UUID or name or a dict
                 "action":{"enum": ["deploy","reserve","verify" ]},
                 "connect_mgmt_interfaces": {"oneOf": [{"type":"boolean"}, {"type":"object"}]},# can be true or a dict with datacenter: net_name
                 "cloud-config": cloud_config_schema, #common to all vnfs in the instance scenario
@@ -986,41 +1018,51 @@ instance_scenario_create_schema_v01 = {
                                 #"metadata": {"type": "object"},
                                 #"user_data": {"type": "string"}
                                 #"cloud-config": cloud_config_schema, #particular for a vnf
-                                "external-connections": {
+                                "vdus": {
+                                    "type": "object",
+                                    "patternProperties": {
+                                        ".": {
+                                            "type": "object",
+                                            "properties": {
+                                                "name": name_schema,  # overrides vdu name schema
+                                                "mgmt_keys": {"type": "array", "items": {"type": "string"}},
+                                                "vduImage": name_schema,
+                                                "devices": {
+                                                    "type": "object",
+                                                    "patternProperties": {
+                                                        ".": {
+                                                            "vim_id": name_schema,
+                                                        }
+                                                    }
+                                                },
+                                                "interfaces": {
+                                                    "type": "object",
+                                                    "patternProperties": {
+                                                        ".": {
+                                                            "ip_address": ip_schema,
+                                                            "mac_address": mac_schema,
+                                                            "floating-ip": {"type": "boolean"},
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "networks": {
                                     "type": "object",
                                     "patternProperties": {
                                         ".": {
                                             "type": "object",
                                             "properties": {
                                                 "vim-network-name": name_schema,
-                                                "ip_address": ip_schema
-                                            } 
-                                        }
-                                    }
-                                },
-                                "internal-connections": {
-                                    "type": "object",
-                                    "patternProperties": {
-                                        ".": {
-                                            "type": "object",
-                                            "properties": {
+                                                "vim-network-id": name_schema,
                                                 "ip-profile": ip_profile_schema,
-                                                "elements": {
-                                                    "type" : "array",
-                                                    "items":{
-                                                        "type":"object",
-                                                        "properties":{
-                                                            "VNFC": name_schema,
-                                                            "local_iface_name": name_schema,
-                                                            "ip_address": ip_schema
-                                                        },
-                                                        "required": ["VNFC", "local_iface_name"],
-                                                    }
-                                                }
+                                                "name": name_schema,
                                             }
                                         }
                                     }
-                                }
+                                },
                             }
                         }
                     },
@@ -1039,7 +1081,8 @@ instance_scenario_create_schema_v01 = {
                                         "properties":{
                                             "ip_address": ip_schema,
                                             "datacenter": name_schema,
-                                            "vim-network-name": name_schema
+                                            "vim-network-name": name_schema,
+                                            "vim-network-id": name_schema
                                         },
                                         "patternProperties":{
                                             ".": {"type": "string"}
@@ -1047,7 +1090,7 @@ instance_scenario_create_schema_v01 = {
                                     }
                                 },
                                 "ip-profile": ip_profile_schema,
-                                #if the network connects VNFs deployed at different sites, you must specify one entry per site that this network connect to 
+                                #if the network connects VNFs deployed at different sites, you must specify one entry per site that this network connect to
                                 "sites": {
                                     "type":"array",
                                     "minLength":1,
@@ -1056,22 +1099,20 @@ instance_scenario_create_schema_v01 = {
                                         "properties":{
                                             # By default for an scenario 'external' network openmano looks for an existing VIM network to map this external scenario network,
                                             # for other networks openamno creates at VIM
-                                            # Use netmap-create to force to create an external scenario network  
+                                            # Use netmap-create to force to create an external scenario network
                                             "netmap-create": {"oneOf":[name_schema,{"type": "null"}]}, #datacenter network to use. Null if must be created as an internal net
-                                            #netmap-use:   Indicates an existing VIM network that must be used for this scenario network. 
+                                            #netmap-use:   Indicates an existing VIM network that must be used for this scenario network.
                                             #Can use both the VIM network name (if it is not ambiguous) or the VIM net UUID
                                             #If both 'netmap-create' and 'netmap-use'are supplied, netmap-use precedes, but if fails openmano follows the netmap-create
                                             #In oder words, it is the same as 'try to map to the VIM network (netmap-use) if exist, and if not create the network (netmap-create)
-                                            "netmap-use": name_schema, # 
+                                            "netmap-use": name_schema, #
                                             "vim-network-name": name_schema, #override network name
+                                            "vim-network-id": name_schema,
                                             #"ip-profile": ip_profile_schema,
-                                            "datacenter": name_schema,                                        
+                                            "datacenter": name_schema,
                                         }
                                     }
                                 },
-                                
-
-
                             }
                         }
                     },
@@ -1102,29 +1143,20 @@ instance_scenario_action_schema = {
         },
         "add_public_key": description_schema,
         "console": {"type": ["string", "null"], "enum": ["novnc", "xvpvnc", "rdp-html5", "spice-html5", None]},
-        "create-vdu": {
+        "vdu-scaling": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
                     "vdu-id": id_schema,
+                    "osm_vdu_id": name_schema,
+                    "member-vnf-index": name_schema,
                     "count": integer1_schema,
-                },
-                "additionalProperties": False,
-                "required": ["vdu-id"]
-            }
-        },
-        "delete-vdu": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "vdu-id": id_schema,
-                    "transaction-id": id_schema,
+                    "type": {"enum": ["create", "delete"]}
                 },
                 "additionalProperties": False,
                 "minProperties": 1,
-                "maxProperties": 1,
+                "required": ["type"]
             }
         },
         "vnfs": {"type": "array", "items": {"type": "string"}},
@@ -1192,7 +1224,7 @@ sdn_port_mapping_schema  = {
                         "items": {
                             "type": "object",
                             "properties": {
-                                "pci": pci_extended_schema,       # pci_schema,
+                                "pci": {"OneOf": [{"type": "null"}, pci_extended_schema]},       # pci_schema,
                                 "switch_port": nameshort_schema,
                                 "switch_mac": mac_schema
                             },

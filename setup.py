@@ -15,6 +15,7 @@ _maintainer_email = 'gerardo.garciadeblas@telefonica.com'
 _license = 'Apache 2.0'
 _url = 'https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary'
 _requirements = [
+    "six",  # python 2 x 3 compatibility
     "PyYAML",
     "bottle",
     #"mysqlclient",
@@ -38,10 +39,11 @@ _requirements = [
     #"lib_osm_openvim",
     #"osm_im",
     "pycrypto",
+    "netaddr",
 ]
 
 setup(name=_name,
-      version_command=('git describe', 'pep440-git'),
+      version_command=('git describe --match v*', 'pep440-git-full'),
       description = _description,
       long_description = open('README.rst').read(),
       author = _author,
@@ -60,7 +62,8 @@ setup(name=_name,
       data_files = [('/etc/osm/', ['osm_ro/openmanod.cfg']),
                    ('/etc/systemd/system/', ['osm_ro/osm-ro.service']),
                    ],
-      scripts=['openmanod', 'openmano', 'osm_ro/scripts/service-openmano', 'osm_ro/scripts/openmano-report',],
+      scripts=['openmanod', 'openmano', 'osm_ro/scripts/service-openmano', 'osm_ro/scripts/openmano-report',
+          'osm_ro/scripts/RO-start.sh'],
       install_requires=_requirements,
       include_package_data=True,
       setup_requires=['setuptools-version-command'],

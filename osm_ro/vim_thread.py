@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openvim
 # All Rights Reserved.
 #
@@ -23,7 +23,7 @@
 
 """"
 This is thread that interacts with a VIM. It processes TASKs sequentially against a single VIM.
-The tasks are stored at database in table vim_actions
+The tasks are stored at database in table vim_wim_actions
 The task content is (M: stored at memory, D: stored at database):
     MD  instance_action_id:  reference a global action over an instance-scenario: database instance_actions
     MD  task_index:     index number of the task. This together with the previous forms a unique key identifier
@@ -37,6 +37,7 @@ The task content is (M: stored at memory, D: stored at database):
             params:     list with the params to be sent to the VIM for CREATE or FIND. For DELETE the vim_id is taken from other related tasks
             find:       (only for CREATE tasks) if present it should FIND before creating and use if existing. Contains the FIND params
             depends_on: list with the 'task_index'es of tasks that must be completed before. e.g. a vm creation depends on a net creation
+                        can contain an int (single index on the same instance-action) or str (compete action ID)
             sdn_net_id: used for net.
             tries:
             interfaces: used for VMs. Each key is the uuid of the instance_interfaces entry at database
@@ -48,8 +49,8 @@ The task content is (M: stored at memory, D: stored at database):
             vim_status: VIM status of the element. Stored also at database in the instance_XXX
     M   depends:    dict with task_index(from depends_on) to task class
     M   params:     same as extra[params] but with the resolved dependencies
-    M   vim_interfaces: similar to extra[interfaces] but with VIM information. Stored at database in the instance_XXX but not at vim_actions
-    M   vim_info:   Detailed information of a vm,net from the VIM. Stored at database in the instance_XXX but not at vim_actions
+    M   vim_interfaces: similar to extra[interfaces] but with VIM information. Stored at database in the instance_XXX but not at vim_wim_actions
+    M   vim_info:   Detailed information of a vm,net from the VIM. Stored at database in the instance_XXX but not at vim_wim_actions
     MD  error_msg:  descriptive text upon an error.Stored also at database instance_XXX
     MD  created_at: task creation time
     MD  modified_at: last task update time. On refresh it contains when this task need to be refreshed
@@ -61,12 +62,28 @@ import time
 import Queue
 import logging
 import vimconn
+import vimconn_openvim
+import vimconn_aws
+import vimconn_opennebula
+import vimconn_openstack
+import vimconn_vmware
+import vimconn_fos
 import yaml
 from db_base import db_base_Exception
 from lib_osm_openvim.ovim import ovimException
+from copy import deepcopy
 
 __author__ = "Alfonso Tierno, Pablo Montes"
 __date__ = "$28-Sep-2017 12:07:15$"
+
+vim_module = {
+    "openvim": vimconn_openvim,
+    "aws": vimconn_aws,
+    "opennebula": vimconn_opennebula,
+    "openstack": vimconn_openstack,
+    "vmware": vimconn_vmware,
+    "fos":vimconn_fos
+}
 
 
 def is_task_id(task_id):
@@ -82,10 +99,10 @@ class VimThreadExceptionNotFound(VimThreadException):
 
 
 class vim_thread(threading.Thread):
-    REFRESH_BUILD = 5      # 5 seconds
-    REFRESH_ACTIVE = 60    # 1 minute
+    REFRESH_BUILD = 5  # 5 seconds
+    REFRESH_ACTIVE = 60  # 1 minute
 
-    def __init__(self, myvimconn, task_lock, name=None, datacenter_name=None, datacenter_tenant_id=None,
+    def __init__(self, task_lock, name=None, datacenter_name=None, datacenter_tenant_id=None,
                  db=None, db_lock=None, ovim=None):
         """Init a thread.
         Arguments:
@@ -95,12 +112,8 @@ class vim_thread(threading.Thread):
             'db', 'db_lock': database class and lock to use it in exclusion
         """
         threading.Thread.__init__(self)
-        if isinstance(myvimconn, vimconn.vimconnException):
-            self.vim = None
-            self.error_status = "Error accesing to VIM: {}".format(myvimconn)
-        else:
-            self.vim = myvimconn
-            self.error_status = None
+        self.vim = None
+        self.error_status = None
         self.datacenter_name = datacenter_name
         self.datacenter_tenant_id = datacenter_tenant_id
         self.ovim = ovim
@@ -108,8 +121,9 @@ class vim_thread(threading.Thread):
             self.name = vimconn["id"] + "." + vimconn["config"]["datacenter_tenant_id"]
         else:
             self.name = name
+        self.vim_persistent_info = {}
 
-        self.logger = logging.getLogger('openmano.vim.'+self.name)
+        self.logger = logging.getLogger('openmano.vim.' + self.name)
         self.db = db
         self.db_lock = db_lock
 
@@ -129,6 +143,42 @@ class vim_thread(threading.Thread):
                     <task2>  # e.g. DELETE task
         """
 
+    def get_vimconnector(self):
+        try:
+            from_ = "datacenter_tenants as dt join datacenters as d on dt.datacenter_id=d.uuid"
+            select_ = ('type', 'd.config as config', 'd.uuid as datacenter_id', 'vim_url', 'vim_url_admin',
+                       'd.name as datacenter_name', 'dt.uuid as datacenter_tenant_id',
+                       'dt.vim_tenant_name as vim_tenant_name', 'dt.vim_tenant_id as vim_tenant_id',
+                       'user', 'passwd', 'dt.config as dt_config')
+            where_ = {"dt.uuid": self.datacenter_tenant_id}
+            with self.db_lock:
+                vims = self.db.get_rows(FROM=from_, SELECT=select_, WHERE=where_)
+            vim = vims[0]
+            vim_config = {}
+            if vim["config"]:
+                vim_config.update(yaml.load(vim["config"]))
+            if vim["dt_config"]:
+                vim_config.update(yaml.load(vim["dt_config"]))
+            vim_config['datacenter_tenant_id'] = vim.get('datacenter_tenant_id')
+            vim_config['datacenter_id'] = vim.get('datacenter_id')
+
+            # get port_mapping
+            vim_config["wim_external_ports"] = self.ovim.get_of_port_mappings(
+                db_filter={"region": vim_config['datacenter_id'], "pci": None})
+
+            self.vim = vim_module[vim["type"]].vimconnector(
+                uuid=vim['datacenter_id'], name=vim['datacenter_name'],
+                tenant_id=vim['vim_tenant_id'], tenant_name=vim['vim_tenant_name'],
+                url=vim['vim_url'], url_admin=vim['vim_url_admin'],
+                user=vim['user'], passwd=vim['passwd'],
+                config=vim_config, persistent_info=self.vim_persistent_info
+            )
+            self.error_status = None
+        except Exception as e:
+            self.logger.error("Cannot load vimconnector for vim_account {}: {}".format(self.datacenter_tenant_id, e))
+            self.vim = None
+            self.error_status = "Error loading vimconnector: {}".format(e)
+
     def _reload_vim_actions(self):
         """
         Read actions from database and reload them at memory. Fill self.refresh_list, pending_list, vim_actions
@@ -146,7 +196,7 @@ class vim_thread(threading.Thread):
             while True:
                 # get 200 (database_limit) entries each time
                 with self.db_lock:
-                    vim_actions = self.db.get_rows(FROM="vim_actions",
+                    vim_actions = self.db.get_rows(FROM="vim_wim_actions",
                                                    WHERE={"datacenter_vim_id": self.datacenter_tenant_id,
                                                           "item_id>=": old_item_id},
                                                    ORDER_BY=("item_id", "item", "created_at",),
@@ -275,7 +325,7 @@ class vim_thread(threading.Thread):
                             if task_interface.get("sdn_port_id"):
                                 try:
                                     with self.db_lock:
-                                        self.ovim.delete_port(task_interface["sdn_port_id"])
+                                        self.ovim.delete_port(task_interface["sdn_port_id"], idempotent=True)
                                         task_interface["sdn_port_id"] = None
                                         task_need_update = True
                                 except ovimException as e:
@@ -303,11 +353,11 @@ class vim_thread(threading.Thread):
                                         task_interface["sdn_port_id"] = sdn_port_id
                                         task_need_update = True
                                 except (ovimException, Exception) as e:
-                                    error_text = "ovimException creating new_external_port compute_node={}"\
+                                    error_text = "ovimException creating new_external_port compute_node={}" \
                                                  " pci={} vlan={} {}".format(
-                                                    interface["compute_node"],
-                                                    interface["pci"],
-                                                    interface.get("vlan"), e)
+                                        interface["compute_node"],
+                                        interface["pci"],
+                                        interface.get("vlan"), e)
                                     self.logger.error("task={} get-VM: {}".format(task_id, error_text), exc_info=True)
                                     task_warning_msg += error_text
                                     # TODO Set error_msg at instance_nets instead of instance VMs
@@ -317,6 +367,7 @@ class vim_thread(threading.Thread):
                                     'instance_interfaces',
                                     UPDATE={"mac_address": interface.get("mac_address"),
                                             "ip_address": interface.get("ip_address"),
+                                            "vim_interface_id": interface.get("vim_interface_id"),
                                             "vim_info": interface.get("vim_info"),
                                             "sdn_port_id": task_interface.get("sdn_port_id"),
                                             "compute_node": interface.get("compute_node"),
@@ -350,7 +401,7 @@ class vim_thread(threading.Thread):
                     if task_need_update:
                         with self.db_lock:
                             self.db.update_rows(
-                                'vim_actions',
+                                'vim_wim_actions',
                                 UPDATE={"extra": yaml.safe_dump(task["extra"], default_flow_style=True, width=256),
                                         "error_msg": task.get("error_msg"), "modified_at": now},
                                 WHERE={'instance_action_id': task['instance_action_id'],
@@ -392,18 +443,18 @@ class vim_thread(threading.Thread):
                         except (ovimException, Exception) as e:
                             text_error = "ovimException getting network snd_net_id={}: {}".format(task_sdn_net_id, e)
                             self.logger.error("task={} get-net: {}".format(task_id, text_error), exc_info=True)
-                            sdn_net = {"status": "ERROR", "error_msg": text_error}
+                            sdn_net = {"status": "ERROR", "last_error": text_error}
                         if sdn_net["status"] == "ERROR":
                             if not vim_info_error_msg:
-                                vim_info_error_msg = sdn_net["error_msg"]
+                                vim_info_error_msg = str(sdn_net.get("last_error"))
                             else:
                                 vim_info_error_msg = "VIM_ERROR: {} && SDN_ERROR: {}".format(
-                                    self._format_vim_error_msg(vim_info_error_msg, 1024//2-14),
-                                    self._format_vim_error_msg(sdn_net["error_msg"], 1024//2-14))
-                            if vim_info_status == "VIM_ERROR":
-                                vim_info_status = "VIM_SDN_ERROR"
-                            else:
-                                vim_info_status = "SDN_ERROR"
+                                    self._format_vim_error_msg(vim_info_error_msg, 1024 // 2 - 14),
+                                    self._format_vim_error_msg(sdn_net["last_error"], 1024 // 2 - 14))
+                            vim_info_status = "ERROR"
+                        elif sdn_net["status"] == "BUILD":
+                            if vim_info_status == "ACTIVE":
+                                vim_info_status = "BUILD"
 
                     # update database
                     if vim_info_error_msg:
@@ -420,7 +471,7 @@ class vim_thread(threading.Thread):
                         with self.db_lock:
                             self.db.update_rows('instance_nets', UPDATE=temp_dict, WHERE={"uuid": task["item_id"]})
                             self.db.update_rows(
-                                'vim_actions',
+                                'vim_wim_actions',
                                 UPDATE={"extra": yaml.safe_dump(task["extra"], default_flow_style=True, width=256),
                                         "error_msg": task.get("error_msg"), "modified_at": now},
                                 WHERE={'instance_action_id': task['instance_action_id'],
@@ -482,7 +533,7 @@ class vim_thread(threading.Thread):
                 for task_index in task["extra"].get("depends_on", ()):
                     task_dependency = task["depends"].get("TASK-" + str(task_index))
                     if not task_dependency:
-                        task_dependency = self._look_for_task(task["instance_action_id"], "TASK-" + str(task_index))
+                        task_dependency = self._look_for_task(task["instance_action_id"], task_index)
                         if not task_dependency:
                             raise VimThreadException(
                                 "Cannot get depending net task trying to get depending task {}.{}".format(
@@ -585,7 +636,7 @@ class vim_thread(threading.Thread):
                     database_update["vim_net_id"] = None
 
             no_refresh_tasks = ['instance_sfis', 'instance_sfs',
-                'instance_classifications', 'instance_sfps']
+                                'instance_classifications', 'instance_sfps']
             if task["action"] == "DELETE":
                 action_key = task["item"] + task["item_id"]
                 del self.grouped_tasks[action_key]
@@ -601,7 +652,7 @@ class vim_thread(threading.Thread):
                 now = time.time()
                 with self.db_lock:
                     self.db.update_rows(
-                        table="vim_actions",
+                        table="vim_wim_actions",
                         UPDATE={"status": task["status"], "vim_id": task.get("vim_id"), "modified_at": now,
                                 "error_msg": task["error_msg"],
                                 "extra": yaml.safe_dump(task["extra"], default_flow_style=True, width=256)},
@@ -640,10 +691,19 @@ class vim_thread(threading.Thread):
                 task["params"] = extra.get("params")
                 depends_on_list = extra.get("depends_on")
                 if depends_on_list:
-                    for index in depends_on_list:
-                        if index < len(vim_actions_list) and vim_actions_list[index]["task_index"] == index and\
-                                    vim_actions_list[index]["instance_action_id"] == task["instance_action_id"]:
+                    for dependency_task in depends_on_list:
+                        if isinstance(dependency_task, int):
+                            index = dependency_task
+                        else:
+                            instance_action_id, _, task_id = dependency_task.rpartition(".")
+                            if instance_action_id != task["instance_action_id"]:
+                                continue
+                            index = int(task_id)
+
+                        if index < len(vim_actions_list) and vim_actions_list[index]["task_index"] == index and \
+                                vim_actions_list[index]["instance_action_id"] == task["instance_action_id"]:
                             task["depends"]["TASK-" + str(index)] = vim_actions_list[index]
+                            task["depends"]["TASK-{}.{}".format(task["instance_action_id"], index)] = vim_actions_list[index]
                 if extra.get("interfaces"):
                     task["vim_interfaces"] = {}
             else:
@@ -702,13 +762,15 @@ class vim_thread(threading.Thread):
             if task["status"] == "SCHEDULED":
                 task["status"] = "SUPERSEDED"
                 return True
-            else:   # task["status"] == "processing"
+            else:  # task["status"] == "processing"
                 self.task_lock.release()
                 return False
 
     def run(self):
         self.logger.debug("Starting")
         while True:
+            self.get_vimconnector()
+            self.logger.debug("Vimconnector loaded")
             self._reload_vim_actions()
             reload_thread = False
 
@@ -738,9 +800,26 @@ class vim_thread(threading.Thread):
         self.logger.debug("Finishing")
 
     def _look_for_task(self, instance_action_id, task_id):
-        task_index = task_id.split("-")[-1]
+        """
+        Look for a concrete task at vim_actions database table
+        :param instance_action_id: The instance_action_id
+        :param task_id: Can have several formats:
+            <task index>: integer
+            TASK-<task index> :backward compatibility,
+            [TASK-]<instance_action_id>.<task index>: this instance_action_id overrides the one in the parameter
+        :return: Task dictionary or None if not found
+        """
+        if isinstance(task_id, int):
+            task_index = task_id
+        else:
+            if task_id.startswith("TASK-"):
+                task_id = task_id[5:]
+            ins_action_id, _, task_index = task_id.rpartition(".")
+            if ins_action_id:
+                instance_action_id = ins_action_id
+
         with self.db_lock:
-            tasks = self.db.get_rows(FROM="vim_actions", WHERE={"instance_action_id": instance_action_id,
+            tasks = self.db.get_rows(FROM="vim_wim_actions", WHERE={"instance_action_id": instance_action_id,
                                                                 "task_index": task_index})
         if not tasks:
             return None
@@ -760,7 +839,7 @@ class vim_thread(threading.Thread):
     @staticmethod
     def _format_vim_error_msg(error_text, max_length=1024):
         if error_text and len(error_text) >= max_length:
-            return error_text[:max_length//2-3] + " ... " + error_text[-max_length//2+3:]
+            return error_text[:max_length // 2 - 3] + " ... " + error_text[-max_length // 2 + 3:]
         return error_text
 
     def new_vm(self, task):
@@ -784,22 +863,24 @@ class vim_thread(threading.Thread):
                             "Cannot create VM because depends on a network not created or found: " +
                             str(depends[net["net_id"]]["error_msg"]))
                     net["net_id"] = network_id
-            vim_vm_id, created_items = self.vim.new_vminstance(*params)
+            params_copy = deepcopy(params)
+            vim_vm_id, created_items = self.vim.new_vminstance(*params_copy)
 
             # fill task_interfaces. Look for snd_net_id at database for each interface
             task_interfaces = {}
-            for iface in net_list:
+            for iface in params_copy[5]:
                 task_interfaces[iface["vim_id"]] = {"iface_id": iface["uuid"]}
                 with self.db_lock:
                     result = self.db.get_rows(
-                        SELECT=('sdn_net_id',),
+                        SELECT=('sdn_net_id', 'interface_id'),
                         FROM='instance_nets as ine join instance_interfaces as ii on ii.instance_net_id=ine.uuid',
                         WHERE={'ii.uuid': iface["uuid"]})
                 if result:
                     task_interfaces[iface["vim_id"]]["sdn_net_id"] = result[0]['sdn_net_id']
+                    task_interfaces[iface["vim_id"]]["interface_id"] = result[0]['interface_id']
                 else:
                     self.logger.critical("task={} new-VM: instance_nets uuid={} not found at DB".format(task_id,
-                                         iface["uuid"]), exc_info=True)
+                                                                                                        iface["uuid"]), exc_info=True)
 
             task["vim_info"] = {}
             task["vim_interfaces"] = {}
@@ -830,7 +911,7 @@ class vim_thread(threading.Thread):
                 if iface.get("sdn_port_id"):
                     try:
                         with self.db_lock:
-                            self.ovim.delete_port(iface["sdn_port_id"])
+                            self.ovim.delete_port(iface["sdn_port_id"], idempotent=True)
                     except ovimException as e:
                         self.logger.error("task={} del-VM: ovimException when deleting external_port={}: {} ".format(
                             task_id, iface["sdn_port_id"], e), exc_info=True)
@@ -869,8 +950,9 @@ class vim_thread(threading.Thread):
         sdn_net_id = None
         with self.db_lock:
             result = self.db.get_rows(SELECT=('sdn_net_id',), FROM='instance_nets',
-                                      WHERE={'vim_net_id': vim_net_id, 'instance_scenario_id': None,
-                                             'datacenter_tenant_id': self.datacenter_tenant_id})
+                                      WHERE={'vim_net_id': vim_net_id,
+                                             'datacenter_tenant_id': self.datacenter_tenant_id},
+                                      ORDER="instance_scenario_id")
         if result:
             sdn_net_id = result[0]['sdn_net_id']
 
@@ -919,10 +1001,13 @@ class vim_thread(threading.Thread):
             # CREATE
             params = task["params"]
             action_text = "creating VIM"
-            vim_net_id = self.vim.new_network(*params)
+            vim_net_id = self.vim.new_network(*params[0:3])
 
             net_name = params[0]
             net_type = params[1]
+            wim_account_name = None
+            if len(params) >= 4:
+                wim_account_name = params[3]
 
             sdn_controller = self.vim.config.get('sdn-controller')
             if sdn_controller and (net_type == "data" or net_type == "ptp"):
@@ -937,6 +1022,28 @@ class vim_thread(threading.Thread):
                 action_text = "creating SDN"
                 with self.db_lock:
                     sdn_net_id = self.ovim.new_network(network)
+
+                if wim_account_name and self.vim.config["wim_external_ports"]:
+                    # add external port to connect WIM. Try with compute node __WIM:wim_name and __WIM
+                    action_text = "attaching external port to ovim network"
+                    sdn_port_name = sdn_net_id + "." + task["vim_id"]
+                    sdn_port_name = sdn_port_name[:63]
+                    sdn_port_data = {
+                        "compute_node": "__WIM:" + wim_account_name[0:58],
+                        "pci": None,
+                        "vlan": network["vlan"],
+                        "net_id": sdn_net_id,
+                        "region": self.vim["config"]["datacenter_id"],
+                        "name": sdn_port_name,
+                    }
+                    try:
+                        sdn_external_port_id = self.ovim.new_external_port(sdn_port_data)
+                    except ovimException:
+                        sdn_port_data["compute_node"] = "__WIM"
+                        sdn_external_port_id = self.ovim.new_external_port(sdn_port_data)
+                    self.logger.debug("Added sdn_external_port {} to sdn_network {}".format(sdn_external_port_id,
+                                                                                            sdn_net_id))
+
             task["status"] = "DONE"
             task["extra"]["vim_info"] = {}
             task["extra"]["sdn_net_id"] = sdn_net_id
@@ -967,8 +1074,8 @@ class vim_thread(threading.Thread):
                     port_list = self.ovim.get_ports(columns={'uuid'},
                                                     filter={'name': 'external_port', 'net_id': sdn_net_id})
                     for port in port_list:
-                        self.ovim.delete_port(port['uuid'])
-                    self.ovim.delete_network(sdn_net_id)
+                        self.ovim.delete_port(port['uuid'], idempotent=True)
+                    self.ovim.delete_network(sdn_net_id, idempotent=True)
             if net_vim_id:
                 self.vim.delete_network(net_vim_id)
             task["status"] = "DONE"
@@ -991,18 +1098,39 @@ class vim_thread(threading.Thread):
     def new_sfi(self, task):
         vim_sfi_id = None
         try:
-            params = task["params"]
+            # Waits for interfaces to be ready (avoids failure)
+            time.sleep(1)
+            dep_id = "TASK-" + str(task["extra"]["depends_on"][0])
             task_id = task["instance_action_id"] + "." + str(task["task_index"])
-            depends = task.get("depends")
             error_text = ""
-            interfaces = task.get("depends").values()[0].get("extra").get("params")[5]
+            interfaces = task.get("depends").get(dep_id).get("extra").get("interfaces")
+            ingress_interface_id = task.get("extra").get("params").get("ingress_interface_id")
+            egress_interface_id = task.get("extra").get("params").get("egress_interface_id")
+            ingress_vim_interface_id = None
+            egress_vim_interface_id = None
+            for vim_interface, interface_data in interfaces.iteritems():
+                if interface_data.get("interface_id") == ingress_interface_id:
+                    ingress_vim_interface_id = vim_interface
+                    break
+            if ingress_interface_id != egress_interface_id:
+                for vim_interface, interface_data in interfaces.iteritems():
+                    if interface_data.get("interface_id") == egress_interface_id:
+                        egress_vim_interface_id = vim_interface
+                        break
+            else:
+                egress_vim_interface_id = ingress_vim_interface_id
+            if not ingress_vim_interface_id or not egress_vim_interface_id:
+                self.logger.error("Error creating Service Function Instance, Ingress: %s, Egress: %s",
+                                  ingress_vim_interface_id, egress_vim_interface_id)
+                return False, None
             # At the moment, every port associated with the VM will be used both as ingress and egress ports.
             # Bear in mind that different VIM connectors might support SFI differently. In the case of OpenStack, only the
             # first ingress and first egress ports will be used to create the SFI (Port Pair).
-            port_id_list = [interfaces[0].get("vim_id")]
+            ingress_port_id_list = [ingress_vim_interface_id]
+            egress_port_id_list = [egress_vim_interface_id]
             name = "sfi-%s" % task["item_id"][:8]
             # By default no form of IETF SFC Encapsulation will be used
-            vim_sfi_id = self.vim.new_sfi(name, port_id_list, port_id_list, sfc_encap=False)
+            vim_sfi_id = self.vim.new_sfi(name, ingress_port_id_list, egress_port_id_list, sfc_encap=False)
 
             task["extra"]["created"] = True
             task["error_msg"] = None
@@ -1040,12 +1168,11 @@ class vim_thread(threading.Thread):
     def new_sf(self, task):
         vim_sf_id = None
         try:
-            params = task["params"]
             task_id = task["instance_action_id"] + "." + str(task["task_index"])
-            depends = task.get("depends")
             error_text = ""
-            #sfis = task.get("depends").values()[0].get("extra").get("params")[5]
-            sfis = task.get("depends").values()
+            depending_tasks = ["TASK-" + str(dep_id) for dep_id in task["extra"]["depends_on"]]
+            # sfis = task.get("depends").values()[0].get("extra").get("params")[5]
+            sfis = [task.get("depends").get(dep_task) for dep_task in depending_tasks]
             sfi_id_list = []
             for sfi in sfis:
                 sfi_id_list.append(sfi.get("vim_id"))
@@ -1091,9 +1218,9 @@ class vim_thread(threading.Thread):
         try:
             params = task["params"]
             task_id = task["instance_action_id"] + "." + str(task["task_index"])
-            depends = task.get("depends")
+            dep_id = "TASK-" + str(task["extra"]["depends_on"][0])
             error_text = ""
-            interfaces = task.get("depends").values()[0].get("extra").get("params")[5]
+            interfaces = task.get("depends").get(dep_id).get("extra").get("interfaces").keys()
             # Bear in mind that different VIM connectors might support Classifications differently.
             # In the case of OpenStack, only the first VNF attached to the classifier will be used
             # to create the Classification(s) (the "logical source port" of the "Flow Classifier").
@@ -1115,14 +1242,14 @@ class vim_thread(threading.Thread):
             if '/' not in destination_ip:
                 destination_ip += '/32'
             definition = {
-                    "logical_source_port": interfaces[0].get("vim_id"),
-                    "protocol": ip_proto,
-                    "source_ip_prefix": source_ip,
-                    "destination_ip_prefix": destination_ip,
-                    "source_port_range_min": params.get("source_port"),
-                    "source_port_range_max": params.get("source_port"),
-                    "destination_port_range_min": params.get("destination_port"),
-                    "destination_port_range_max": params.get("destination_port"),
+                "logical_source_port": interfaces[0],
+                "protocol": ip_proto,
+                "source_ip_prefix": source_ip,
+                "destination_ip_prefix": destination_ip,
+                "source_port_range_min": params.get("source_port"),
+                "source_port_range_max": params.get("source_port"),
+                "destination_port_range_min": params.get("destination_port"),
+                "destination_port_range_max": params.get("destination_port"),
             }
 
             vim_classification_id = self.vim.new_classification(
@@ -1166,12 +1293,11 @@ class vim_thread(threading.Thread):
         try:
             params = task["params"]
             task_id = task["instance_action_id"] + "." + str(task["task_index"])
-            depends = task.get("depends")
+            depending_tasks = [task.get("depends").get("TASK-" + str(tsk_id)) for tsk_id in task.get("extra").get("depends_on")]
             error_text = ""
-            deps = task.get("depends").values()
             sf_id_list = []
             classification_id_list = []
-            for dep in deps:
+            for dep in depending_tasks:
                 vim_id = dep.get("vim_id")
                 resource = dep.get("item")
                 if resource == "instance_sfs":

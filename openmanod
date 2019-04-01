@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openmano
 # All Rights Reserved.
 #
@@ -27,7 +27,7 @@ openmano server.
 Main program that implements a reference NFVO (Network Functions Virtualisation Orchestrator).
 It interfaces with an NFV VIM through its API and offers a northbound interface, based on REST (openmano API),
 where NFV services are offered including the creation and deletion of VNF templates, VNF instances,
-network service templates and network service instances. 
+network service templates and network service instances.
 
 It loads the configuration file and launches the http_server thread that will listen requests using openmano API.
 """
@@ -36,7 +36,7 @@ import time
 import sys
 import getopt
 import yaml
-from os import getenv as os_getenv, path as os_path
+from os import environ, path as os_path
 from jsonschema import validate as js_v, exceptions as js_e
 import logging
 import logging.handlers as log_handlers
@@ -44,14 +44,15 @@ import socket
 from osm_ro import httpserver, nfvo, nfvo_db
 from osm_ro.openmano_schemas import config_schema
 from osm_ro.db_base import db_base_Exception
+from osm_ro.wim.engine import WimEngine
+from osm_ro.wim.persistence import WimPersistence
 import osm_ro
 
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ = "$26-aug-2014 11:09:29$"
-__version__ = "0.5.69-r579"
-version_date = "Jun 2018"
-database_version = 31      # expected database schema version
-
+__version__ = "0.6.08"
+version_date = "Jan 2019"
+database_version = 36      # expected database schema version
 
 global global_config
 global logger
@@ -106,7 +107,7 @@ def load_configuration(configuration_file):
 
 
 def console_port_iterator():
-    '''this iterator deals with the http_console_ports 
+    '''this iterator deals with the http_console_ports
     returning the ports one by one
     '''
     index = 0
@@ -155,17 +156,21 @@ def set_logging_file(log_file):
 
 
 if __name__=="__main__":
-    env_config = {
-        'db_host': 'RO_DB_HOST',
-        'db_name': 'RO_DB_NAME',
-        'db_user': 'RO_DB_USER',
-        'db_passwd': 'RO_DB_PASSWORD',
-        'db_ovim_host': 'RO_DB_OVIM_HOST',
-        'db_ovim_name': 'RO_DB_OVIM_NAME',
-        'db_ovim_user': 'RO_DB_OVIM_USER',
-        'db_ovim_passwd': 'RO_DB_OVIM_PASSWORD',
-        'db_port': 'RO_DB_PORT',
-        'db_port': 'RO_DB_PORT',
+    # env2config contains envioron variable names and the correspondence with configuration file openmanod.cfg keys.
+    # If this environ is defined, this value is taken instead of the one at at configuration file
+    env2config = {
+        'RO_DB_HOST': 'db_host',
+        'RO_DB_NAME': 'db_name',
+        'RO_DB_USER': 'db_user',
+        'RO_DB_PASSWORD': 'db_passwd',
+        # 'RO_DB_PORT': 'db_port',
+        'RO_DB_OVIM_HOST': 'db_ovim_host',
+        'RO_DB_OVIM_NAME': 'db_ovim_name',
+        'RO_DB_OVIM_USER': 'db_ovim_user',
+        'RO_DB_OVIM_PASSWORD': 'db_ovim_passwd',
+        # 'RO_DB_OVIM_PORT': 'db_ovim_port',
+        'RO_LOG_LEVEL': 'log_level',
+        'RO_LOG_FILE': 'log_file',
     }
     # Configure logging step 1
     hostname = socket.gethostname()
@@ -175,7 +180,7 @@ if __name__=="__main__":
                                                'severity:%(levelname)s logger:%(name)s log:%(message)s'.format(
                                                     host=hostname),
                                                datefmt='%Y-%m-%dT%H:%M:%S')
-    log_format_simple =  "%(asctime)s %(levelname)s  %(name)s %(filename)s:%(lineno)s %(message)s"
+    log_format_simple =  "%(asctime)s %(levelname)s  %(name)s %(thread)d %(filename)s:%(lineno)s %(message)s"
     log_formatter_simple = logging.Formatter(log_format_simple, datefmt='%Y-%m-%dT%H:%M:%S')
     logging.basicConfig(format=log_format_simple, level= logging.DEBUG)
     logger = logging.getLogger('openmano')
@@ -240,10 +245,15 @@ if __name__=="__main__":
             global_config['log_socket_port'] = log_socket_port
 
         # override with ENV
-        for config_key, env_var in env_config.items():
-            if os_getenv(env_var):
-                global_config[config_key] = os_getenv(env_var)
-
+        for env_k, env_v in environ.items():
+            try:
+                if not env_k.startswith("RO_") or env_k not in env2config or not env_v:
+                    continue
+                global_config[env2config[env_k]] = env_v
+                if env_k.endswith("PORT"):    # convert to int, skip if not possible
+                    global_config[env2config[env_k]] = int(env_v)
+            except Exception as e:
+                logger.warn("skipping environ '{}={}' because exception '{}'".format(env_k, env_v, e))
 
 #         if vnf_repository is not None:
 #             global_config['vnf_repository'] = vnf_repository
@@ -287,7 +297,7 @@ if __name__=="__main__":
         logger.critical("Starting openmano server version: '%s %s' command: '%s'",
                          __version__, version_date, " ".join(sys.argv))
 
-        for log_module in ("nfvo", "http", "vim", "db", "console", "ovim"):
+        for log_module in ("nfvo", "http", "vim", "wim", "db", "console", "ovim"):
             log_level_module = "log_level_" + log_module
             log_file_module = "log_file_" + log_module
             logger_module = logging.getLogger('openmano.' + log_module)
@@ -334,9 +344,18 @@ if __name__=="__main__":
                     pass  # if tenant exist (NfvoException error 409), ignore
                 else:     # otherwise print and error and continue
                     logger.error("Cannot create tenant '{}': {}".format(create_tenant, e))
-        nfvo.start_service(mydb)
 
-        httpthread = httpserver.httpserver(mydb, False, global_config['http_host'], global_config['http_port'])
+        # WIM module
+        wim_persistence = WimPersistence(mydb)
+        wim_engine = WimEngine(wim_persistence)
+        # ---
+        nfvo.start_service(mydb, wim_persistence, wim_engine)
+
+        httpthread = httpserver.httpserver(
+            mydb, False,
+            global_config['http_host'], global_config['http_port'],
+            wim_persistence, wim_engine
+        )
 
         httpthread.start()
         if 'http_admin_port' in global_config:

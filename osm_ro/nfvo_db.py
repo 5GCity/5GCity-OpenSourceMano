@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openmano
 # All Rights Reserved.
 #
@@ -21,9 +21,9 @@
 # contact with: nfvlabs@tid.es
 ##
 
-'''
+"""
 NFVO DB engine. It implements all the methods to interact with the Openmano Database
-'''
+"""
 __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$28-aug-2014 10:05:01$"
 
@@ -34,12 +34,16 @@ import yaml
 import time
 #import sys, os
 
+from .http_tools import errors as httperrors
+
 tables_with_createdat_field=["datacenters","instance_nets","instance_scenarios","instance_vms","instance_vnfs",
                            "interfaces","nets","nfvo_tenants","scenarios","sce_interfaces","sce_nets",
                            "sce_vnfs","tenants_datacenters","datacenter_tenants","vms","vnfs", "datacenter_nets",
-                           "instance_actions", "vim_actions", "sce_vnffgs", "sce_rsps", "sce_rsp_hops",
+                           "instance_actions", "sce_vnffgs", "sce_rsps", "sce_rsp_hops",
                            "sce_classifiers", "sce_classifier_matches", "instance_sfis", "instance_sfs",
-                           "instance_classifications", "instance_sfps"]
+                           "instance_classifications", "instance_sfps", "wims", "wim_accounts", "wim_nfvo_tenants",
+                           "wim_port_mappings", "vim_wim_actions",
+                           "instance_wim_nets"]
 
 
 class nfvo_db(db_base.db_base):
@@ -55,7 +59,7 @@ class nfvo_db(db_base.db_base):
             created_time = time.time()
             try:
                 with self.con:
-            
+
                     myVNFDict = {}
                     myVNFDict["name"] = vnf_name
                     myVNFDict["descriptor"] = vnf_descriptor['vnf'].get('descriptor')
@@ -63,22 +67,22 @@ class nfvo_db(db_base.db_base):
                     myVNFDict["description"] = vnf_descriptor['vnf']['description']
                     myVNFDict["class"] = vnf_descriptor['vnf'].get('class',"MISC")
                     myVNFDict["tenant_id"] = vnf_descriptor['vnf'].get("tenant_id")
-                    
+
                     vnf_id = self._new_row_internal('vnfs', myVNFDict, add_uuid=True, root_uuid=None, created_time=created_time)
                     #print "Adding new vms to the NFVO database"
                     #For each vm, we must create the appropriate vm in the NFVO database.
                     vmDict = {}
                     for _,vm in VNFCDict.iteritems():
                         #This code could make the name of the vms grow and grow.
-                        #If we agree to follow this convention, we should check with a regex that the vnfc name is not including yet the vnf name  
+                        #If we agree to follow this convention, we should check with a regex that the vnfc name is not including yet the vnf name
                         #vm['name'] = "%s-%s" % (vnf_name,vm['name'])
                         #print "VM name: %s. Description: %s" % (vm['name'], vm['description'])
                         vm["vnf_id"] = vnf_id
                         created_time += 0.00001
-                        vm_id = self._new_row_internal('vms', vm, add_uuid=True, root_uuid=vnf_id, created_time=created_time) 
+                        vm_id = self._new_row_internal('vms', vm, add_uuid=True, root_uuid=vnf_id, created_time=created_time)
                         #print "Internal vm id in NFVO DB: %s" % vm_id
                         vmDict[vm['name']] = vm_id
-                
+
                     #Collect the bridge interfaces of each VM/VNFC under the 'bridge-ifaces' field
                     bridgeInterfacesDict = {}
                     for vm in vnf_descriptor['vnf']['VNFC']:
@@ -124,19 +128,19 @@ class nfvo_db(db_base.db_base):
                     if 'internal-connections' in vnf_descriptor['vnf']:
                         for net in vnf_descriptor['vnf']['internal-connections']:
                             #print "Net name: %s. Description: %s" % (net['name'], net['description'])
-                            
+
                             myNetDict = {}
                             myNetDict["name"] = net['name']
                             myNetDict["description"] = net['description']
                             myNetDict["type"] = net['type']
                             myNetDict["vnf_id"] = vnf_id
-                            
+
                             created_time += 0.00001
                             net_id = self._new_row_internal('nets', myNetDict, add_uuid=True, root_uuid=vnf_id, created_time=created_time)
-                                
+
                             for element in net['elements']:
                                 ifaceItem = {}
-                                #ifaceItem["internal_name"] = "%s-%s-%s" % (net['name'],element['VNFC'], element['local_iface_name'])  
+                                #ifaceItem["internal_name"] = "%s-%s-%s" % (net['name'],element['VNFC'], element['local_iface_name'])
                                 ifaceItem["internal_name"] = element['local_iface_name']
                                 #ifaceItem["vm_id"] = vmDict["%s-%s" % (vnf_name,element['VNFC'])]
                                 ifaceItem["vm_id"] = vmDict[element['VNFC']]
@@ -159,17 +163,17 @@ class nfvo_db(db_base.db_base):
                                     created_time_iface = bridgeiface['created_time']
                                 internalconnList.append(ifaceItem)
                             #print "Internal net id in NFVO DB: %s" % net_id
-                    
+
                     #print "Adding internal interfaces to the NFVO database (if any)"
                     for iface in internalconnList:
                         #print "Iface name: %s" % iface['internal_name']
                         iface_id = self._new_row_internal('interfaces', iface, add_uuid=True, root_uuid=vnf_id, created_time = created_time_iface)
                         #print "Iface id in NFVO DB: %s" % iface_id
-                    
+
                     #print "Adding external interfaces to the NFVO database"
                     for iface in vnf_descriptor['vnf']['external-connections']:
                         myIfaceDict = {}
-                        #myIfaceDict["internal_name"] = "%s-%s-%s" % (vnf_name,iface['VNFC'], iface['local_iface_name'])  
+                        #myIfaceDict["internal_name"] = "%s-%s-%s" % (vnf_name,iface['VNFC'], iface['local_iface_name'])
                         myIfaceDict["internal_name"] = iface['local_iface_name']
                         #myIfaceDict["vm_id"] = vmDict["%s-%s" % (vnf_name,iface['VNFC'])]
                         myIfaceDict["vm_id"] = vmDict[iface['VNFC']]
@@ -193,13 +197,13 @@ class nfvo_db(db_base.db_base):
                         #print "Iface name: %s" % iface['name']
                         iface_id = self._new_row_internal('interfaces', myIfaceDict, add_uuid=True, root_uuid=vnf_id, created_time = created_time_iface)
                         #print "Iface id in NFVO DB: %s" % iface_id
-                    
+
                     return vnf_id
-                
+
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries)
             tries -= 1
-        
+
     def new_vnf_as_a_whole2(self,nfvo_tenant,vnf_name,vnf_descriptor,VNFCDict):
         self.logger.debug("Adding new vnf to the NFVO database")
         tries = 2
@@ -207,7 +211,7 @@ class nfvo_db(db_base.db_base):
             created_time = time.time()
             try:
                 with self.con:
-                     
+
                     myVNFDict = {}
                     myVNFDict["name"] = vnf_name
                     myVNFDict["descriptor"] = vnf_descriptor['vnf'].get('descriptor')
@@ -222,15 +226,15 @@ class nfvo_db(db_base.db_base):
                     vmDict = {}
                     for _,vm in VNFCDict.iteritems():
                         #This code could make the name of the vms grow and grow.
-                        #If we agree to follow this convention, we should check with a regex that the vnfc name is not including yet the vnf name  
+                        #If we agree to follow this convention, we should check with a regex that the vnfc name is not including yet the vnf name
                         #vm['name'] = "%s-%s" % (vnf_name,vm['name'])
                         #print "VM name: %s. Description: %s" % (vm['name'], vm['description'])
                         vm["vnf_id"] = vnf_id
                         created_time += 0.00001
-                        vm_id = self._new_row_internal('vms', vm, add_uuid=True, root_uuid=vnf_id, created_time=created_time) 
+                        vm_id = self._new_row_internal('vms', vm, add_uuid=True, root_uuid=vnf_id, created_time=created_time)
                         #print "Internal vm id in NFVO DB: %s" % vm_id
                         vmDict[vm['name']] = vm_id
-                     
+
                     #Collect the bridge interfaces of each VM/VNFC under the 'bridge-ifaces' field
                     bridgeInterfacesDict = {}
                     for vm in vnf_descriptor['vnf']['VNFC']:
@@ -274,13 +278,13 @@ class nfvo_db(db_base.db_base):
                     if 'internal-connections' in vnf_descriptor['vnf']:
                         for net in vnf_descriptor['vnf']['internal-connections']:
                             #print "Net name: %s. Description: %s" % (net['name'], net['description'])
-                            
+
                             myNetDict = {}
                             myNetDict["name"] = net['name']
                             myNetDict["description"] = net['description']
                             if (net["implementation"] == "overlay"):
                                 net["type"] = "bridge"
-                                #It should give an error if the type is e-line. For the moment, we consider it as a bridge 
+                                #It should give an error if the type is e-line. For the moment, we consider it as a bridge
                             elif (net["implementation"] == "underlay"):
                                 if (net["type"] == "e-line"):
                                     net["type"] = "ptp"
@@ -289,10 +293,10 @@ class nfvo_db(db_base.db_base):
                             net.pop("implementation")
                             myNetDict["type"] = net['type']
                             myNetDict["vnf_id"] = vnf_id
-                            
+
                             created_time += 0.00001
                             net_id = self._new_row_internal('nets', myNetDict, add_uuid=True, root_uuid=vnf_id, created_time=created_time)
-                            
+
                             if "ip-profile" in net:
                                 ip_profile = net["ip-profile"]
                                 myIPProfileDict = {}
@@ -305,13 +309,13 @@ class nfvo_db(db_base.db_base):
                                     myIPProfileDict["dhcp_enabled"] = ip_profile["dhcp"].get('enabled',"true")
                                     myIPProfileDict["dhcp_start_address"] = ip_profile["dhcp"].get('start-address',None)
                                     myIPProfileDict["dhcp_count"] = ip_profile["dhcp"].get('count',None)
-                                
+
                                 created_time += 0.00001
                                 ip_profile_id = self._new_row_internal('ip_profiles', myIPProfileDict)
-                                
+
                             for element in net['elements']:
                                 ifaceItem = {}
-                                #ifaceItem["internal_name"] = "%s-%s-%s" % (net['name'],element['VNFC'], element['local_iface_name'])  
+                                #ifaceItem["internal_name"] = "%s-%s-%s" % (net['name'],element['VNFC'], element['local_iface_name'])
                                 ifaceItem["internal_name"] = element['local_iface_name']
                                 #ifaceItem["vm_id"] = vmDict["%s-%s" % (vnf_name,element['VNFC'])]
                                 ifaceItem["vm_id"] = vmDict[element['VNFC']]
@@ -335,11 +339,11 @@ class nfvo_db(db_base.db_base):
                                 #print "Iface name: %s" % iface['internal_name']
                                 iface_id = self._new_row_internal('interfaces', ifaceItem, add_uuid=True, root_uuid=vnf_id, created_time=created_time_iface)
                                 #print "Iface id in NFVO DB: %s" % iface_id
-                    
+
                     #print "Adding external interfaces to the NFVO database"
                     for iface in vnf_descriptor['vnf']['external-connections']:
                         myIfaceDict = {}
-                        #myIfaceDict["internal_name"] = "%s-%s-%s" % (vnf_name,iface['VNFC'], iface['local_iface_name'])  
+                        #myIfaceDict["internal_name"] = "%s-%s-%s" % (vnf_name,iface['VNFC'], iface['local_iface_name'])
                         myIfaceDict["internal_name"] = iface['local_iface_name']
                         #myIfaceDict["vm_id"] = vmDict["%s-%s" % (vnf_name,iface['VNFC'])]
                         myIfaceDict["vm_id"] = vmDict[iface['VNFC']]
@@ -363,9 +367,9 @@ class nfvo_db(db_base.db_base):
                         #print "Iface name: %s" % iface['name']
                         iface_id = self._new_row_internal('interfaces', myIfaceDict, add_uuid=True, root_uuid=vnf_id, created_time=created_time_iface)
                         #print "Iface id in NFVO DB: %s" % iface_id
-                    
+
                     return vnf_id
-                
+
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries)
 #             except KeyError as e2:
@@ -388,7 +392,7 @@ class nfvo_db(db_base.db_base):
                              'name': scenario_dict['name'],
                              'description': scenario_dict['description'],
                              'public': scenario_dict.get('public', "false")}
-                    
+
                     scenario_uuid =  self._new_row_internal('scenarios', INSERT_, add_uuid=True, root_uuid=None, created_time=created_time)
                     #sce_nets
                     for net in scenario_dict['nets'].values():
@@ -447,9 +451,9 @@ class nfvo_db(db_base.db_base):
                             created_time += 0.00001
                             iface_uuid = self._new_row_internal('sce_interfaces', INSERT_, add_uuid=True,
                                                                  root_uuid=scenario_uuid, created_time=created_time)
-                            
+
                     return scenario_uuid
-                    
+
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries)
             tries -= 1
@@ -465,7 +469,7 @@ class nfvo_db(db_base.db_base):
                     #check that scenario exist
                     tenant_id = scenario_dict.get('tenant_id')
                     scenario_uuid = scenario_dict['uuid']
-                    
+
                     where_text = "uuid='{}'".format(scenario_uuid)
                     if not tenant_id and tenant_id != "any":
                         where_text += " AND (tenant_id='{}' OR public='True')".format(tenant_id)
@@ -474,9 +478,9 @@ class nfvo_db(db_base.db_base):
                     self.cur.execute(cmd)
                     self.cur.fetchall()
                     if self.cur.rowcount==0:
-                        raise db_base.db_base_Exception("No scenario found with this criteria " + where_text, db_base.HTTP_Bad_Request)
+                        raise db_base.db_base_Exception("No scenario found with this criteria " + where_text, httperrors.Bad_Request)
                     elif self.cur.rowcount>1:
-                        raise db_base.db_base_Exception("More than one scenario found with this criteria " + where_text, db_base.HTTP_Bad_Request)
+                        raise db_base.db_base_Exception("More than one scenario found with this criteria " + where_text, httperrors.Bad_Request)
 
                     #scenario
                     nodes = {}
@@ -500,7 +504,7 @@ class nfvo_db(db_base.db_base):
                         item_changed += self._update_rows('sce_nets', node, WHERE_)
                         item_changed += self._update_rows('sce_vnfs', node, WHERE_, modified_time=modified_time)
                     return item_changed
-                    
+
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries)
             tries -= 1
@@ -509,7 +513,7 @@ class nfvo_db(db_base.db_base):
 #         '''Obtain the scenario instance information, filtering by one or serveral of the tenant, uuid or name
 #         instance_scenario_id is the uuid or the name if it is not a valid uuid format
 #         Only one scenario isntance must mutch the filtering or an error is returned
-#         ''' 
+#         '''
 #         print "1******************************************************************"
 #         try:
 #             with self.con:
@@ -525,11 +529,11 @@ class nfvo_db(db_base.db_base):
 #                 self.cur.execute("SELECT * FROM instance_scenarios WHERE "+ where_text)
 #                 rows = self.cur.fetchall()
 #                 if self.cur.rowcount==0:
-#                     return -HTTP_Bad_Request, "No scenario instance found with this criteria " + where_text
+#                     return -httperrors.Bad_Request, "No scenario instance found with this criteria " + where_text
 #                 elif self.cur.rowcount>1:
-#                     return -HTTP_Bad_Request, "More than one scenario instance found with this criteria " + where_text
+#                     return -httperrors.Bad_Request, "More than one scenario instance found with this criteria " + where_text
 #                 instance_scenario_dict = rows[0]
-#                 
+#
 #                 #instance_vnfs
 #                 self.cur.execute("SELECT uuid,vnf_id FROM instance_vnfs WHERE instance_scenario_id='"+ instance_scenario_dict['uuid'] + "'")
 #                 instance_scenario_dict['instance_vnfs'] = self.cur.fetchall()
@@ -537,17 +541,17 @@ class nfvo_db(db_base.db_base):
 #                     #instance_vms
 #                     self.cur.execute("SELECT uuid, vim_vm_id "+
 #                                 "FROM instance_vms  "+
-#                                 "WHERE instance_vnf_id='" + vnf['uuid'] +"'"  
+#                                 "WHERE instance_vnf_id='" + vnf['uuid'] +"'"
 #                                 )
 #                     vnf['instance_vms'] = self.cur.fetchall()
 #                 #instance_nets
 #                 self.cur.execute("SELECT uuid, vim_net_id FROM instance_nets WHERE instance_scenario_id='"+ instance_scenario_dict['uuid'] + "'")
 #                 instance_scenario_dict['instance_nets'] = self.cur.fetchall()
-#                 
+#
 #                 #instance_interfaces
 #                 self.cur.execute("SELECT uuid, vim_interface_id, instance_vm_id, instance_net_id FROM instance_interfaces WHERE instance_scenario_id='"+ instance_scenario_dict['uuid'] + "'")
 #                 instance_scenario_dict['instance_interfaces'] = self.cur.fetchall()
-#                 
+#
 #                 db_base._convert_datetime2str(instance_scenario_dict)
 #                 db_base._convert_str2boolean(instance_scenario_dict, ('public','shared','external') )
 #                 print "2******************************************************************"
@@ -561,7 +565,7 @@ class nfvo_db(db_base.db_base):
         scenario_id is the uuid or the name if it is not a valid uuid format
         if datacenter_vim_id,d datacenter_id is provided, it supply aditional vim_id fields with the matching vim uuid
         Only one scenario must mutch the filtering or an error is returned
-        ''' 
+        '''
         tries = 2
         while tries:
             try:
@@ -575,9 +579,9 @@ class nfvo_db(db_base.db_base):
                     self.cur.execute(cmd)
                     rows = self.cur.fetchall()
                     if self.cur.rowcount==0:
-                        raise db_base.db_base_Exception("No scenario found with this criteria " + where_text, db_base.HTTP_Bad_Request)
+                        raise db_base.db_base_Exception("No scenario found with this criteria " + where_text, httperrors.Bad_Request)
                     elif self.cur.rowcount>1:
-                        raise db_base.db_base_Exception("More than one scenario found with this criteria " + where_text, db_base.HTTP_Bad_Request)
+                        raise db_base.db_base_Exception("More than one scenario found with this criteria " + where_text, httperrors.Bad_Request)
                     scenario_dict = rows[0]
                     if scenario_dict["cloud_config"]:
                         scenario_dict["cloud-config"] = yaml.load(scenario_dict["cloud_config"])
@@ -608,7 +612,7 @@ class nfvo_db(db_base.db_base):
                         # vms
                         cmd = "SELECT vms.uuid as uuid, flavor_id, image_id, image_list, vms.name as name," \
                               " vms.description as description, vms.boot_data as boot_data, count," \
-                              " vms.availability_zone as availability_zone" \
+                              " vms.availability_zone as availability_zone, vms.osm_id as osm_id, vms.pdu_type" \
                               " FROM vnfs join vms on vnfs.uuid=vms.vnf_id" \
                               " WHERE vnfs.uuid='" + vnf['vnf_id'] + "'"  \
                               " ORDER BY vms.created_at"
@@ -625,19 +629,23 @@ class nfvo_db(db_base.db_base):
                             else:
                                 del vm["image_list"]
                             if datacenter_vim_id!=None:
-                                cmd = "SELECT vim_id FROM datacenters_images WHERE image_id='{}' AND datacenter_vim_id='{}'".format(vm['image_id'],datacenter_vim_id)
-                                self.logger.debug(cmd)
-                                self.cur.execute(cmd) 
-                                if self.cur.rowcount==1:
-                                    vim_image_dict = self.cur.fetchone()
-                                    vm['vim_image_id']=vim_image_dict['vim_id']
-                                cmd = "SELECT vim_id FROM datacenters_flavors WHERE flavor_id='{}' AND datacenter_vim_id='{}'".format(vm['flavor_id'],datacenter_vim_id)
-                                self.logger.debug(cmd)
-                                self.cur.execute(cmd) 
-                                if self.cur.rowcount==1:
-                                    vim_flavor_dict = self.cur.fetchone()
-                                    vm['vim_flavor_id']=vim_flavor_dict['vim_id']
-                                
+                                if vm['image_id']:
+                                    cmd = "SELECT vim_id FROM datacenters_images WHERE image_id='{}' AND " \
+                                          "datacenter_vim_id='{}'".format(vm['image_id'], datacenter_vim_id)
+                                    self.logger.debug(cmd)
+                                    self.cur.execute(cmd)
+                                    if self.cur.rowcount==1:
+                                        vim_image_dict = self.cur.fetchone()
+                                        vm['vim_image_id']=vim_image_dict['vim_id']
+                                if vm['flavor_id']:
+                                    cmd = "SELECT vim_id FROM datacenters_flavors WHERE flavor_id='{}' AND " \
+                                          "datacenter_vim_id='{}'".format(vm['flavor_id'], datacenter_vim_id)
+                                    self.logger.debug(cmd)
+                                    self.cur.execute(cmd)
+                                    if self.cur.rowcount==1:
+                                        vim_flavor_dict = self.cur.fetchone()
+                                        vm['vim_flavor_id']=vim_flavor_dict['vim_id']
+
                             #interfaces
                             cmd = "SELECT uuid,internal_name,external_name,net_id,type,vpci,mac,bw,model,ip_address," \
                                   "floating_ip, port_security" \
@@ -656,23 +664,23 @@ class nfvo_db(db_base.db_base):
                                             iface["ip_address"] = sce_interface["ip_address"]
                                         break
                         #nets    every net of a vms
-                        cmd = "SELECT uuid,name,type,description FROM nets WHERE vnf_id='{}'".format(vnf['vnf_id'])  
+                        cmd = "SELECT uuid,name,type,description, osm_id FROM nets WHERE vnf_id='{}'".format(vnf['vnf_id'])
                         self.logger.debug(cmd)
                         self.cur.execute(cmd)
                         vnf['nets'] = self.cur.fetchall()
                         for vnf_net in vnf['nets']:
                             SELECT_ = "ip_version,subnet_address,gateway_address,dns_address,dhcp_enabled,dhcp_start_address,dhcp_count"
-                            cmd = "SELECT {} FROM ip_profiles WHERE net_id='{}'".format(SELECT_,vnf_net['uuid'])  
+                            cmd = "SELECT {} FROM ip_profiles WHERE net_id='{}'".format(SELECT_,vnf_net['uuid'])
                             self.logger.debug(cmd)
                             self.cur.execute(cmd)
                             ipprofiles = self.cur.fetchall()
                             if self.cur.rowcount==1:
                                 vnf_net["ip_profile"] = ipprofiles[0]
                             elif self.cur.rowcount>1:
-                                raise db_base.db_base_Exception("More than one ip-profile found with this criteria: net_id='{}'".format(vnf_net['uuid']), db_base.HTTP_Bad_Request)
-                            
+                                raise db_base.db_base_Exception("More than one ip-profile found with this criteria: net_id='{}'".format(vnf_net['uuid']), httperrors.Bad_Request)
+
                     #sce_nets
-                    cmd = "SELECT uuid,name,type,external,description,vim_network_name" \
+                    cmd = "SELECT uuid,name,type,external,description,vim_network_name, osm_id" \
                           " FROM sce_nets  WHERE scenario_id='{}'" \
                           " ORDER BY created_at ".format(scenario_dict['uuid'])
                     self.logger.debug(cmd)
@@ -682,28 +690,28 @@ class nfvo_db(db_base.db_base):
                     for net in scenario_dict['nets']:
                         if str(net['external']) == 'false':
                             SELECT_ = "ip_version,subnet_address,gateway_address,dns_address,dhcp_enabled,dhcp_start_address,dhcp_count"
-                            cmd = "SELECT {} FROM ip_profiles WHERE sce_net_id='{}'".format(SELECT_,net['uuid'])  
+                            cmd = "SELECT {} FROM ip_profiles WHERE sce_net_id='{}'".format(SELECT_,net['uuid'])
                             self.logger.debug(cmd)
                             self.cur.execute(cmd)
                             ipprofiles = self.cur.fetchall()
                             if self.cur.rowcount==1:
                                 net["ip_profile"] = ipprofiles[0]
                             elif self.cur.rowcount>1:
-                                raise db_base.db_base_Exception("More than one ip-profile found with this criteria: sce_net_id='{}'".format(net['uuid']), db_base.HTTP_Bad_Request)
+                                raise db_base.db_base_Exception("More than one ip-profile found with this criteria: sce_net_id='{}'".format(net['uuid']), httperrors.Bad_Request)
                             continue
                         WHERE_=" WHERE name='{}'".format(net['name'])
                         if datacenter_id!=None:
                             WHERE_ += " AND datacenter_id='{}'".format(datacenter_id)
                         cmd = "SELECT vim_net_id FROM datacenter_nets" + WHERE_
                         self.logger.debug(cmd)
-                        self.cur.execute(cmd) 
+                        self.cur.execute(cmd)
                         d_net = self.cur.fetchone()
                         if d_net==None or datacenter_vim_id==None:
                             #print "nfvo_db.get_scenario() WARNING external net %s not found"  % net['name']
                             net['vim_id']=None
                         else:
                             net['vim_id']=d_net['vim_net_id']
-                    
+
                     db_base._convert_datetime2str(scenario_dict)
                     db_base._convert_str2boolean(scenario_dict, ('public','shared','external','port-security','floating-ip') )
 
@@ -720,7 +728,8 @@ class nfvo_db(db_base.db_base):
                         self.cur.execute(cmd)
                         vnffg['rsps'] = self.cur.fetchall()
                         for rsp in vnffg['rsps']:
-                            cmd = "SELECT uuid,if_order,interface_id,sce_vnf_id FROM sce_rsp_hops WHERE sce_rsp_id='{}' "\
+                            cmd = "SELECT uuid,if_order,ingress_interface_id,egress_interface_id,sce_vnf_id " \
+                                  "FROM sce_rsp_hops WHERE sce_rsp_id='{}' "\
                                   "ORDER BY created_at".format(rsp['uuid'])
                             self.logger.debug(cmd)
                             self.cur.execute(cmd)
@@ -745,13 +754,13 @@ class nfvo_db(db_base.db_base):
         '''Deletes a scenario, filtering by one or several of the tenant, uuid or name
         scenario_id is the uuid or the name if it is not a valid uuid format
         Only one scenario must mutch the filtering or an error is returned
-        ''' 
+        '''
         tries = 2
         while tries:
             try:
                 with self.con:
                     self.cur = self.con.cursor(mdb.cursors.DictCursor)
-    
+
                     #scenario table
                     where_text = "uuid='{}'".format(scenario_id)
                     if not tenant_id and tenant_id != "any":
@@ -761,12 +770,12 @@ class nfvo_db(db_base.db_base):
                     self.cur.execute(cmd)
                     rows = self.cur.fetchall()
                     if self.cur.rowcount==0:
-                        raise db_base.db_base_Exception("No scenario found where " + where_text, db_base.HTTP_Bad_Request)
+                        raise db_base.db_base_Exception("No scenario found where " + where_text, httperrors.Not_Found)
                     elif self.cur.rowcount>1:
-                        raise db_base.db_base_Exception("More than one scenario found where " + where_text, db_base.HTTP_Bad_Request)
+                        raise db_base.db_base_Exception("More than one scenario found where " + where_text, httperrors.Conflict)
                     scenario_uuid = rows[0]["uuid"]
                     scenario_name = rows[0]["name"]
-                    
+
                     #sce_vnfs
                     cmd = "DELETE FROM scenarios WHERE uuid='{}'".format(scenario_uuid)
                     self.logger.debug(cmd)
@@ -777,9 +786,9 @@ class nfvo_db(db_base.db_base):
                 self._format_error(e, tries, "delete", "instances running")
             tries -= 1
 
-    def new_rows(self, tables, uuid_list=None):
+    def new_rows(self, tables, uuid_list=None, confidential_data=False):
         """
-        Make a transactional insertion of rows at several tables
+        Make a transactional insertion of rows at several tables. Can be also a deletion
         :param tables: list with dictionary where the keys are the table names and the values are a row or row list
             with the values to be inserted at the table. Each row is a dictionary with the key values. E.g.:
             tables = [
@@ -790,10 +799,12 @@ class nfvo_db(db_base.db_base):
             If tables does not contain the 'created_at', it is generated incrementally with the order of tables. You can
             provide a integer value, that it is an index multiply by 0.00001 to add to the created time to manually set
             up and order
+            If dict contains {"TO-DELETE": uuid} the entry is deleted if exist instead of inserted
         :param uuid_list: list of created uuids, first one is the root (#TODO to store at uuid table)
         :return: None if success,  raise exception otherwise
         """
         tries = 2
+        table_name = None
         while tries:
             created_time = time.time()
             try:
@@ -805,19 +816,24 @@ class nfvo_db(db_base.db_base):
                             if isinstance(row_list, dict):
                                 row_list = (row_list, )  #create a list with the single value
                             for row in row_list:
+                                if "TO-DELETE" in row:
+                                    self._delete_row_by_id_internal(table_name, row["TO-DELETE"])
+                                    continue
+
                                 if table_name in self.tables_with_created_field:
                                     if "created_at" in row:
-                                        created_time_param = created_time + row.pop("created_at")*0.00001
+                                        created_time_param = created_time + (index + row.pop("created_at"))*0.00001
                                     else:
                                         created_time_param = created_time + index*0.00001
-                                        index += 1
+                                    index += 1
                                 else:
                                     created_time_param = 0
                                 self._new_row_internal(table_name, row, add_uuid=False, root_uuid=None,
-                                                               created_time=created_time_param)
+                                                       confidential_data=confidential_data,
+                                                       created_time=created_time_param)
                     return
             except (mdb.Error, AttributeError) as e:
-                self._format_error(e, tries)
+                self._format_error(e, tries, table=table_name)
             tries -= 1
 
     def new_instance_scenario_as_a_whole(self,tenant_id,instance_scenario_name,instance_scenario_description,scenarioDict):
@@ -840,7 +856,7 @@ class nfvo_db(db_base.db_base):
                         INSERT_["cloud_config"] = yaml.safe_dump(scenarioDict["cloud-config"], default_flow_style=True, width=256)
 
                     instance_uuid = self._new_row_internal('instance_scenarios', INSERT_, add_uuid=True, root_uuid=None, created_time=created_time)
-                    
+
                     net_scene2instance={}
                     #instance_nets   #nets interVNF
                     for net in scenarioDict['nets']:
@@ -850,10 +866,10 @@ class nfvo_db(db_base.db_base):
                             net["vim_id_sites"] ={datacenter_site_id: net['vim_id']}
                             net["vim_id_sites"]["datacenter_site_id"] = {datacenter_site_id: net['vim_id']}
                         sce_net_id = net.get("uuid")
-                        
+
                         for datacenter_site_id,vim_id in net["vim_id_sites"].iteritems():
                             INSERT_={'vim_net_id': vim_id, 'created': net.get('created', False), 'instance_scenario_id':instance_uuid } #,  'type': net['type']
-                            INSERT_['datacenter_id'] = datacenter_site_id 
+                            INSERT_['datacenter_id'] = datacenter_site_id
                             INSERT_['datacenter_tenant_id'] = scenarioDict["datacenter2tenant"][datacenter_site_id]
                             if not net.get('created', False):
                                 INSERT_['status'] = "ACTIVE"
@@ -863,31 +879,31 @@ class nfvo_db(db_base.db_base):
                             instance_net_uuid =  self._new_row_internal('instance_nets', INSERT_, True, instance_uuid, created_time)
                             net_scene2instance[ sce_net_id ][datacenter_site_id] = instance_net_uuid
                             net['uuid'] = instance_net_uuid  #overwrite scnario uuid by instance uuid
-                        
+
                         if 'ip_profile' in net:
                             net['ip_profile']['net_id'] = None
                             net['ip_profile']['sce_net_id'] = None
                             net['ip_profile']['instance_net_id'] = instance_net_uuid
                             created_time += 0.00001
                             ip_profile_id = self._new_row_internal('ip_profiles', net['ip_profile'])
-                    
+
                     #instance_vnfs
                     for vnf in scenarioDict['vnfs']:
                         datacenter_site_id = vnf.get('datacenter_id', datacenter_id)
                         INSERT_={'instance_scenario_id': instance_uuid,  'vnf_id': vnf['vnf_id']  }
-                        INSERT_['datacenter_id'] = datacenter_site_id 
+                        INSERT_['datacenter_id'] = datacenter_site_id
                         INSERT_['datacenter_tenant_id'] = scenarioDict["datacenter2tenant"][datacenter_site_id]
                         if vnf.get("uuid"):
                             INSERT_['sce_vnf_id'] = vnf['uuid']
                         created_time += 0.00001
                         instance_vnf_uuid =  self._new_row_internal('instance_vnfs', INSERT_, True, instance_uuid, created_time)
                         vnf['uuid'] = instance_vnf_uuid  #overwrite scnario uuid by instance uuid
-                        
+
                         #instance_nets   #nets intraVNF
                         for net in vnf['nets']:
                             net_scene2instance[ net['uuid'] ] = {}
                             INSERT_={'vim_net_id': net['vim_id'], 'created': net.get('created', False), 'instance_scenario_id':instance_uuid  } #,  'type': net['type']
-                            INSERT_['datacenter_id'] = net.get('datacenter_id', datacenter_site_id) 
+                            INSERT_['datacenter_id'] = net.get('datacenter_id', datacenter_site_id)
                             INSERT_['datacenter_tenant_id'] = scenarioDict["datacenter2tenant"][datacenter_id]
                             if net.get("uuid"):
                                 INSERT_['net_id'] = net['uuid']
@@ -895,7 +911,7 @@ class nfvo_db(db_base.db_base):
                             instance_net_uuid =  self._new_row_internal('instance_nets', INSERT_, True, instance_uuid, created_time)
                             net_scene2instance[ net['uuid'] ][datacenter_site_id] = instance_net_uuid
                             net['uuid'] = instance_net_uuid  #overwrite scnario uuid by instance uuid
-                            
+
                             if 'ip_profile' in net:
                                 net['ip_profile']['net_id'] = None
                                 net['ip_profile']['sce_net_id'] = None
@@ -909,7 +925,7 @@ class nfvo_db(db_base.db_base):
                             created_time += 0.00001
                             instance_vm_uuid =  self._new_row_internal('instance_vms', INSERT_, True, instance_uuid, created_time)
                             vm['uuid'] = instance_vm_uuid  #overwrite scnario uuid by instance uuid
-                            
+
                             #instance_interfaces
                             for interface in vm['interfaces']:
                                 net_id = interface.get('net_id', None)
@@ -940,7 +956,7 @@ class nfvo_db(db_base.db_base):
         '''Obtain the instance information, filtering by one or several of the tenant, uuid or name
         instance_id is the uuid or the name if it is not a valid uuid format
         Only one instance must mutch the filtering or an error is returned
-        ''' 
+        '''
         tries = 2
         while tries:
             try:
@@ -964,32 +980,40 @@ class nfvo_db(db_base.db_base):
                     self.logger.debug(cmd)
                     self.cur.execute(cmd)
                     rows = self.cur.fetchall()
-                    
+
                     if self.cur.rowcount == 0:
-                        raise db_base.db_base_Exception("No instance found where " + where_text, db_base.HTTP_Not_Found)
+                        raise db_base.db_base_Exception("No instance found where " + where_text, httperrors.Not_Found)
                     elif self.cur.rowcount > 1:
                         raise db_base.db_base_Exception("More than one instance found where " + where_text,
-                                                        db_base.HTTP_Bad_Request)
+                                                        httperrors.Bad_Request)
                     instance_dict = rows[0]
                     if instance_dict["cloud_config"]:
                         instance_dict["cloud-config"] = yaml.load(instance_dict["cloud_config"])
                     del instance_dict["cloud_config"]
-                    
+
                     # instance_vnfs
                     cmd = "SELECT iv.uuid as uuid, iv.vnf_id as vnf_id, sv.name as vnf_name, sce_vnf_id, datacenter_id"\
-                                " ,datacenter_tenant_id, v.mgmt_access, sv.member_vnf_index, v.osm_id as vnfd_osm_id "\
-                            " FROM instance_vnfs as iv left join sce_vnfs as sv "\
-                                "on iv.sce_vnf_id=sv.uuid join vnfs as v on iv.vnf_id=v.uuid" \
-                            " WHERE iv.instance_scenario_id='{}'" \
-                            " ORDER BY iv.created_at ".format(instance_dict['uuid'])
+                          ", datacenter_tenant_id, v.mgmt_access, sv.member_vnf_index, v.osm_id as vnfd_osm_id "\
+                          "FROM instance_vnfs as iv left join sce_vnfs as sv "\
+                          " on iv.sce_vnf_id=sv.uuid join vnfs as v on iv.vnf_id=v.uuid " \
+                          "WHERE iv.instance_scenario_id='{}' " \
+                          "ORDER BY iv.created_at ".format(instance_dict['uuid'])
                     self.logger.debug(cmd)
                     self.cur.execute(cmd)
                     instance_dict['vnfs'] = self.cur.fetchall()
                     for vnf in instance_dict['vnfs']:
-                        vnf_manage_iface_list=[]
-                        #instance vms
+                        vnf["ip_address"] = None
+                        vnf_mgmt_access_iface = None
+                        vnf_mgmt_access_vm = None
+                        if vnf["mgmt_access"]:
+                            vnf_mgmt_access = yaml.load(vnf["mgmt_access"])
+                            vnf_mgmt_access_iface = vnf_mgmt_access.get("interface_id")
+                            vnf_mgmt_access_vm = vnf_mgmt_access.get("vm_id")
+                            vnf["ip_address"] = vnf_mgmt_access.get("ip-address")
+
+                        # instance vms
                         cmd = "SELECT iv.uuid as uuid, vim_vm_id, status, error_msg, vim_info, iv.created_at as "\
-                               "created_at, name, vms.osm_id as vdu_osm_id"\
+                               "created_at, name, vms.osm_id as vdu_osm_id, vim_name, vms.uuid as vm_uuid"\
                                 " FROM instance_vms as iv join vms on iv.vm_id=vms.uuid "\
                                 " WHERE instance_vnf_id='{}' ORDER BY iv.created_at".format(vnf['uuid'])
                         self.logger.debug(cmd)
@@ -999,29 +1023,38 @@ class nfvo_db(db_base.db_base):
                             vm_manage_iface_list=[]
                             # instance_interfaces
                             cmd = "SELECT vim_interface_id, instance_net_id, internal_name,external_name, mac_address,"\
-                                  " ii.ip_address as ip_address, vim_info, i.type as type, sdn_port_id"\
+                                  " ii.ip_address as ip_address, vim_info, i.type as type, sdn_port_id, i.uuid"\
                                   " FROM instance_interfaces as ii join interfaces as i on ii.interface_id=i.uuid"\
                                   " WHERE instance_vm_id='{}' ORDER BY created_at".format(vm['uuid'])
                             self.logger.debug(cmd)
                             self.cur.execute(cmd )
                             vm['interfaces'] = self.cur.fetchall()
                             for iface in vm['interfaces']:
+                                if vnf_mgmt_access_iface and vnf_mgmt_access_iface == iface["uuid"]:
+                                    if not vnf["ip_address"]:
+                                        vnf["ip_address"] = iface["ip_address"]
                                 if iface["type"] == "mgmt" and iface["ip_address"]:
-                                    vnf_manage_iface_list.append(iface["ip_address"])
                                     vm_manage_iface_list.append(iface["ip_address"])
                                 if not verbose:
                                     del iface["type"]
-                            if vm_manage_iface_list: vm["ip_address"] = ",".join(vm_manage_iface_list)
-                        if vnf_manage_iface_list: vnf["ip_address"] = ",".join(vnf_manage_iface_list)
-                        
+                                del iface["uuid"]
+                            if vm_manage_iface_list:
+                                vm["ip_address"] = ",".join(vm_manage_iface_list)
+                                if not vnf["ip_address"] and vnf_mgmt_access_vm == vm["vm_uuid"]:
+                                    vnf["ip_address"] = vm["ip_address"]
+                            del vm["vm_uuid"]
+
                     #instance_nets
-                    #select_text = "instance_nets.uuid as uuid,sce_nets.name as net_name,instance_nets.vim_net_id as net_id,instance_nets.status as status,instance_nets.external as external" 
+                    #select_text = "instance_nets.uuid as uuid,sce_nets.name as net_name,instance_nets.vim_net_id as net_id,instance_nets.status as status,instance_nets.external as external"
                     #from_text = "instance_nets join instance_scenarios on instance_nets.instance_scenario_id=instance_scenarios.uuid " + \
                     #            "join sce_nets on instance_scenarios.scenario_id=sce_nets.scenario_id"
                     #where_text = "instance_nets.instance_scenario_id='"+ instance_dict['uuid'] + "'"
-                    cmd = "SELECT uuid,vim_net_id,status,error_msg,vim_info,created, sce_net_id, net_id as vnf_net_id, datacenter_id, datacenter_tenant_id, sdn_net_id"\
-                            " FROM instance_nets" \
-                            " WHERE instance_scenario_id='{}' ORDER BY created_at".format(instance_dict['uuid'])
+                    cmd = "SELECT inets.uuid as uuid,vim_net_id,status,error_msg,vim_info,created, sce_net_id, " \
+                          "net_id as vnf_net_id, datacenter_id, datacenter_tenant_id, sdn_net_id, " \
+                          "snets.osm_id as ns_net_osm_id, nets.osm_id as vnf_net_osm_id, inets.vim_name " \
+                          "FROM instance_nets as inets left join sce_nets as snets on inets.sce_net_id=snets.uuid " \
+                          "left join nets on inets.net_id=nets.uuid " \
+                          "WHERE instance_scenario_id='{}' ORDER BY inets.created_at".format(instance_dict['uuid'])
                     self.logger.debug(cmd)
                     self.cur.execute(cmd)
                     instance_dict['nets'] = self.cur.fetchall()
@@ -1072,18 +1105,18 @@ class nfvo_db(db_base.db_base):
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries)
             tries -= 1
-        
+
     def delete_instance_scenario(self, instance_id, tenant_id=None):
         '''Deletes a instance_Scenario, filtering by one or serveral of the tenant, uuid or name
         instance_id is the uuid or the name if it is not a valid uuid format
         Only one instance_scenario must mutch the filtering or an error is returned
-        ''' 
+        '''
         tries = 2
         while tries:
             try:
                 with self.con:
                     self.cur = self.con.cursor(mdb.cursors.DictCursor)
-    
+
                     #instance table
                     where_list=[]
                     if tenant_id is not None: where_list.append( "tenant_id='" + tenant_id +"'" )
@@ -1096,24 +1129,24 @@ class nfvo_db(db_base.db_base):
                     self.logger.debug(cmd)
                     self.cur.execute(cmd)
                     rows = self.cur.fetchall()
-                    
+
                     if self.cur.rowcount==0:
-                        raise db_base.db_base_Exception("No instance found where " + where_text, db_base.HTTP_Bad_Request)
+                        raise db_base.db_base_Exception("No instance found where " + where_text, httperrors.Bad_Request)
                     elif self.cur.rowcount>1:
-                        raise db_base.db_base_Exception("More than one instance found where " + where_text, db_base.HTTP_Bad_Request)
+                        raise db_base.db_base_Exception("More than one instance found where " + where_text, httperrors.Bad_Request)
                     instance_uuid = rows[0]["uuid"]
                     instance_name = rows[0]["name"]
-                    
+
                     #sce_vnfs
                     cmd = "DELETE FROM instance_scenarios WHERE uuid='{}'".format(instance_uuid)
                     self.logger.debug(cmd)
                     self.cur.execute(cmd)
-    
+
                     return instance_uuid + " " + instance_name
             except (mdb.Error, AttributeError) as e:
                 self._format_error(e, tries, "delete", "No dependences can avoid deleting!!!!")
             tries -= 1
-    
+
     def new_instance_scenario(self, instance_scenario_dict, tenant_id):
         #return self.new_row('vnfs', vnf_dict, None, tenant_id, True, True)
         return self._new_row_internal('instance_scenarios', instance_scenario_dict, tenant_id, add_uuid=True, root_uuid=None, log=True)
@@ -1129,7 +1162,7 @@ class nfvo_db(db_base.db_base):
     def update_instance_vnf(self, instance_vnf_dict):
         #TODO:
         return
-    
+
     def delete_instance_vnf(self, instance_vnf_id):
         #TODO:
         return
@@ -1141,14 +1174,14 @@ class nfvo_db(db_base.db_base):
     def update_instance_vm(self, instance_vm_dict):
         #TODO:
         return
-    
+
     def delete_instance_vm(self, instance_vm_id):
         #TODO:
         return
 
     def new_instance_net(self, instance_net_dict, tenant_id, instance_scenario_id = None):
         return self._new_row_internal('instance_nets', instance_net_dict, tenant_id, add_uuid=True, root_uuid=instance_scenario_id, log=True)
-    
+
     def update_instance_net(self, instance_net_dict):
         #TODO:
         return
@@ -1156,7 +1189,7 @@ class nfvo_db(db_base.db_base):
     def delete_instance_net(self, instance_net_id):
         #TODO:
         return
-    
+
     def new_instance_interface(self, instance_interface_dict, tenant_id, instance_scenario_id = None):
         return self._new_row_internal('instance_interfaces', instance_interface_dict, tenant_id, add_uuid=True, root_uuid=instance_scenario_id, log=True)
 
@@ -1170,7 +1203,7 @@ class nfvo_db(db_base.db_base):
 
     def update_datacenter_nets(self, datacenter_id, new_net_list=[]):
         ''' Removes the old and adds the new net list at datacenter list for one datacenter.
-        Attribute 
+        Attribute
             datacenter_id: uuid of the datacenter to act upon
             table: table where to insert
             new_net_list: the new values to be inserted. If empty it only deletes the existing nets
@@ -1196,4 +1229,4 @@ class nfvo_db(db_base.db_base):
                 self._format_error(e, tries)
             tries -= 1
 
-        
+

@@ -1,10 +1,25 @@
+# Copyright 2018 Telefonica S.A.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 .PHONY: all test clean
 
 SHELL := /bin/bash
 
 BRANCH ?= master
 
-all: lib-openvim osm-im
+all:  #  lib-openvim    # osm-im
 	$(MAKE) clean_build build
 	$(MAKE) clean_build package
 
@@ -74,7 +89,7 @@ package: prepare
 snap:
 	echo "Nothing to be done yet"
 
-install:
+install: lib-openvim osm-im
 	dpkg -i IM/deb_dist/python-osm-im*.deb
 	dpkg -i openvim/.build/python-lib-osm-openvim*.deb
 	dpkg -i .build/python-osm-ro*.deb

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openmano
 # All Rights Reserved.
 #
@@ -32,7 +32,7 @@ to the VIM connector's SFC resources as follows:
 - Service Function (OSM) -> Port Pair Group (Neutron)
 - Service Function Path (OSM) -> Port Chain (Neutron)
 '''
-__author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes, xFlow Research, Igor D.C."
+__author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes, xFlow Research, Igor D.C., Eduardo Sousa"
 __date__  = "$22-sep-2017 23:59:59$"
 
 import vimconn
@@ -44,6 +44,8 @@ import yaml
 import random
 import re
 import copy
+from pprint import pformat
+from types import StringTypes
 
 from novaclient import client as nClient, exceptions as nvExceptions
 from keystoneauth1.identity import v2, v3
@@ -52,7 +54,6 @@ import keystoneclient.exceptions as ksExceptions
 import keystoneclient.v3.client as ksClient_v3
 import keystoneclient.v2_0.client as ksClient_v2
 from glanceclient import client as glClient
-import glanceclient.client as gl1Client
 import glanceclient.exc as gl1Exceptions
 from  cinderclient import client as cClient
 from httplib import HTTPException
@@ -77,6 +78,18 @@ supportedClassificationTypes = ['legacy_flow_classifier']
 #global var to have a timeout creating and deleting volumes
 volume_timeout = 600
 server_timeout = 600
+
+
+class SafeDumper(yaml.SafeDumper):
+    def represent_data(self, data):
+        # Openstack APIs use custom subclasses of dict and YAML safe dumper
+        # is designed to not handle that (reference issue 142 of pyyaml)
+        if isinstance(data, dict) and data.__class__ != dict:
+            # A simple solution is to convert those items back to dicts
+            data = dict(data.items())
+
+        return super(SafeDumper, self).represent_data(data)
+
 
 class vimconnector(vimconn.vimconnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None,
@@ -118,7 +131,7 @@ class vimconnector(vimconn.vimconnector):
         self.neutron = self.session.get('neutron')
         self.cinder = self.session.get('cinder')
         self.glance = self.session.get('glance')
-        self.glancev1 = self.session.get('glancev1')
+        # self.glancev1 = self.session.get('glancev1')
         self.keystone = self.session.get('keystone')
         self.api_version3 = self.session.get('api_version3')
         self.vim_type = self.config.get("vim_type")
@@ -159,11 +172,30 @@ class vimconnector(vimconn.vimconnector):
             vimconn.vimconnector.__setitem__(self, index, value)
         self.session['reload_client'] = True
 
+    def serialize(self, value):
+        """Serialization of python basic types.
+
+        In the case value is not serializable a message will be logged and a
+        simple representation of the data that cannot be converted back to
+        python is returned.
+        """
+        if isinstance(value, StringTypes):
+            return value
+
+        try:
+            return yaml.dump(value, Dumper=SafeDumper,
+                             default_flow_style=True, width=256)
+        except yaml.representer.RepresenterError:
+                self.logger.debug(
+                    'The following entity cannot be serialized in YAML:'
+                    '\n\n%s\n\n', pformat(value), exc_info=True)
+                return str(value)
+
     def _reload_connection(self):
         '''Called before any operation, it check if credentials has changed
         Throw keystoneclient.apiclient.exceptions.AuthorizationFailure
         '''
-        #TODO control the timing and possible token timeout, but it seams that python client does this task for us :-) 
+        #TODO control the timing and possible token timeout, but it seams that python client does this task for us :-)
         if self.session['reload_client']:
             if self.config.get('APIversion'):
                 self.api_version3 = self.config['APIversion'] == 'v3.3' or self.config['APIversion'] == '3'
@@ -219,8 +251,8 @@ class vimconnector(vimconn.vimconnector):
                 glance_endpoint = None
             self.glance = self.session['glance'] = glClient.Client(2, session=sess, endpoint=glance_endpoint)
             #using version 1 of glance client in new_image()
-            self.glancev1 = self.session['glancev1'] = glClient.Client('1', session=sess,
-                                                                       endpoint=glance_endpoint)
+            # self.glancev1 = self.session['glancev1'] = glClient.Client('1', session=sess,
+            #                                                            endpoint=glance_endpoint)
             self.session['reload_client'] = False
             self.persistent_info['session'] = self.session
             # add availablity zone info inside  self.persistent_info
@@ -348,15 +380,16 @@ class vimconnector(vimconn.vimconnector):
 
     def _format_exception(self, exception):
         '''Transform a keystone, nova, neutron  exception into a vimconn exception'''
-        if isinstance(exception, (HTTPException, gl1Exceptions.HTTPException, gl1Exceptions.CommunicationError,
-                                  ConnectionError, ksExceptions.ConnectionError, neExceptions.ConnectionFailed
-                                  )):
-            raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))
-        elif isinstance(exception, (nvExceptions.ClientException, ksExceptions.ClientException,
-                                    neExceptions.NeutronException, nvExceptions.BadRequest)):
-            raise vimconn.vimconnUnexpectedResponse(type(exception).__name__ + ": " + str(exception))
-        elif isinstance(exception, (neExceptions.NetworkNotFoundClient, nvExceptions.NotFound)):
+        if isinstance(exception, (neExceptions.NetworkNotFoundClient, nvExceptions.NotFound, ksExceptions.NotFound, gl1Exceptions.HTTPNotFound)):
             raise vimconn.vimconnNotFoundException(type(exception).__name__ + ": " + str(exception))
+        elif isinstance(exception, (HTTPException, gl1Exceptions.HTTPException, gl1Exceptions.CommunicationError,
+                               ConnectionError, ksExceptions.ConnectionError, neExceptions.ConnectionFailed)):
+            raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))
+        elif isinstance(exception,  (KeyError, nvExceptions.BadRequest, ksExceptions.BadRequest)):
+            raise vimconn.vimconnException(type(exception).__name__ + ": " + str(exception))
+        elif isinstance(exception, (nvExceptions.ClientException, ksExceptions.ClientException,
+                                    neExceptions.NeutronException)):
+            raise vimconn.vimconnUnexpectedResponse(type(exception).__name__ + ": " + str(exception))
         elif isinstance(exception, nvExceptions.Conflict):
             raise vimconn.vimconnConflictException(type(exception).__name__ + ": " + str(exception))
         elif isinstance(exception, vimconn.vimconnException):
@@ -400,7 +433,7 @@ class vimconnector(vimconn.vimconnector):
             else:
                 project = self.keystone.tenants.create(tenant_name, tenant_description)
             return project.id
-        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
+        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ksExceptions.BadRequest, ConnectionError)  as e:
             self._format_exception(e)
 
     def delete_tenant(self, tenant_id):
@@ -413,7 +446,7 @@ class vimconnector(vimconn.vimconnector):
             else:
                 self.keystone.tenants.delete(tenant_id)
             return tenant_id
-        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
+        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ksExceptions.NotFound, ConnectionError)  as e:
             self._format_exception(e)
 
     def new_network(self,net_name, net_type, ip_profile=None, shared=False, vlan=None):
@@ -463,7 +496,9 @@ class vimconnector(vimconn.vimconnector):
                     }
             # Gateway should be set to None if not needed. Otherwise openstack assigns one by default
             if ip_profile.get('gateway_address'):
-                subnet['gateway_ip'] = ip_profile.get('gateway_address')
+                subnet['gateway_ip'] = ip_profile['gateway_address']
+            else:
+                subnet['gateway_ip'] = None
             if ip_profile.get('dns_address'):
                 subnet['dns_nameservers'] = ip_profile['dns_address'].split(";")
             if 'dhcp_enabled' in ip_profile:
@@ -533,7 +568,9 @@ class vimconnector(vimconn.vimconnector):
             subnets.append(subnet)
         net["subnets"] = subnets
         net["encapsulation"] = net.get('provider:network_type')
+        net["encapsulation_type"] = net.get('provider:network_type')
         net["segmentation_id"] = net.get('provider:segmentation_id')
+        net["encapsulation_id"] = net.get('provider:segmentation_id')
         return net
 
     def delete_network(self, net_id):
@@ -561,13 +598,13 @@ class vimconnector(vimconn.vimconnector):
                 net_id:         #VIM id of this network
                     status:     #Mandatory. Text with one of:
                                 #  DELETED (not found at vim)
-                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...) 
+                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
                                 #  OTHER (Vim reported other status not understood)
                                 #  ERROR (VIM indicates an ERROR status)
-                                #  ACTIVE, INACTIVE, DOWN (admin down), 
+                                #  ACTIVE, INACTIVE, DOWN (admin down),
                                 #  BUILD (on building process)
                                 #
-                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR 
+                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
                     vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
 
         '''
@@ -584,10 +621,9 @@ class vimconnector(vimconn.vimconnector):
 
                 if net['status'] == "ACTIVE" and not net_vim['admin_state_up']:
                     net['status'] = 'DOWN'
-                try:
-                    net['vim_info'] = yaml.safe_dump(net_vim, default_flow_style=True, width=256)
-                except yaml.representer.RepresenterError:
-                    net['vim_info'] = str(net_vim)
+
+                net['vim_info'] = self.serialize(net_vim)
+
                 if net_vim.get('fault'):  #TODO
                     net['error_msg'] = str(net_vim['fault'])
             except vimconn.vimconnNotFoundException as e:
@@ -661,83 +697,84 @@ class vimconnector(vimconn.vimconnector):
         retry=0
         max_retries=3
         name_suffix = 0
-        name=flavor_data['name']
-        while retry<max_retries:
-            retry+=1
-            try:
-                self._reload_connection()
-                if change_name_if_used:
-                    #get used names
-                    fl_names=[]
-                    fl=self.nova.flavors.list()
-                    for f in fl:
-                        fl_names.append(f.name)
-                    while name in fl_names:
-                        name_suffix += 1
-                        name = flavor_data['name']+"-" + str(name_suffix)
+        try:
+            name=flavor_data['name']
+            while retry<max_retries:
+                retry+=1
+                try:
+                    self._reload_connection()
+                    if change_name_if_used:
+                        #get used names
+                        fl_names=[]
+                        fl=self.nova.flavors.list()
+                        for f in fl:
+                            fl_names.append(f.name)
+                        while name in fl_names:
+                            name_suffix += 1
+                            name = flavor_data['name']+"-" + str(name_suffix)
 
-                ram = flavor_data.get('ram',64)
-                vcpus = flavor_data.get('vcpus',1)
-                numa_properties=None
+                    ram = flavor_data.get('ram',64)
+                    vcpus = flavor_data.get('vcpus',1)
+                    numa_properties=None
 
-                extended = flavor_data.get("extended")
-                if extended:
-                    numas=extended.get("numas")
-                    if numas:
-                        numa_nodes = len(numas)
-                        if numa_nodes > 1:
-                            return -1, "Can not add flavor with more than one numa"
-                        numa_properties = {"hw:numa_nodes":str(numa_nodes)}
-                        numa_properties["hw:mem_page_size"] = "large"
-                        numa_properties["hw:cpu_policy"] = "dedicated"
-                        numa_properties["hw:numa_mempolicy"] = "strict"
-                        if self.vim_type == "VIO":
-                            numa_properties["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
-                            numa_properties["vmware:latency_sensitivity_level"] = "high"
-                        for numa in numas:
-                            #overwrite ram and vcpus
-                            #check if key 'memory' is present in numa else use ram value at flavor
-                            if 'memory' in numa:
-                                ram = numa['memory']*1024
-                            #See for reference: https://specs.openstack.org/openstack/nova-specs/specs/mitaka/implemented/virt-driver-cpu-thread-pinning.html
-                            if 'paired-threads' in numa:
-                                vcpus = numa['paired-threads']*2
-                                #cpu_thread_policy "require" implies that the compute node must have an STM architecture
-                                numa_properties["hw:cpu_thread_policy"] = "require"
-                                numa_properties["hw:cpu_policy"] = "dedicated"
-                            elif 'cores' in numa:
-                                vcpus = numa['cores']
-                                # cpu_thread_policy "prefer" implies that the host must not have an SMT architecture, or a non-SMT architecture will be emulated
-                                numa_properties["hw:cpu_thread_policy"] = "isolate"
-                                numa_properties["hw:cpu_policy"] = "dedicated"
-                            elif 'threads' in numa:
-                                vcpus = numa['threads']
-                                # cpu_thread_policy "prefer" implies that the host may or may not have an SMT architecture
-                                numa_properties["hw:cpu_thread_policy"] = "prefer"
-                                numa_properties["hw:cpu_policy"] = "dedicated"
-                            # for interface in numa.get("interfaces",() ):
-                            #     if interface["dedicated"]=="yes":
-                            #         raise vimconn.vimconnException("Passthrough interfaces are not supported for the openstack connector", http_code=vimconn.HTTP_Service_Unavailable)
-                            #     #TODO, add the key 'pci_passthrough:alias"="<label at config>:<number ifaces>"' when a way to connect it is available
+                    extended = flavor_data.get("extended")
+                    if extended:
+                        numas=extended.get("numas")
+                        if numas:
+                            numa_nodes = len(numas)
+                            if numa_nodes > 1:
+                                return -1, "Can not add flavor with more than one numa"
+                            numa_properties = {"hw:numa_nodes":str(numa_nodes)}
+                            numa_properties["hw:mem_page_size"] = "large"
+                            numa_properties["hw:cpu_policy"] = "dedicated"
+                            numa_properties["hw:numa_mempolicy"] = "strict"
+                            if self.vim_type == "VIO":
+                                numa_properties["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
+                                numa_properties["vmware:latency_sensitivity_level"] = "high"
+                            for numa in numas:
+                                #overwrite ram and vcpus
+                                #check if key 'memory' is present in numa else use ram value at flavor
+                                if 'memory' in numa:
+                                    ram = numa['memory']*1024
+                                #See for reference: https://specs.openstack.org/openstack/nova-specs/specs/mitaka/implemented/virt-driver-cpu-thread-pinning.html
+                                if 'paired-threads' in numa:
+                                    vcpus = numa['paired-threads']*2
+                                    #cpu_thread_policy "require" implies that the compute node must have an STM architecture
+                                    numa_properties["hw:cpu_thread_policy"] = "require"
+                                    numa_properties["hw:cpu_policy"] = "dedicated"
+                                elif 'cores' in numa:
+                                    vcpus = numa['cores']
+                                    # cpu_thread_policy "prefer" implies that the host must not have an SMT architecture, or a non-SMT architecture will be emulated
+                                    numa_properties["hw:cpu_thread_policy"] = "isolate"
+                                    numa_properties["hw:cpu_policy"] = "dedicated"
+                                elif 'threads' in numa:
+                                    vcpus = numa['threads']
+                                    # cpu_thread_policy "prefer" implies that the host may or may not have an SMT architecture
+                                    numa_properties["hw:cpu_thread_policy"] = "prefer"
+                                    numa_properties["hw:cpu_policy"] = "dedicated"
+                                # for interface in numa.get("interfaces",() ):
+                                #     if interface["dedicated"]=="yes":
+                                #         raise vimconn.vimconnException("Passthrough interfaces are not supported for the openstack connector", http_code=vimconn.HTTP_Service_Unavailable)
+                                #     #TODO, add the key 'pci_passthrough:alias"="<label at config>:<number ifaces>"' when a way to connect it is available
 
-                #create flavor                 
-                new_flavor=self.nova.flavors.create(name,
-                                ram,
-                                vcpus,
-                                flavor_data.get('disk',0),
-                                is_public=flavor_data.get('is_public', True)
-                            )
-                #add metadata
-                if numa_properties:
-                    new_flavor.set_keys(numa_properties)
-                return new_flavor.id
-            except nvExceptions.Conflict as e:
-                if change_name_if_used and retry < max_retries:
-                    continue
-                self._format_exception(e)
-            #except nvExceptions.BadRequest as e:
-            except (ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError) as e:
-                self._format_exception(e)
+                    #create flavor
+                    new_flavor=self.nova.flavors.create(name,
+                                    ram,
+                                    vcpus,
+                                    flavor_data.get('disk',0),
+                                    is_public=flavor_data.get('is_public', True)
+                                )
+                    #add metadata
+                    if numa_properties:
+                        new_flavor.set_keys(numa_properties)
+                    return new_flavor.id
+                except nvExceptions.Conflict as e:
+                    if change_name_if_used and retry < max_retries:
+                        continue
+                    self._format_exception(e)
+        #except nvExceptions.BadRequest as e:
+        except (ksExceptions.ClientException, nvExceptions.ClientException, ConnectionError, KeyError) as e:
+            self._format_exception(e)
 
     def delete_flavor(self,flavor_id):
         '''Deletes a tenant flavor from openstack VIM. Returns the old flavor_id
@@ -770,40 +807,48 @@ class vimconnector(vimconn.vimconnector):
                 if "disk_format" in image_dict:
                     disk_format=image_dict["disk_format"]
                 else: #autodiscover based on extension
-                    if image_dict['location'][-6:]==".qcow2":
+                    if image_dict['location'].endswith(".qcow2"):
                         disk_format="qcow2"
-                    elif image_dict['location'][-4:]==".vhd":
+                    elif image_dict['location'].endswith(".vhd"):
                         disk_format="vhd"
-                    elif image_dict['location'][-5:]==".vmdk":
+                    elif image_dict['location'].endswith(".vmdk"):
                         disk_format="vmdk"
-                    elif image_dict['location'][-4:]==".vdi":
+                    elif image_dict['location'].endswith(".vdi"):
                         disk_format="vdi"
-                    elif image_dict['location'][-4:]==".iso":
+                    elif image_dict['location'].endswith(".iso"):
                         disk_format="iso"
-                    elif image_dict['location'][-4:]==".aki":
+                    elif image_dict['location'].endswith(".aki"):
                         disk_format="aki"
-                    elif image_dict['location'][-4:]==".ari":
+                    elif image_dict['location'].endswith(".ari"):
                         disk_format="ari"
-                    elif image_dict['location'][-4:]==".ami":
+                    elif image_dict['location'].endswith(".ami"):
                         disk_format="ami"
                     else:
                         disk_format="raw"
                 self.logger.debug("new_image: '%s' loading from '%s'", image_dict['name'], image_dict['location'])
-                if image_dict['location'][0:4]=="http":
-                    new_image = self.glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
-                            container_format="bare", location=image_dict['location'], disk_format=disk_format)
+                if self.vim_type == "VIO":
+                    container_format = "bare"
+                    if 'container_format' in image_dict:
+                        container_format = image_dict['container_format']
+                    new_image = self.glance.images.create(name=image_dict['name'], container_format=container_format,
+                                                          disk_format=disk_format)
+                else:
+                    new_image = self.glance.images.create(name=image_dict['name'])
+                if image_dict['location'].startswith("http"):
+                    # TODO there is not a method to direct download. It must be downloaded locally with requests
+                    raise vimconn.vimconnNotImplemented("Cannot create image from URL")
                 else: #local path
                     with open(image_dict['location']) as fimage:
-                        new_image = self.glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
-                            container_format="bare", data=fimage, disk_format=disk_format)
-                #insert metadata. We cannot use 'new_image.properties.setdefault' 
-                #because nova and glance are "INDEPENDENT" and we are using nova for reading metadata
-                new_image_nova=self.nova.images.find(id=new_image.id)
-                new_image_nova.metadata.setdefault('location',image_dict['location'])
+                        self.glance.images.upload(new_image.id, fimage)
+                        #new_image = self.glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
+                        #    container_format="bare", data=fimage, disk_format=disk_format)
                 metadata_to_load = image_dict.get('metadata')
-                if metadata_to_load:
-                    for k,v in yaml.load(metadata_to_load).iteritems():
-                        new_image_nova.metadata.setdefault(k,v)
+                # TODO location is a reserved word for current openstack versions. fixed for VIO please check for openstack
+                if self.vim_type == "VIO":
+                    metadata_to_load['upload_location'] = image_dict['location']
+                else:
+                    metadata_to_load['location'] = image_dict['location']
+                self.glance.images.update(new_image.id, **metadata_to_load)
                 return new_image.id
             except (nvExceptions.Conflict, ksExceptions.ClientException, nvExceptions.ClientException) as e:
                 self._format_exception(e)
@@ -820,16 +865,16 @@ class vimconnector(vimconn.vimconnector):
         '''
         try:
             self._reload_connection()
-            self.nova.images.delete(image_id)
+            self.glance.images.delete(image_id)
             return image_id
-        except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e: #TODO remove
+        except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, gl1Exceptions.HTTPNotFound, ConnectionError) as e: #TODO remove
             self._format_exception(e)
 
     def get_image_id_from_path(self, path):
         '''Get the image id from image path in the VIM database. Returns the image_id'''
         try:
             self._reload_connection()
-            images = self.nova.images.list()
+            images = self.glance.images.list()
             for image in images:
                 if image.metadata.get("location")==path:
                     return image.id
@@ -852,17 +897,18 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             filter_dict_os = filter_dict.copy()
             #First we filter by the available filter fields: name, id. The others are removed.
-            filter_dict_os.pop('checksum', None)
-            image_list = self.nova.images.findall(**filter_dict_os)
-            if len(image_list) == 0:
-                return []
-            #Then we filter by the rest of filter fields: checksum
+            image_list = self.glance.images.list()
             filtered_list = []
             for image in image_list:
                 try:
-                    image_class = self.glance.images.get(image.id)
-                    if 'checksum' not in filter_dict or image_class['checksum'] == filter_dict.get('checksum'):
-                        filtered_list.append(image_class.copy())
+                    if filter_dict.get("name") and image["name"] != filter_dict["name"]:
+                        continue
+                    if filter_dict.get("id") and image["id"] != filter_dict["id"]:
+                        continue
+                    if filter_dict.get("checksum") and image["checksum"] != filter_dict["checksum"]:
+                        continue
+
+                    filtered_list.append(image.copy())
                 except gl1Exceptions.HTTPNotFound:
                     pass
             return filtered_list
@@ -880,8 +926,8 @@ class vimconnector(vimconn.vimconnector):
                 return True
             if vm_status == 'ERROR':
                 return False
-            time.sleep(1)
-            elapsed_time += 1
+            time.sleep(5)
+            elapsed_time += 5
 
         # if we exceeded the timeout rollback
         if elapsed_time >= server_timeout:
@@ -979,6 +1025,7 @@ class vimconnector(vimconn.vimconnector):
             'disk_list': (optional) list with additional disks to the VM. Each item is a dict with:
                 'image_id': (optional). VIM id of an existing image. If not provided an empty disk must be mounted
                 'size': (mandatory) string with the size of the disk in GB
+                'vim_id' (optional) should use this existing volume id
             availability_zone_index: Index of availability_zone_list to use for this this VM. None if not AV required
             availability_zone_list: list of availability zones given by user in the VNFD descriptor.  Ignore if
                 availability_zone_index is None
@@ -1093,31 +1140,34 @@ class vimconnector(vimconn.vimconnector):
 
             # Create additional volumes in case these are present in disk_list
             base_disk_index = ord('b')
-            if disk_list != None:
+            if disk_list:
                 block_device_mapping = {}
                 for disk in disk_list:
-                    if 'image_id' in disk:
-                        volume = self.cinder.volumes.create(size = disk['size'],name = name + '_vd' +
-                                    chr(base_disk_index), imageRef = disk['image_id'])
+                    if disk.get('vim_id'):
+                        block_device_mapping['_vd' + chr(base_disk_index)] = disk['vim_id']
                     else:
-                        volume = self.cinder.volumes.create(size=disk['size'], name=name + '_vd' +
-                                    chr(base_disk_index))
-                    created_items["volume:" + str(volume.id)] = True
-                    block_device_mapping['_vd' +  chr(base_disk_index)] = volume.id
+                        if 'image_id' in disk:
+                            volume = self.cinder.volumes.create(size=disk['size'], name=name + '_vd' +
+                                                                chr(base_disk_index), imageRef=disk['image_id'])
+                        else:
+                            volume = self.cinder.volumes.create(size=disk['size'], name=name + '_vd' +
+                                                                chr(base_disk_index))
+                        created_items["volume:" + str(volume.id)] = True
+                        block_device_mapping['_vd' + chr(base_disk_index)] = volume.id
                     base_disk_index += 1
 
-                # Wait until volumes are with status available
-                keep_waiting = True
+                # Wait until created volumes are with status available
                 elapsed_time = 0
-                while keep_waiting and elapsed_time < volume_timeout:
-                    keep_waiting = False
-                    for volume_id in block_device_mapping.itervalues():
-                        if self.cinder.volumes.get(volume_id).status != 'available':
-                            keep_waiting = True
-                    if keep_waiting:
-                        time.sleep(1)
-                        elapsed_time += 1
-
+                while elapsed_time < volume_timeout:
+                    for created_item in created_items:
+                        v, _, volume_id = created_item.partition(":")
+                        if v == 'volume':
+                            if self.cinder.volumes.get(volume_id).status != 'available':
+                                break
+                    else:  # all ready: break from while
+                        break
+                    time.sleep(5)
+                    elapsed_time += 5
                 # If we exceeded the timeout rollback
                 if elapsed_time >= volume_timeout:
                     raise vimconn.vimconnException('Timeout creating volumes for instance ' + name,
@@ -1255,13 +1305,13 @@ class vimconnector(vimconn.vimconnector):
         Params:
             vm_id: uuid of the VM
             console_type, can be:
-                "novnc" (by default), "xvpvnc" for VNC types, 
+                "novnc" (by default), "xvpvnc" for VNC types,
                 "rdp-html5" for RDP types, "spice-html5" for SPICE types
         Returns dict with the console parameters:
                 protocol: ssh, ftp, http, https, ...
-                server:   usually ip address 
-                port:     the http, ssh, ... port 
-                suffix:   extra text, e.g. the http path and query string   
+                server:   usually ip address
+                port:     the http, ssh, ... port
+                suffix:   extra text, e.g. the http path and query string
         '''
         self.logger.debug("Getting VM CONSOLE from VIM")
         try:
@@ -1361,14 +1411,14 @@ class vimconnector(vimconn.vimconnector):
                 vm_id:          #VIM id of this Virtual Machine
                     status:     #Mandatory. Text with one of:
                                 #  DELETED (not found at vim)
-                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...) 
+                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
                                 #  OTHER (Vim reported other status not understood)
                                 #  ERROR (VIM indicates an ERROR status)
-                                #  ACTIVE, PAUSED, SUSPENDED, INACTIVE (not running), 
+                                #  ACTIVE, PAUSED, SUSPENDED, INACTIVE (not running),
                                 #  CREATING (on building process), ERROR
                                 #  ACTIVE:NoMgmtIP (Active but any of its interface has an IP address
                                 #
-                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR 
+                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
                     vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
                     interfaces:
                      -  vim_info:         #Text with plain information obtained from vim (yaml.safe_dump)
@@ -1391,10 +1441,9 @@ class vimconnector(vimconn.vimconnector):
                 else:
                     vm['status']    = "OTHER"
                     vm['error_msg'] = "VIM status reported " + vm_vim['status']
-                try:
-                    vm['vim_info']  = yaml.safe_dump(vm_vim, default_flow_style=True, width=256)
-                except yaml.representer.RepresenterError:
-                    vm['vim_info'] = str(vm_vim)
+
+                vm['vim_info'] = self.serialize(vm_vim)
+
                 vm["interfaces"] = []
                 if vm_vim.get('fault'):
                     vm['error_msg'] = str(vm_vim['fault'])
@@ -1404,20 +1453,17 @@ class vimconnector(vimconn.vimconnector):
                     port_dict = self.neutron.list_ports(device_id=vm_id)
                     for port in port_dict["ports"]:
                         interface={}
-                        try:
-                            interface['vim_info'] = yaml.safe_dump(port, default_flow_style=True, width=256)
-                        except yaml.representer.RepresenterError:
-                            interface['vim_info'] = str(port)
+                        interface['vim_info'] = self.serialize(port)
                         interface["mac_address"] = port.get("mac_address")
                         interface["vim_net_id"] = port["network_id"]
                         interface["vim_interface_id"] = port["id"]
-                        # check if OS-EXT-SRV-ATTR:host is there, 
+                        # check if OS-EXT-SRV-ATTR:host is there,
                         # in case of non-admin credentials, it will be missing
                         if vm_vim.get('OS-EXT-SRV-ATTR:host'):
                             interface["compute_node"] = vm_vim['OS-EXT-SRV-ATTR:host']
                         interface["pci"] = None
 
-                        # check if binding:profile is there, 
+                        # check if binding:profile is there,
                         # in case of non-admin credentials, it will be missing
                         if port.get('binding:profile'):
                             if port['binding:profile'].get('pci_slot'):
@@ -1615,7 +1661,7 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("osconnector: Adding a new user to VIM")
         try:
             self._reload_connection()
-            user=self.keystone.users.create(user_name, user_passwd, tenant_id=tenant_id)
+            user=self.keystone.users.create(user_name, password=user_passwd, default_project=tenant_id)
             #self.keystone.tenants.add_user(self.k_creds["username"], #role)
             return user.id
         except ksExceptions.ConnectionError as e:
@@ -1930,7 +1976,7 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             # In networking-sfc the MPLS encapsulation is legacy
             # should be used when no full SFC Encapsulation is intended
-            sfc_encap = 'mpls'
+            correlation = 'mpls'
             if sfc_encap:
                 correlation = 'nsh'
             sfp_dict = {'name': name,

@@ -56,7 +56,7 @@ nsd:nsd-catalog:
                 vnfd-connection-point-ref: eth0
 
         -   id:         vld2
-            name:       vld2-name
+            name:       nsd-vld2
             short-name: vld2-sname
             type:       ELAN
             ip-profile-ref: ipprofileA
@@ -71,7 +71,7 @@ nsd:nsd-catalog:
                 ip-address:                10.31.31.5
 
         -   id:         vld3
-            name:       vld3-name
+            name:       nsd-vld3
             short-name: vld3-sname
             type:       ELAN
             ip-profile-ref: no_dhcp

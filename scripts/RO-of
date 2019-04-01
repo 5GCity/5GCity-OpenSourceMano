@@ -1,0 +1,58 @@
+#!/bin/bash
+
+##
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
+# This file is part of openmano
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+#
+##
+
+# author: Alfonso Tierno
+
+# to get docker id that is running:
+# $ docker_ro=`docker service ps osm_ro -f desired-state=running --format "{{.Name}}.{{.ID}}" --no-trunc`
+# exec with:
+# $ docker exec -ti $docker_ro RO-of
+
+function get_from_db()
+{
+    echo  "select $1 from $2 where name='$3' or uuid='$3';" | mysql -h"$RO_DB_HOST" -u"$RO_DB_OVIM_USER" -p"$RO_DB_OVIM_PASSWORD" "$RO_DB_OVIM_NAME"  2>/dev/null | tail -n1
+}
+
+[ -z "$RO_DB_OVIM_HOST" ] && export RO_DB_OVIM_HOST="$RO_DB_HOST"
+
+if [ -z "$1" ] ; then
+    echo "usage '$0 <sdn_controller> command'"
+    echo
+    echo "available sdn_controllers are:"
+    echo  "select uuid, name, type, ip, dpid, status from ofcs;" | mysql -h"$RO_DB_HOST" -u"$RO_DB_OVIM_USER" -p"$RO_DB_OVIM_PASSWORD" "$RO_DB_OVIM_NAME"  2>/dev/null
+    exit
+fi
+
+
+export OF_CONTROLLER_DPID=`get_from_db dpid ofcs $1`
+[ -z "$OF_CONTROLLER_DPID" ] && echo "Cannot find sdn_controller '$1' at database" >&2 && exit 1
+
+export OF_CONTROLLER_IP=`get_from_db ip ofcs $1`
+export OF_CONTROLLER_PORT=`get_from_db port ofcs $1`
+export OF_CONTROLLER_USER=`get_from_db user ofcs $1`
+export OF_CONTROLLER_PASSWORD=`get_from_db password ofcs $1`
+export OF_CONTROLLER_TYPE=`get_from_db type ofcs $1`
+
+shift
+openflow-lib "$@"
+
+
+

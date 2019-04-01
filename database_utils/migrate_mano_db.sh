@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openmano
 # All Rights Reserved.
 #
@@ -24,6 +24,7 @@
 #
 #Upgrade/Downgrade openmano database preserving the content
 #
+DBUTILS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 DBUSER="mano"
 DBPASS=""
@@ -32,8 +33,10 @@ DBHOST=""
 DBPORT="3306"
 DBNAME="mano_db"
 QUIET_MODE=""
+BACKUP_DIR=""
+BACKUP_FILE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=31
+LAST_DB_VERSION=36
 
 # Detect paths
 MYSQL=$(which mysql)
@@ -50,11 +53,12 @@ function usage(){
     echo -e "     -P PORT  database port. '$DBPORT' by default"
     echo -e "     -h HOST  database host. 'localhost' by default"
     echo -e "     -d NAME  database name. '$DBNAME' by default.  Prompts if DB access fails"
+    echo -e "     -b DIR   backup folder where to create rollback backup file"
     echo -e "     -q --quiet: Do not prompt for credentials and exit if cannot access to database"
     echo -e "     --help   shows this help"
 }
 
-while getopts ":u:p:P:h:d:q-:" o; do
+while getopts ":u:p:b:P:h:d:q-:" o; do
     case "${o}" in
         u)
             DBUSER="$OPTARG"
@@ -70,6 +74,9 @@ while getopts ":u:p:P:h:d:q-:" o; do
             ;;
         h)
             DBHOST="$OPTARG"
+            ;;
+        b)
+            BACKUP_DIR="$OPTARG"
             ;;
         q)
             export QUIET_MODE=yes
@@ -142,29 +149,12 @@ done
 DBCMD="mysql $DEF_EXTRA_FILE_PARAM $DBNAME"
 #echo DBCMD $DBCMD
 
-#GET DATABASE VERSION
 #check that the database seems a openmano database
 if ! echo -e "show create table vnfs;\nshow create table scenarios" | $DBCMD >/dev/null 2>&1
 then
     echo "    database $DBNAME does not seem to be an openmano database" >&2
     exit 1;
 fi
-
-if ! echo 'show create table schema_version;' | $DBCMD >/dev/null 2>&1
-then
-    DATABASE_VER="0.0"
-    DATABASE_VER_NUM=0
-else
-    DATABASE_VER_NUM=`echo "select max(version_int) from schema_version;" | $DBCMD | tail -n+2` 
-    DATABASE_VER=`echo "select version from schema_version where version_int='$DATABASE_VER_NUM';" | $DBCMD | tail -n+2` 
-    [ "$DATABASE_VER_NUM" -lt 0 -o "$DATABASE_VER_NUM" -gt 100 ] &&
-        echo "    Error can not get database version ($DATABASE_VER?)" >&2 && exit 1
-    #echo "_${DATABASE_VER_NUM}_${DATABASE_VER}"
-fi
-
-[ "$DATABASE_VER_NUM" -gt "$LAST_DB_VERSION" ] &&
-    echo "Database has been upgraded with a newer version of this script. Use this version to downgrade" >&2 &&
-    exit 1
 
 #GET DATABASE TARGET VERSION
 #DB_VERSION=0
@@ -199,6 +189,11 @@ fi
 #[ $OPENMANO_VER_NUM -ge 5059 ] && DB_VERSION=29  #0.5.59 =>  29
 #[ $OPENMANO_VER_NUM -ge 5060 ] && DB_VERSION=30  #0.5.60 =>  30
 #[ $OPENMANO_VER_NUM -ge 5061 ] && DB_VERSION=31  #0.5.61 =>  31
+#[ $OPENMANO_VER_NUM -ge 5070 ] && DB_VERSION=32  #0.5.70 =>  32
+#[ $OPENMANO_VER_NUM -ge 5082 ] && DB_VERSION=33  #0.5.82 =>  33
+#[ $OPENMANO_VER_NUM -ge 6000 ] && DB_VERSION=34  #0.6.00 =>  34
+#[ $OPENMANO_VER_NUM -ge 6001 ] && DB_VERSION=35  #0.6.01 =>  35
+#[ $OPENMANO_VER_NUM -ge 6003 ] && DB_VERSION=35  #0.6.03 =>  36
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -220,8 +215,8 @@ function upgrade_to_1(){
 }
 function downgrade_from_1(){
     # echo "    downgrade database from version 0.1 to version 0.0"
-    echo "      DROP TABLE \`schema_version\`"
-    sql "DROP TABLE \`schema_version\`;"
+    echo "      DROP TABLE IF EXISTS \`schema_version\`"
+    sql "DROP TABLE IF EXISTS \`schema_version\`;"
 }
 function upgrade_to_2(){
     # echo "    upgrade database from version 0.1 to version 0.2"
@@ -302,11 +297,11 @@ function downgrade_from_2(){
     echo "      Delete columns 'user/passwd' from 'vim_tenants'"
     sql "ALTER TABLE vim_tenants DROP COLUMN user, DROP COLUMN passwd; "
     echo "        delete tables 'datacenter_images', 'images'"
-    sql "DROP TABLE \`datacenters_images\`;"
-    sql "DROP TABLE \`images\`;"
+    sql "DROP TABLE IF EXISTS \`datacenters_images\`;"
+    sql "DROP TABLE IF EXISTS \`images\`;"
     echo "        delete tables 'datacenter_flavors', 'flavors'"
-    sql "DROP TABLE \`datacenters_flavors\`;"
-    sql "DROP TABLE \`flavors\`;"
+    sql "DROP TABLE IF EXISTS \`datacenters_flavors\`;"
+    sql "DROP TABLE IF EXISTS \`flavors\`;"
     sql "DELETE FROM schema_version WHERE version_int='2';"
 }
 
@@ -620,7 +615,7 @@ function upgrade_to_12(){
 function downgrade_from_12(){
     # echo "    downgrade database from version 0.12 to version 0.11"
     echo "      delete ip_profiles table, and remove ip_address column in 'interfaces' and 'sce_interfaces'"
-    sql "DROP TABLE ip_profiles;"
+    sql "DROP TABLE IF EXISTS ip_profiles;"
     sql "ALTER TABLE interfaces DROP COLUMN ip_address;"
     sql "ALTER TABLE sce_interfaces DROP COLUMN ip_address;"
     sql "DELETE FROM schema_version WHERE version_int='12';"
@@ -1004,8 +999,8 @@ function downgrade_from_26(){
 	    "REFERENCES scenarios (uuid);"
 
     echo "      Delete table instance_actions"
-    sql "DROP TABLE vim_actions"
-    sql "DROP TABLE instance_actions"
+    sql "DROP TABLE IF EXISTS vim_actions"
+    sql "DROP TABLE IF EXISTS instance_actions"
     sql "DELETE FROM schema_version WHERE version_int='26';"
 }
 
@@ -1218,24 +1213,24 @@ function upgrade_to_28(){
 function downgrade_from_28(){
     echo "      [Undo adding the VNFFG tables]"
     echo "      Dropping instance_sfps"
-    sql "DROP TABLE instance_sfps;"
+    sql "DROP TABLE IF EXISTS instance_sfps;"
     echo "      Dropping sce_classifications"
-    sql "DROP TABLE instance_classifications;"
+    sql "DROP TABLE IF EXISTS instance_classifications;"
     echo "      Dropping instance_sfs"
-    sql "DROP TABLE instance_sfs;"
+    sql "DROP TABLE IF EXISTS instance_sfs;"
     echo "      Dropping instance_sfis"
-    sql "DROP TABLE instance_sfis;"
+    sql "DROP TABLE IF EXISTS instance_sfis;"
     echo "      Dropping sce_classifier_matches"
     echo "      [Undo adding the VNFFG-SFC instance mapping tables]"
-    sql "DROP TABLE sce_classifier_matches;"
+    sql "DROP TABLE IF EXISTS sce_classifier_matches;"
     echo "      Dropping sce_classifiers"
-    sql "DROP TABLE sce_classifiers;"
+    sql "DROP TABLE IF EXISTS sce_classifiers;"
     echo "      Dropping sce_rsp_hops"
-    sql "DROP TABLE sce_rsp_hops;"
+    sql "DROP TABLE IF EXISTS sce_rsp_hops;"
     echo "      Dropping sce_rsps"
-    sql "DROP TABLE sce_rsps;"
+    sql "DROP TABLE IF EXISTS sce_rsps;"
     echo "      Dropping sce_vnffgs"
-    sql "DROP TABLE sce_vnffgs;"
+    sql "DROP TABLE IF EXISTS sce_vnffgs;"
     echo "      [Altering vim_actions table]"
     sql "ALTER TABLE vim_actions MODIFY COLUMN item ENUM('datacenters_flavors','datacenter_images','instance_nets','instance_vms','instance_interfaces') NOT NULL COMMENT 'table where the item is stored'"
     sql "DELETE FROM schema_version WHERE version_int='28';"
@@ -1279,7 +1274,31 @@ function downgrade_from_31(){
     sql "ALTER TABLE sce_nets DROP COLUMN vim_network_name;"
     sql "DELETE FROM schema_version WHERE version_int='31';"
 }
+function upgrade_to_32(){
+    echo "      Add 'vim_name' to 'instance_vms'"
+    sql "ALTER TABLE instance_vms ADD COLUMN vim_name VARCHAR(255) NULL DEFAULT NULL AFTER vim_vm_id;"
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
+         "VALUES (32, '0.32', '0.5.70', 'Add vim_name to instance vms', '2018-06-28');"
+}
+function downgrade_from_32(){
+    echo "      Remove back 'vim_name' from 'instance_vms'"
+    sql "ALTER TABLE instance_vms DROP COLUMN vim_name;"
+    sql "DELETE FROM schema_version WHERE version_int='32';"
+}
 
+function upgrade_to_33(){
+    echo "      Add PDU information to 'vms'"
+    sql "ALTER TABLE vms ADD COLUMN pdu_type VARCHAR(255) NULL DEFAULT NULL AFTER osm_id;"
+    sql "ALTER TABLE instance_nets ADD COLUMN vim_name VARCHAR(255) NULL DEFAULT NULL AFTER vim_net_id;"
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
+         "VALUES (33, '0.33', '0.5.82', 'Add pdu information to vms', '2018-11-13');"
+}
+function downgrade_from_33(){
+    echo "      Remove back PDU information from 'vms'"
+    sql "ALTER TABLE vms DROP COLUMN pdu_type;"
+    sql "ALTER TABLE instance_nets DROP COLUMN vim_name;"
+    sql "DELETE FROM schema_version WHERE version_int='33';"
+}
 function upgrade_to_X(){
     echo "      change 'datacenter_nets'"
     sql "ALTER TABLE datacenter_nets ADD COLUMN vim_tenant_id VARCHAR(36) NOT NULL AFTER datacenter_id, DROP INDEX name_datacenter_id, ADD UNIQUE INDEX name_datacenter_id (name, datacenter_id, vim_tenant_id);"
@@ -1288,21 +1307,73 @@ function downgrade_from_X(){
     echo "      Change back 'datacenter_nets'"
     sql "ALTER TABLE datacenter_nets DROP COLUMN vim_tenant_id, DROP INDEX name_datacenter_id, ADD UNIQUE INDEX name_datacenter_id (name, datacenter_id);"
 }
+function upgrade_to_34() {
+    echo "      Create databases required for WIM features"
+    script="$(find "${DBUTILS}/migrations/up" -iname "34*.sql" | tail -1)"
+    sql "source ${script}"
+}
+function downgrade_from_34() {
+    echo "      Drop databases required for WIM features"
+    script="$(find "${DBUTILS}/migrations/down" -iname "34*.sql" | tail -1)"
+    sql "source ${script}"
+}
+function upgrade_to_35(){
+    echo "      Create databases required for WIM features"
+    script="$(find "${DBUTILS}/migrations/up" -iname "35*.sql" | tail -1)"
+    sql "source ${script}"
+}
+function downgrade_from_35(){
+    echo "      Drop databases required for WIM features"
+    script="$(find "${DBUTILS}/migrations/down" -iname "35*.sql" | tail -1)"
+    sql "source ${script}"
+}
+function upgrade_to_36(){
+    echo "      Allow null for image_id at 'vms'"
+    sql "ALTER TABLE vms ALTER image_id DROP DEFAULT;"
+    sql "ALTER TABLE vms CHANGE COLUMN image_id image_id VARCHAR(36) NULL COMMENT 'Link to image table' AFTER " \
+        "flavor_id;"
+    echo "      Enlarge config at 'wims' and 'wim_accounts'"
+    sql "ALTER TABLE wims CHANGE COLUMN config config TEXT NULL DEFAULT NULL AFTER wim_url;"
+    sql "ALTER TABLE wim_accounts CHANGE COLUMN config config TEXT NULL DEFAULT NULL AFTER password;"
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) "\
+         "VALUES (36, '0.36', '0.6.03', 'Allow vm without image_id for PDUs', '2018-12-19');"
+}
+function downgrade_from_36(){
+    echo "      Force back not null for image_id at 'vms'"
+    sql "ALTER TABLE vms ALTER image_id DROP DEFAULT;"
+    sql "ALTER TABLE vms CHANGE COLUMN image_id image_id VARCHAR(36) NOT NULL COMMENT 'Link to image table' AFTER " \
+        "flavor_id;"
+    # For downgrade do not restore wims/wim_accounts config to varchar 4000
+    sql "DELETE FROM schema_version WHERE version_int='36';"
+}
+
 #TODO ... put functions here
 
-# echo "db version = "${DATABASE_VER_NUM}
-[ $DB_VERSION -eq $DATABASE_VER_NUM ] && echo "    current database version '$DATABASE_VER_NUM' is ok" && exit 0
 
-# Create a backup database content
-TEMPFILE2="$(mktemp -q --tmpdir "backupdb.XXXXXX.sql")"
-trap 'rm -f "$TEMPFILE2"' EXIT
-mysqldump $DEF_EXTRA_FILE_PARAM --add-drop-table --add-drop-database --routines --databases $DBNAME > $TEMPFILE2
+function del_schema_version_process()
+{
+    echo "DELETE FROM schema_version WHERE version_int='0';" | $DBCMD ||
+        ! echo "    ERROR writing on schema_version" >&2 || exit 1
+}
+
+function set_schema_version_process()
+{
+    echo "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES "\
+        "(0, '0.0', '0.0.0', 'migration from $DATABASE_VER_NUM to $DB_VERSION backup: $BACKUP_FILE',"\
+        "'$(date +%Y-%m-%d)');" | $DBCMD ||
+        ! echo  "    Cannot set database at migration process writing into schema_version" >&2 || exit 1
+
+}
 
 function rollback_db()
 {
-    cat $TEMPFILE2 | mysql $DEF_EXTRA_FILE_PARAM && echo "    Aborted! Rollback database OK" ||
-        echo "    Aborted! Rollback database FAIL"
-    exit 1
+    if echo $DATABASE_PROCESS | grep -q init ; then   # Empty database. No backup needed
+        echo "    Aborted! Rollback database not needed" && exit 1
+    else   # migration a non empty database or Recovering a migration process
+        cat $BACKUP_FILE | mysql $DEF_EXTRA_FILE_PARAM && echo "    Aborted! Rollback database OK" &&
+            del_schema_version_process && rm -f "$BACKUP_FILE" && exit 1
+        echo "    Aborted! Rollback database FAIL" && exit 1
+    fi
 }
 
 function sql()    # send a sql command
@@ -1311,27 +1382,86 @@ function sql()    # send a sql command
     return 0
 }
 
-#UPGRADE DATABASE step by step
-while [ $DB_VERSION -gt $DATABASE_VER_NUM ]
-do
-    echo "    upgrade database from version '$DATABASE_VER_NUM' to '$((DATABASE_VER_NUM+1))'"
-    DATABASE_VER_NUM=$((DATABASE_VER_NUM+1))
-    upgrade_to_${DATABASE_VER_NUM}
-    #FILE_="${DIRNAME}/upgrade_to_${DATABASE_VER_NUM}.sh"
-    #[ ! -x "$FILE_" ] && echo "Error, can not find script '$FILE_' to upgrade" >&2 && exit -1
-    #$FILE_ || exit -1  # if fail return
-done
+function migrate()
+{
+    #UPGRADE DATABASE step by step
+    while [ $DB_VERSION -gt $DATABASE_VER_NUM ]
+    do
+        echo "    upgrade database from version '$DATABASE_VER_NUM' to '$((DATABASE_VER_NUM+1))'"
+        DATABASE_VER_NUM=$((DATABASE_VER_NUM+1))
+        upgrade_to_${DATABASE_VER_NUM}
+        #FILE_="${DIRNAME}/upgrade_to_${DATABASE_VER_NUM}.sh"
+        #[ ! -x "$FILE_" ] && echo "Error, can not find script '$FILE_' to upgrade" >&2 && exit -1
+        #$FILE_ || exit -1  # if fail return
+    done
 
-#DOWNGRADE DATABASE step by step
-while [ $DB_VERSION -lt $DATABASE_VER_NUM ]
-do
-    echo "    downgrade database from version '$DATABASE_VER_NUM' to '$((DATABASE_VER_NUM-1))'"
-    #FILE_="${DIRNAME}/downgrade_from_${DATABASE_VER_NUM}.sh"
-    #[ ! -x "$FILE_" ] && echo "Error, can not find script '$FILE_' to downgrade" >&2 && exit -1
-    #$FILE_ || exit -1  # if fail return
-    downgrade_from_${DATABASE_VER_NUM}
-    DATABASE_VER_NUM=$((DATABASE_VER_NUM-1))
-done
+    #DOWNGRADE DATABASE step by step
+    while [ $DB_VERSION -lt $DATABASE_VER_NUM ]
+    do
+        echo "    downgrade database from version '$DATABASE_VER_NUM' to '$((DATABASE_VER_NUM-1))'"
+        #FILE_="${DIRNAME}/downgrade_from_${DATABASE_VER_NUM}.sh"
+        #[ ! -x "$FILE_" ] && echo "Error, can not find script '$FILE_' to downgrade" >&2 && exit -1
+        #$FILE_ || exit -1  # if fail return
+        downgrade_from_${DATABASE_VER_NUM}
+        DATABASE_VER_NUM=$((DATABASE_VER_NUM-1))
+    done
+}
+
+
+# check if current database is ok
+function check_migration_needed()
+{
+    DATABASE_VER_NUM=`echo "select max(version_int) from schema_version;" | $DBCMD | tail -n+2` ||
+    ! echo "    ERROR cannot read from schema_version" || exit 1
+
+    if [[ -z "$DATABASE_VER_NUM" ]] || [[ "$DATABASE_VER_NUM" -lt 0 ]] || [[ "$DATABASE_VER_NUM" -gt 100 ]] ; then
+        echo "    Error can not get database version ($DATABASE_VER_NUM?)" >&2
+        exit 1
+    fi
+
+    [[ $DB_VERSION -eq $DATABASE_VER_NUM ]] && echo "    current database version '$DATABASE_VER_NUM' is ok" && return 1
+    [[ "$DATABASE_VER_NUM" -gt "$LAST_DB_VERSION" ]] &&
+        echo "Database has been upgraded with a newer version of this script. Use this version to downgrade" >&2 &&
+        exit 1
+    return 0
+}
+
+DATABASE_PROCESS=`echo "select comments from schema_version where version_int=0;" | $DBCMD | tail -n+2` ||
+    ! echo "    ERROR cannot read from schema_version" || exit 1
+if [[ -z "$DATABASE_PROCESS" ]] ; then  # migration a non empty database
+    check_migration_needed || exit 0
+    # Create a backup database content
+    [[ -n "$BACKUP_DIR" ]] && BACKUP_FILE="$(mktemp -q  "${BACKUP_DIR}/backupdb.XXXXXX.sql")"
+    [[ -z "$BACKUP_DIR" ]] && BACKUP_FILE="$(mktemp -q --tmpdir "backupdb.XXXXXX.sql")"
+    mysqldump $DEF_EXTRA_FILE_PARAM --add-drop-table --add-drop-database --routines --databases $DBNAME > $BACKUP_FILE ||
+        ! echo "Cannot create Backup file '$BACKUP_FILE'" >&2 || exit 1
+    echo "    Backup file '$BACKUP_FILE' created"
+    # Set schema version
+    set_schema_version_process
+    migrate
+    del_schema_version_process
+    rm -f "$BACKUP_FILE"
+elif echo $DATABASE_PROCESS | grep -q init ; then   # Empty database. No backup needed
+    echo "    Migrating an empty database"
+    if check_migration_needed ; then
+        migrate
+    fi
+    del_schema_version_process
+
+else  # Recover Migration process
+    BACKUP_FILE=${DATABASE_PROCESS##*backup: }
+    [[ -f "$BACKUP_FILE" ]] || ! echo "Previous migration process fail and cannot recover backup file '$BACKUP_FILE'" >&2 ||
+        exit 1
+    echo "    Previous migration was killed. Restoring database from rollback file'$BACKUP_FILE'"
+    cat $BACKUP_FILE | mysql $DEF_EXTRA_FILE_PARAM || ! echo "    Cannot load backup file '$BACKUP_FILE'" >&2 || exit 1
+    if check_migration_needed ; then
+        set_schema_version_process
+        migrate
+    fi
+    del_schema_version_process
+    rm -f "$BACKUP_FILE"
+fi
+exit 0
 
 #echo done
 

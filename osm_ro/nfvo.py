@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openmano
 # All Rights Reserved.
 #
@@ -28,12 +28,11 @@ __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$16-sep-2014 22:05:01$"
 
 # import imp
-# import json
+import json
 import yaml
 import utils
+from utils import deprecated
 import vim_thread
-from db_base import HTTP_Unauthorized, HTTP_Bad_Request, HTTP_Internal_Server_Error, HTTP_Not_Found,\
-    HTTP_Conflict, HTTP_Method_Not_Allowed
 import console_proxy_thread as cli
 import vimconn
 import logging
@@ -52,10 +51,26 @@ from Crypto.PublicKey import RSA
 import osm_im.vnfd as vnfd_catalog
 import osm_im.nsd as nsd_catalog
 from pyangbind.lib.serialise import pybindJSONDecoder
-from itertools import chain
+from copy import deepcopy
+
+
+# WIM
+import wim.wimconn as wimconn
+import wim.wim_thread as wim_thread
+from .http_tools import errors as httperrors
+from .wim.engine import WimEngine
+from .wim.persistence import WimPersistence
+from copy import deepcopy
+from pprint import pformat
+#
 
 global global_config
 global vimconn_imported
+# WIM
+global wim_engine
+wim_engine  = None
+global wimconn_imported
+#
 global logger
 global default_volume_size
 default_volume_size = '5' #size in GB
@@ -66,16 +81,21 @@ global_config = None
 vimconn_imported = {}   # dictionary with VIM type as key, loaded module as value
 vim_threads = {"running":{}, "deleting": {}, "names": []}      # threads running for attached-VIMs
 vim_persistent_info = {}
+# WIM
+wimconn_imported = {}   # dictionary with WIM type as key, loaded module as value
+wim_threads = {"running":{}, "deleting": {}, "names": []}      # threads running for attached-WIMs
+wim_persistent_info = {}
+#
+
 logger = logging.getLogger('openmano.nfvo')
 task_lock = Lock()
 last_task_id = 0.0
 db = None
 db_lock = Lock()
 
-class NfvoException(Exception):
-    def __init__(self, message, http_code):
-        self.http_code = http_code
-        Exception.__init__(self, message)
+
+class NfvoException(httperrors.HttpMappedError):
+    """Common Class for NFVO errors"""
 
 
 def get_task_id():
@@ -114,12 +134,31 @@ def get_non_used_vim_name(datacenter_name, datacenter_id, tenant_name, tenant_id
     vim_threads["names"].append(name)
     return name
 
+# -- Move
+def get_non_used_wim_name(wim_name, wim_id, tenant_name, tenant_id):
+    name = wim_name[:16]
+    if name not in wim_threads["names"]:
+        wim_threads["names"].append(name)
+        return name
+    name = wim_name[:16] + "." + tenant_name[:16]
+    if name not in wim_threads["names"]:
+        wim_threads["names"].append(name)
+        return name
+    name = wim_id + "-" + tenant_id
+    wim_threads["names"].append(name)
+    return name
 
-def start_service(mydb):
+
+def start_service(mydb, persistence=None, wim=None):
     global db, global_config
     db = nfvo_db.nfvo_db()
     db.connect(global_config['db_host'], global_config['db_user'], global_config['db_passwd'], global_config['db_name'])
     global ovim
+
+    if persistence:
+        persistence.lock = db_lock
+    else:
+        persistence = WimPersistence(db, lock=db_lock)
 
     # Initialize openvim for SDN control
     # TODO: Avoid static configuration by adding new parameters to openmanod.cfg
@@ -141,9 +180,14 @@ def start_service(mydb):
     try:
         # starts ovim library
         ovim = ovim_module.ovim(ovim_configuration)
+
+        global wim_engine
+        wim_engine = wim or WimEngine(persistence)
+        wim_engine.ovim = ovim
+
         ovim.start_service()
 
-        #delete old unneeded vim_actions
+        #delete old unneeded vim_wim_actions
         clean_db(mydb)
 
         # starts vim_threads
@@ -174,13 +218,13 @@ def start_service(mydb):
                     # if module_info and module_info[0]:
                     #    file.close(module_info[0])
                     raise NfvoException("Unknown vim type '{}'. Cannot open file '{}.py'; {}: {}".format(
-                        vim["type"], module, type(e).__name__, str(e)), HTTP_Bad_Request)
+                        vim["type"], module, type(e).__name__, str(e)), httperrors.Bad_Request)
 
             thread_id = vim['datacenter_tenant_id']
             vim_persistent_info[thread_id] = {}
             try:
                 #if not tenant:
-                #    return -HTTP_Bad_Request, "You must provide a valid tenant name or uuid for VIM  %s" % ( vim["type"])
+                #    return -httperrors.Bad_Request, "You must provide a valid tenant name or uuid for VIM  %s" % ( vim["type"])
                 myvim = vimconn_imported[ vim["type"] ].vimconnector(
                     uuid=vim['datacenter_id'], name=vim['datacenter_name'],
                     tenant_id=vim['vim_tenant_id'], tenant_name=vim['vim_tenant_name'],
@@ -194,13 +238,15 @@ def start_service(mydb):
                                                                                vim['datacenter_id'], e))
             except Exception as e:
                 raise NfvoException("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, e),
-                                    HTTP_Internal_Server_Error)
+                                    httperrors.Internal_Server_Error)
             thread_name = get_non_used_vim_name(vim['datacenter_name'], vim['vim_tenant_id'], vim['vim_tenant_name'],
                                                 vim['vim_tenant_id'])
-            new_thread = vim_thread.vim_thread(myvim, task_lock, thread_name, vim['datacenter_name'],
+            new_thread = vim_thread.vim_thread(task_lock, thread_name, vim['datacenter_name'],
                                                vim['datacenter_tenant_id'], db=db, db_lock=db_lock, ovim=ovim)
             new_thread.start()
             vim_threads["running"][thread_id] = new_thread
+
+        wim_engine.start_threads()
     except db_base_Exception as e:
         raise NfvoException(str(e) + " at nfvo.get_vim", e.http_code)
     except ovim_module.ovimException as e:
@@ -211,17 +257,21 @@ def start_service(mydb):
                             msg=message[22:-3], dbname=global_config["db_ovim_name"],
                             dbuser=global_config["db_ovim_user"], dbpass=global_config["db_ovim_passwd"],
                             ver=message[-3:-1], dbhost=global_config["db_ovim_host"])
-        raise NfvoException(message, HTTP_Bad_Request)
+        raise NfvoException(message, httperrors.Bad_Request)
 
 
 def stop_service():
     global ovim, global_config
     if ovim:
         ovim.stop_service()
-    for thread_id,thread in vim_threads["running"].items():
+    for thread_id, thread in vim_threads["running"].items():
         thread.insert_task("exit")
         vim_threads["deleting"][thread_id] = thread
     vim_threads["running"] = {}
+
+    if wim_engine:
+        wim_engine.stop_threads()
+
     if global_config and global_config.get("console_thread"):
         for thread in global_config["console_thread"]:
             thread.terminate = True
@@ -236,21 +286,21 @@ def clean_db(mydb):
     :param mydb: database connector
     :return: None
     """
-    # get and delete unused vim_actions: all elements deleted, one week before, instance not present
+    # get and delete unused vim_wim_actions: all elements deleted, one week before, instance not present
     now = t.time()-3600*24*7
     instance_action_id = None
     nb_deleted = 0
     while True:
         actions_to_delete = mydb.get_rows(
             SELECT=("item", "item_id", "instance_action_id"),
-            FROM="vim_actions as va join instance_actions as ia on va.instance_action_id=ia.uuid "
+            FROM="vim_wim_actions as va join instance_actions as ia on va.instance_action_id=ia.uuid "
                     "left join instance_scenarios as i on ia.instance_id=i.uuid",
             WHERE={"va.action": "DELETE", "va.modified_at<": now, "i.uuid": None,
                    "va.status": ("DONE", "SUPERSEDED")},
             LIMIT=100
         )
         for to_delete in actions_to_delete:
-            mydb.delete_row(FROM="vim_actions", WHERE=to_delete)
+            mydb.delete_row(FROM="vim_wim_actions", WHERE=to_delete)
             if instance_action_id != to_delete["instance_action_id"]:
                 instance_action_id = to_delete["instance_action_id"]
                 mydb.delete_row(FROM="instance_actions", WHERE={"uuid": instance_action_id})
@@ -258,8 +308,7 @@ def clean_db(mydb):
         if len(actions_to_delete) < 100:
             break
     if nb_deleted:
-        logger.debug("Removed {} unused vim_actions".format(nb_deleted))
-
+        logger.debug("Removed {} unused vim_wim_actions".format(nb_deleted))
 
 
 def get_flavorlist(mydb, vnf_id, nfvo_tenant=None):
@@ -295,7 +344,7 @@ def get_imagelist(mydb, vnf_id, nfvo_tenant=None):
     image_list = []
     vms = mydb.get_rows(SELECT=('image_id','image_list'), FROM='vms', WHERE={'vnf_id': vnf_id})
     for vm in vms:
-        if vm["image_id"] not in image_list:
+        if vm["image_id"] and vm["image_id"] not in image_list:
             image_list.append(vm["image_id"])
         if vm["image_list"]:
             vm_image_list = yaml.load(vm["image_list"])
@@ -355,7 +404,7 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
                                             vim["type"], module, type(e).__name__, str(e)))
                         continue
                     raise NfvoException("Unknown vim type '{}'. Can not open file '{}.py'; {}: {}".format(
-                                            vim["type"], module, type(e).__name__, str(e)), HTTP_Bad_Request)
+                                            vim["type"], module, type(e).__name__, str(e)), httperrors.Bad_Request)
 
             try:
                 if 'datacenter_tenant_id' in vim:
@@ -366,7 +415,7 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
                 else:
                     persistent_info = {}
                 #if not tenant:
-                #    return -HTTP_Bad_Request, "You must provide a valid tenant name or uuid for VIM  %s" % ( vim["type"])
+                #    return -httperrors.Bad_Request, "You must provide a valid tenant name or uuid for VIM  %s" % ( vim["type"])
                 vim_dict[ vim['datacenter_id'] ] = vimconn_imported[ vim["type"] ].vimconnector(
                                 uuid=vim['datacenter_id'], name=vim['datacenter_name'],
                                 tenant_id=vim.get('vim_tenant_id',vim_tenant),
@@ -379,7 +428,7 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
                 if ignore_errors:
                     logger.error("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, str(e)))
                     continue
-                http_code = HTTP_Internal_Server_Error
+                http_code = httperrors.Internal_Server_Error
                 if isinstance(e, vimconn.vimconnException):
                     http_code = e.http_code
                 raise NfvoException("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, str(e)), http_code)
@@ -444,7 +493,7 @@ def check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=1):
                     raise NfvoException(
                         "Error at vnf:VNFC[name:'{}']:numas:interfaces:name, interface name '{}' already used in this VNFC".format(
                             vnfc["name"], interface["name"]),
-                        HTTP_Bad_Request)
+                        httperrors.Bad_Request)
                 name_dict[ interface["name"] ] = "underlay"
         #bridge interfaces
         for interface in vnfc.get("bridge-ifaces",() ):
@@ -452,7 +501,7 @@ def check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=1):
                 raise NfvoException(
                     "Error at vnf:VNFC[name:'{}']:bridge-ifaces:name, interface name '{}' already used in this VNFC".format(
                         vnfc["name"], interface["name"]),
-                    HTTP_Bad_Request)
+                    httperrors.Bad_Request)
             name_dict[ interface["name"] ] = "overlay"
         vnfc_interfaces[ vnfc["name"] ] = name_dict
         # check bood-data info
@@ -461,7 +510,7 @@ def check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=1):
         #     if (vnfc["boot-data"].get("users") or vnfc["boot-data"].get("config-files")) and vnfc["boot-data"].get("user-data"):
         #         raise NfvoException(
         #             "Error at vnf:VNFC:boot-data, fields 'users' and 'config-files' are not compatible with 'user-data'",
-        #             HTTP_Bad_Request)
+        #             httperrors.Bad_Request)
 
     #check if the info in external_connections matches with the one in the vnfcs
     name_list=[]
@@ -470,20 +519,20 @@ def check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=1):
             raise NfvoException(
                 "Error at vnf:external-connections:name, value '{}' already used as an external-connection".format(
                     external_connection["name"]),
-                HTTP_Bad_Request)
+                httperrors.Bad_Request)
         name_list.append(external_connection["name"])
         if external_connection["VNFC"] not in vnfc_interfaces:
             raise NfvoException(
                 "Error at vnf:external-connections[name:'{}']:VNFC, value '{}' does not match any VNFC".format(
                     external_connection["name"], external_connection["VNFC"]),
-                HTTP_Bad_Request)
+                httperrors.Bad_Request)
 
         if external_connection["local_iface_name"] not in vnfc_interfaces[ external_connection["VNFC"] ]:
             raise NfvoException(
                 "Error at vnf:external-connections[name:'{}']:local_iface_name, value '{}' does not match any interface of this VNFC".format(
                     external_connection["name"],
                     external_connection["local_iface_name"]),
-                HTTP_Bad_Request )
+                httperrors.Bad_Request )
 
     #check if the info in internal_connections matches with the one in the vnfcs
     name_list=[]
@@ -492,7 +541,7 @@ def check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=1):
             raise NfvoException(
                 "Error at vnf:internal-connections:name, value '%s' already used as an internal-connection".format(
                     internal_connection["name"]),
-                HTTP_Bad_Request)
+                httperrors.Bad_Request)
         name_list.append(internal_connection["name"])
         #We should check that internal-connections of type "ptp" have only 2 elements
 
@@ -502,7 +551,7 @@ def check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=1):
                     internal_connection["name"],
                     'ptp' if vnf_descriptor_version==1 else 'e-line',
                     'data' if vnf_descriptor_version==1 else "e-lan"),
-                HTTP_Bad_Request)
+                httperrors.Bad_Request)
         for port in internal_connection["elements"]:
             vnf = port["VNFC"]
             iface = port["local_iface_name"]
@@ -510,13 +559,13 @@ def check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=1):
                 raise NfvoException(
                     "Error at vnf:internal-connections[name:'{}']:elements[]:VNFC, value '{}' does not match any VNFC".format(
                         internal_connection["name"], vnf),
-                    HTTP_Bad_Request)
+                    httperrors.Bad_Request)
             if iface not in vnfc_interfaces[ vnf ]:
                 raise NfvoException(
                     "Error at vnf:internal-connections[name:'{}']:elements[]:local_iface_name, value '{}' does not match any interface of this VNFC".format(
                         internal_connection["name"], iface),
-                    HTTP_Bad_Request)
-                return -HTTP_Bad_Request,
+                    httperrors.Bad_Request)
+                return -httperrors.Bad_Request,
             if vnf_descriptor_version==1 and "type" not in internal_connection:
                 if vnfc_interfaces[vnf][iface] == "overlay":
                     internal_connection["type"] = "bridge"
@@ -534,7 +583,7 @@ def check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=1):
                         internal_connection["name"],
                         iface, 'bridge' if vnf_descriptor_version==1 else 'overlay',
                         'data' if vnf_descriptor_version==1 else 'underlay'),
-                    HTTP_Bad_Request)
+                    httperrors.Bad_Request)
             if (internal_connection.get("type") == "bridge" or internal_connection.get("implementation") == "overlay") and \
                 vnfc_interfaces[vnf][iface] == "underlay":
                 raise NfvoException(
@@ -542,7 +591,7 @@ def check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=1):
                         internal_connection["name"], iface,
                         'data' if vnf_descriptor_version==1 else 'underlay',
                         'bridge' if vnf_descriptor_version==1 else 'overlay'),
-                    HTTP_Bad_Request)
+                    httperrors.Bad_Request)
 
 
 def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vim=False, return_on_error=None):
@@ -587,7 +636,7 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
                 vim_images = vim.get_image_list(filter_dict)
                 #logger.debug('>>>>>>>> VIM images: %s', str(vim_images))
                 if len(vim_images) > 1:
-                    raise vimconn.vimconnException("More than one candidate VIM image found for filter: {}".format(str(filter_dict)), HTTP_Conflict)
+                    raise vimconn.vimconnException("More than one candidate VIM image found for filter: {}".format(str(filter_dict)), httperrors.Conflict)
                 elif len(vim_images) == 0:
                     raise vimconn.vimconnNotFoundException("Image not found at VIM with filter: '{}'".format(str(filter_dict)))
                 else:
@@ -720,8 +769,8 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
             for index in range(0,len(devices_original)) :
                 device=devices_original[index]
                 if "image" not in device and "image name" not in device:
-                    if 'size' in device:
-                        disk_list.append({'size': device.get('size', default_volume_size)})
+                    # if 'size' in device:
+                    disk_list.append({'size': device.get('size', default_volume_size), 'name': device.get('name')})
                     continue
                 image_dict={}
                 image_dict['name']=device.get('image name',flavor_dict['name']+str(dev_nb)+"-img")
@@ -843,7 +892,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
         try:
             pybindJSONDecoder.load_ietf_json(vnf_descriptor, None, None, obj=myvnfd, path_helper=True)
         except Exception as e:
-            raise NfvoException("Error. Invalid VNF descriptor format " + str(e), HTTP_Bad_Request)
+            raise NfvoException("Error. Invalid VNF descriptor format " + str(e), httperrors.Bad_Request)
         db_vnfs = []
         db_nets = []
         db_vms = []
@@ -915,6 +964,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     "vnf_id": vnf_uuid,
                     "uuid": net_uuid,
                     "description": get_str(vld, "description", 255),
+                    "osm_id": get_str(vld, "id", 255),
                     "type": "bridge",   # TODO adjust depending on connection point type
                 }
                 net_id2uuid[vld.get("id")] = net_uuid
@@ -926,7 +976,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                         raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{}]':'vld[{}]':'ip-profile-ref':"
                                             "'{}'. Reference to a non-existing 'ip_profiles'".format(
                                                 str(vnfd["id"]), str(vld["id"]), str(vld["ip-profile-ref"])),
-                                            HTTP_Bad_Request)
+                                            httperrors.Bad_Request)
                     db_ip_profiles[ip_profile_name2db_table_index[ip_profile_name]]["net_id"] = net_uuid
                 else:  #check no ip-address has been defined
                     for icp in vld.get("internal-connection-point").itervalues():
@@ -934,12 +984,13 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                             raise NfvoException("Error at 'vnfd[{}]':'vld[{}]':'internal-connection-point[{}]' "
                                             "contains an ip-address but no ip-profile has been defined at VLD".format(
                                                 str(vnfd["id"]), str(vld["id"]), str(icp["id"])),
-                                            HTTP_Bad_Request)
+                                            httperrors.Bad_Request)
 
             # connection points vaiable declaration
             cp_name2iface_uuid = {}
             cp_name2vm_uuid = {}
             cp_name2db_interface = {}
+            vdu_id2cp_name = {}  # stored only when one external connection point is presented at this VDU
 
             # table vms (vdus)
             vdu_id2uuid = {}
@@ -957,6 +1008,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     "osm_id": vdu_id,
                     "name": get_str(vdu, "name", 255),
                     "description": get_str(vdu, "description", 255),
+                    "pdu_type": get_str(vdu, "pdu-type", 255),
                     "vnf_id": vnf_uuid,
                 }
                 vdu_id2uuid[db_vm["osm_id"]] = vm_uuid
@@ -994,7 +1046,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                 # volumes
                 devices = []
                 if vdu.get("volumes"):
-                    for volume_key in sorted(vdu["volumes"]):
+                    for volume_key in vdu["volumes"]:
                         volume = vdu["volumes"][volume_key]
                         if not image_present:
                             # Convert the first volume to vnfc.image
@@ -1007,7 +1059,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                             db_vm["image_id"] = image_uuid
                         else:
                             # Add Openmano devices
-                            device = {}
+                            device = {"name": str(volume.get("name"))}
                             device["type"] = str(volume.get("device-type"))
                             if volume.get("size"):
                                 device["size"] = int(volume["size"])
@@ -1015,7 +1067,13 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                 device["image name"] = str(volume["image"])
                                 if volume.get("image-checksum"):
                                     device["image checksum"] = str(volume["image-checksum"])
+
                             devices.append(device)
+
+                if not db_vm.get("image_id"):
+                    if not db_vm["pdu_type"]:
+                        raise NfvoException("Not defined image for VDU")
+                    # create a fake image
 
                 # cloud-init
                 boot_data = {}
@@ -1045,7 +1103,6 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
 
                 # table interfaces (internal/external interfaces)
                 flavor_epa_interfaces = []
-                vdu_id2cp_name = {}  # stored only when one external connection point is presented at this VDU
                 # for iface in chain(vdu.get("internal-interface").itervalues(), vdu.get("external-interface").itervalues()):
                 for iface in vdu.get("interface").itervalues():
                     flavor_epa_interface = {}
@@ -1068,7 +1125,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
 
                     if iface.get("virtual-interface").get("type") == "OM-MGMT":
                         db_interface["type"] = "mgmt"
-                    elif iface.get("virtual-interface").get("type") in ("VIRTIO", "E1000"):
+                    elif iface.get("virtual-interface").get("type") in ("VIRTIO", "E1000", "PARAVIRT"):
                         db_interface["type"] = "bridge"
                         db_interface["model"] = get_str(iface.get("virtual-interface"), "type", 12)
                     elif iface.get("virtual-interface").get("type") in ("SR-IOV", "PCI-PASSTHROUGH"):
@@ -1081,7 +1138,10 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                         raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{}]':'vdu[{}]':'interface':'virtual"
                                             "-interface':'type':'{}'. Interface type is not supported".format(
                                                 vnfd_id, vdu_id, iface.get("virtual-interface").get("type")),
-                                            HTTP_Bad_Request)
+                                            httperrors.Bad_Request)
+
+                    if iface.get("mgmt-interface"):
+                        db_interface["type"] = "mgmt"
 
                     if iface.get("external-connection-point-ref"):
                         try:
@@ -1112,7 +1172,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                                 " at connection-point".format(
                                                     vnf=vnfd_id, vdu=vdu_id, iface=iface["name"],
                                                     cp=iface.get("vnfd-connection-point-ref")),
-                                                HTTP_Bad_Request)
+                                                httperrors.Bad_Request)
                     elif iface.get("internal-connection-point-ref"):
                         try:
                             for icp_descriptor in vdu_descriptor["internal-connection-point"]:
@@ -1147,9 +1207,9 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                                 " {msg}".format(
                                                     vnf=vnfd_id, vdu=vdu_id, iface=iface["name"],
                                                     cp=iface.get("internal-connection-point-ref"), msg=str(e)),
-                                                HTTP_Bad_Request)
-                    if iface.get("position") is not None:
-                        db_interface["created_at"] = int(iface.get("position")) - 1000
+                                                httperrors.Bad_Request)
+                    if iface.get("position"):
+                        db_interface["created_at"] = int(iface.get("position")) * 50
                     if iface.get("mac-address"):
                         db_interface["mac"] = str(iface.get("mac-address"))
                     db_interfaces.append(db_interface)
@@ -1232,11 +1292,12 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                         raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'placement-groups[{pg}]':"
                                             "'member-vdus':'{vdu}'. Reference to a non-existing vdu".format(
                                                 vnf=vnfd_id, pg=pg_name, vdu=vdu_id),
-                                            HTTP_Bad_Request)
-                    db_vms[vdu_id2db_table_index[vdu_id]]["availability_zone"] = pg_name
+                                            httperrors.Bad_Request)
+                    if vdu_id2db_table_index[vdu_id]:
+                        db_vms[vdu_id2db_table_index[vdu_id]]["availability_zone"] = pg_name
                     # TODO consider the case of isolation and not colocation
                     # if pg.get("strategy") == "ISOLATION":
-                    
+
             # VNF mgmt configuration
             mgmt_access = {}
             if vnfd["mgmt-interface"].get("vdu-id"):
@@ -1245,24 +1306,26 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'mgmt-interface':'vdu-id':"
                                         "'{vdu}'. Reference to a non-existing vdu".format(
                                             vnf=vnfd_id, vdu=mgmt_vdu_id),
-                                        HTTP_Bad_Request)
+                                        httperrors.Bad_Request)
                 mgmt_access["vm_id"] = vdu_id2uuid[vnfd["mgmt-interface"]["vdu-id"]]
                 # if only one cp is defined by this VDU, mark this interface as of type "mgmt"
                 if vdu_id2cp_name.get(mgmt_vdu_id):
-                    cp_name2db_interface[vdu_id2cp_name[mgmt_vdu_id]]["type"] = "mgmt"
+                    if cp_name2db_interface[vdu_id2cp_name[mgmt_vdu_id]]:
+                        cp_name2db_interface[vdu_id2cp_name[mgmt_vdu_id]]["type"] = "mgmt"
 
             if vnfd["mgmt-interface"].get("ip-address"):
                 mgmt_access["ip-address"] = str(vnfd["mgmt-interface"].get("ip-address"))
             if vnfd["mgmt-interface"].get("cp"):
                 if vnfd["mgmt-interface"]["cp"] not in cp_name2iface_uuid:
-                    raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'mgmt-interface':'cp':'{cp}'. "
+                    raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'mgmt-interface':'cp'['{cp}']. "
                                         "Reference to a non-existing connection-point".format(
                                             vnf=vnfd_id, cp=vnfd["mgmt-interface"]["cp"]),
-                                        HTTP_Bad_Request)
+                                        httperrors.Bad_Request)
                 mgmt_access["vm_id"] = cp_name2vm_uuid[vnfd["mgmt-interface"]["cp"]]
                 mgmt_access["interface_id"] = cp_name2iface_uuid[vnfd["mgmt-interface"]["cp"]]
                 # mark this interface as of type mgmt
-                cp_name2db_interface[vnfd["mgmt-interface"]["cp"]]["type"] = "mgmt"
+                if cp_name2db_interface[vnfd["mgmt-interface"]["cp"]]:
+                    cp_name2db_interface[vnfd["mgmt-interface"]["cp"]]["type"] = "mgmt"
 
             default_user = get_str(vnfd.get("vnf-configuration", {}).get("config-access", {}).get("ssh-access", {}),
                                     "default-user", 64)
@@ -1296,9 +1359,10 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
         raise
     except Exception as e:
         logger.error("Exception {}".format(e))
-        raise  # NfvoException("Exception {}".format(e), HTTP_Bad_Request)
+        raise  # NfvoException("Exception {}".format(e), httperrors.Bad_Request)
 
 
+@deprecated("Use new_vnfd_v3")
 def new_vnf(mydb, tenant_id, vnf_descriptor):
     global global_config
 
@@ -1311,7 +1375,7 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
         if "tenant_id" in vnf_descriptor["vnf"]:
             if vnf_descriptor["vnf"]["tenant_id"] != tenant_id:
                 raise NfvoException("VNF can not have a different tenant owner '{}', must be '{}'".format(vnf_descriptor["vnf"]["tenant_id"], tenant_id),
-                                    HTTP_Unauthorized)
+                                    httperrors.Unauthorized)
         else:
             vnf_descriptor['vnf']['tenant_id'] = tenant_id
         # Step 3. Get the URL of the VIM from the nfvo_tenant and the datacenter
@@ -1369,9 +1433,9 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
             #    result2, message = rollback(myvim, myvimURL, myvim_tenant, flavorList, imageList)
             #    if result2:
             #        print "Error creating flavor: unknown processor model. Rollback successful."
-            #        return -HTTP_Bad_Request, "Error creating flavor: unknown processor model. Rollback successful."
+            #        return -httperrors.Bad_Request, "Error creating flavor: unknown processor model. Rollback successful."
             #    else:
-            #        return -HTTP_Bad_Request, "Error creating flavor: unknown processor model. Rollback fail: you need to access VIM and delete the following %s" % message
+            #        return -httperrors.Bad_Request, "Error creating flavor: unknown processor model. Rollback fail: you need to access VIM and delete the following %s" % message
             myflavorDict['extended']['processor_ranking'] = 100  #Hardcoded value, while we decide when the mapping is done
 
             if 'numas' in vnfc and len(vnfc['numas'])>0:
@@ -1428,7 +1492,7 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
             error_text = "Exception at database"
         elif isinstance(e, KeyError):
             error_text = "KeyError exception "
-            e.http_code = HTTP_Internal_Server_Error
+            e.http_code = httperrors.Internal_Server_Error
         else:
             error_text = "Exception at VIM"
         error_text += " {} {}. {}".format(type(e).__name__, str(e), message)
@@ -1436,6 +1500,7 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
         raise NfvoException(error_text, e.http_code)
 
 
+@deprecated("Use new_vnfd_v3")
 def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
     global global_config
 
@@ -1448,7 +1513,7 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
         if "tenant_id" in vnf_descriptor["vnf"]:
             if vnf_descriptor["vnf"]["tenant_id"] != tenant_id:
                 raise NfvoException("VNF can not have a different tenant owner '{}', must be '{}'".format(vnf_descriptor["vnf"]["tenant_id"], tenant_id),
-                                    HTTP_Unauthorized)
+                                    httperrors.Unauthorized)
         else:
             vnf_descriptor['vnf']['tenant_id'] = tenant_id
         # Step 3. Get the URL of the VIM from the nfvo_tenant and the datacenter
@@ -1505,9 +1570,9 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
             #    result2, message = rollback(myvim, myvimURL, myvim_tenant, flavorList, imageList)
             #    if result2:
             #        print "Error creating flavor: unknown processor model. Rollback successful."
-            #        return -HTTP_Bad_Request, "Error creating flavor: unknown processor model. Rollback successful."
+            #        return -httperrors.Bad_Request, "Error creating flavor: unknown processor model. Rollback successful."
             #    else:
-            #        return -HTTP_Bad_Request, "Error creating flavor: unknown processor model. Rollback fail: you need to access VIM and delete the following %s" % message
+            #        return -httperrors.Bad_Request, "Error creating flavor: unknown processor model. Rollback fail: you need to access VIM and delete the following %s" % message
             myflavorDict['extended']['processor_ranking'] = 100  #Hardcoded value, while we decide when the mapping is done
 
             if 'numas' in vnfc and len(vnfc['numas'])>0:
@@ -1563,7 +1628,7 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
             error_text = "Exception at database"
         elif isinstance(e, KeyError):
             error_text = "KeyError exception "
-            e.http_code = HTTP_Internal_Server_Error
+            e.http_code = httperrors.Internal_Server_Error
         else:
             error_text = "Exception at VIM"
         error_text += " {} {}. {}".format(type(e).__name__, str(e), message)
@@ -1591,15 +1656,15 @@ def get_vnf_id(mydb, tenant_id, vnf_id):
             SELECT=('vms.uuid as uuid', 'vms.osm_id as osm_id', 'vms.name as name', 'vms.description as description',
                     'boot_data'),
             WHERE={'vnfs.uuid': vnf_id} )
-    if len(content)==0:
-        raise NfvoException("vnf '{}' not found".format(vnf_id), HTTP_Not_Found)
+    if len(content) != 0:
+        #raise NfvoException("vnf '{}' not found".format(vnf_id), httperrors.Not_Found)
     # change boot_data into boot-data
-    for vm in content:
-        if vm.get("boot_data"):
-            vm["boot-data"] = yaml.safe_load(vm["boot_data"])
-            del vm["boot_data"]
+        for vm in content:
+            if vm.get("boot_data"):
+                vm["boot-data"] = yaml.safe_load(vm["boot_data"])
+                del vm["boot_data"]
 
-    data['vnf']['VNFC'] = content
+        data['vnf']['VNFC'] = content
     #TODO: GET all the information from a VNFC and include it in the output.
 
     #GET NET
@@ -1616,7 +1681,7 @@ def get_vnf_id(mydb, tenant_id, vnf_id):
         if len(ipprofiles)==1:
             net["ip_profile"] = ipprofiles[0]
         elif len(ipprofiles)>1:
-            raise NfvoException("More than one ip-profile found with this criteria: net_id='{}'".format(net['uuid']), HTTP_Bad_Request)
+            raise NfvoException("More than one ip-profile found with this criteria: net_id='{}'".format(net['uuid']), httperrors.Bad_Request)
 
 
     #TODO: For each net, GET its elements and relevant info per element (VNFC, iface, ip_address) and include them in the output.
@@ -1660,7 +1725,7 @@ def delete_vnf(mydb,tenant_id,vnf_id,datacenter=None,vim_tenant=None):
 
     deleted = mydb.delete_row_by_id('vnfs', vnf_id)
     if deleted == 0:
-        raise NfvoException("vnf '{}' not found".format(vnf_id), HTTP_Not_Found)
+        raise NfvoException("vnf '{}' not found".format(vnf_id), httperrors.Not_Found)
 
     undeletedItems = []
     for flavor in flavorList:
@@ -1736,12 +1801,13 @@ def delete_vnf(mydb,tenant_id,vnf_id,datacenter=None,vim_tenant=None):
     #    return "delete_vnf. Undeleted: %s" %(undeletedItems)
 
 
+@deprecated("Not used")
 def get_hosts_info(mydb, nfvo_tenant_id, datacenter_name=None):
     result, vims = get_vim(mydb, nfvo_tenant_id, None, datacenter_name)
     if result < 0:
         return result, vims
     elif result == 0:
-        return -HTTP_Not_Found, "datacenter '%s' not found" % datacenter_name
+        return -httperrors.Not_Found, "datacenter '%s' not found" % datacenter_name
     myvim = vims.values()[0]
     result,servers =  myvim.get_hosts_info()
     if result < 0:
@@ -1753,10 +1819,10 @@ def get_hosts_info(mydb, nfvo_tenant_id, datacenter_name=None):
 def get_hosts(mydb, nfvo_tenant_id):
     vims = get_vim(mydb, nfvo_tenant_id)
     if len(vims) == 0:
-        raise NfvoException("No datacenter found for tenant '{}'".format(str(nfvo_tenant_id)), HTTP_Not_Found)
+        raise NfvoException("No datacenter found for tenant '{}'".format(str(nfvo_tenant_id)), httperrors.Not_Found)
     elif len(vims)>1:
         #print "nfvo.datacenter_action() error. Several datacenters found"
-        raise NfvoException("More than one datacenters found, try to identify with uuid", HTTP_Conflict)
+        raise NfvoException("More than one datacenters found, try to identify with uuid", httperrors.Conflict)
     myvim = vims.values()[0]
     try:
         hosts =  myvim.get_hosts()
@@ -1786,6 +1852,7 @@ def get_hosts(mydb, nfvo_tenant_id):
         raise NfvoException("Not possible to get_host_list from VIM: {}".format(str(e)), e.http_code)
 
 
+@deprecated("Use new_nsd_v3")
 def new_scenario(mydb, tenant_id, topo):
 
 #    result, vims = get_vim(mydb, tenant_id)
@@ -1797,7 +1864,7 @@ def new_scenario(mydb, tenant_id, topo):
         if "tenant_id" in topo:
             if topo["tenant_id"] != tenant_id:
                 raise NfvoException("VNF can not have a different tenant owner '{}', must be '{}'".format(topo["tenant_id"], tenant_id),
-                                    HTTP_Unauthorized)
+                                    httperrors.Unauthorized)
     else:
         tenant_id=None
 
@@ -1829,15 +1896,15 @@ def new_scenario(mydb, tenant_id, topo):
             error_text += " 'VNF model' " +  vnf['VNF model']
             where['name'] = vnf['VNF model']
         if len(where) == 1:
-            raise NfvoException("Descriptor need a 'vnf_id' or 'VNF model' field at " + error_pos, HTTP_Bad_Request)
+            raise NfvoException("Descriptor need a 'vnf_id' or 'VNF model' field at " + error_pos, httperrors.Bad_Request)
 
         vnf_db = mydb.get_rows(SELECT=('uuid','name','description'),
                                FROM='vnfs',
                                WHERE=where)
         if len(vnf_db)==0:
-            raise NfvoException("unknown" + error_text + " at " + error_pos, HTTP_Not_Found)
+            raise NfvoException("unknown" + error_text + " at " + error_pos, httperrors.Not_Found)
         elif len(vnf_db)>1:
-            raise NfvoException("more than one" + error_text + " at " + error_pos + " Concrete with 'vnf_id'", HTTP_Conflict)
+            raise NfvoException("more than one" + error_text + " at " + error_pos + " Concrete with 'vnf_id'", httperrors.Conflict)
         vnf['uuid']=vnf_db[0]['uuid']
         vnf['description']=vnf_db[0]['description']
         #get external interfaces
@@ -1863,7 +1930,7 @@ def new_scenario(mydb, tenant_id, topo):
         con_type = conections[k].get("type", "link")
         if con_type != "link":
             if k in other_nets:
-                raise NfvoException("Format error. Reapeted network name at 'topology':'connections':'{}'".format(str(k)), HTTP_Bad_Request)
+                raise NfvoException("Format error. Reapeted network name at 'topology':'connections':'{}'".format(str(k)), httperrors.Bad_Request)
             other_nets[k] = {'external': False}
             if conections[k].get("graph"):
                 other_nets[k]["graph"] =   conections[k]["graph"]
@@ -1886,10 +1953,10 @@ def new_scenario(mydb, tenant_id, topo):
         for iface in ifaces_list:
             if iface[0] not in vnfs and iface[0] not in other_nets :
                 raise NfvoException("format error. Invalid VNF name at 'topology':'connections':'{}':'nodes':'{}'".format(
-                                                                                        str(k), iface[0]), HTTP_Not_Found)
+                                                                                        str(k), iface[0]), httperrors.Not_Found)
             if iface[0] in vnfs and iface[1] not in vnfs[ iface[0] ]['ifaces']:
                 raise NfvoException("format error. Invalid interface name at 'topology':'connections':'{}':'nodes':'{}':'{}'".format(
-                                                                                        str(k), iface[0], iface[1]), HTTP_Not_Found)
+                                                                                        str(k), iface[0], iface[1]), httperrors.Not_Found)
 
 #1.5 unify connections from the pair list to a consolidated list
     index=0
@@ -1926,13 +1993,13 @@ def new_scenario(mydb, tenant_id, topo):
             if 'name' not in net:
                 net['name']=k
             if 'model' not in net:
-                raise NfvoException("needed a 'model' at " + error_pos, HTTP_Bad_Request)
+                raise NfvoException("needed a 'model' at " + error_pos, httperrors.Bad_Request)
             if net['model']=='bridge_net':
                 net['type']='bridge';
             elif net['model']=='dataplane_net':
                 net['type']='data';
             else:
-                raise NfvoException("unknown 'model' '"+ net['model'] +"' at " + error_pos, HTTP_Not_Found)
+                raise NfvoException("unknown 'model' '"+ net['model'] +"' at " + error_pos, httperrors.Not_Found)
         else: #external
 #IF we do not want to check that external network exist at datacenter
             pass
@@ -1946,17 +2013,17 @@ def new_scenario(mydb, tenant_id, topo):
 #                 error_text += " 'model' " +  net['model']
 #                 WHERE_['name'] = net['model']
 #             if len(WHERE_) == 0:
-#                 return -HTTP_Bad_Request, "needed a 'net_id' or 'model' at " + error_pos
+#                 return -httperrors.Bad_Request, "needed a 'net_id' or 'model' at " + error_pos
 #             r,net_db = mydb.get_table(SELECT=('uuid','name','description','type','shared'),
 #                 FROM='datacenter_nets', WHERE=WHERE_ )
 #             if r<0:
 #                 print "nfvo.new_scenario Error getting datacenter_nets",r,net_db
 #             elif r==0:
 #                 print "nfvo.new_scenario Error" +error_text+ " is not present at database"
-#                 return -HTTP_Bad_Request, "unknown " +error_text+ " at " + error_pos
+#                 return -httperrors.Bad_Request, "unknown " +error_text+ " at " + error_pos
 #             elif r>1:
 #                 print "nfvo.new_scenario Error more than one external_network for " +error_text+ " is present at database"
-#                 return -HTTP_Bad_Request, "more than one external_network for " +error_text+ "at "+ error_pos + " Concrete with 'net_id'"
+#                 return -httperrors.Bad_Request, "more than one external_network for " +error_text+ "at "+ error_pos + " Concrete with 'net_id'"
 #             other_nets[k].update(net_db[0])
 #ENDIF
     net_list={}
@@ -1973,7 +2040,7 @@ def new_scenario(mydb, tenant_id, topo):
                     if other_net_index>=0:
                         error_text="There is some interface connected both to net '%s' and net '%s'" % (con[other_net_index][0], net_key)
                         #print "nfvo.new_scenario " + error_text
-                        raise NfvoException(error_text, HTTP_Bad_Request)
+                        raise NfvoException(error_text, httperrors.Bad_Request)
                     else:
                         other_net_index = index
                         net_target = net_key
@@ -1997,7 +2064,7 @@ def new_scenario(mydb, tenant_id, topo):
 #                     if type_=='data' and other_nets[net_target]['type']=="ptp":
 #                         error_text = "Error connecting %d nodes on a not multipoint net %s" % (len(con), net_target)
 #                         print "nfvo.new_scenario " + error_text
-#                         return -HTTP_Bad_Request, error_text
+#                         return -httperrors.Bad_Request, error_text
 #ENDIF
                 for iface in con:
                     vnfs[ iface[0] ]['ifaces'][ iface[1] ]['net_key'] = net_target
@@ -2019,7 +2086,7 @@ def new_scenario(mydb, tenant_id, topo):
                 if net_type_bridge and net_type_data:
                     error_text = "Error connection interfaces of bridge type with data type. Firs node %s, iface %s" % (iface[0], iface[1])
                     #print "nfvo.new_scenario " + error_text
-                    raise NfvoException(error_text, HTTP_Bad_Request)
+                    raise NfvoException(error_text, httperrors.Bad_Request)
                 elif net_type_bridge:
                     type_='bridge'
                 else:
@@ -2030,7 +2097,7 @@ def new_scenario(mydb, tenant_id, topo):
             error_text = "Error connection node %s : %s does not match any VNF or interface" % (iface[0], iface[1])
             #print "nfvo.new_scenario " + error_text
             #raise e
-            raise NfvoException(error_text, HTTP_Bad_Request)
+            raise NfvoException(error_text, httperrors.Bad_Request)
 
 #1.8: Connect to management net all not already connected interfaces of type 'mgmt'
     #1.8.1 obtain management net
@@ -2067,6 +2134,7 @@ def new_scenario(mydb, tenant_id, topo):
     return c
 
 
+@deprecated("Use new_nsd_v3")
 def new_scenario_v02(mydb, tenant_id, scenario_dict, version):
     """ This creates a new scenario for version 0.2 and 0.3"""
     scenario = scenario_dict["scenario"]
@@ -2076,7 +2144,7 @@ def new_scenario_v02(mydb, tenant_id, scenario_dict, version):
             if scenario["tenant_id"] != tenant_id:
                 # print "nfvo.new_scenario_v02() tenant '%s' not found" % tenant_id
                 raise NfvoException("VNF can not have a different tenant owner '{}', must be '{}'".format(
-                                                    scenario["tenant_id"], tenant_id), HTTP_Unauthorized)
+                                                    scenario["tenant_id"], tenant_id), httperrors.Unauthorized)
     else:
         tenant_id=None
 
@@ -2092,14 +2160,14 @@ def new_scenario_v02(mydb, tenant_id, scenario_dict, version):
             error_text += " 'vnf_name' " + vnf['vnf_name']
             where['name'] = vnf['vnf_name']
         if len(where) == 1:
-            raise NfvoException("Needed a 'vnf_id' or 'vnf_name' at " + error_pos, HTTP_Bad_Request)
+            raise NfvoException("Needed a 'vnf_id' or 'vnf_name' at " + error_pos, httperrors.Bad_Request)
         vnf_db = mydb.get_rows(SELECT=('uuid', 'name', 'description'),
                                FROM='vnfs',
                                WHERE=where)
         if len(vnf_db) == 0:
-            raise NfvoException("Unknown" + error_text + " at " + error_pos, HTTP_Not_Found)
+            raise NfvoException("Unknown" + error_text + " at " + error_pos, httperrors.Not_Found)
         elif len(vnf_db) > 1:
-            raise NfvoException("More than one" + error_text + " at " + error_pos + " Concrete with 'vnf_id'", HTTP_Conflict)
+            raise NfvoException("More than one" + error_text + " at " + error_pos + " Concrete with 'vnf_id'", httperrors.Conflict)
         vnf['uuid'] = vnf_db[0]['uuid']
         vnf['description'] = vnf_db[0]['description']
         vnf['ifaces'] = {}
@@ -2127,17 +2195,17 @@ def new_scenario_v02(mydb, tenant_id, scenario_dict, version):
                     error_text = "Error at 'networks':'{}':'interfaces' VNF '{}' not match any VNF at 'vnfs'".format(
                         net_name, vnf)
                     # logger.debug("nfvo.new_scenario_v02 " + error_text)
-                    raise NfvoException(error_text, HTTP_Not_Found)
+                    raise NfvoException(error_text, httperrors.Not_Found)
                 if iface not in scenario["vnfs"][vnf]['ifaces']:
                     error_text = "Error at 'networks':'{}':'interfaces':'{}' interface not match any VNF interface"\
                         .format(net_name, iface)
                     # logger.debug("nfvo.new_scenario_v02 " + error_text)
-                    raise NfvoException(error_text, HTTP_Bad_Request)
+                    raise NfvoException(error_text, httperrors.Bad_Request)
                 if "net_key" in scenario["vnfs"][vnf]['ifaces'][iface]:
                     error_text = "Error at 'networks':'{}':'interfaces':'{}' interface already connected at network"\
                                  "'{}'".format(net_name, iface,scenario["vnfs"][vnf]['ifaces'][iface]['net_key'])
                     # logger.debug("nfvo.new_scenario_v02 " + error_text)
-                    raise NfvoException(error_text, HTTP_Bad_Request)
+                    raise NfvoException(error_text, httperrors.Bad_Request)
                 scenario["vnfs"][vnf]['ifaces'][ iface ]['net_key'] = net_name
                 scenario["vnfs"][vnf]['ifaces'][iface]['ip_address'] = ip_address
                 iface_type = scenario["vnfs"][vnf]['ifaces'][iface]['type']
@@ -2150,7 +2218,7 @@ def new_scenario_v02(mydb, tenant_id, scenario_dict, version):
             error_text = "Error connection interfaces of 'bridge' type and 'data' type at 'networks':'{}':'interfaces'"\
                 .format(net_name)
             # logger.debug("nfvo.new_scenario " + error_text)
-            raise NfvoException(error_text, HTTP_Bad_Request)
+            raise NfvoException(error_text, httperrors.Bad_Request)
         elif net_type_bridge:
             type_ = 'bridge'
         else:
@@ -2161,19 +2229,19 @@ def new_scenario_v02(mydb, tenant_id, scenario_dict, version):
                 error_text = "Error connecting interfaces of data type to a network declared as 'underlay' at "\
                              "'network':'{}'".format(net_name)
                 # logger.debug(error_text)
-                raise NfvoException(error_text, HTTP_Bad_Request)
+                raise NfvoException(error_text, httperrors.Bad_Request)
             elif type_ != "bridge" and net["implementation"] == "overlay":
                 error_text = "Error connecting interfaces of data type to a network declared as 'overlay' at "\
                              "'network':'{}'".format(net_name)
                 # logger.debug(error_text)
-                raise NfvoException(error_text, HTTP_Bad_Request)
+                raise NfvoException(error_text, httperrors.Bad_Request)
             net.pop("implementation")
         if "type" in net and version == "0.3":   # for v0.3
             if type_ == "data" and net["type"] == "e-line":
                 error_text = "Error connecting more than 2 interfaces of data type to a network declared as type "\
                              "'e-line' at 'network':'{}'".format(net_name)
                 # logger.debug(error_text)
-                raise NfvoException(error_text, HTTP_Bad_Request)
+                raise NfvoException(error_text, httperrors.Bad_Request)
             elif type_ == "ptp" and net["type"] == "e-lan":
                 type_ = "data"
 
@@ -2201,7 +2269,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
         try:
             pybindJSONDecoder.load_ietf_json(nsd_descriptor, None, None, obj=mynsd)
         except Exception as e:
-            raise NfvoException("Error. Invalid NS descriptor format: " + str(e), HTTP_Bad_Request)
+            raise NfvoException("Error. Invalid NS descriptor format: " + str(e), httperrors.Bad_Request)
         db_scenarios = []
         db_sce_nets = []
         db_sce_vnfs = []
@@ -2244,7 +2312,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                     raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'constituent-vnfd':'vnfd-id-ref':"
                                         "'{}'. Reference to a non-existing VNFD in the catalog".format(
                                             str(nsd["id"]), str(vnf["vnfd-id-ref"])[:255]),
-                                        HTTP_Bad_Request)
+                                        httperrors.Bad_Request)
                 sce_vnf_uuid = str(uuid4())
                 uuid_list.append(sce_vnf_uuid)
                 db_sce_vnf = {
@@ -2291,6 +2359,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                     "scenario_id": scenario_uuid,
                     # "type": #TODO
                     "multipoint": not vld.get("type") == "ELINE",
+                    "osm_id":  get_str(vld, "id", 255),
                     # "external": #TODO
                     "description": get_str(vld, "description", 255),
                 }
@@ -2312,7 +2381,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                         raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'vld[{}]':'ip-profile-ref':'{}'."
                                             " Reference to a non-existing 'ip_profiles'".format(
                                                 str(nsd["id"]), str(vld["id"]), str(vld["ip-profile-ref"])),
-                                            HTTP_Bad_Request)
+                                            httperrors.Bad_Request)
                     db_ip_profiles[ip_profile_name2db_table_index[ip_profile_name]]["sce_net_id"] = sce_net_uuid
                 elif vld.get("vim-network-name"):
                     db_sce_net["vim_network_name"] = get_str(vld, "vim-network-name", 255)
@@ -2326,7 +2395,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                                             "-ref':'member-vnf-index-ref':'{}'. Reference to a non-existing index at "
                                             "'nsd':'constituent-vnfd'".format(
                                                 str(nsd["id"]), str(vld["id"]), str(iface["member-vnf-index-ref"])),
-                                            HTTP_Bad_Request)
+                                            httperrors.Bad_Request)
 
                     existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid', 'i.type as iface_type'),
                                                     FROM="interfaces as i join vms on i.vm_id=vms.uuid",
@@ -2339,7 +2408,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                                             "connection-point name at VNFD '{}'".format(
                                                 str(nsd["id"]), str(vld["id"]), str(iface["vnfd-connection-point-ref"]),
                                                 str(iface.get("vnfd-id-ref"))[:255]),
-                                            HTTP_Bad_Request)
+                                            httperrors.Bad_Request)
                     interface_uuid = existing_ifaces[0]["uuid"]
                     if existing_ifaces[0]["iface_type"] == "data" and not db_sce_net["type"]:
                         db_sce_net["type"] = "data"
@@ -2394,27 +2463,43 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                                                 "-ref':'member-vnf-index-ref':'{}'. Reference to a non-existing index at "
                                                 "'nsd':'constituent-vnfd'".format(
                                                     str(nsd["id"]), str(rsp["id"]), str(iface["member-vnf-index-ref"])),
-                                                HTTP_Bad_Request)
+                                                httperrors.Bad_Request)
 
-                        existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid',),
-                                                        FROM="interfaces as i join vms on i.vm_id=vms.uuid",
-                                                        WHERE={'vnf_id': vnf_index2vnf_uuid[vnf_index],
-                                                               'external_name': get_str(iface, "vnfd-connection-point-ref",
-                                                                                        255)})
-                        if not existing_ifaces:
+                        ingress_existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid',),
+                                                                FROM="interfaces as i join vms on i.vm_id=vms.uuid",
+                                                                WHERE={
+                                                                    'vnf_id': vnf_index2vnf_uuid[vnf_index],
+                                                                    'external_name': get_str(iface, "vnfd-ingress-connection-point-ref",
+                                                                                             255)})
+                        if not ingress_existing_ifaces:
                             raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'rsp[{}]':'vnfd-connection-point"
-                                                "-ref':'vnfd-connection-point-ref':'{}'. Reference to a non-existing "
+                                                "-ref':'vnfd-ingress-connection-point-ref':'{}'. Reference to a non-existing "
                                                 "connection-point name at VNFD '{}'".format(
-                                                    str(nsd["id"]), str(rsp["id"]), str(iface["vnfd-connection-point-ref"]),
-                                                    str(iface.get("vnfd-id-ref"))[:255]),
-                                                HTTP_Bad_Request)
-                        interface_uuid = existing_ifaces[0]["uuid"]
+                                str(nsd["id"]), str(rsp["id"]), str(iface["vnfd-ingress-connection-point-ref"]),
+                                str(iface.get("vnfd-id-ref"))[:255]), httperrors.Bad_Request)
+
+                        egress_existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid',),
+                                                               FROM="interfaces as i join vms on i.vm_id=vms.uuid",
+                                                               WHERE={
+                                                                   'vnf_id': vnf_index2vnf_uuid[vnf_index],
+                                                                   'external_name': get_str(iface, "vnfd-egress-connection-point-ref",
+                                                                                            255)})
+                        if not egress_existing_ifaces:
+                            raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'rsp[{}]':'vnfd-connection-point"
+                                                "-ref':'vnfd-egress-connection-point-ref':'{}'. Reference to a non-existing "
+                                                "connection-point name at VNFD '{}'".format(
+                                str(nsd["id"]), str(rsp["id"]), str(iface["vnfd-egress-connection-point-ref"]),
+                                str(iface.get("vnfd-id-ref"))[:255]), HTTP_Bad_Request)
+
+                        ingress_interface_uuid = ingress_existing_ifaces[0]["uuid"]
+                        egress_interface_uuid = egress_existing_ifaces[0]["uuid"]
                         sce_rsp_hop_uuid = str(uuid4())
                         uuid_list.append(sce_rsp_hop_uuid)
                         db_sce_rsp_hop = {
                             "uuid": sce_rsp_hop_uuid,
                             "if_order": if_order,
-                            "interface_id": interface_uuid,
+                            "ingress_interface_id": ingress_interface_uuid,
+                            "egress_interface_id": egress_interface_uuid,
                             "sce_vnf_id": vnf_index2scevnf_uuid[vnf_index],
                             "sce_rsp_id": sce_rsp_uuid,
                         }
@@ -2433,7 +2518,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                                             "-ref':'member-vnf-index-ref':'{}'. Reference to a non-existing index at "
                                             "'nsd':'constituent-vnfd'".format(
                                                 str(nsd["id"]), str(classifier["id"]), str(classifier["member-vnf-index-ref"])),
-                                            HTTP_Bad_Request)
+                                            httperrors.Bad_Request)
                     existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid',),
                                                     FROM="interfaces as i join vms on i.vm_id=vms.uuid",
                                                     WHERE={'vnf_id': vnf_index2vnf_uuid[vnf_index],
@@ -2445,7 +2530,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                                             "connection-point name at VNFD '{}'".format(
                                                 str(nsd["id"]), str(rsp["id"]), str(iface["vnfd-connection-point-ref"]),
                                                 str(iface.get("vnfd-id-ref"))[:255]),
-                                            HTTP_Bad_Request)
+                                            httperrors.Bad_Request)
                     interface_uuid = existing_ifaces[0]["uuid"]
 
                     db_sce_classifier = {
@@ -2501,7 +2586,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
         raise
     except Exception as e:
         logger.error("Exception {}".format(e))
-        raise  # NfvoException("Exception {}".format(e), HTTP_Bad_Request)
+        raise  # NfvoException("Exception {}".format(e), httperrors.Bad_Request)
 
 
 def edit_scenario(mydb, tenant_id, scenario_id, data):
@@ -2511,6 +2596,7 @@ def edit_scenario(mydb, tenant_id, scenario_id, data):
     return c
 
 
+@deprecated("Use create_instance")
 def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instance_scenario_description, datacenter=None,vim_tenant=None, startvms=True):
     #print "Checking that nfvo_tenant_id exists and getting the VIM URI and the VIM tenant_id"
     datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_id, datacenter, vim_tenant=vim_tenant)
@@ -2561,7 +2647,7 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
                     error_text = "Error, datacenter '%s' does not have external network '%s'." % (datacenter_name, sce_net['name'])
                     _, message = rollback(mydb, vims, rollbackList)
                     logger.error("nfvo.start_scenario: %s", error_text)
-                    raise NfvoException(error_text, HTTP_Bad_Request)
+                    raise NfvoException(error_text, httperrors.Bad_Request)
                 logger.debug("Using existent VIM network for scenario %s. Network id %s", scenarioDict['name'],sce_net['vim_id'])
                 auxNetDict['scenario'][sce_net['uuid']] = sce_net['vim_id']
 
@@ -2608,7 +2694,7 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
             # check if there is enough availability zones available at vim level.
             if myvims[datacenter_id].availability_zone and vnf_availability_zones:
                 if len(vnf_availability_zones) > len(myvims[datacenter_id].availability_zone):
-                    raise NfvoException('No enough availability zones at VIM for this deployment', HTTP_Bad_Request)
+                    raise NfvoException('No enough availability zones at VIM for this deployment', httperrors.Bad_Request)
 
             for vm in sce_vnf['vms']:
                 i += 1
@@ -2664,9 +2750,9 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
                         e_text = "Cannot determine the interface type PF or VF of VNF '%s' VM '%s' iface '%s'" %(sce_vnf['name'], vm['name'], iface['internal_name'])
                         if flavor_dict.get('extended')==None:
                             raise NfvoException(e_text  + "After database migration some information is not available. \
-                                    Try to delete and create the scenarios and VNFs again", HTTP_Conflict)
+                                    Try to delete and create the scenarios and VNFs again", httperrors.Conflict)
                         else:
-                            raise NfvoException(e_text, HTTP_Internal_Server_Error)
+                            raise NfvoException(e_text, httperrors.Internal_Server_Error)
                     if netDict["use"]=="mgmt" or netDict["use"]=="bridge":
                         netDict["type"]="virtual"
                     if "vpci" in iface and iface["vpci"] is not None:
@@ -2843,12 +2929,12 @@ def get_vim_thread(mydb, tenant_id, datacenter_id_name=None, datacenter_tenant_i
                      "join datacenters as d on d.uuid=dt.datacenter_id",
                 WHERE=where_)
             if len(datacenters) > 1:
-                raise NfvoException("More than one datacenters found, try to identify with uuid", HTTP_Conflict)
+                raise NfvoException("More than one datacenters found, try to identify with uuid", httperrors.Conflict)
             elif datacenters:
                 thread_id = datacenters[0]["datacenter_tenant_id"]
                 thread = vim_threads["running"].get(thread_id)
         if not thread:
-            raise NfvoException("datacenter '{}' not found".format(str(datacenter_id_name)), HTTP_Not_Found)
+            raise NfvoException("datacenter '{}' not found".format(str(datacenter_id_name)), httperrors.Not_Found)
         return thread_id, thread
     except db_base_Exception as e:
         raise NfvoException("{} {}".format(type(e).__name__ , str(e)), e.http_code)
@@ -2867,13 +2953,13 @@ def get_datacenter_uuid(mydb, tenant_id, datacenter_id_name):
                " dt on td.datacenter_tenant_id=dt.uuid"
     else:
         from_ = 'datacenters as d'
-    vimaccounts = mydb.get_rows(FROM=from_, SELECT=("d.uuid as uuid",), WHERE=WHERE_dict )
+    vimaccounts = mydb.get_rows(FROM=from_, SELECT=("d.uuid as uuid, d.name as name",), WHERE=WHERE_dict )
     if len(vimaccounts) == 0:
-        raise NfvoException("datacenter '{}' not found".format(str(datacenter_id_name)), HTTP_Not_Found)
+        raise NfvoException("datacenter '{}' not found".format(str(datacenter_id_name)), httperrors.Not_Found)
     elif len(vimaccounts)>1:
         #print "nfvo.datacenter_action() error. Several datacenters found"
-        raise NfvoException("More than one datacenters found, try to identify with uuid", HTTP_Conflict)
-    return vimaccounts[0]["uuid"]
+        raise NfvoException("More than one datacenters found, try to identify with uuid", httperrors.Conflict)
+    return vimaccounts[0]["uuid"], vimaccounts[0]["name"]
 
 
 def get_datacenter_by_name_uuid(mydb, tenant_id, datacenter_id_name=None, **extra_filter):
@@ -2886,16 +2972,16 @@ def get_datacenter_by_name_uuid(mydb, tenant_id, datacenter_id_name=None, **extr
             datacenter_name = datacenter_id_name
     vims = get_vim(mydb, tenant_id, datacenter_id, datacenter_name, **extra_filter)
     if len(vims) == 0:
-        raise NfvoException("datacenter '{}' not found".format(str(datacenter_id_name)), HTTP_Not_Found)
+        raise NfvoException("datacenter '{}' not found".format(str(datacenter_id_name)), httperrors.Not_Found)
     elif len(vims)>1:
         #print "nfvo.datacenter_action() error. Several datacenters found"
-        raise NfvoException("More than one datacenters found, try to identify with uuid", HTTP_Conflict)
+        raise NfvoException("More than one datacenters found, try to identify with uuid", httperrors.Conflict)
     return vims.keys()[0], vims.values()[0]
 
 
 def update(d, u):
-    '''Takes dict d and updates it with the values in dict u.'''
-    '''It merges all depth levels'''
+    """Takes dict d and updates it with the values in dict u.
+       It merges all depth levels"""
     for k, v in u.iteritems():
         if isinstance(v, collections.Mapping):
             r = update(d.get(k, {}), v)
@@ -2922,8 +3008,12 @@ def create_instance(mydb, tenant_id, instance_dict):
     rollbackList = []
 
     # print "Checking that the scenario exists and getting the scenario dictionary"
-    scenarioDict = mydb.get_scenario(scenario, tenant_id, datacenter_vim_id=myvim_threads_id[default_datacenter_id],
-                                     datacenter_id=default_datacenter_id)
+    if isinstance(scenario, str):
+        scenarioDict = mydb.get_scenario(scenario, tenant_id, datacenter_vim_id=myvim_threads_id[default_datacenter_id],
+                                         datacenter_id=default_datacenter_id)
+    else:
+        scenarioDict = scenario
+        scenarioDict["uuid"] = None
 
     # logger.debug(">>>>>> Dictionaries before merging")
     # logger.debug(">>>>>> InstanceDict:\n{}".format(yaml.safe_dump(instance_dict,default_flow_style=False, width=256)))
@@ -2966,26 +3056,45 @@ def create_instance(mydb, tenant_id, instance_dict):
     # Auxiliary dictionaries from x to y
     sce_net2instance = {}
     net2task_id = {'scenario': {}}
+    # Mapping between local networks and WIMs
+    wim_usage = {}
+
+    def ip_profile_IM2RO(ip_profile_im):
+        # translate from input format to database format
+        ip_profile_ro = {}
+        if 'subnet-address' in ip_profile_im:
+            ip_profile_ro['subnet_address'] = ip_profile_im['subnet-address']
+        if 'ip-version' in ip_profile_im:
+            ip_profile_ro['ip_version'] = ip_profile_im['ip-version']
+        if 'gateway-address' in ip_profile_im:
+            ip_profile_ro['gateway_address'] = ip_profile_im['gateway-address']
+        if 'dns-address' in ip_profile_im:
+            ip_profile_ro['dns_address'] = ip_profile_im['dns-address']
+            if isinstance(ip_profile_ro['dns_address'], (list, tuple)):
+                ip_profile_ro['dns_address'] = ";".join(ip_profile_ro['dns_address'])
+        if 'dhcp' in ip_profile_im:
+            ip_profile_ro['dhcp_start_address'] = ip_profile_im['dhcp'].get('start-address')
+            ip_profile_ro['dhcp_enabled'] = ip_profile_im['dhcp'].get('enabled', True)
+            ip_profile_ro['dhcp_count'] = ip_profile_im['dhcp'].get('count')
+        return ip_profile_ro
 
     # logger.debug("Creating instance from scenario-dict:\n%s",
     #               yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False))
     try:
         # 0 check correct parameters
         for net_name, net_instance_desc in instance_dict.get("networks", {}).iteritems():
-            found = False
             for scenario_net in scenarioDict['nets']:
-                if net_name == scenario_net["name"]:
-                    found = True
+                if net_name == scenario_net.get("name") or net_name == scenario_net.get("osm_id") or net_name == scenario_net.get("uuid"):
                     break
-            if not found:
-                raise NfvoException("Invalid scenario network name '{}' at instance:networks".format(net_name),
-                                    HTTP_Bad_Request)
+            else:
+                raise NfvoException("Invalid scenario network name or id '{}' at instance:networks".format(net_name),
+                                    httperrors.Bad_Request)
             if "sites" not in net_instance_desc:
                 net_instance_desc["sites"] = [ {} ]
             site_without_datacenter_field = False
             for site in net_instance_desc["sites"]:
                 if site.get("datacenter"):
-                    site["datacenter"] = get_datacenter_uuid(mydb, tenant_id, site["datacenter"])
+                    site["datacenter"], _ = get_datacenter_uuid(mydb, tenant_id, site["datacenter"])
                     if site["datacenter"] not in myvims:
                         # Add this datacenter to myvims
                         d, v = get_datacenter_by_name_uuid(mydb, tenant_id, site["datacenter"])
@@ -2995,26 +3104,58 @@ def create_instance(mydb, tenant_id, instance_dict):
                 else:
                     if site_without_datacenter_field:
                         raise NfvoException("Found more than one entries without datacenter field at "
-                                            "instance:networks:{}:sites".format(net_name), HTTP_Bad_Request)
+                                            "instance:networks:{}:sites".format(net_name), httperrors.Bad_Request)
                     site_without_datacenter_field = True
                     site["datacenter"] = default_datacenter_id   # change name to id
 
         for vnf_name, vnf_instance_desc in instance_dict.get("vnfs",{}).iteritems():
-            found = False
             for scenario_vnf in scenarioDict['vnfs']:
-                if vnf_name == scenario_vnf['name'] or vnf_name == scenario_vnf['member_vnf_index']:
-                    found = True
+                if vnf_name == scenario_vnf['member_vnf_index'] or vnf_name == scenario_vnf['uuid'] or vnf_name == scenario_vnf['name']:
                     break
-            if not found:
-                raise NfvoException("Invalid vnf name '{}' at instance:vnfs".format(vnf_name), HTTP_Bad_Request)
+            else:
+                raise NfvoException("Invalid vnf name '{}' at instance:vnfs".format(vnf_name), httperrors.Bad_Request)
             if "datacenter" in vnf_instance_desc:
                 # Add this datacenter to myvims
-                vnf_instance_desc["datacenter"] = get_datacenter_uuid(mydb, tenant_id, vnf_instance_desc["datacenter"])
+                vnf_instance_desc["datacenter"], _ = get_datacenter_uuid(mydb, tenant_id, vnf_instance_desc["datacenter"])
                 if vnf_instance_desc["datacenter"] not in myvims:
                     d, v = get_datacenter_by_name_uuid(mydb, tenant_id, vnf_instance_desc["datacenter"])
                     myvims[d] = v
                     myvim_threads_id[d], _ = get_vim_thread(mydb, tenant_id, vnf_instance_desc["datacenter"])
                 scenario_vnf["datacenter"] = vnf_instance_desc["datacenter"]
+
+            for net_id, net_instance_desc in vnf_instance_desc.get("networks", {}).iteritems():
+                for scenario_net in scenario_vnf['nets']:
+                    if net_id == scenario_net['osm_id'] or net_id == scenario_net['uuid'] or net_id == scenario_net["name"]:
+                        break
+                else:
+                    raise NfvoException("Invalid net id or name '{}' at instance:vnfs:networks".format(net_id), httperrors.Bad_Request)
+                if net_instance_desc.get("vim-network-name"):
+                    scenario_net["vim-network-name"] = net_instance_desc["vim-network-name"]
+                if net_instance_desc.get("vim-network-id"):
+                    scenario_net["vim-network-id"] = net_instance_desc["vim-network-id"]
+                if net_instance_desc.get("name"):
+                    scenario_net["name"] = net_instance_desc["name"]
+                if 'ip-profile' in net_instance_desc:
+                    ipprofile_db = ip_profile_IM2RO(net_instance_desc['ip-profile'])
+                    if 'ip_profile' not in scenario_net:
+                        scenario_net['ip_profile'] = ipprofile_db
+                    else:
+                        update(scenario_net['ip_profile'], ipprofile_db)
+
+            for vdu_id, vdu_instance_desc in vnf_instance_desc.get("vdus", {}).iteritems():
+                for scenario_vm in scenario_vnf['vms']:
+                    if vdu_id == scenario_vm['osm_id'] or vdu_id == scenario_vm["name"]:
+                        break
+                else:
+                    raise NfvoException("Invalid vdu id or name '{}' at instance:vnfs:vdus".format(vdu_id), httperrors.Bad_Request)
+                scenario_vm["instance_parameters"] = vdu_instance_desc
+                for iface_id, iface_instance_desc in vdu_instance_desc.get("interfaces", {}).iteritems():
+                    for scenario_interface in scenario_vm['interfaces']:
+                        if iface_id == scenario_interface['internal_name'] or iface_id == scenario_interface["external_name"]:
+                            scenario_interface.update(iface_instance_desc)
+                            break
+                    else:
+                        raise NfvoException("Invalid vdu id or name '{}' at instance:vnfs:vdus".format(vdu_id), httperrors.Bad_Request)
 
         # 0.1 parse cloud-config parameters
         cloud_config = unify_cloud_config(instance_dict.get("cloud-config"), scenarioDict.get("cloud-config"))
@@ -3026,19 +3167,7 @@ def create_instance(mydb, tenant_id, instance_dict):
             for scenario_net in scenarioDict['nets']:
                 if net_name == scenario_net["name"]:
                     if 'ip-profile' in net_instance_desc:
-                        # translate from input format to database format
-                        ipprofile_in = net_instance_desc['ip-profile']
-                        ipprofile_db = {}
-                        ipprofile_db['subnet_address'] = ipprofile_in.get('subnet-address')
-                        ipprofile_db['ip_version'] = ipprofile_in.get('ip-version', 'IPv4')
-                        ipprofile_db['gateway_address'] = ipprofile_in.get('gateway-address')
-                        ipprofile_db['dns_address'] = ipprofile_in.get('dns-address')
-                        if isinstance(ipprofile_db['dns_address'], (list, tuple)):
-                            ipprofile_db['dns_address'] = ";".join(ipprofile_db['dns_address'])
-                        if 'dhcp' in ipprofile_in:
-                            ipprofile_db['dhcp_start_address'] = ipprofile_in['dhcp'].get('start-address')
-                            ipprofile_db['dhcp_enabled'] = ipprofile_in['dhcp'].get('enabled', True)
-                            ipprofile_db['dhcp_count'] = ipprofile_in['dhcp'].get('count' )
+                        ipprofile_db = ip_profile_IM2RO(net_instance_desc['ip-profile'])
                         if 'ip_profile' not in scenario_net:
                             scenario_net['ip_profile'] = ipprofile_db
                         else:
@@ -3059,53 +3188,94 @@ def create_instance(mydb, tenant_id, instance_dict):
         number_mgmt_networks = 0
         db_instance_nets = []
         for sce_net in scenarioDict['nets']:
-            descriptor_net = instance_dict.get("networks", {}).get(sce_net["name"], {})
-            net_name = descriptor_net.get("vim-network-name")
-            sce_net2instance[sce_net['uuid']] = {}
-            net2task_id['scenario'][sce_net['uuid']] = {}
+            sce_net_uuid = sce_net.get('uuid', sce_net["name"])
+            # get involved datacenters where this network need to be created
+            involved_datacenters = []
+            for sce_vnf in scenarioDict.get("vnfs", ()):
+                vnf_datacenter = sce_vnf.get("datacenter", default_datacenter_id)
+                if vnf_datacenter in involved_datacenters:
+                    continue
+                if sce_vnf.get("interfaces"):
+                    for sce_vnf_ifaces in sce_vnf["interfaces"]:
+                        if sce_vnf_ifaces.get("sce_net_id") == sce_net["uuid"]:
+                            involved_datacenters.append(vnf_datacenter)
+                            break
+            if not involved_datacenters:
+                involved_datacenters.append(default_datacenter_id)
 
-            sites = descriptor_net.get("sites", [ {} ])
-            for site in sites:
-                if site.get("datacenter"):
-                    vim = myvims[ site["datacenter"] ]
-                    datacenter_id = site["datacenter"]
-                    myvim_thread_id = myvim_threads_id[ site["datacenter"] ]
-                else:
-                    vim = myvims[ default_datacenter_id ]
-                    datacenter_id = default_datacenter_id
-                    myvim_thread_id = myvim_threads_id[default_datacenter_id]
+            # --> WIM
+            # TODO: use this information during network creation
+            wim_account_id = wim_account_name = None
+            if len(involved_datacenters) > 1 and 'uuid' in sce_net:
+                # OBS: sce_net without uuid are used internally to VNFs
+                # and the assumption is that VNFs will not be split among
+                # different datacenters
+                wim_account = wim_engine.find_suitable_wim_account(
+                    involved_datacenters, tenant_id)
+                wim_account_id = wim_account['uuid']
+                wim_account_name = wim_account['name']
+                wim_usage[sce_net['uuid']] = wim_account_id
+            # <-- WIM
+
+            descriptor_net = {}
+            if instance_dict.get("networks") and instance_dict["networks"].get(sce_net["name"]):
+                descriptor_net = instance_dict["networks"][sce_net["name"]]
+            net_name = descriptor_net.get("vim-network-name")
+            # add datacenters from instantiation parameters
+            if descriptor_net.get("sites"):
+                for site in descriptor_net["sites"]:
+                    if site.get("datacenter") and site["datacenter"] not in involved_datacenters:
+                        involved_datacenters.append(site["datacenter"])
+            sce_net2instance[sce_net_uuid] = {}
+            net2task_id['scenario'][sce_net_uuid] = {}
+
+            if sce_net["external"]:
+                number_mgmt_networks += 1
+
+            for datacenter_id in involved_datacenters:
+                netmap_use = None
+                netmap_create = None
+                if descriptor_net.get("sites"):
+                    for site in descriptor_net["sites"]:
+                        if site.get("datacenter") == datacenter_id:
+                            netmap_use = site.get("netmap-use")
+                            netmap_create = site.get("netmap-create")
+                            break
+
+                vim = myvims[datacenter_id]
+                myvim_thread_id = myvim_threads_id[datacenter_id]
+
                 net_type = sce_net['type']
+                net_vim_name = None
                 lookfor_filter = {'admin_state_up': True, 'status': 'ACTIVE'}  # 'shared': True
 
                 if not net_name:
                     if sce_net["external"]:
                         net_name = sce_net["name"]
                     else:
-                        net_name = "{}.{}".format(instance_name, sce_net["name"])
+                        net_name = "{}-{}".format(instance_name, sce_net["name"])
                         net_name = net_name[:255]     # limit length
 
-                if sce_net["external"]:
-                    number_mgmt_networks += 1
-                if "netmap-use" in site or "netmap-create" in site:
+                if netmap_use or netmap_create:
                     create_network = False
                     lookfor_network = False
-                    if "netmap-use" in site:
+                    if netmap_use:
                         lookfor_network = True
-                        if utils.check_valid_uuid(site["netmap-use"]):
-                            lookfor_filter["id"] = site["netmap-use"]
+                        if utils.check_valid_uuid(netmap_use):
+                            lookfor_filter["id"] = netmap_use
                         else:
-                            lookfor_filter["name"] = site["netmap-use"]
-                    if "netmap-create" in site:
+                            lookfor_filter["name"] = netmap_use
+                    if netmap_create:
                         create_network = True
                         net_vim_name = net_name
-                        if site["netmap-create"]:
-                            net_vim_name = site["netmap-create"]
+                        if isinstance(netmap_create, str):
+                            net_vim_name = netmap_create
                 elif sce_net.get("vim_network_name"):
                     create_network = False
                     lookfor_network = True
                     lookfor_filter["name"] = sce_net.get("vim_network_name")
                 elif sce_net["external"]:
-                    if sce_net['vim_id'] != None:
+                    if sce_net.get('vim_id'):
                         # there is a netmap at datacenter_nets database   # TODO REVISE!!!!
                         create_network = False
                         lookfor_network = True
@@ -3114,7 +3284,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                         if number_mgmt_networks > 1:
                             raise NfvoException("Found several VLD of type mgmt. "
                                                 "You must concrete what vim-network must be use for each one",
-                                                HTTP_Bad_Request)
+                                                httperrors.Bad_Request)
                         create_network = False
                         lookfor_network = True
                         if vim["config"].get("management_network_id"):
@@ -3135,7 +3305,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                 task_extra = {}
                 if create_network:
                     task_action = "CREATE"
-                    task_extra["params"] = (net_vim_name, net_type, sce_net.get('ip_profile', None))
+                    task_extra["params"] = (net_vim_name, net_type, sce_net.get('ip_profile', None), wim_account_name)
                     if lookfor_network:
                         task_extra["find"] = (lookfor_filter,)
                 elif lookfor_network:
@@ -3145,12 +3315,13 @@ def create_instance(mydb, tenant_id, instance_dict):
                 # fill database content
                 net_uuid = str(uuid4())
                 uuid_list.append(net_uuid)
-                sce_net2instance[sce_net['uuid']][datacenter_id] = net_uuid
+                sce_net2instance[sce_net_uuid][datacenter_id] = net_uuid
                 db_net = {
                     "uuid": net_uuid,
                     'vim_net_id': None,
+                    "vim_name": net_vim_name,
                     "instance_scenario_id": instance_uuid,
-                    "sce_net_id": sce_net["uuid"],
+                    "sce_net_id": sce_net.get("uuid"),
                     "created": create_network,
                     'datacenter_id': datacenter_id,
                     'datacenter_tenant_id': myvim_thread_id,
@@ -3167,7 +3338,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                     "item_id": net_uuid,
                     "extra": yaml.safe_dump(task_extra, default_flow_style=True, width=256)
                 }
-                net2task_id['scenario'][sce_net['uuid']][datacenter_id] = task_index
+                net2task_id['scenario'][sce_net_uuid][datacenter_id] = task_index
                 task_index += 1
                 db_vim_actions.append(db_vim_action)
 
@@ -3194,6 +3365,7 @@ def create_instance(mydb, tenant_id, instance_dict):
             "myvims": myvims,
             "cloud_config": cloud_config,
             "RO_pub_key": tenant[0].get('RO_pub_key'),
+            "instance_parameters": instance_dict,
         }
         vnf_params_out = {
             "task_index": task_index,
@@ -3207,21 +3379,22 @@ def create_instance(mydb, tenant_id, instance_dict):
             "net2task_id": net2task_id,
             "sce_net2instance": sce_net2instance,
         }
-        sce_vnf_list = sorted(scenarioDict['vnfs'], key=lambda k: k['name'])
-        for sce_vnf in sce_vnf_list:
+        # sce_vnf_list = sorted(scenarioDict['vnfs'], key=lambda k: k['name'])
+        for sce_vnf in scenarioDict.get('vnfs', ()):  # sce_vnf_list:
             instantiate_vnf(mydb, sce_vnf, vnf_params, vnf_params_out, rollbackList)
         task_index = vnf_params_out["task_index"]
         uuid_list = vnf_params_out["uuid_list"]
 
         # Create VNFFGs
         # task_depends_on = []
-        for vnffg in scenarioDict['vnffgs']:
+        for vnffg in scenarioDict.get('vnffgs', ()):
             for rsp in vnffg['rsps']:
                 sfs_created = []
                 for cp in rsp['connection_points']:
                     count = mydb.get_rows(
-                            SELECT=('vms.count'),
-                            FROM="vms join interfaces on vms.uuid=interfaces.vm_id join sce_rsp_hops as h on interfaces.uuid=h.interface_id",
+                            SELECT='vms.count',
+                            FROM="vms join interfaces on vms.uuid=interfaces.vm_id join sce_rsp_hops as h "
+                                 "on interfaces.uuid=h.ingress_interface_id",
                             WHERE={'h.uuid': cp['uuid']})[0]['count']
                     instance_vnf = next((item for item in db_instance_vnfs if item['sce_vnf_id'] == cp['sce_vnf_id']), None)
                     instance_vms = [item for item in db_instance_vms if item['instance_vnf_id'] == instance_vnf['uuid']]
@@ -3236,6 +3409,10 @@ def create_instance(mydb, tenant_id, instance_dict):
                     for i in range(count):
                         # create sfis
                         sfi_uuid = str(uuid4())
+                        extra_params = {
+                            "ingress_interface_id": cp["ingress_interface_id"],
+                            "egress_interface_id": cp["egress_interface_id"]
+                        }
                         uuid_list.append(sfi_uuid)
                         db_sfi = {
                             "uuid": sfi_uuid,
@@ -3254,7 +3431,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                             "status": "SCHEDULED",
                             "item": "instance_sfis",
                             "item_id": sfi_uuid,
-                            "extra": yaml.safe_dump({"params": "", "depends_on": [dependencies[i]]},
+                            "extra": yaml.safe_dump({"params": extra_params, "depends_on": [dependencies[i]]},
                                                     default_flow_style=True, width=256)
                         }
                         sfis_created.append(task_index)
@@ -3364,10 +3541,18 @@ def create_instance(mydb, tenant_id, instance_dict):
                 }
                 task_index += 1
                 db_vim_actions.append(db_vim_action)
+        db_instance_action["number_tasks"] = task_index
+
+        # --> WIM
+        logger.debug('wim_usage:\n%s\n\n', pformat(wim_usage))
+        wan_links = wim_engine.derive_wan_links(wim_usage, db_instance_nets, tenant_id)
+        wim_actions = wim_engine.create_actions(wan_links)
+        wim_actions, db_instance_action = (
+            wim_engine.incorporate_actions(wim_actions, db_instance_action))
+        # <-- WIM
 
         scenarioDict["datacenter2tenant"] = myvim_threads_id
 
-        db_instance_action["number_tasks"] = task_index
         db_instance_scenario['datacenter_tenant_id'] = myvim_threads_id[default_datacenter_id]
         db_instance_scenario['datacenter_id'] = default_datacenter_id
         db_tables=[
@@ -3382,7 +3567,8 @@ def create_instance(mydb, tenant_id, instance_dict):
             {"instance_sfs": db_instance_sfs},
             {"instance_classifications": db_instance_classifications},
             {"instance_sfps": db_instance_sfps},
-            {"vim_actions": db_vim_actions}
+            {"instance_wim_nets": wan_links},
+            {"vim_wim_actions": db_vim_actions + wim_actions}
         ]
 
         logger.debug("create_instance done DB tables: %s",
@@ -3390,6 +3576,8 @@ def create_instance(mydb, tenant_id, instance_dict):
         mydb.new_rows(db_tables, uuid_list)
         for myvim_thread_id in myvim_threads_id.values():
             vim_threads["running"][myvim_thread_id].insert_task(db_vim_actions)
+
+        wim_engine.dispatch(wim_actions)
 
         returned_instance = mydb.get_instance_scenario(instance_uuid)
         returned_instance["action_id"] = instance_action_id
@@ -3404,6 +3592,7 @@ def create_instance(mydb, tenant_id, instance_dict):
             error_text = "Exception"
         error_text += " {} {}. {}".format(type(e).__name__, str(e), message)
         # logger.error("create_instance: %s", error_text)
+        logger.exception(e)
         raise NfvoException(error_text, e.http_code)
 
 
@@ -3444,7 +3633,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         # net_name = descriptor_net.get("name")
         net_name = None
         if not net_name:
-            net_name = "{}.{}".format(instance_name, net["name"])
+            net_name = "{}-{}".format(instance_name, net["name"])
             net_name = net_name[:255]  # limit length
         net_type = net['type']
 
@@ -3461,6 +3650,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         db_net = {
             "uuid": net_uuid,
             'vim_net_id': None,
+            "vim_name": net_name,
             "instance_scenario_id": instance_uuid,
             "net_id": net["uuid"],
             "created": True,
@@ -3469,16 +3659,27 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         }
         db_instance_nets.append(db_net)
 
+        lookfor_filter = {}
+        if net.get("vim-network-name"):
+            lookfor_filter["name"] = net["vim-network-name"]
+        if net.get("vim-network-id"):
+            lookfor_filter["id"] = net["vim-network-id"]
+        if lookfor_filter:
+            task_action = "FIND"
+            task_extra = {"params": (lookfor_filter,)}
+        else:
+            task_action = "CREATE"
+            task_extra = {"params": (net_name, net_type, net.get('ip_profile', None))}
+
         db_vim_action = {
             "instance_action_id": instance_action_id,
             "task_index": task_index,
             "datacenter_vim_id": myvim_thread_id,
             "status": "SCHEDULED",
-            "action": "CREATE",
+            "action": task_action,
             "item": "instance_nets",
             "item_id": net_uuid,
-            "extra": yaml.safe_dump({"params": (net_name, net_type, net.get('ip_profile', None))},
-                                    default_flow_style=True, width=256)
+            "extra": yaml.safe_dump(task_extra, default_flow_style=True, width=256)
         }
         task_index += 1
         db_vim_actions.append(db_vim_action)
@@ -3505,7 +3706,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
     if sce_vnf.get('mgmt_access'):
         ssh_access = sce_vnf['mgmt_access'].get('config-access', {}).get('ssh-access')
     vnf_availability_zones = []
-    for vm in sce_vnf['vms']:
+    for vm in sce_vnf.get('vms'):
         vm_av = vm.get('availability_zone')
         if vm_av and vm_av not in vnf_availability_zones:
             vnf_availability_zones.append(vm_av)
@@ -3513,7 +3714,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
     # check if there is enough availability zones available at vim level.
     if myvims[datacenter_id].availability_zone and vnf_availability_zones:
         if len(vnf_availability_zones) > len(myvims[datacenter_id].availability_zone):
-            raise NfvoException('No enough availability zones at VIM for this deployment', HTTP_Bad_Request)
+            raise NfvoException('No enough availability zones at VIM for this deployment', httperrors.Bad_Request)
 
     if sce_vnf.get("datacenter"):
         vim = myvims[sce_vnf["datacenter"]]
@@ -3539,12 +3740,18 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
     db_instance_vnfs.append(db_instance_vnf)
 
     for vm in sce_vnf['vms']:
+        # skip PDUs
+        if vm.get("pdu_type"):
+            continue
+
         myVMDict = {}
         sce_vnf_name = sce_vnf['member_vnf_index'] if sce_vnf['member_vnf_index'] else sce_vnf['name']
         myVMDict['name'] = "{}-{}-{}".format(instance_name[:64], sce_vnf_name[:64], vm["name"][:64])
         myVMDict['description'] = myVMDict['name'][0:99]
         #                if not startvms:
         #                    myVMDict['start'] = "no"
+        if vm.get("instance_parameters") and vm["instance_parameters"].get("name"):
+            myVMDict['name'] = vm["instance_parameters"].get("name")
         myVMDict['name'] = myVMDict['name'][0:255]  # limit name length
         # create image at vim in case it not exist
         image_uuid = vm['image_id']
@@ -3567,7 +3774,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         extended_flavor_dict = mydb.get_rows(FROM='datacenters_flavors', SELECT=('extended',),
                                              WHERE={'vim_id': flavor_id})
         if not extended_flavor_dict:
-            raise NfvoException("flavor '{}' not found".format(flavor_id), HTTP_Not_Found)
+            raise NfvoException("flavor '{}' not found".format(flavor_id), httperrors.Not_Found)
 
         # extended_flavor_dict_yaml = yaml.load(extended_flavor_dict[0])
         myVMDict['disks'] = None
@@ -3576,6 +3783,10 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
             extended_flavor_dict_yaml = yaml.load(extended_info)
             if 'disks' in extended_flavor_dict_yaml:
                 myVMDict['disks'] = extended_flavor_dict_yaml['disks']
+                if vm.get("instance_parameters") and vm["instance_parameters"].get("devices"):
+                    for disk in myVMDict['disks']:
+                        if disk.get("name") in vm["instance_parameters"]["devices"]:
+                            disk.update(vm["instance_parameters"]["devices"][disk.get("name")])
 
         vm['vim_flavor_id'] = flavor_id
         myVMDict['imageRef'] = vm['vim_image_id']
@@ -3584,6 +3795,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         myVMDict['networks'] = []
         task_depends_on = []
         # TODO ALF. connect_mgmt_interfaces. Connect management interfaces if this is true
+        is_management_vm = False
         db_vm_ifaces = []
         for iface in vm['interfaces']:
             netDict = {}
@@ -3613,15 +3825,20 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                     sce_vnf['name'], vm['name'], iface['internal_name'])
                 if flavor_dict.get('extended') == None:
                     raise NfvoException(e_text + "After database migration some information is not available. \
-                            Try to delete and create the scenarios and VNFs again", HTTP_Conflict)
+                            Try to delete and create the scenarios and VNFs again", httperrors.Conflict)
                 else:
-                    raise NfvoException(e_text, HTTP_Internal_Server_Error)
-            if netDict["use"] == "mgmt" or netDict["use"] == "bridge":
+                    raise NfvoException(e_text, httperrors.Internal_Server_Error)
+            if netDict["use"] == "mgmt":
+                is_management_vm = True
+                netDict["type"] = "virtual"
+            if netDict["use"] == "bridge":
                 netDict["type"] = "virtual"
             if iface.get("vpci"):
                 netDict['vpci'] = iface['vpci']
             if iface.get("mac"):
                 netDict['mac_address'] = iface['mac']
+            if iface.get("mac_address"):
+                netDict['mac_address'] = iface['mac_address']
             if iface.get("ip_address"):
                 netDict['ip_address'] = iface['ip_address']
             if iface.get("port-security") is not None:
@@ -3668,9 +3885,16 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
 
         # We add the RO key to cloud_config if vnf will need ssh access
         cloud_config_vm = cloud_config
-        if ssh_access and ssh_access['required'] and ssh_access['default-user'] and tenant[0].get('RO_pub_key'):
-            RO_key = {"key-pairs": [tenant[0]['RO_pub_key']]}
-            cloud_config_vm = unify_cloud_config(cloud_config_vm, RO_key)
+        if is_management_vm and params["instance_parameters"].get("mgmt_keys"):
+            cloud_config_vm = unify_cloud_config({"key-pairs": params["instance_parameters"]["mgmt_keys"]},
+                                                  cloud_config_vm)
+
+        if vm.get("instance_parameters") and vm["instance_parameters"].get("mgmt_keys"):
+            cloud_config_vm = unify_cloud_config({"key-pairs": vm["instance_parameters"]["mgmt_keys"]},
+                                                 cloud_config_vm)
+        # if ssh_access and ssh_access['required'] and ssh_access['default-user'] and tenant[0].get('RO_pub_key'):
+        #     RO_key = {"key-pairs": [tenant[0]['RO_pub_key']]}
+        #     cloud_config_vm = unify_cloud_config(cloud_config_vm, RO_key)
         if vm.get("boot_data"):
             cloud_config_vm = unify_cloud_config(vm["boot_data"], cloud_config_vm)
 
@@ -3679,10 +3903,8 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         else:
             av_index = None
         for vm_index in range(0, vm.get('count', 1)):
-            vm_index_name = ""
-            if vm.get('count', 1) > 1:
-                vm_index_name += "." + chr(97 + vm_index)
-            task_params = (myVMDict['name'] + vm_index_name, myVMDict['description'], myVMDict.get('start', None),
+            vm_name = myVMDict['name'] + "-" + str(vm_index+1)
+            task_params = (vm_name, myVMDict['description'], myVMDict.get('start', None),
                            myVMDict['imageRef'], myVMDict['flavorRef'], myVMDict['networks'], cloud_config_vm,
                            myVMDict['disks'], av_index, vnf_availability_zones)
             # put interface uuid back to scenario[vnfs][vms[[interfaces]
@@ -3699,6 +3921,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                 'instance_vnf_id': vnf_uuid,
                 # TODO delete "vim_vm_id": vm_id,
                 "vm_id": vm["uuid"],
+                "vim_name": vm_name,
                 # "status":
             }
             db_instance_vms.append(db_vm)
@@ -3748,6 +3971,14 @@ def delete_instance(mydb, tenant_id, instance_id):
     instanceDict = mydb.get_instance_scenario(instance_id, tenant_id)
     # print yaml.safe_dump(instanceDict, indent=4, default_flow_style=False)
     tenant_id = instanceDict["tenant_id"]
+
+    # --> WIM
+    # We need to retrieve the WIM Actions now, before the instance_scenario is
+    # deleted. The reason for that is that: ON CASCADE rules will delete the
+    # instance_wim_nets record in the database
+    wim_actions = wim_engine.delete_actions(instance_scenario_id=instance_id)
+    # <-- WIM
+
     # print "Checking that nfvo_tenant_id exists and getting the VIM URI and the VIM tenant_id"
     # 1. Delete from Database
     message = mydb.delete_instance_scenario(instance_id, tenant_id)
@@ -3770,101 +4001,13 @@ def delete_instance(mydb, tenant_id, instance_id):
         # "number_tasks": 0 # filled bellow
     }
 
-    # 2.1 deleting VMs
-    # vm_fail_list=[]
-    for sce_vnf in instanceDict['vnfs']:
-        datacenter_key = (sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
-        vimthread_affected[sce_vnf["datacenter_tenant_id"]] = None
-        if datacenter_key not in myvims:
-            try:
-                _,myvim_thread = get_vim_thread(mydb, tenant_id, sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
-            except NfvoException as e:
-                logger.error(str(e))
-                myvim_thread = None
-            myvim_threads[datacenter_key] = myvim_thread
-            vims = get_vim(mydb, tenant_id, datacenter_id=sce_vnf["datacenter_id"],
-                       datacenter_tenant_id=sce_vnf["datacenter_tenant_id"])
-            if len(vims) == 0:
-                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(sce_vnf["datacenter_id"],
-                                                                                        sce_vnf["datacenter_tenant_id"]))
-                myvims[datacenter_key] = None
-            else:
-                myvims[datacenter_key] = vims.values()[0]
-        myvim = myvims[datacenter_key]
-        myvim_thread = myvim_threads[datacenter_key]
-        for vm in sce_vnf['vms']:
-            if not myvim:
-                error_msg += "\n    VM id={} cannot be deleted because datacenter={} not found".format(vm['vim_vm_id'], sce_vnf["datacenter_id"])
-                continue
-            db_vim_action = {
-                "instance_action_id": instance_action_id,
-                "task_index": task_index,
-                "datacenter_vim_id": sce_vnf["datacenter_tenant_id"],
-                "action": "DELETE",
-                "status": "SCHEDULED",
-                "item": "instance_vms",
-                "item_id": vm["uuid"],
-                "extra": yaml.safe_dump({"params": vm["interfaces"]},
-                                        default_flow_style=True, width=256)
-            }
-            db_vim_actions.append(db_vim_action)
-            for interface in vm["interfaces"]:
-                if not interface.get("instance_net_id"):
-                    continue
-                if interface["instance_net_id"] not in net2vm_dependencies:
-                    net2vm_dependencies[interface["instance_net_id"]] = []
-                net2vm_dependencies[interface["instance_net_id"]].append(task_index)
-            task_index += 1
-
-    # 2.2 deleting NETS
-    # net_fail_list=[]
-    for net in instanceDict['nets']:
-        vimthread_affected[net["datacenter_tenant_id"]] = None
-        datacenter_key = (net["datacenter_id"], net["datacenter_tenant_id"])
-        if datacenter_key not in myvims:
-            try:
-                _,myvim_thread = get_vim_thread(mydb, tenant_id, sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
-            except NfvoException as e:
-                logger.error(str(e))
-                myvim_thread = None
-            myvim_threads[datacenter_key] = myvim_thread
-            vims = get_vim(mydb, tenant_id, datacenter_id=net["datacenter_id"],
-                           datacenter_tenant_id=net["datacenter_tenant_id"])
-            if len(vims) == 0:
-                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(net["datacenter_id"], net["datacenter_tenant_id"]))
-                myvims[datacenter_key] = None
-            else:
-                myvims[datacenter_key] = vims.values()[0]
-        myvim = myvims[datacenter_key]
-        myvim_thread = myvim_threads[datacenter_key]
-
-        if not myvim:
-            error_msg += "\n    Net VIM_id={} cannot be deleted because datacenter={} not found".format(net['vim_net_id'], net["datacenter_id"])
-            continue
-        extra = {"params": (net['vim_net_id'], net['sdn_net_id'])}
-        if net2vm_dependencies.get(net["uuid"]):
-            extra["depends_on"] = net2vm_dependencies[net["uuid"]]
-        db_vim_action = {
-            "instance_action_id": instance_action_id,
-            "task_index": task_index,
-            "datacenter_vim_id": net["datacenter_tenant_id"],
-            "action": "DELETE",
-            "status": "SCHEDULED",
-            "item": "instance_nets",
-            "item_id": net["uuid"],
-            "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
-        }
-        task_index += 1
-        db_vim_actions.append(db_vim_action)
-
-    # 2.3 deleting VNFFGs
-
+    # 2.1 deleting VNFFGs
     for sfp in instanceDict.get('sfps', ()):
         vimthread_affected[sfp["datacenter_tenant_id"]] = None
         datacenter_key = (sfp["datacenter_id"], sfp["datacenter_tenant_id"])
         if datacenter_key not in myvims:
             try:
-                _,myvim_thread = get_vim_thread(mydb, tenant_id, sfp["datacenter_id"], sfp["datacenter_tenant_id"])
+                _, myvim_thread = get_vim_thread(mydb, tenant_id, sfp["datacenter_id"], sfp["datacenter_tenant_id"])
             except NfvoException as e:
                 logger.error(str(e))
                 myvim_thread = None
@@ -3896,12 +4039,52 @@ def delete_instance(mydb, tenant_id, instance_id):
         task_index += 1
         db_vim_actions.append(db_vim_action)
 
+    for classification in instanceDict['classifications']:
+        vimthread_affected[classification["datacenter_tenant_id"]] = None
+        datacenter_key = (classification["datacenter_id"], classification["datacenter_tenant_id"])
+        if datacenter_key not in myvims:
+            try:
+                _, myvim_thread = get_vim_thread(mydb, tenant_id, classification["datacenter_id"], classification["datacenter_tenant_id"])
+            except NfvoException as e:
+                logger.error(str(e))
+                myvim_thread = None
+            myvim_threads[datacenter_key] = myvim_thread
+            vims = get_vim(mydb, tenant_id, datacenter_id=classification["datacenter_id"],
+                           datacenter_tenant_id=classification["datacenter_tenant_id"])
+            if len(vims) == 0:
+                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(classification["datacenter_id"],
+                                                                                               classification["datacenter_tenant_id"]))
+                myvims[datacenter_key] = None
+            else:
+                myvims[datacenter_key] = vims.values()[0]
+        myvim = myvims[datacenter_key]
+        myvim_thread = myvim_threads[datacenter_key]
+
+        if not myvim:
+            error_msg += "\n    vim_classification_id={} cannot be deleted because datacenter={} not found".format(classification['vim_classification_id'],
+                                                                                                                   classification["datacenter_id"])
+            continue
+        depends_on = [action["task_index"] for action in db_vim_actions if action["item"] == "instance_sfps"]
+        extra = {"params": (classification['vim_classification_id']), "depends_on": depends_on}
+        db_vim_action = {
+            "instance_action_id": instance_action_id,
+            "task_index": task_index,
+            "datacenter_vim_id": classification["datacenter_tenant_id"],
+            "action": "DELETE",
+            "status": "SCHEDULED",
+            "item": "instance_classifications",
+            "item_id": classification["uuid"],
+            "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
+        }
+        task_index += 1
+        db_vim_actions.append(db_vim_action)
+
     for sf in instanceDict.get('sfs', ()):
         vimthread_affected[sf["datacenter_tenant_id"]] = None
         datacenter_key = (sf["datacenter_id"], sf["datacenter_tenant_id"])
         if datacenter_key not in myvims:
             try:
-                _,myvim_thread = get_vim_thread(mydb, tenant_id, sf["datacenter_id"], sf["datacenter_tenant_id"])
+                _, myvim_thread = get_vim_thread(mydb, tenant_id, sf["datacenter_id"], sf["datacenter_tenant_id"])
             except NfvoException as e:
                 logger.error(str(e))
                 myvim_thread = None
@@ -3919,7 +4102,8 @@ def delete_instance(mydb, tenant_id, instance_id):
         if not myvim:
             error_msg += "\n    vim_sf_id={} cannot be deleted because datacenter={} not found".format(sf['vim_sf_id'], sf["datacenter_id"])
             continue
-        extra = {"params": (sf['vim_sf_id'])}
+        depends_on = [action["task_index"] for action in db_vim_actions if action["item"] == "instance_sfps"]
+        extra = {"params": (sf['vim_sf_id']), "depends_on": depends_on}
         db_vim_action = {
             "instance_action_id": instance_action_id,
             "task_index": task_index,
@@ -3938,7 +4122,7 @@ def delete_instance(mydb, tenant_id, instance_id):
         datacenter_key = (sfi["datacenter_id"], sfi["datacenter_tenant_id"])
         if datacenter_key not in myvims:
             try:
-                _,myvim_thread = get_vim_thread(mydb, tenant_id, sfi["datacenter_id"], sfi["datacenter_tenant_id"])
+                _, myvim_thread = get_vim_thread(mydb, tenant_id, sfi["datacenter_id"], sfi["datacenter_tenant_id"])
             except NfvoException as e:
                 logger.error(str(e))
                 myvim_thread = None
@@ -3956,7 +4140,8 @@ def delete_instance(mydb, tenant_id, instance_id):
         if not myvim:
             error_msg += "\n    vim_sfi_id={} cannot be deleted because datacenter={} not found".format(sfi['vim_sfi_id'], sfi["datacenter_id"])
             continue
-        extra = {"params": (sfi['vim_sfi_id'])}
+        depends_on = [action["task_index"] for action in db_vim_actions if action["item"] == "instance_sfs"]
+        extra = {"params": (sfi['vim_sfi_id']), "depends_on": depends_on}
         db_vim_action = {
             "instance_action_id": instance_action_id,
             "task_index": task_index,
@@ -3970,20 +4155,70 @@ def delete_instance(mydb, tenant_id, instance_id):
         task_index += 1
         db_vim_actions.append(db_vim_action)
 
-    for classification in instanceDict['classifications']:
-        vimthread_affected[classification["datacenter_tenant_id"]] = None
-        datacenter_key = (classification["datacenter_id"], classification["datacenter_tenant_id"])
+    # 2.2 deleting VMs
+    # vm_fail_list=[]
+    for sce_vnf in instanceDict.get('vnfs', ()):
+        datacenter_key = (sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
+        vimthread_affected[sce_vnf["datacenter_tenant_id"]] = None
         if datacenter_key not in myvims:
             try:
-                _,myvim_thread = get_vim_thread(mydb, tenant_id, classification["datacenter_id"], classification["datacenter_tenant_id"])
+                _, myvim_thread = get_vim_thread(mydb, tenant_id, sce_vnf["datacenter_id"], sce_vnf["datacenter_tenant_id"])
             except NfvoException as e:
                 logger.error(str(e))
                 myvim_thread = None
             myvim_threads[datacenter_key] = myvim_thread
-            vims = get_vim(mydb, tenant_id, datacenter_id=classification["datacenter_id"],
-                           datacenter_tenant_id=classification["datacenter_tenant_id"])
+            vims = get_vim(mydb, tenant_id, datacenter_id=sce_vnf["datacenter_id"],
+                           datacenter_tenant_id=sce_vnf["datacenter_tenant_id"])
             if len(vims) == 0:
-                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(classification["datacenter_id"], classification["datacenter_tenant_id"]))
+                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(sce_vnf["datacenter_id"],
+                                                                                               sce_vnf["datacenter_tenant_id"]))
+                myvims[datacenter_key] = None
+            else:
+                myvims[datacenter_key] = vims.values()[0]
+        myvim = myvims[datacenter_key]
+        myvim_thread = myvim_threads[datacenter_key]
+
+        for vm in sce_vnf['vms']:
+            if not myvim:
+                error_msg += "\n    VM id={} cannot be deleted because datacenter={} not found".format(vm['vim_vm_id'], sce_vnf["datacenter_id"])
+                continue
+            sfi_dependencies = [action["task_index"] for action in db_vim_actions if action["item"] == "instance_sfis"]
+            db_vim_action = {
+                "instance_action_id": instance_action_id,
+                "task_index": task_index,
+                "datacenter_vim_id": sce_vnf["datacenter_tenant_id"],
+                "action": "DELETE",
+                "status": "SCHEDULED",
+                "item": "instance_vms",
+                "item_id": vm["uuid"],
+                "extra": yaml.safe_dump({"params": vm["interfaces"], "depends_on": sfi_dependencies},
+                                        default_flow_style=True, width=256)
+            }
+            db_vim_actions.append(db_vim_action)
+            for interface in vm["interfaces"]:
+                if not interface.get("instance_net_id"):
+                    continue
+                if interface["instance_net_id"] not in net2vm_dependencies:
+                    net2vm_dependencies[interface["instance_net_id"]] = []
+                net2vm_dependencies[interface["instance_net_id"]].append(task_index)
+            task_index += 1
+
+    # 2.3 deleting NETS
+    # net_fail_list=[]
+    for net in instanceDict['nets']:
+        vimthread_affected[net["datacenter_tenant_id"]] = None
+        datacenter_key = (net["datacenter_id"], net["datacenter_tenant_id"])
+        if datacenter_key not in myvims:
+            try:
+                _,myvim_thread = get_vim_thread(mydb, tenant_id, net["datacenter_id"], net["datacenter_tenant_id"])
+            except NfvoException as e:
+                logger.error(str(e))
+                myvim_thread = None
+            myvim_threads[datacenter_key] = myvim_thread
+            vims = get_vim(mydb, tenant_id, datacenter_id=net["datacenter_id"],
+                           datacenter_tenant_id=net["datacenter_tenant_id"])
+            if len(vims) == 0:
+                logger.error("datacenter '{}' with datacenter_tenant_id '{}' not found".format(net["datacenter_id"], net["datacenter_tenant_id"]))
                 myvims[datacenter_key] = None
             else:
                 myvims[datacenter_key] = vims.values()[0]
@@ -3991,26 +4226,40 @@ def delete_instance(mydb, tenant_id, instance_id):
         myvim_thread = myvim_threads[datacenter_key]
 
         if not myvim:
-            error_msg += "\n    vim_classification_id={} cannot be deleted because datacenter={} not found".format(classification['vim_classification_id'], classification["datacenter_id"])
+            error_msg += "\n    Net VIM_id={} cannot be deleted because datacenter={} not found".format(net['vim_net_id'], net["datacenter_id"])
             continue
-        extra = {"params": (classification['vim_classification_id'])}
+        extra = {"params": (net['vim_net_id'], net['sdn_net_id'])}
+        if net2vm_dependencies.get(net["uuid"]):
+            extra["depends_on"] = net2vm_dependencies[net["uuid"]]
+        sfi_dependencies = [action["task_index"] for action in db_vim_actions if action["item"] == "instance_sfis"]
+        if len(sfi_dependencies) > 0:
+            if "depends_on" in extra:
+                extra["depends_on"] += sfi_dependencies
+            else:
+                extra["depends_on"] = sfi_dependencies
         db_vim_action = {
             "instance_action_id": instance_action_id,
             "task_index": task_index,
-            "datacenter_vim_id": classification["datacenter_tenant_id"],
+            "datacenter_vim_id": net["datacenter_tenant_id"],
             "action": "DELETE",
             "status": "SCHEDULED",
-            "item": "instance_classifications",
-            "item_id": classification["uuid"],
+            "item": "instance_nets",
+            "item_id": net["uuid"],
             "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
         }
         task_index += 1
         db_vim_actions.append(db_vim_action)
 
     db_instance_action["number_tasks"] = task_index
+
+    # --> WIM
+    wim_actions, db_instance_action = (
+        wim_engine.incorporate_actions(wim_actions, db_instance_action))
+    # <-- WIM
+
     db_tables = [
         {"instance_actions": db_instance_action},
-        {"vim_actions": db_vim_actions}
+        {"vim_wim_actions": db_vim_actions + wim_actions}
     ]
 
     logger.debug("delete_instance done DB tables: %s",
@@ -4018,6 +4267,8 @@ def delete_instance(mydb, tenant_id, instance_id):
     mydb.new_rows(db_tables, ())
     for myvim_thread_id in vimthread_affected.keys():
         vim_threads["running"][myvim_thread_id].insert_task(db_vim_actions)
+
+    wim_engine.dispatch(wim_actions)
 
     if len(error_msg) > 0:
         return 'action_id={} instance {} deleted but some elements could not be deleted, or already deleted '\
@@ -4046,6 +4297,7 @@ def get_instance_id(mydb, tenant_id, instance_id):
             }
     return instance_dict
 
+@deprecated("Instance is automatically refreshed by vim_threads")
 def refresh_instance(mydb, nfvo_tenant, instanceDict, datacenter=None, vim_tenant=None):
     '''Refreshes a scenario instance. It modifies instanceDict'''
     '''Returns:
@@ -4218,23 +4470,204 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
     #print "Checking that nfvo_tenant_id exists and getting the VIM URI and the VIM tenant_id"
     vims = get_vim(mydb, nfvo_tenant, instanceDict['datacenter_id'])
     if len(vims) == 0:
-        raise NfvoException("datacenter '{}' not found".format(str(instanceDict['datacenter_id'])), HTTP_Not_Found)
+        raise NfvoException("datacenter '{}' not found".format(str(instanceDict['datacenter_id'])), httperrors.Not_Found)
     myvim = vims.values()[0]
+    vm_result = {}
+    vm_error = 0
+    vm_ok = 0
 
-    if action_dict.get("create-vdu"):
-        for vdu in action_dict["create-vdu"]:
+    myvim_threads_id = {}
+    if action_dict.get("vdu-scaling"):
+        db_instance_vms = []
+        db_vim_actions = []
+        db_instance_interfaces = []
+        instance_action_id = get_task_id()
+        db_instance_action = {
+            "uuid": instance_action_id,   # same uuid for the instance and the action on create
+            "tenant_id": nfvo_tenant,
+            "instance_id": instance_id,
+            "description": "SCALE",
+        }
+        vm_result["instance_action_id"] = instance_action_id
+        vm_result["created"] = []
+        vm_result["deleted"] = []
+        task_index = 0
+        for vdu in action_dict["vdu-scaling"]:
             vdu_id = vdu.get("vdu-id")
+            osm_vdu_id = vdu.get("osm_vdu_id")
+            member_vnf_index = vdu.get("member-vnf-index")
             vdu_count = vdu.get("count", 1)
-            # get from database TODO
-            # insert tasks TODO
-            pass
+            if vdu_id:
+                target_vms = mydb.get_rows(
+                    FROM="instance_vms as vms join instance_vnfs as vnfs on vms.instance_vnf_id=vnfs.uuid",
+                    WHERE={"vms.uuid": vdu_id},
+                    ORDER_BY="vms.created_at"
+                )
+                if not target_vms:
+                    raise NfvoException("Cannot find the vdu with id {}".format(vdu_id), httperrors.Not_Found)
+            else:
+                if not osm_vdu_id and not member_vnf_index:
+                    raise NfvoException("Invalid input vdu parameters. Must supply either 'vdu-id' of 'osm_vdu_id','member-vnf-index'")
+                target_vms = mydb.get_rows(
+                    # SELECT=("ivms.uuid", "ivnfs.datacenter_id", "ivnfs.datacenter_tenant_id"),
+                    FROM="instance_vms as ivms join instance_vnfs as ivnfs on ivms.instance_vnf_id=ivnfs.uuid"\
+                         " join sce_vnfs as svnfs on ivnfs.sce_vnf_id=svnfs.uuid"\
+                         " join vms on ivms.vm_id=vms.uuid",
+                    WHERE={"vms.osm_id": osm_vdu_id, "svnfs.member_vnf_index": member_vnf_index,
+                           "ivnfs.instance_scenario_id": instance_id},
+                    ORDER_BY="ivms.created_at"
+                )
+                if not target_vms:
+                    raise NfvoException("Cannot find the vdu with osm_vdu_id {} and member-vnf-index {}".format(osm_vdu_id, member_vnf_index), httperrors.Not_Found)
+                vdu_id = target_vms[-1]["uuid"]
+            target_vm = target_vms[-1]
+            datacenter = target_vm["datacenter_id"]
+            myvim_threads_id[datacenter], _ = get_vim_thread(mydb, nfvo_tenant, datacenter)
+
+            if vdu["type"] == "delete":
+                for index in range(0, vdu_count):
+                    target_vm = target_vms[-1-index]
+                    vdu_id = target_vm["uuid"]
+                    # look for nm
+                    vm_interfaces = None
+                    for sce_vnf in instanceDict['vnfs']:
+                        for vm in sce_vnf['vms']:
+                            if vm["uuid"] == vdu_id:
+                                vm_interfaces = vm["interfaces"]
+                                break
+
+                    db_vim_action = {
+                        "instance_action_id": instance_action_id,
+                        "task_index": task_index,
+                        "datacenter_vim_id": target_vm["datacenter_tenant_id"],
+                        "action": "DELETE",
+                        "status": "SCHEDULED",
+                        "item": "instance_vms",
+                        "item_id": vdu_id,
+                        "extra": yaml.safe_dump({"params": vm_interfaces},
+                                                default_flow_style=True, width=256)
+                    }
+                    task_index += 1
+                    db_vim_actions.append(db_vim_action)
+                    vm_result["deleted"].append(vdu_id)
+                    # delete from database
+                    db_instance_vms.append({"TO-DELETE": vdu_id})
+
+            else:  # vdu["type"] == "create":
+                iface2iface = {}
+                where = {"item": "instance_vms", "item_id": target_vm["uuid"], "action": "CREATE"}
+
+                vim_action_to_clone = mydb.get_rows(FROM="vim_wim_actions", WHERE=where)
+                if not vim_action_to_clone:
+                    raise NfvoException("Cannot find the vim_action at database with {}".format(where), httperrors.Internal_Server_Error)
+                vim_action_to_clone = vim_action_to_clone[0]
+                extra = yaml.safe_load(vim_action_to_clone["extra"])
+
+                # generate a new depends_on. Convert format TASK-Y into new format TASK-ACTION-XXXX.XXXX.Y
+                # TODO do the same for flavor and image when available
+                task_depends_on = []
+                task_params = extra["params"]
+                task_params_networks = deepcopy(task_params[5])
+                for iface in task_params[5]:
+                    if iface["net_id"].startswith("TASK-"):
+                        if "." not in iface["net_id"]:
+                            task_depends_on.append("{}.{}".format(vim_action_to_clone["instance_action_id"],
+                                                             iface["net_id"][5:]))
+                            iface["net_id"] = "TASK-{}.{}".format(vim_action_to_clone["instance_action_id"],
+                                                                  iface["net_id"][5:])
+                        else:
+                            task_depends_on.append(iface["net_id"][5:])
+                    if "mac_address" in iface:
+                        del iface["mac_address"]
+
+                vm_ifaces_to_clone = mydb.get_rows(FROM="instance_interfaces", WHERE={"instance_vm_id": target_vm["uuid"]})
+                for index in range(0, vdu_count):
+                    vm_uuid = str(uuid4())
+                    vm_name = target_vm.get('vim_name')
+                    try:
+                        suffix = vm_name.rfind("-")
+                        vm_name = vm_name[:suffix+1] + str(index + 1 + int(vm_name[suffix+1:]))
+                    except Exception:
+                        pass
+                    db_instance_vm = {
+                        "uuid": vm_uuid,
+                        'instance_vnf_id': target_vm['instance_vnf_id'],
+                        'vm_id': target_vm['vm_id'],
+                        'vim_name': vm_name
+                    }
+                    db_instance_vms.append(db_instance_vm)
+
+                    for vm_iface in vm_ifaces_to_clone:
+                        iface_uuid = str(uuid4())
+                        iface2iface[vm_iface["uuid"]] = iface_uuid
+                        db_vm_iface = {
+                            "uuid": iface_uuid,
+                            'instance_vm_id': vm_uuid,
+                            "instance_net_id": vm_iface["instance_net_id"],
+                            'interface_id': vm_iface['interface_id'],
+                            'type': vm_iface['type'],
+                            'floating_ip': vm_iface['floating_ip'],
+                            'port_security': vm_iface['port_security']
+                        }
+                        db_instance_interfaces.append(db_vm_iface)
+                    task_params_copy = deepcopy(task_params)
+                    for iface in task_params_copy[5]:
+                        iface["uuid"] = iface2iface[iface["uuid"]]
+                        # increment ip_address
+                        if "ip_address" in iface:
+                            ip = iface.get("ip_address")
+                            i = ip.rfind(".")
+                            if i > 0:
+                                try:
+                                    i += 1
+                                    ip = ip[i:] + str(int(ip[:i]) + 1)
+                                    iface["ip_address"] = ip
+                                except:
+                                    iface["ip_address"] = None
+                    if vm_name:
+                        task_params_copy[0] = vm_name
+                    db_vim_action = {
+                        "instance_action_id": instance_action_id,
+                        "task_index": task_index,
+                        "datacenter_vim_id": vim_action_to_clone["datacenter_vim_id"],
+                        "action": "CREATE",
+                        "status": "SCHEDULED",
+                        "item": "instance_vms",
+                        "item_id": vm_uuid,
+                        # ALF
+                        # ALF
+                        # TODO examinar parametros, quitar MAC o incrementar. Incrementar IP y colocar las dependencias con ACTION-asdfasd.
+                        # ALF
+                        # ALF
+                        "extra": yaml.safe_dump({"params": task_params_copy, "depends_on": task_depends_on}, default_flow_style=True, width=256)
+                    }
+                    task_index += 1
+                    db_vim_actions.append(db_vim_action)
+                    vm_result["created"].append(vm_uuid)
+
+        db_instance_action["number_tasks"] = task_index
+        db_tables = [
+            {"instance_vms": db_instance_vms},
+            {"instance_interfaces": db_instance_interfaces},
+            {"instance_actions": db_instance_action},
+            # TODO revise sfps
+            # {"instance_sfis": db_instance_sfis},
+            # {"instance_sfs": db_instance_sfs},
+            # {"instance_classifications": db_instance_classifications},
+            # {"instance_sfps": db_instance_sfps},
+            {"vim_wim_actions": db_vim_actions}
+        ]
+        logger.debug("create_vdu done DB tables: %s",
+                     yaml.safe_dump(db_tables, indent=4, default_flow_style=False))
+        mydb.new_rows(db_tables, [])
+        for myvim_thread in myvim_threads_id.values():
+            vim_threads["running"][myvim_thread].insert_task(db_vim_actions)
+
+        return vm_result
 
     input_vnfs = action_dict.pop("vnfs", [])
     input_vms = action_dict.pop("vms", [])
     action_over_all = True if not input_vnfs and not input_vms else False
-    vm_result = {}
-    vm_error = 0
-    vm_ok = 0
     for sce_vnf in instanceDict['vnfs']:
         for vm in sce_vnf['vms']:
             if not action_over_all and sce_vnf['uuid'] not in input_vnfs and sce_vnf['vnf_name'] not in input_vnfs and \
@@ -4259,13 +4692,13 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                                                           password=password, ro_key=priv_RO_key)
                             else:
                                 raise NfvoException("Unable to inject ssh key in vm: {} - Aborting".format(vm['uuid']),
-                                                    HTTP_Internal_Server_Error)
+                                                    httperrors.Internal_Server_Error)
                         except KeyError:
                             raise NfvoException("Unable to inject ssh key in vm: {} - Aborting".format(vm['uuid']),
-                                                HTTP_Internal_Server_Error)
+                                                httperrors.Internal_Server_Error)
                     else:
                         raise NfvoException("Unable to inject ssh key in vm: {} - Aborting".format(vm['uuid']),
-                                            HTTP_Internal_Server_Error)
+                                            httperrors.Internal_Server_Error)
                 else:
                     data = myvim.action_vminstance(vm['vim_vm_id'], action_dict)
                     if "console" in action_dict:
@@ -4280,7 +4713,7 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                                                     }
                             vm_ok +=1
                         elif data["server"]=="127.0.0.1" or data["server"]=="localhost":
-                            vm_result[ vm['uuid'] ] = {"vim_result": -HTTP_Unauthorized,
+                            vm_result[ vm['uuid'] ] = {"vim_result": -httperrors.Unauthorized,
                                                        "description": "this console is only reachable by local interface",
                                                        "name":vm['name']
                                                     }
@@ -4325,10 +4758,12 @@ def instance_action_get(mydb, nfvo_tenant, instance_id, action_id):
     rows = mydb.get_rows(FROM="instance_actions", WHERE=filter)
     if action_id:
         if not rows:
-            raise NfvoException("Not found any action with this criteria", HTTP_Not_Found)
-        vim_actions = mydb.get_rows(FROM="vim_actions", WHERE={"instance_action_id": action_id})
-        rows[0]["vim_actions"] = vim_actions
-    return {"ations": rows}
+            raise NfvoException("Not found any action with this criteria", httperrors.Not_Found)
+        vim_wim_actions = mydb.get_rows(FROM="vim_wim_actions", WHERE={"instance_action_id": action_id})
+        rows[0]["vim_wim_actions"] = vim_wim_actions
+        # for backward compatibility set vim_actions = vim_wim_actions
+        rows[0]["vim_actions"] = vim_wim_actions
+    return {"actions": rows}
 
 
 def create_or_use_console_proxy_thread(console_server, console_port):
@@ -4352,15 +4787,15 @@ def create_or_use_console_proxy_thread(console_server, console_port):
             #port used, try with onoher
             continue
         except cli.ConsoleProxyException as e:
-            raise NfvoException(str(e), HTTP_Bad_Request)
-    raise NfvoException("Not found any free 'http_console_ports'", HTTP_Conflict)
+            raise NfvoException(str(e), httperrors.Bad_Request)
+    raise NfvoException("Not found any free 'http_console_ports'", httperrors.Conflict)
 
 
 def check_tenant(mydb, tenant_id):
     '''check that tenant exists at database'''
     tenant = mydb.get_rows(FROM='nfvo_tenants', SELECT=('uuid',), WHERE={'uuid': tenant_id})
     if not tenant:
-        raise NfvoException("tenant '{}' not found".format(tenant_id), HTTP_Not_Found)
+        raise NfvoException("tenant '{}' not found".format(tenant_id), httperrors.Not_Found)
     return
 
 def new_tenant(mydb, tenant_dict):
@@ -4403,7 +4838,7 @@ def new_datacenter(mydb, datacenter_descriptor):
         #    file.close(module_info[0])
         raise NfvoException("Incorrect datacenter type '{}'. Plugin '{}.py' not installed".format(datacenter_type,
                                                                                                   module),
-                            HTTP_Bad_Request)
+                            httperrors.Bad_Request)
 
     datacenter_id = mydb.new_row("datacenters", datacenter_descriptor, add_uuid=True, confidential_data=True)
     if sdn_port_mapping:
@@ -4421,7 +4856,7 @@ def edit_datacenter(mydb, datacenter_id_name, datacenter_descriptor):
 
     # edit data
     datacenter_id = datacenter['uuid']
-    where={'uuid': datacenter['uuid']}
+    where = {'uuid': datacenter['uuid']}
     remove_port_mapping = False
     new_sdn_port_mapping = None
     if "config" in datacenter_descriptor:
@@ -4431,10 +4866,10 @@ def edit_datacenter(mydb, datacenter_id_name, datacenter_descriptor):
                 if "sdn-port-mapping" in new_config_dict:
                     remove_port_mapping = True
                     new_sdn_port_mapping = new_config_dict.pop("sdn-port-mapping")
-                #delete null fields
-                to_delete=[]
+                # delete null fields
+                to_delete = []
                 for k in new_config_dict:
-                    if new_config_dict[k] == None:
+                    if new_config_dict[k] is None:
                         to_delete.append(k)
                         if k == 'sdn-controller':
                             remove_port_mapping = True
@@ -4444,11 +4879,11 @@ def edit_datacenter(mydb, datacenter_id_name, datacenter_descriptor):
                     config_text = '{}'
                 config_dict = yaml.load(config_text)
                 config_dict.update(new_config_dict)
-                #delete null fields
+                # delete null fields
                 for k in to_delete:
                     del config_dict[k]
             except Exception as e:
-                raise NfvoException("Bad format at datacenter:config " + str(e), HTTP_Bad_Request)
+                raise NfvoException("Bad format at datacenter:config " + str(e), httperrors.Bad_Request)
         if config_dict:
             datacenter_descriptor["config"] = yaml.safe_dump(config_dict, default_flow_style=True, width=256)
         else:
@@ -4457,14 +4892,16 @@ def edit_datacenter(mydb, datacenter_id_name, datacenter_descriptor):
             try:
                 datacenter_sdn_port_mapping_delete(mydb, None, datacenter_id)
             except ovimException as e:
-                logger.error("Error deleting datacenter-port-mapping " + str(e))
+                raise NfvoException("Error deleting datacenter-port-mapping " + str(e), httperrors.Conflict)
 
     mydb.update_rows('datacenters', datacenter_descriptor, where)
     if new_sdn_port_mapping:
         try:
             datacenter_sdn_port_mapping_set(mydb, None, datacenter_id, new_sdn_port_mapping)
         except ovimException as e:
-            logger.error("Error adding datacenter-port-mapping " + str(e))
+            # Rollback
+            mydb.update_rows('datacenters', datacenter, where)
+            raise NfvoException("Error adding datacenter-port-mapping " + str(e), httperrors.Conflict)
     return datacenter_id
 
 
@@ -4475,33 +4912,38 @@ def delete_datacenter(mydb, datacenter):
     try:
         datacenter_sdn_port_mapping_delete(mydb, None, datacenter_dict['uuid'])
     except ovimException as e:
-        logger.error("Error deleting datacenter-port-mapping " + str(e))
+        raise NfvoException("Error deleting datacenter-port-mapping " + str(e))
     return datacenter_dict['uuid'] + " " + datacenter_dict['name']
 
 
-def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=None, vim_tenant_name=None, vim_username=None, vim_password=None, config=None):
+def create_vim_account(mydb, nfvo_tenant, datacenter_id, name=None, vim_id=None, vim_tenant=None, vim_tenant_name=None,
+                       vim_username=None, vim_password=None, config=None):
     # get datacenter info
     try:
-        datacenter_id = get_datacenter_uuid(mydb, None, datacenter)
+        if not datacenter_id:
+            if not vim_id:
+                raise NfvoException("You must provide 'vim_id", http_code=httperrors.Bad_Request)
+            datacenter_id = vim_id
+        datacenter_id, datacenter_name = get_datacenter_uuid(mydb, None, datacenter_id)
 
-        create_vim_tenant = True if not vim_tenant_id and not vim_tenant_name else False
+        create_vim_tenant = True if not vim_tenant and not vim_tenant_name else False
 
         # get nfvo_tenant info
         tenant_dict = mydb.get_table_by_uuid_name('nfvo_tenants', nfvo_tenant)
         if vim_tenant_name==None:
             vim_tenant_name=tenant_dict['name']
 
-        #check that this association does not exist before
         tenants_datacenter_dict={"nfvo_tenant_id":tenant_dict['uuid'], "datacenter_id":datacenter_id }
-        tenants_datacenters = mydb.get_rows(FROM='tenants_datacenters', WHERE=tenants_datacenter_dict)
-        if len(tenants_datacenters)>0:
-            raise NfvoException("datacenter '{}' and tenant'{}' are already attached".format(datacenter_id, tenant_dict['uuid']), HTTP_Conflict)
+        # #check that this association does not exist before
+        # tenants_datacenters = mydb.get_rows(FROM='tenants_datacenters', WHERE=tenants_datacenter_dict)
+        # if len(tenants_datacenters)>0:
+        #     raise NfvoException("datacenter '{}' and tenant'{}' are already attached".format(datacenter_id, tenant_dict['uuid']), httperrors.Conflict)
 
         vim_tenant_id_exist_atdb=False
         if not create_vim_tenant:
             where_={"datacenter_id": datacenter_id}
-            if vim_tenant_id!=None:
-                where_["vim_tenant_id"] = vim_tenant_id
+            if vim_tenant!=None:
+                where_["vim_tenant_id"] = vim_tenant
             if vim_tenant_name!=None:
                 where_["vim_tenant_name"] = vim_tenant_name
             #check if vim_tenant_id is already at database
@@ -4513,25 +4955,29 @@ def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=
             else: #result=0
                 datacenter_tenants_dict = {}
                 #insert at table datacenter_tenants
-        else: #if vim_tenant_id==None:
+        else: #if vim_tenant==None:
             #create tenant at VIM if not provided
             try:
                 _, myvim = get_datacenter_by_name_uuid(mydb, None, datacenter, vim_user=vim_username,
                                                                    vim_passwd=vim_password)
                 datacenter_name = myvim["name"]
-                vim_tenant_id = myvim.new_tenant(vim_tenant_name, "created by openmano for datacenter "+datacenter_name)
+                vim_tenant = myvim.new_tenant(vim_tenant_name, "created by openmano for datacenter "+datacenter_name)
             except vimconn.vimconnException as e:
-                raise NfvoException("Not possible to create vim_tenant {} at VIM: {}".format(vim_tenant_id, str(e)), HTTP_Internal_Server_Error)
+                raise NfvoException("Not possible to create vim_tenant {} at VIM: {}".format(vim_tenant_id, str(e)), httperrors.Internal_Server_Error)
             datacenter_tenants_dict = {}
             datacenter_tenants_dict["created"]="true"
 
         #fill datacenter_tenants table
         if not vim_tenant_id_exist_atdb:
-            datacenter_tenants_dict["vim_tenant_id"] = vim_tenant_id
+            datacenter_tenants_dict["vim_tenant_id"] = vim_tenant
             datacenter_tenants_dict["vim_tenant_name"] = vim_tenant_name
             datacenter_tenants_dict["user"] = vim_username
             datacenter_tenants_dict["passwd"] = vim_password
             datacenter_tenants_dict["datacenter_id"] = datacenter_id
+            if name:
+                datacenter_tenants_dict["name"] = name
+            else:
+                datacenter_tenants_dict["name"] = datacenter_name
             if config:
                 datacenter_tenants_dict["config"] = yaml.safe_dump(config, default_flow_style=True, width=256)
             id_ = mydb.new_row('datacenter_tenants', datacenter_tenants_dict, add_uuid=True, confidential_data=True)
@@ -4541,59 +4987,59 @@ def associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter, vim_tenant_id=
         datacenter_tenant_id = datacenter_tenants_dict["uuid"]
         tenants_datacenter_dict["datacenter_tenant_id"] = datacenter_tenant_id
         mydb.new_row('tenants_datacenters', tenants_datacenter_dict)
+
         # create thread
-        datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_dict['uuid'], datacenter_id)  # reload data
-        datacenter_name = myvim["name"]
         thread_name = get_non_used_vim_name(datacenter_name, datacenter_id, tenant_dict['name'], tenant_dict['uuid'])
-        new_thread = vim_thread.vim_thread(myvim, task_lock, thread_name, datacenter_name, datacenter_tenant_id,
+        new_thread = vim_thread.vim_thread(task_lock, thread_name, datacenter_name, datacenter_tenant_id,
                                            db=db, db_lock=db_lock, ovim=ovim)
         new_thread.start()
         thread_id = datacenter_tenants_dict["uuid"]
         vim_threads["running"][thread_id] = new_thread
-        return datacenter_id
+        return thread_id
     except vimconn.vimconnException as e:
-        raise NfvoException(str(e), HTTP_Bad_Request)
+        raise NfvoException(str(e), httperrors.Bad_Request)
 
 
-def edit_datacenter_to_tenant(mydb, nfvo_tenant, datacenter_id, vim_tenant_id=None, vim_tenant_name=None,
-                              vim_username=None, vim_password=None, config=None):
-    #Obtain the data of this datacenter_tenant_id
-    vim_data = mydb.get_rows(
-        SELECT=("datacenter_tenants.vim_tenant_name", "datacenter_tenants.vim_tenant_id", "datacenter_tenants.user",
-                "datacenter_tenants.passwd", "datacenter_tenants.config"),
-        FROM="datacenter_tenants JOIN tenants_datacenters ON datacenter_tenants.uuid=tenants_datacenters.datacenter_tenant_id",
-        WHERE={"tenants_datacenters.nfvo_tenant_id": nfvo_tenant,
-               "tenants_datacenters.datacenter_id": datacenter_id})
+def edit_vim_account(mydb, nfvo_tenant, datacenter_tenant_id, datacenter_id=None, name=None, vim_tenant=None,
+                              vim_tenant_name=None, vim_username=None, vim_password=None, config=None):
 
-    logger.debug(str(vim_data))
-    if len(vim_data) < 1:
-        raise NfvoException("Datacenter {} is not attached for tenant {}".format(datacenter_id, nfvo_tenant), HTTP_Conflict)
+    # get vim_account; check is valid for this tenant
+    from_ = "datacenter_tenants as dt JOIN tenants_datacenters as td ON dt.uuid=td.datacenter_tenant_id"
+    where_ = {"td.nfvo_tenant_id": nfvo_tenant}
+    if datacenter_tenant_id:
+        where_["dt.uuid"] = datacenter_tenant_id
+    if datacenter_id:
+        where_["dt.datacenter_id"] = datacenter_id
+    vim_accounts = mydb.get_rows(SELECT="dt.uuid as uuid, config", FROM=from_, WHERE=where_)
+    if not vim_accounts:
+        raise NfvoException("vim_account not found for this tenant", http_code=httperrors.Not_Found)
+    elif len(vim_accounts) > 1:
+        raise NfvoException("found more than one vim_account for this tenant", http_code=httperrors.Conflict)
+    datacenter_tenant_id = vim_accounts[0]["uuid"]
+    original_config = vim_accounts[0]["config"]
 
-    v = vim_data[0]
-    if v['config']:
-        v['config'] = yaml.load(v['config'])
-
-    if vim_tenant_id:
-        v['vim_tenant_id'] = vim_tenant_id
-    if vim_tenant_name:
-        v['vim_tenant_name'] = vim_tenant_name
-    if vim_username:
-        v['user'] = vim_username
-    if vim_password:
-        v['passwd'] = vim_password
+    update_ = {}
     if config:
-        if not v['config']:
-            v['config'] = {}
-        v['config'].update(config)
+        original_config_dict = yaml.load(original_config)
+        original_config_dict.update(config)
+        update["config"] = yaml.safe_dump(original_config_dict, default_flow_style=True, width=256)
+    if name:
+        update_['name'] = name
+    if vim_tenant:
+        update_['vim_tenant_id'] = vim_tenant
+    if vim_tenant_name:
+        update_['vim_tenant_name'] = vim_tenant_name
+    if vim_username:
+        update_['user'] = vim_username
+    if vim_password:
+        update_['passwd'] = vim_password
+    if update_:
+        mydb.update_rows("datacenter_tenants", UPDATE=update_, WHERE={"uuid": datacenter_tenant_id})
 
-    logger.debug(str(v))
-    deassociate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter_id, vim_tenant_id=v['vim_tenant_id'])
-    associate_datacenter_to_tenant(mydb, nfvo_tenant, datacenter_id, vim_tenant_id=v['vim_tenant_id'], vim_tenant_name=v['vim_tenant_name'],
-                                   vim_username=v['user'], vim_password=v['passwd'], config=v['config'])
+    vim_threads["running"][datacenter_tenant_id].insert_task("reload")
+    return datacenter_tenant_id
 
-    return datacenter_id
-
-def deassociate_datacenter_to_tenant(mydb, tenant_id, datacenter, vim_tenant_id=None):
+def delete_vim_account(mydb, tenant_id, vim_account_id, datacenter=None):
     #get nfvo_tenant info
     if not tenant_id or tenant_id=="any":
         tenant_uuid = None
@@ -4601,14 +5047,18 @@ def deassociate_datacenter_to_tenant(mydb, tenant_id, datacenter, vim_tenant_id=
         tenant_dict = mydb.get_table_by_uuid_name('nfvo_tenants', tenant_id)
         tenant_uuid = tenant_dict['uuid']
 
-    datacenter_id = get_datacenter_uuid(mydb, tenant_uuid, datacenter)
     #check that this association exist before
-    tenants_datacenter_dict={"datacenter_id": datacenter_id }
+    tenants_datacenter_dict = {}
+    if datacenter:
+        datacenter_id, _ = get_datacenter_uuid(mydb, tenant_uuid, datacenter)
+        tenants_datacenter_dict["datacenter_id"] = datacenter_id
+    elif vim_account_id:
+        tenants_datacenter_dict["datacenter_tenant_id"] = vim_account_id
     if tenant_uuid:
         tenants_datacenter_dict["nfvo_tenant_id"] = tenant_uuid
     tenant_datacenter_list = mydb.get_rows(FROM='tenants_datacenters', WHERE=tenants_datacenter_dict)
     if len(tenant_datacenter_list)==0 and tenant_uuid:
-        raise NfvoException("datacenter '{}' and tenant '{}' are not attached".format(datacenter_id, tenant_dict['uuid']), HTTP_Not_Found)
+        raise NfvoException("datacenter '{}' and tenant '{}' are not attached".format(datacenter_id, tenant_dict['uuid']), httperrors.Not_Found)
 
     #delete this association
     mydb.delete_row(FROM='tenants_datacenters', WHERE=tenants_datacenter_dict)
@@ -4650,7 +5100,7 @@ def datacenter_action(mydb, tenant_id, datacenter, action_dict):
             #print content
         except vimconn.vimconnException as e:
             #logger.error("nfvo.datacenter_action() Not possible to get_network_list from VIM: %s ", str(e))
-            raise NfvoException(str(e), HTTP_Internal_Server_Error)
+            raise NfvoException(str(e), httperrors.Internal_Server_Error)
         #update nets Change from VIM format to NFVO format
         net_list=[]
         for net in nets:
@@ -4679,7 +5129,7 @@ def datacenter_action(mydb, tenant_id, datacenter, action_dict):
         return result
 
     else:
-        raise NfvoException("Unknown action " + str(action_dict), HTTP_Bad_Request)
+        raise NfvoException("Unknown action " + str(action_dict), httperrors.Bad_Request)
 
 
 def datacenter_edit_netmap(mydb, tenant_id, datacenter, netmap, action_dict):
@@ -4709,11 +5159,11 @@ def datacenter_new_netmap(mydb, tenant_id, datacenter, action_dict=None):
         vim_nets = myvim.get_network_list(filter_dict=filter_dict)
     except vimconn.vimconnException as e:
         #logger.error("nfvo.datacenter_new_netmap() Not possible to get_network_list from VIM: %s ", str(e))
-        raise NfvoException(str(e), HTTP_Internal_Server_Error)
+        raise NfvoException(str(e), httperrors.Internal_Server_Error)
     if len(vim_nets)>1 and action_dict:
-        raise NfvoException("more than two networks found, specify with vim_id", HTTP_Conflict)
+        raise NfvoException("more than two networks found, specify with vim_id", httperrors.Conflict)
     elif len(vim_nets)==0: # and action_dict:
-        raise NfvoException("Not found a network at VIM with " + str(filter_dict), HTTP_Not_Found)
+        raise NfvoException("Not found a network at VIM with " + str(filter_dict), httperrors.Not_Found)
     net_list=[]
     for net in vim_nets:
         net_nfvo={'datacenter_id': datacenter_id}
@@ -4754,11 +5204,11 @@ def get_sdn_net_id(mydb, tenant_id, datacenter, network_id):
     # ensure the network is defined
     if len(network) == 0:
         raise NfvoException("Network {} is not present in the system".format(network_id),
-                            HTTP_Bad_Request)
+                            httperrors.Bad_Request)
 
     # ensure there is only one network with the provided name
     if len(network) > 1:
-        raise NfvoException("Multiple networks present in vim identified by {}".format(network_id), HTTP_Bad_Request)
+        raise NfvoException("Multiple networks present in vim identified by {}".format(network_id), httperrors.Bad_Request)
 
     # ensure it is a dataplane network
     if network[0]['type'] != 'data':
@@ -4791,7 +5241,7 @@ def get_sdn_net_id(mydb, tenant_id, datacenter, network_id):
         return sdn_net_id
     else:
         raise NfvoException("More than one SDN network is associated to vim network {}".format(
-            network_id), HTTP_Internal_Server_Error)
+            network_id), httperrors.Internal_Server_Error)
 
 def get_sdn_controller_id(mydb, datacenter):
     # Obtain sdn controller id
@@ -4805,12 +5255,12 @@ def vim_net_sdn_attach(mydb, tenant_id, datacenter, network_id, descriptor):
     try:
         sdn_network_id = get_sdn_net_id(mydb, tenant_id, datacenter, network_id)
         if not sdn_network_id:
-            raise NfvoException("No SDN network is associated to vim-network {}".format(network_id), HTTP_Internal_Server_Error)
+            raise NfvoException("No SDN network is associated to vim-network {}".format(network_id), httperrors.Internal_Server_Error)
 
         #Obtain sdn controller id
         controller_id = get_sdn_controller_id(mydb, datacenter)
         if not controller_id:
-            raise NfvoException("No SDN controller is set for datacenter {}".format(datacenter), HTTP_Internal_Server_Error)
+            raise NfvoException("No SDN controller is set for datacenter {}".format(datacenter), httperrors.Internal_Server_Error)
 
         #Obtain sdn controller info
         sdn_controller = ovim.show_of_controller(controller_id)
@@ -4831,7 +5281,7 @@ def vim_net_sdn_attach(mydb, tenant_id, datacenter, network_id, descriptor):
         result = ovim.new_port(port_data)
     except ovimException as e:
         raise NfvoException("ovimException attaching SDN network {} to vim network {}".format(
-            sdn_network_id, network_id) + str(e), HTTP_Internal_Server_Error)
+            sdn_network_id, network_id) + str(e), httperrors.Internal_Server_Error)
     except db_base_Exception as e:
         raise NfvoException("db_base_Exception attaching SDN network to vim network {}".format(
             network_id) + str(e), e.http_code)
@@ -4845,7 +5295,7 @@ def vim_net_sdn_detach(mydb, tenant_id, datacenter, network_id, port_id=None):
         sdn_network_id = get_sdn_net_id(mydb, tenant_id, datacenter, network_id)
         if not sdn_network_id:
             raise NfvoException("No SDN network is associated to vim-network {}".format(network_id),
-                                HTTP_Internal_Server_Error)
+                                httperrors.Internal_Server_Error)
         #in case no port_id is specified only ports marked as 'external_port' will be detached
         filter = {'name': 'external_port', 'net_id': sdn_network_id}
 
@@ -4853,11 +5303,11 @@ def vim_net_sdn_detach(mydb, tenant_id, datacenter, network_id, port_id=None):
         port_list = ovim.get_ports(columns={'uuid'}, filter=filter)
     except ovimException as e:
         raise NfvoException("ovimException obtaining external ports for net {}. ".format(network_id) + str(e),
-                            HTTP_Internal_Server_Error)
+                            httperrors.Internal_Server_Error)
 
     if len(port_list) == 0:
         raise NfvoException("No ports attached to the network {} were found with the requested criteria".format(network_id),
-                            HTTP_Bad_Request)
+                            httperrors.Bad_Request)
 
     port_uuid_list = []
     for port in port_list:
@@ -4865,7 +5315,7 @@ def vim_net_sdn_detach(mydb, tenant_id, datacenter, network_id, port_id=None):
             port_uuid_list.append(port['uuid'])
             ovim.delete_port(port['uuid'])
         except ovimException as e:
-            raise NfvoException("ovimException deleting port {} for net {}. ".format(port['uuid'], network_id) + str(e), HTTP_Internal_Server_Error)
+            raise NfvoException("ovimException deleting port {} for net {}. ".format(port['uuid'], network_id) + str(e), httperrors.Internal_Server_Error)
 
     return 'Detached ports uuid: {}'.format(','.join(port_uuid_list))
 
@@ -4885,7 +5335,7 @@ def vim_action_get(mydb, tenant_id, datacenter, item, name):
 
             if len(content) == 0:
                 raise NfvoException("Network {} is not present in the system. ".format(name),
-                                    HTTP_Bad_Request)
+                                    httperrors.Bad_Request)
 
             #Update the networks with the attached ports
             for net in content:
@@ -4895,7 +5345,7 @@ def vim_action_get(mydb, tenant_id, datacenter, item, name):
                         #port_list = ovim.get_ports(columns={'uuid', 'switch_port', 'vlan'}, filter={'name': 'external_port', 'net_id': sdn_network_id})
                         port_list = ovim.get_ports(columns={'uuid', 'switch_port', 'vlan','name'}, filter={'net_id': sdn_network_id})
                     except ovimException as e:
-                        raise NfvoException("ovimException obtaining external ports for net {}. ".format(network_id) + str(e), HTTP_Internal_Server_Error)
+                        raise NfvoException("ovimException obtaining external ports for net {}. ".format(network_id) + str(e), httperrors.Internal_Server_Error)
                     #Remove field name and if port name is external_port save it as 'type'
                     for port in port_list:
                         if port['name'] == 'external_port':
@@ -4910,7 +5360,7 @@ def vim_action_get(mydb, tenant_id, datacenter, item, name):
 
             content = myvim.get_image_list(filter_dict=filter_dict)
         else:
-            raise NfvoException(item + "?", HTTP_Method_Not_Allowed)
+            raise NfvoException(item + "?", httperrors.Method_Not_Allowed)
         logger.debug("vim_action response %s", content) #update nets Change from VIM format to NFVO format
         if name and len(content)==1:
             return {item[:-1]: content[0]}
@@ -4935,9 +5385,9 @@ def vim_action_delete(mydb, tenant_id, datacenter, item, name):
     logger.debug("vim_action_delete vim response: " + str(content))
     items = content.values()[0]
     if type(items)==list and len(items)==0:
-        raise NfvoException("Not found " + item, HTTP_Not_Found)
+        raise NfvoException("Not found " + item, httperrors.Not_Found)
     elif type(items)==list and len(items)>1:
-        raise NfvoException("Found more than one {} with this name. Use uuid.".format(item), HTTP_Not_Found)
+        raise NfvoException("Found more than one {} with this name. Use uuid.".format(item), httperrors.Not_Found)
     else: # it is a dict
         item_id = items["id"]
         item_name = str(items.get("name"))
@@ -4953,7 +5403,7 @@ def vim_action_delete(mydb, tenant_id, datacenter, item, name):
                 except ovimException as e:
                     raise NfvoException(
                         "ovimException obtaining external ports for net {}. ".format(network_id) + str(e),
-                        HTTP_Internal_Server_Error)
+                        httperrors.Internal_Server_Error)
 
                 # By calling one by one all ports to be detached we ensure that not only the external_ports get detached
                 for port in port_list:
@@ -4972,7 +5422,7 @@ def vim_action_delete(mydb, tenant_id, datacenter, item, name):
                 except ovimException as e:
                     logger.error("ovimException deleting SDN network={} ".format(sdn_network_id) + str(e), exc_info=True)
                     raise NfvoException("ovimException deleting SDN network={} ".format(sdn_network_id) + str(e),
-                                        HTTP_Internal_Server_Error)
+                                        httperrors.Internal_Server_Error)
 
             content = myvim.delete_network(item_id)
         elif item=="tenants":
@@ -4980,7 +5430,7 @@ def vim_action_delete(mydb, tenant_id, datacenter, item, name):
         elif item == "images":
             content = myvim.delete_image(item_id)
         else:
-            raise NfvoException(item + "?", HTTP_Method_Not_Allowed)
+            raise NfvoException(item + "?", httperrors.Method_Not_Allowed)
     except vimconn.vimconnException as e:
         #logger.error( "vim_action Not possible to delete_{} {}from VIM: {} ".format(item, name, str(e)))
         raise NfvoException("Not possible to delete_{} {} from VIM: {}".format(item, name, str(e)), e.http_code)
@@ -5021,7 +5471,7 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
                     logger.error("ovimException creating SDN network={} ".format(
                         sdn_network) + str(e), exc_info=True)
                     raise NfvoException("ovimException creating SDN network={} ".format(sdn_network) + str(e),
-                                        HTTP_Internal_Server_Error)
+                                        httperrors.Internal_Server_Error)
 
                 # Save entry in in dabase mano_db in table instance_nets to stablish a dictionary  vim_net_id <->sdn_net_id
                 # use instance_scenario_id=None to distinguish from real instaces of nets
@@ -5039,7 +5489,7 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
             tenant = descriptor["tenant"]
             content = myvim.new_tenant(tenant["name"], tenant.get("description"))
         else:
-            raise NfvoException(item + "?", HTTP_Method_Not_Allowed)
+            raise NfvoException(item + "?", httperrors.Method_Not_Allowed)
     except vimconn.vimconnException as e:
         raise NfvoException("Not possible to create {} at VIM: {}".format(item, str(e)), e.http_code)
 
@@ -5073,7 +5523,7 @@ def sdn_controller_delete(mydb, tenant_id, controller_id):
         if datacenter['config']:
             config = yaml.load(datacenter['config'])
             if 'sdn-controller' in config and config['sdn-controller'] == controller_id:
-                raise NfvoException("SDN controller {} is in use by datacenter {}".format(controller_id, datacenter['uuid']), HTTP_Conflict)
+                raise NfvoException("SDN controller {} is in use by datacenter {}".format(controller_id, datacenter['uuid']), httperrors.Conflict)
 
     data = ovim.delete_of_controller(controller_id)
     msg = 'SDN controller {} deleted'.format(data)
@@ -5083,12 +5533,12 @@ def sdn_controller_delete(mydb, tenant_id, controller_id):
 def datacenter_sdn_port_mapping_set(mydb, tenant_id, datacenter_id, sdn_port_mapping):
     controller = mydb.get_rows(FROM="datacenters", SELECT=("config",), WHERE={"uuid":datacenter_id})
     if len(controller) < 1:
-        raise NfvoException("Datacenter {} not present in the database".format(datacenter_id), HTTP_Not_Found)
+        raise NfvoException("Datacenter {} not present in the database".format(datacenter_id), httperrors.Not_Found)
 
     try:
         sdn_controller_id = yaml.load(controller[0]["config"])["sdn-controller"]
     except:
-        raise NfvoException("The datacenter {} has not an SDN controller associated".format(datacenter_id), HTTP_Bad_Request)
+        raise NfvoException("The datacenter {} has not an SDN controller associated".format(datacenter_id), httperrors.Bad_Request)
 
     sdn_controller = ovim.show_of_controller(sdn_controller_id)
     switch_dpid = sdn_controller["dpid"]
@@ -5102,9 +5552,8 @@ def datacenter_sdn_port_mapping_set(mydb, tenant_id, datacenter_id, sdn_port_map
             pci = port.get("pci")
             element["switch_port"] = port.get("switch_port")
             element["switch_mac"] = port.get("switch_mac")
-            if not pci or not (element["switch_port"] or element["switch_mac"]):
-                raise NfvoException ("The mapping must contain the 'pci' and at least one of the elements 'switch_port'"
-                                     " or 'switch_mac'", HTTP_Bad_Request)
+            if not element["switch_port"] and not element["switch_mac"]:
+                raise NfvoException ("The mapping must contain 'switch_port' or 'switch_mac'", httperrors.Bad_Request)
             for pci_expanded in utils.expand_brackets(pci):
                 element["pci"] = pci_expanded
                 maps.append(dict(element))
@@ -5131,10 +5580,10 @@ def datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id):
             result["dpid"] = sdn_controller["dpid"]
 
     if result["sdn-controller"] == None:
-        raise NfvoException("SDN controller is not defined for datacenter {}".format(datacenter_id), HTTP_Bad_Request)
+        raise NfvoException("SDN controller is not defined for datacenter {}".format(datacenter_id), httperrors.Bad_Request)
     if result["dpid"] == None:
         raise NfvoException("It was not possible to determine DPID for SDN controller {}".format(result["sdn-controller"]),
-                        HTTP_Internal_Server_Error)
+                        httperrors.Internal_Server_Error)
 
     if len(maps) == 0:
         return result
@@ -5142,9 +5591,9 @@ def datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id):
     ports_correspondence_dict = dict()
     for link in maps:
         if result["sdn-controller"] != link["ofc_id"]:
-            raise NfvoException("The sdn-controller specified for different port mappings differ", HTTP_Internal_Server_Error)
+            raise NfvoException("The sdn-controller specified for different port mappings differ", httperrors.Internal_Server_Error)
         if result["dpid"] != link["switch_dpid"]:
-            raise NfvoException("The dpid specified for different port mappings differ", HTTP_Internal_Server_Error)
+            raise NfvoException("The dpid specified for different port mappings differ", httperrors.Internal_Server_Error)
         element = dict()
         element["pci"] = link["pci"]
         if link["switch_port"]:
@@ -5183,10 +5632,10 @@ def create_RO_keypair(tenant_id):
     try:
         public_key = key.publickey().exportKey('OpenSSH')
         if isinstance(public_key, ValueError):
-            raise NfvoException("Unable to create public key: {}".format(public_key), HTTP_Internal_Server_Error)
+            raise NfvoException("Unable to create public key: {}".format(public_key), httperrors.Internal_Server_Error)
         private_key = key.exportKey(passphrase=tenant_id, pkcs=8)
     except (ValueError, NameError) as e:
-        raise NfvoException("Unable to create private key: {}".format(e), HTTP_Internal_Server_Error)
+        raise NfvoException("Unable to create private key: {}".format(e), httperrors.Internal_Server_Error)
     return public_key, private_key
 
 def decrypt_key (key, tenant_id):
@@ -5202,7 +5651,7 @@ def decrypt_key (key, tenant_id):
         key = RSA.importKey(key,tenant_id)
         unencrypted_key = key.exportKey('PEM')
         if isinstance(unencrypted_key, ValueError):
-            raise NfvoException("Unable to decrypt the private key: {}".format(unencrypted_key), HTTP_Internal_Server_Error)
+            raise NfvoException("Unable to decrypt the private key: {}".format(unencrypted_key), httperrors.Internal_Server_Error)
     except ValueError as e:
-        raise NfvoException("Unable to decrypt the private key: {}".format(e), HTTP_Internal_Server_Error)
+        raise NfvoException("Unable to decrypt the private key: {}".format(e), httperrors.Internal_Server_Error)
     return unencrypted_key

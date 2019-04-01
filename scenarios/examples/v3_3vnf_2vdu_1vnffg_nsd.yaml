@@ -77,11 +77,13 @@ nsd:nsd-catalog:
                     -   member-vnf-index-ref: 2
                         order: 0
                         vnfd-id-ref: 2vdu_vnfd
-                        vnfd-connection-point-ref: eth0
+                        vnfd-ingress-connection-point-ref: eth0
+                        vnfd-egress-connection-point-ref: eth0
                     -   member-vnf-index-ref: 3
                         order: 1
                         vnfd-id-ref: 2vdu_vnfd
-                        vnfd-connection-point-ref: eth0
+                        vnfd-ingress-connection-point-ref: eth0
+                        vnfd-egress-connection-point-ref: eth0
                 classifier:
                 -   id: class1
                     name: class1-name

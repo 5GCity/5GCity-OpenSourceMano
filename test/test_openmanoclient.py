@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2015 Telefónica Investigación y Desarrollo, S.A.U.
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
 # This file is part of openmano
 # All Rights Reserved.
 #
@@ -230,7 +230,80 @@ if __name__=="__main__":
         to_delete_list.insert(0,{"item": "datacenter-detach", "function": client.detach_datacenter, "params":{"name": test_datacenter} })
 
         client["datacenter_name"] = test_datacenter
-        
+
+        # WIMs
+        print("  {}. TEST create_wim".format(test_number))
+        test_number += 1
+        long_name = _get_random_name(60)
+
+        wim = client.create_wim(name=long_name, wim_url="http://fakeurl/fake")
+        if verbose: print(wim)
+
+        print("  {}. TEST list_wims".format(test_number))
+        test_number += 1
+        wims = client.list_wims(all_tenants=True)
+        if verbose: print(wims)
+
+        print("  {}. TEST list_tenans filter by name".format(test_number))
+        test_number += 1
+        wims_ = client.list_wims(all_tenants=True, name=long_name)
+        if not wims_["wims"]:
+            raise Exception("Text error, no TENANT found with name")
+        if verbose: print(wims_)
+
+        print("  {}. TEST get_wim by UUID".format(test_number))
+        test_number += 1
+        wim = client.get_wim(uuid=wims_["wims"][0]["uuid"], all_tenants=True)
+        if verbose: print(wim)
+
+        print("  {}. TEST delete_wim by name".format(test_number))
+        test_number += 1
+        wim = client.delete_wim(name=long_name)
+        if verbose: print(wim)
+
+        print("  {}. TEST create_wim for remaining tests".format(test_number))
+        test_number += 1
+        test_wim = "test-wim " + \
+                          ''.join(random.choice('abcdefghijklmnopqrstuvwxyz') for _ in range(40))
+        wim = client.create_wim(name=test_wim, vim_url="http://127.0.0.1:9080/odl")
+        if verbose: print(wim)
+        to_delete_list.insert(0,
+                              {
+                                    "item": "wim", "function": client.delete_wim,
+                                    "params":
+                                        {
+                                                "name": test_wim
+                                        }
+                                })
+
+        test_wim_tenant = "test-wimtenant " + \
+                           ''.join(random.choice('abcdefghijklmnopqrstuvwxyz') for _ in range(40))
+
+        # print("  {}. TEST datacenter new tenenat".format(test_number))
+        # test_number += 1
+        # test_vim_tenant = "test-vimtenant " + \
+        #                   ''.join(random.choice('abcdefghijklmnopqrstuvwxyz') for _ in range(40))
+        # vim_tenant = client.vim_action("create", "tenants", datacenter_name=test_datacenter, all_tenants=True,
+        #                                name=test_vim_tenant)
+        # if verbose: print(vim_tenant)
+        # client["datacenter_name"] = test_datacenter
+        # to_delete_list.insert(0, {"item": "vim_tenant",
+        #                           "function": client.vim_action,
+        #                           "params": {
+        #                               "action": "delete",
+        #                               "item": "tenants",
+        #                               "datacenter_name": test_datacenter,
+        #                               "all_tenants": True,
+        #                               "uuid": vim_tenant["tenant"]["id"]
+        #                           }
+        #                           })
+
+        print("  {}. TEST wim attach".format(test_number))
+        test_number += 1
+        wim = client.attach_wim(name=test_wim, wim_tenant_name=test_wim_tenant)
+        if verbose: print(wim)
+        to_delete_list.insert(0, {"item": "wim-detach", "function": client.detach_wim,
+                                  "params": {"name": test_wim}})
     
     #VIM_ACTIONS
     print("  {}. TEST create_VIM_tenant".format(test_number))

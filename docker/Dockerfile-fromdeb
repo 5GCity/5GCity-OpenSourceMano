@@ -26,8 +26,6 @@ RUN apt-get update && apt-get install -y curl mysql-client software-properties-c
   && mkdir -p /bin/RO
 
 
-COPY docker/scripts/ /bin/RO
-
 VOLUME /opt/openmano/logs
 
 EXPOSE 9090
@@ -54,5 +52,5 @@ ENV RO_DB_NAME=mano_db
 ENV RO_DB_OVIM_NAME=mano_vim_db
 
 
-CMD /bin/RO/start.sh
+CMD RO-start.sh
 

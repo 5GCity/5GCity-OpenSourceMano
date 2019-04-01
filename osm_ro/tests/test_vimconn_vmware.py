@@ -23,15 +23,17 @@
 
 
 from osm_ro.vimconn_vmware import vimconnector
-from osm_ro.vimconn import vimconnUnexpectedResponse,vimconnNotFoundException
+from osm_ro.vimconn import vimconnUnexpectedResponse,vimconnNotFoundException,vimconnException
 from pyvcloud.vcd.client import Client
 from lxml import etree as lxmlElementTree
 from pyvcloud.vcd.org import Org
 from pyvcloud.vcd.vdc import VDC
 from pyvcloud.vcd.vapp import VApp
+import os
 import unittest
 import mock
 import test_vimconn_vmware_xml_response as xml_resp
+from os import path
 
 __author__ = "Prakash Kasar"
 
@@ -47,7 +49,7 @@ class TestVimconn_VMware(unittest.TestCase):
 
         # get vcd org object
         org_resp = xml_resp.org_xml_response
-        get_org = lxmlElementTree.fromstring(org_resp) 
+        get_org = lxmlElementTree.fromstring(org_resp)
         self.org = Org(self.client, resource=get_org)
 
         self.vim = vimconnector(uuid='12354',
@@ -64,7 +66,7 @@ class TestVimconn_VMware(unittest.TestCase):
     def test_get_network_not_found(self, perform_request, connect, get_vdc_details):
         """
         Testcase to get network with invalid network id
-        """   
+        """
         # created vdc object
         vdc_xml_resp = xml_resp.vdc_xml_response
         vdc = lxmlElementTree.fromstring(vdc_xml_resp)
@@ -108,7 +110,7 @@ class TestVimconn_VMware(unittest.TestCase):
     @mock.patch.object(vimconnector,'connect')
     def test_get_network_list_not_found(self, connect, get_vdc_details, perform_request):
         """
-        Testcase to get list of available networks by invalid network id 
+        Testcase to get list of available networks by invalid network id
         """
         vdc_xml_resp = xml_resp.vdc_xml_response
         network_xml_resp = xml_resp.network_xml_response
@@ -133,8 +135,8 @@ class TestVimconn_VMware(unittest.TestCase):
     def test_get_network_list(self, connect, get_vdc_details, perform_request):
         """
         Testcase to get list of available networks by valid network id
-        """ 
-        #import pdb;pdb.set_trace() ## Not working  
+        """
+        #import pdb;pdb.set_trace() ## Not working
         vdc_xml_resp = xml_resp.vdc_xml_response
         net_id = '5c04dc6d-6096-47c6-b72b-68f19013d491'
         # created vdc object
@@ -149,7 +151,7 @@ class TestVimconn_VMware(unittest.TestCase):
                                        mock.Mock(status_code = 200,
                                        content = network_xml_resp)]
         perform_request.reset_mock()
-        perform_request() 
+        perform_request()
 
         # call to VIM connector method with network_id
         result = self.vim.get_network_list({'id': net_id})
@@ -165,7 +167,7 @@ class TestVimconn_VMware(unittest.TestCase):
         """
         Testcase to create new network by passing network name and type
         """
-        # create network reposnse 
+        # create network reposnse
         create_net_xml_resp = xml_resp.create_network_xml_response
         net_name = 'Test_network'
         net_type = 'bridge'
@@ -180,12 +182,11 @@ class TestVimconn_VMware(unittest.TestCase):
     @mock.patch.object(vimconnector, 'create_network_rest')
     def test_new_network_not_created(self, create_network_rest):
         """
-        Testcase to create new network by assigning empty xml data  
+        Testcase to create new network by assigning empty xml data
         """
         # assumed return value from VIM connector
         create_network_rest.return_value = """<?xml version="1.0" encoding="UTF-8"?>
                                               <OrgVdcNetwork></OrgVdcNetwork>"""
-                                           
 
         # assert verified expected and return result from VIM connector
         self.assertRaises(vimconnUnexpectedResponse,self.vim.new_network,
@@ -197,10 +198,10 @@ class TestVimconn_VMware(unittest.TestCase):
     @mock.patch.object(vimconnector, 'delete_network_action')
     def test_delete_network(self, delete_network_action, get_network_action, connect):
         """
-        Testcase to delete network by network id  
+        Testcase to delete network by network id
         """
         net_uuid = '0a55e5d1-43a2-4688-bc92-cb304046bf87'
-        # delete network response 
+        # delete network response
         delete_net_xml_resp = xml_resp.delete_network_xml_response
 
         # assumed return value from VIM connector
@@ -216,7 +217,7 @@ class TestVimconn_VMware(unittest.TestCase):
     @mock.patch.object(vimconnector, 'get_vcd_network')
     def test_delete_network_not_found(self, get_vcd_network):
         """
-        Testcase to delete network by invalid network id  
+        Testcase to delete network by invalid network id
         """
         # assumed return value from VIM connector
         get_vcd_network.return_value = False
@@ -226,7 +227,7 @@ class TestVimconn_VMware(unittest.TestCase):
 
     def test_get_flavor(self):
         """
-        Testcase to get flavor data  
+        Testcase to get flavor data
         """
         flavor_data = {'a646eb8a-95bd-4e81-8321-5413ee72b62e': {'disk': 10,
                                                                 'vcpus': 1,
@@ -239,7 +240,7 @@ class TestVimconn_VMware(unittest.TestCase):
 
     def test_get_flavor_not_found(self):
         """
-        Testcase to get flavor data with invalid id 
+        Testcase to get flavor data with invalid id
         """
         vimconnector.flavorlist = {}
         # assert verified expected and return result from VIM connector
@@ -257,7 +258,7 @@ class TestVimconn_VMware(unittest.TestCase):
 
     def test_delete_flavor(self):
         """
-        Testcase to delete flavor data  
+        Testcase to delete flavor data
         """
         flavor_data = {'2cb3dffb-5c51-4355-8406-28553ead28ac': {'disk': 10,
                                                                 'vcpus': 1,
@@ -273,7 +274,7 @@ class TestVimconn_VMware(unittest.TestCase):
     @mock.patch.object(vimconnector,'perform_request')
     def test_delete_image_not_found(self, perform_request, connect_as_admin):
         """
-        Testcase to delete image by invalid image id  
+        Testcase to delete image by invalid image id
         """
         # creating conn object
         self.vim.client = self.vim.connect_as_admin()
@@ -303,7 +304,7 @@ class TestVimconn_VMware(unittest.TestCase):
         # assumed return value from VIM connector
         get_vdc_details.return_value = self.org, vdc
         list_catalogs.return_value = [{'isShared': 'false', 'numberOfVAppTemplates': '1', 'orgName': 'Org3', 'isPublished': 'false', 'ownerName': 'system', 'numberOfMedia': '0', 'creationDate': '2017-10-15T02:03:59.403-07:00', 'id': '34925a30-0f4a-4018-9759-0d6799063b51', 'name': 'Ubuntu_1nic'}, {'isShared': 'false', 'numberOfVAppTemplates': '1', 'orgName': 'Org3', 'isPublished': 'false', 'ownerName': 'orgadmin', 'numberOfMedia': '1', 'creationDate': '2018-02-15T02:16:58.300-08:00', 'id': '4b94b67e-c2c6-49ec-b46c-3f35ba45ca4a', 'name': 'cirros034'}, {'isShared': 'true', 'numberOfVAppTemplates': '1', 'orgName': 'Org3', 'isPublished': 'true', 'ownerName': 'system', 'numberOfMedia': '0', 'creationDate': '2018-01-26T02:09:12.387-08:00', 'id': 'b139ed82-7ca4-49fb-9882-5f841f59c890', 'name': 'Ubuntu_plugtest-1'}, {'isShared': 'true', 'numberOfVAppTemplates': '1', 'orgName': 'Org2', 'isPublished': 'false', 'ownerName': 'system', 'numberOfMedia': '0', 'creationDate': '2017-06-18T21:33:16.430-07:00', 'id': 'b31e6973-86d2-404b-a522-b16846d099dc', 'name': 'Ubuntu_Cat'}, {'isShared': 'false', 'numberOfVAppTemplates': '1', 'orgName': 'Org3', 'isPublished': 'false', 'ownerName': 'orgadmin', 'numberOfMedia': '0', 'creationDate': '2018-02-15T22:26:28.910-08:00', 'id': 'c3b56180-f980-4256-9109-a93168d73ff2', 'name': 'de4ffcf2ad21f1a5d0714d6b868e2645'}, {'isShared': 'false', 'numberOfVAppTemplates': '0', 'orgName': 'Org3', 'isPublished': 'false', 'ownerName': 'system', 'numberOfMedia': '0', 'creationDate': '2017-08-23T05:54:56.780-07:00', 'id': 'd0eb0b02-718d-42e0-b889-56575000b52d', 'name': 'Test_Cirros'}, {'isShared': 'false', 'numberOfVAppTemplates': '0', 'orgName': 'Org3', 'isPublished': 'false', 'ownerName': 'system', 'numberOfMedia': '0', 'creationDate': '2017-03-08T21:25:05.923-08:00', 'id': 'd3fa3df2-b311-4571-9138-4c66541d7f46', 'name': 'cirros_10'}, {'isShared': 'false', 'numberOfVAppTemplates': '0', 'orgName': 'Org3', 'isPublished': 'false', 'ownerName': 'system', 'numberOfMedia': '0', 'creationDate': '2017-07-12T22:45:20.537-07:00', 'id': 'd64b2617-ea4b-4b90-910b-102c99dd2031', 'name': 'Ubuntu16'}, {'isShared': 'true', 'numberOfVAppTemplates': '1', 'orgName': 'Org3', 'isPublished': 'true', 'ownerName': 'system', 'numberOfMedia': '1', 'creationDate': '2017-10-14T23:52:37.260-07:00', 'id': 'e8d953db-8dc9-46d5-9cab-329774cd2ad9', 'name': 'Ubuntu_no_nic'}]
- 
+
         result = self.vim.get_image_list({'id': '4b94b67e-c2c6-49ec-b46c-3f35ba45ca4a'})
 
         # assert verified expected and return result from VIM connector
@@ -378,18 +379,18 @@ class TestVimconn_VMware(unittest.TestCase):
 
         # assumed return value from VIM connector
         self.vim.client = self.vim.connect()
-        get_vdc_details.return_value = self.org, vdc 
+        get_vdc_details.return_value = self.org, vdc
         get_namebyvappid.return_name = vm_name
 
         vapp_resp = xml_resp.vapp_xml_response
-        vapp = lxmlElementTree.fromstring(vapp_resp) 
+        vapp = lxmlElementTree.fromstring(vapp_resp)
         get_vapp.return_value = vapp
-        
+
         power_off_resp = xml_resp.poweroff_task_xml
         power_off = lxmlElementTree.fromstring(power_off_resp)
         poweroff.return_value = power_off
 
-        status_resp = xml_resp.status_task_xml 
+        status_resp = xml_resp.status_task_xml
         status = lxmlElementTree.fromstring(status_resp)
         self.vim.connect.return_value.get_task_monitor.return_value.wait_for_success.return_value = status
 
@@ -413,12 +414,12 @@ class TestVimconn_VMware(unittest.TestCase):
                                                             get_network_id_by_name):
         """
         Testcase to refresh vms status by valid vm id
-        """ 
+        """
         vm_id = '53a529b2-10d8-4d56-a7ad-8182acdbe71c'
 
         # created vdc object
         vdc_xml_resp = xml_resp.vdc_xml_response
-        vdc = lxmlElementTree.fromstring(vdc_xml_resp)    
+        vdc = lxmlElementTree.fromstring(vdc_xml_resp)
         # assumed return value from VIM connector
         self.vim.client = self.vim.connect()
         get_vdc_details.return_value = self.org, vdc
@@ -427,13 +428,13 @@ class TestVimconn_VMware(unittest.TestCase):
         get_vm_pci_details.return_value = {'host_name': 'test-esx-1.corp.local', 'host_ip': '12.19.24.31'}
         vapp_resp = xml_resp.vapp_xml_response
         vapp = lxmlElementTree.fromstring(vapp_resp)
-        get_vapp.return_value = vapp 
+        get_vapp.return_value = vapp
         get_network_id_by_name.return_value = '47d12505-5968-4e16-95a7-18743edb0c8b'
 
         vm_resp = xml_resp.vm_xml_response
         vm_list = lxmlElementTree.fromstring(vm_resp)
         get_all_vms.return_value = vm_list
-          
+
         perform_request.return_value.status_code = 200
         perform_request.return_value.content = vm_resp
         # call to VIM connector method
@@ -484,7 +485,7 @@ class TestVimconn_VMware(unittest.TestCase):
         get_namebyvappid.return_value = 'Test1_vm-69a18104-8413-4cb8-bad7-b5afaec6f9fa'
         self.vim.client = self.vim.connect()
         power_off_resp = xml_resp.poweroff_task_xml
-        power_off = lxmlElementTree.fromstring(power_off_resp) 
+        power_off = lxmlElementTree.fromstring(power_off_resp)
         get_vapp.return_value.undeploy.return_value = power_off
 
         status_resp = xml_resp.status_task_xml
@@ -500,16 +501,16 @@ class TestVimconn_VMware(unittest.TestCase):
     @mock.patch.object(vimconnector,'get_org')
     def test_get_tenant_list(self, get_org):
         """
-        Test case for get tenant list     
+        Test case for get tenant list
         """
         org_dict = {'catalogs': {'4c4fdb5d-0c7d-4fee-9efd-cb061f327a01': '80d8488f67ba1de98b7f485fba6abbd2', '1b98ca02-b0a6-4ca7-babe-eadc0ae59677': 'Ubuntu', 'e7f27dfe-14b7-49e1-918e-173bda02683a': '834bdd1f28fd15dcbe830456ec58fbca', '9441ee69-0486-4438-ac62-8d8082c51302': 'centos', 'e660cce0-47a6-4315-a5b9-97a39299a374': 'cirros01', '0fd96c61-c3d1-4abf-9a34-0dff8fb65743': 'cirros034', '1c703be3-9bd2-46a2-854c-3e678d5cdda8': 'Ubuntu_plugtest-1', 'bc4e342b-f84c-41bd-a93a-480f35bacf69': 'Cirros', '8a206fb5-3ef9-4571-9bcc-137615f4d930': '255eb079a62ac155e7f942489f14b0c4'}, 'vdcs': {'e6436c6a-d922-4b39-9c1c-b48e766fce5e': 'osm', '3852f762-18ae-4833-a229-42684b6e7373': 'cloud-1-vdc'}, 'networks': {'e203cacd-9320-4422-9be0-12c7def3ab56': 'testing_lNejr37B-38e4ca67-1e26-486f-ad2f-f14bb099e068', 'a6623349-2bef-4367-9fda-d33f9ab927f8': 'Vlan_3151', 'adf780cb-358c-47c2-858d-ae5778ccaf17': 'testing_xwBultc-99b8a2ae-c091-4dd3-bbf7-762a51612385', '721f9efc-11fe-4c13-936d-252ba0ed93c8': 'testing_tLljy8WB5e-a898cb28-e75b-4867-a22e-f2bad285c144', '1512d97a-929d-4b06-b8af-cf5ac42a2aee': 'Managment', 'd9167301-28af-4b89-b9e0-09f612e962fa': 'testing_prMW1VThk-063cb428-eaee-44b8-9d0d-df5fb77a5b4d', '004ae853-f899-43fd-8981-7513a3b40d6b': 'testing_RTtKVi09rld-fab00b16-7996-49af-8249-369c6bbfa02d'}}
         tenant_name = 'osm'
         get_org.return_value = org_dict
 
-        # call to VIM connector method  
+        # call to VIM connector method
         results = self.vim.get_tenant_list({'name' : tenant_name})
-        # assert verified expected and return result from VIM connector  
-        for result in results: 
+        # assert verified expected and return result from VIM connector
+        for result in results:
             self.assertEqual(tenant_name,result['name'])
 
     @mock.patch.object(vimconnector,'get_org')
@@ -525,3 +526,455 @@ class TestVimconn_VMware(unittest.TestCase):
         results = self.vim.get_tenant_list({'name' : tenant_name})
         # assert verified expected and return result from VIM connector
         self.assertEqual(results, [])
+
+    @mock.patch.object(vimconnector,'create_vdc')
+    def test_new_tenant(self, create_vdc):
+        """
+        Test case for create new tenant
+        """
+        tenant_name = 'test'
+        vdc = {'a493aa2c-3104-4d63-969b-fc9e72304c9f': 'https://localhost/api/task/e658d84c-007d-4fd8-9590-3a8f93cc0de4'}
+        create_vdc.return_value = vdc
+
+        # call to VIM connector method
+        result = self.vim.new_tenant(tenant_name)
+        # assert verified expected and return result from VIM connector
+        self.assertEqual('a493aa2c-3104-4d63-969b-fc9e72304c9f', result)
+
+    @mock.patch.object(vimconnector,'create_vdc')
+    def test_new_tenant_negative(self, create_vdc):
+        """
+        Test case for create new tenant
+        """
+        tenant_name = 'test'
+        create_vdc.return_value = None
+
+        # assert verified expected and return result from VIM connector
+        self.assertRaises(vimconnException,self.vim.new_tenant,tenant_name)
+
+    @mock.patch.object(vimconnector,'connect_as_admin')
+    @mock.patch.object(vimconnector,'connect')
+    @mock.patch.object(vimconnector,'perform_request')
+    def test_delete_tenant(self, perform_request, connect, connect_as_admin):
+        """
+        Test case to delete tenant
+        """
+        tenant_id = '753227f5-d6c6-4478-9546-acc5cfff21e9'
+        delete_tenant_resp = xml_resp.delete_tenant
+
+        self.vim.client = self.vim.connect()
+        perform_request.side_effect = [mock.Mock(status_code = 200,
+                                       content = delete_tenant_resp),
+                                       mock.Mock(status_code = 202,
+                                       content = None)
+                                       ]
+
+        # call to VIM connector method
+        result = self.vim.delete_tenant(tenant_id)
+        # assert verified expected and return result from VIM connector
+        self.assertEqual(tenant_id, result)
+
+    @mock.patch.object(vimconnector,'connect_as_admin')
+    @mock.patch.object(vimconnector,'connect')
+    @mock.patch.object(vimconnector,'perform_request')
+    def test_delete_tenant_negative(self, perform_request, connect, connect_as_admin):
+        """
+        Test case to delete tenant
+        """
+        tenant_id = 'ten45klsjdf'
+
+        self.vim.client = self.vim.connect()
+        perform_request.return_value.status_code = 201
+
+        # assert verified expected and return result from VIM connector
+        self.assertRaises(vimconnNotFoundException,self.vim.delete_tenant,tenant_id)
+
+    @mock.patch.object(vimconnector,'get_vdc_details')
+    @mock.patch.object(Org,'list_catalogs')
+    @mock.patch.object(vimconnector,'get_vcd_network')
+    @mock.patch.object(Org,'get_vdc')
+    @mock.patch.object(Org,'get_catalog_item')
+    @mock.patch.object(vimconnector,'connect')
+    @mock.patch.object(vimconnector,'perform_request')
+    @mock.patch.object(Client,'get_task_monitor')
+    @mock.patch.object(VDC,'get_vapp')
+    @mock.patch.object(vimconnector,'get_network_list')
+    @mock.patch.object(vimconnector,'power_on_vapp')
+    def test_new_vminstance(self, power_on, get_network_list, get_vapp,
+                            get_task_monitor, perform_request, connect,
+                            get_catalog_item, get_vdc, get_vcd_network,
+                                       list_catalogs, get_vdc_details):
+        """
+        Test case for new vm instance
+        """
+        image_id = '34925a30-0f4a-4018-9759-0d6799063b51'
+        vimconnector.flavorlist = {'123347db-536b-4936-8b62-1fcdc721865d': {'vcpus': 1,
+                                                                            'disk': 10,
+                                                                            'ram': 1024}}
+
+        flavor_id = '123347db-536b-4936-8b62-1fcdc721865d'
+        net_list = [{'use': 'bridge', 'name': 'eth0', 'floating_ip': False, 'vpci': '0000:00:11.0', 'port_security': True, 'type': 'virtual', 'net_id': '69c713cb-3eec-452c-9a32-0e95c8ffe567'}]
+
+        cat_list = [{'isShared': 'false', 'numberOfVAppTemplates': '1', 'orgName': 'Org3', 'isPublished': 'false', 'ownerName': 'system', 'numberOfMedia': '0', 'creationDate': '2017-10-15T02:03:59.403-07:00', 'id': '34925a30-0f4a-4018-9759-0d6799063b51', 'name': 'Ubuntu_1nic'}]
+
+        network_dict = {'status': '1', 'isShared': 'false', 'IpScope': '', 'EndAddress': '192.169.241.150', 'name': 'testing_6n5mJwUyx-ad9d62fc-8223-4dbe-88c4-9f16458ebeec', 'Dns1': '192.169.241.102', 'IpRanges': '', 'Gateway': '192.169.241.253', 'Netmask': '255.255.255.0', 'RetainNetInfoAcrossDeployments': 'false', 'IpScopes': '', 'IsEnabled': 'true', 'DnsSuffix': 'corp.local', 'StartAddress': '192.169.241.115', 'IpRange': '', 'Configuration': '', 'FenceMode': 'bridged', 'IsInherited': 'true', 'uuid': '69c713cb-3eec-452c-9a32-0e95c8ffe567'}
+
+        network_list = [{'status': 'ACTIVE', 'name': 'default', 'admin_state_up': True, 'shared': False, 'tenant_id': '2584137f-6541-4c04-a2a2-e56bfca14c69', 'type': 'bridge', 'id': '1fd6421e-929a-4576-bc19-a0c48aea1969'}]
+
+        # created vdc object
+        vdc_xml_resp = xml_resp.vdc_xml_response
+        vdc = lxmlElementTree.fromstring(vdc_xml_resp)
+
+        catalog_list = lxmlElementTree.fromstring(xml_resp.catalog_list_xml)
+        # assumed return value from VIM connector
+        get_vdc_details.return_value = self.org, vdc
+        list_catalogs.return_value = cat_list
+        get_vcd_network.return_value = network_dict
+        get_vdc.return_value = vdc
+        get_catalog_item.return_value = catalog_list
+        self.vim.client = self.vim.connect()
+        perform_request.side_effect = [mock.Mock(status_code = 200,
+                                       content = xml_resp.catalogItem_xml),
+                                       mock.Mock(status_code = 200,
+                                       content = xml_resp.vapp_template_xml),
+                                       mock.Mock(status_code = 201,
+                                       content = xml_resp.deployed_vapp_xml)]
+
+        status_resp = xml_resp.status_task_xml
+        status = lxmlElementTree.fromstring(status_resp)
+        self.vim.connect.return_value.get_task_monitor.return_value.wait_for_success.return_value = status
+        vapp_resp = xml_resp.vapp_xml_response
+        vapp = lxmlElementTree.fromstring(vapp_resp)
+        get_vapp.return_value = vapp
+        get_network_list.return_value = network_list
+        power_on_resp = xml_resp.poweroff_task_xml
+        poweron = lxmlElementTree.fromstring(power_on_resp)
+        power_on.return_value = poweron
+
+        # call to VIM connector method
+        result = self.vim.new_vminstance(name='Test1_vm', image_id=image_id,
+                                                        flavor_id=flavor_id,
+                                                          net_list=net_list)
+        # assert verified expected and return result from VIM connector
+        self.assertIsNotNone(result)
+
+
+    @mock.patch.object(vimconnector,'get_vdc_details')
+    @mock.patch.object(Org,'list_catalogs')
+    @mock.patch.object(vimconnector,'get_vcd_network')
+    @mock.patch.object(Org,'get_vdc')
+    @mock.patch.object(Org,'get_catalog_item')
+    @mock.patch.object(vimconnector,'connect')
+    @mock.patch.object(vimconnector,'perform_request')
+    @mock.patch.object(Client,'get_task_monitor')
+    @mock.patch.object(VDC,'get_vapp')
+    @mock.patch.object(vimconnector,'get_network_list')
+    @mock.patch.object(vimconnector,'power_on_vapp')
+    def test_new_vminstance_negative(self, power_on, get_network_list, get_vapp,
+                            get_task_monitor, perform_request, connect,
+                            get_catalog_item, get_vdc, get_vcd_network,
+                                       list_catalogs, get_vdc_details):
+        """
+        Test case for new vm instance
+        """
+        image_id = '34925a30-0f4a-4018-9759-0d6799063b51'
+        vimconnector.flavorlist = {'123347db-536b-4936-8b62-1fcdc721865d': {'vcpus': 1,
+                                                                            'disk': 10,
+                                                                            'ram': 1024}}
+        flavor_id = '123347db-536b-4936-8b62-1fcdc721865d'
+        net_list = [{'use': 'bridge', 'name': 'eth0', 'floating_ip': False, 'vpci': '0000:00:11.0', 'port_security': True, 'type': 'virtual', 'net_id': '69c713cb-3eec-452c-9a32-0e95c8ffe567'}]
+
+        cat_list = [{'isShared': 'false', 'numberOfVAppTemplates': '1', 'orgName': 'Org3', 'isPublished': 'false', 'ownerName': 'system', 'numberOfMedia': '0', 'creationDate': '2017-10-15T02:03:59.403-07:00', 'id': '34925a30-0f4a-4018-9759-0d6799063b51', 'name': 'Ubuntu_1nic'}]
+
+        network_dict = {'status': '1', 'isShared': 'false', 'IpScope': '', 'EndAddress': '192.169.241.150', 'name': 'testing_6n5mJwUyx-ad9d62fc-8223-4dbe-88c4-9f16458ebeec', 'Dns1': '192.169.241.102', 'IpRanges': '', 'Gateway': '192.169.241.253', 'Netmask': '255.255.255.0', 'RetainNetInfoAcrossDeployments': 'false', 'IpScopes': '', 'IsEnabled': 'true', 'DnsSuffix': 'corp.local', 'StartAddress': '192.169.241.115', 'IpRange': '', 'Configuration': '', 'FenceMode': 'bridged', 'IsInherited': 'true', 'uuid': '69c713cb-3eec-452c-9a32-0e95c8ffe567'}
+
+        # created vdc object
+        vdc_xml_resp = xml_resp.vdc_xml_response
+        vdc = lxmlElementTree.fromstring(vdc_xml_resp)
+
+        catalog_list = lxmlElementTree.fromstring(xml_resp.catalog_list_xml)
+        # assumed return value from VIM connector
+        get_vdc_details.return_value = self.org, vdc
+        list_catalogs.return_value = cat_list
+        get_vcd_network.return_value = network_dict
+        get_vdc.return_value = vdc
+        get_catalog_item.return_value = catalog_list
+        self.vim.client = self.vim.connect()
+        perform_request.side_effect = [mock.Mock(status_code = 200,
+                                       content = xml_resp.catalogItem_xml),
+                                       mock.Mock(status_code = 200,
+                                       content = xml_resp.vapp_template_xml),
+                                       mock.Mock(status_code = 400,
+                                       content = "Bad request error")]
+
+        # call to VIM connector method
+        self.assertRaises(vimconnUnexpectedResponse,self.vim.new_vminstance,
+                                                                 name='Test1_vm',
+                                                                 image_id=image_id,
+                                                                 flavor_id=flavor_id,
+                                                                 net_list=net_list)
+
+    @mock.patch.object(vimconnector,'get_catalogid')
+    @mock.patch.object(vimconnector,'upload_vimimage')
+    @mock.patch.object(Org,'create_catalog')
+    @mock.patch.object(Org,'list_catalogs')
+    @mock.patch.object(vimconnector,'get_vdc_details')
+    @mock.patch.object(path,'isfile')
+    @mock.patch.object(os,'access')
+    def test_new_image(self, access, isfile,
+                              get_vdc_details,
+                                list_catalogs,
+                               create_catalog,
+                               upload_vimimage,
+                                get_catalogid):
+        """
+        Test case for create new image
+        """
+        path = '/tmp/cirros/cirros.ovf'
+        cat_list = [{'isShared': 'false', 'numberOfVAppTemplates': '1', 'orgName': 'Org3', 'isPublished': 'false', 'ownerName': 'system', 'numberOfMedia': '0', 'creationDate': '2017-10-15T02:03:59.403-07:00', 'id': '9759-0d6799063b51', 'name': 'cirros'}]
+        # created vdc object
+        vdc_xml_resp = xml_resp.vdc_xml_response
+        vdc = lxmlElementTree.fromstring(vdc_xml_resp)
+
+        catalog = lxmlElementTree.fromstring(xml_resp.catalog1_xml_response)
+
+        # assumed return value from VIM connector
+        isfile.return_value = True
+        access.return_value = True
+        get_vdc_details.return_value = self.org, vdc
+        list_catalogs.return_value = cat_list
+        create_catalog.return_value = catalog
+        upload_vimimage.return_value = True
+        get_catalogid.return_value = '9759-0d6799063b51'
+        result = self.vim.new_image({'name': 'TestImage', 'location' : path})
+
+        # assert verified expected and return result from VIM connector
+        self.assertIsNotNone(result)
+
+    @mock.patch.object(vimconnector,'get_catalogid')
+    @mock.patch.object(vimconnector,'upload_vimimage')
+    @mock.patch.object(Org,'create_catalog')
+    @mock.patch.object(Org,'list_catalogs')
+    @mock.patch.object(vimconnector,'get_vdc_details')
+    def test_new_image_negative(self, get_vdc_details, list_catalogs,
+                                              create_catalog,
+                                              upload_vimimage,
+                                              get_catalogid):
+        """
+        Test case for create new image with negative scenario
+        """
+        path = '/tmp/cirros/cirros.ovf'
+        cat_list = [{'isShared': 'false', 'numberOfVAppTemplates': '1', 'orgName': 'Org1', 'ownerName': 'system', 'numberOfMedia': '0', 'creationDate': '2017-10-15', 'id': '34925a30-0f4a-4018-9759-0d6799063b51', 'name': 'test'}]
+        # created vdc object
+        vdc_xml_resp = xml_resp.vdc_xml_response
+        vdc = lxmlElementTree.fromstring(vdc_xml_resp)
+
+        catalog = lxmlElementTree.fromstring(xml_resp.catalog1_xml_response)
+
+        # assumed return value from VIM connector
+        get_vdc_details.return_value = self.org, vdc
+        list_catalogs.return_value = cat_list
+        create_catalog.return_value = catalog
+        upload_vimimage.return_value = False
+        get_catalogid.return_value = '34925a30-0f4a-4018-9759-0d6799063b51'
+
+        # assert verified expected and return result from VIM connector
+        self.assertRaises(vimconnException,self.vim.new_image,{'name':'TestImage', 'location':path})
+
+    @mock.patch.object(vimconnector,'connect_as_admin')
+    @mock.patch.object(vimconnector,'perform_request')
+    def test_delete_image(self, perform_request, connect_as_admin):
+        """
+        Testcase to delete image by image id
+        """
+        image_id = 'f3bf3733-465b-419f-b675-52f91d18edbb'
+        # creating conn object
+        self.vim.client = self.vim.connect_as_admin()
+
+        # assumed return value from VIM connector
+        perform_request.side_effect = [mock.Mock(status_code = 200,
+                                       content = xml_resp.delete_catalog_xml_response),
+                                       mock.Mock(status_code = 200,
+                                       content = xml_resp.delete_catalog_item_xml_response),
+                                       mock.Mock(status_code = 204,
+                                       content = ''),
+                                       mock.Mock(status_code = 204,
+                                       content = '')
+                                       ]
+
+        # call to vim connctor method
+        result = self.vim.delete_image(image_id)
+        # assert verified expected and return result from VIM connector
+        self.assertEqual(image_id, result)
+
+    @mock.patch.object(vimconnector,'get_catalogid')
+    @mock.patch.object(vimconnector,'upload_vimimage')
+    @mock.patch.object(Org,'create_catalog')
+    @mock.patch.object(Org,'list_catalogs')
+    @mock.patch.object(vimconnector,'get_vdc_details')
+    @mock.patch.object(path,'isfile')
+    @mock.patch.object(os,'access')
+    def test_get_image_id_from_path(self, access, isfile,
+                                              get_vdc_details,
+                                              list_catalogs,
+                                              create_catalog,
+                                              upload_vimimage,
+                                              get_catalogid):
+        """
+        Test case to get image id from image path
+        """
+        path = '/tmp/ubuntu/ubuntu.ovf'
+        cat_list = [{'isShared': 'false', 'numberOfVAppTemplates': '1', 'orgName': 'Org3', 'isPublished': 'false', 'ownerName': 'system', 'numberOfMedia': '0', 'creationDate': '2017-10-15T02:03:59.403-07:00', 'id': '7208-0f6777052c30', 'name': 'ubuntu'}]
+
+        # created vdc object
+        vdc_xml_resp = xml_resp.vdc_xml_response
+        vdc = lxmlElementTree.fromstring(vdc_xml_resp)
+
+        catalog = lxmlElementTree.fromstring(xml_resp.catalog1_xml_response)
+
+        # assumed return value from VIM connector
+        isfile.return_value = True
+        access.return_value = True
+        get_vdc_details.return_value = self.org, vdc
+        list_catalogs.return_value = cat_list
+        create_catalog.return_value = catalog
+        upload_vimimage.return_value = True
+        get_catalogid.return_value = '7208-0f6777052c30'
+        result = self.vim.get_image_id_from_path(path=path)
+
+        # assert verified expected and return result from VIM connector
+        self.assertIsNotNone(result)
+
+    @mock.patch.object(vimconnector,'get_catalogid')
+    @mock.patch.object(vimconnector,'upload_vimimage')
+    @mock.patch.object(Org,'create_catalog')
+    @mock.patch.object(Org,'list_catalogs')
+    @mock.patch.object(vimconnector,'get_vdc_details')
+    @mock.patch.object(path,'isfile')
+    @mock.patch.object(os,'access')
+    def test_get_image_id_from_path_negative(self, access, isfile,
+                                              get_vdc_details,
+                                              list_catalogs,
+                                              create_catalog,
+                                              upload_vimimage,
+                                              get_catalogid):
+        """
+        Test case to get image id from image path with negative scenario
+        """
+        path = '/tmp/ubuntu/ubuntu.ovf'
+        cat_list = [{'isShared': 'false', 'numberOfVAppTemplates': '1', 'orgName': 'Org3', 'isPublished': 'false', 'ownerName': 'system', 'numberOfMedia': '0', 'creationDate': '2017-10-15T02:03:59.403-07:00', 'id': '7208-0f6777052c30', 'name': 'ubuntu'}]
+
+        # created vdc object
+        vdc_xml_resp = xml_resp.vdc_xml_response
+        vdc = lxmlElementTree.fromstring(vdc_xml_resp)
+
+        catalog = lxmlElementTree.fromstring(xml_resp.catalog1_xml_response)
+
+        # assumed return value from VIM connector
+        isfile.return_value = True
+        access.return_value = True
+        get_vdc_details.return_value = self.org, vdc
+        list_catalogs.return_value = cat_list
+        create_catalog.return_value = catalog
+        upload_vimimage.return_value = False
+        get_catalogid.return_value = '7208-0f6777052c30'
+        self.assertRaises(vimconnException, self.vim.get_image_id_from_path, path)
+
+    @mock.patch.object(vimconnector,'get_vdc_details')
+    @mock.patch.object(vimconnector,'connect')
+    @mock.patch.object(Org,'list_catalogs')
+    def test_get_image_list_negative(self, list_catalogs, connect, get_vdc_details):
+        """
+        Testcase to get image list by invalid image id
+        """
+        # created vdc object
+        vdc_xml_resp = xml_resp.vdc_xml_response
+        vdc = lxmlElementTree.fromstring(vdc_xml_resp)
+        self.vim.client = self.vim.connect()
+
+        # assumed return value from VIM connector
+        get_vdc_details.return_value = self.org, vdc
+        list_catalogs.return_value = [{'isShared': 'false', 'numberOfVAppTemplates': '1', 'orgName': 'Org3', 'isPublished': 'false', 'ownerName': 'system', 'numberOfMedia': '0', 'creationDate': '2017-10-15T02:03:59.403-07:00', 'id': '34925a30-0f4a-4018-9759-0d6799063b51', 'name': 'Ubuntu_1nic'}, {'isShared': 'false', 'numberOfVAppTemplates': '1', 'orgName': 'Org3', 'isPublished': 'false', 'ownerName': 'orgadmin', 'numberOfMedia': '1', 'creationDate': '2018-02-15T02:16:58.300-08:00', 'id': '4b94b67e-c2c6-49ec-b46c-3f35ba45ca4a', 'name': 'cirros034'}]
+
+        # call to vim connector method with invalid image id
+        self.vim.get_image_list({'id': 'b46c-3f35ba45ca4a'})
+
+    @mock.patch.object(vimconnector,'get_vapp_details_rest')
+    @mock.patch.object(vimconnector,'get_vdc_details')
+    def test_get_vminstance_negative(self, get_vdc_details, get_vapp_details_rest):
+        """
+        Testcase to get vminstance by invalid vm id
+        """
+
+        invalid_vmid = '18743edb0c8b-sdfsf-fg'
+        # created vdc object
+        vdc_xml_resp = xml_resp.vdc_xml_response
+        vdc = lxmlElementTree.fromstring(vdc_xml_resp)
+        # assumed return value from VIM connector
+        get_vdc_details.return_value = self.org, vdc
+        get_vapp_details_rest.return_value = False
+
+        # assert verified expected and return result from VIM connector
+        self.assertRaises(vimconnNotFoundException, self.vim.get_vminstance,invalid_vmid)
+
+    @mock.patch.object(vimconnector,'connect')
+    @mock.patch.object(vimconnector,'get_namebyvappid')
+    @mock.patch.object(vimconnector,'get_vdc_details')
+    @mock.patch.object(VDC,'get_vapp')
+    def test_delete_vminstance_negative(self, get_vapp, get_vdc_details,
+                                             get_namebyvappid, connect):
+        """
+        Testcase to delete vminstance by invalid vm id
+        """
+        vm_id = 'sdfrtt4935-87a1-0e4dc9c3a069'
+        vm_name = 'Test1_vm-69a18104-8413-4cb8-bad7-b5afaec6f9fa'
+        # created vdc object
+        vdc_xml_resp = xml_resp.vdc_xml_response
+        vdc = lxmlElementTree.fromstring(vdc_xml_resp)
+
+        # assumed return value from VIM connector
+        self.vim.client = self.vim.connect()
+        get_vdc_details.return_value = self.org, vdc
+        get_namebyvappid.return_name = vm_name
+
+        get_vapp.return_value = None
+
+        # call to VIM connector method
+        self.assertRaises(vimconnException, self.vim.delete_vminstance,vm_id)
+
+    @mock.patch.object(vimconnector,'get_vcd_network')
+    def test_refresh_nets_status_negative(self, get_vcd_network):
+        """
+        Testcase for refresh nets status by invalid vm id
+        """
+        net_id = 'sjkldf-456mfd-345'
+
+        # assumed return value from VIM connector
+        get_vcd_network.return_value = None
+        result = self.vim.refresh_nets_status([net_id])
+
+        # assert verified expected and return result from VIM connector
+        for attr in result[net_id]:
+            if attr == 'status':
+                self.assertEqual(result[net_id][attr], 'DELETED')
+
+    @mock.patch.object(vimconnector,'connect')
+    @mock.patch.object(vimconnector,'get_namebyvappid')
+    @mock.patch.object(vimconnector,'get_vdc_details')
+    def test_action_vminstance_negative(self, get_vdc_details,
+                                             get_namebyvappid,
+                                                     connect):
+        """
+        Testcase for action vm instance by invalid action
+        """
+        vm_id = '8413-4cb8-bad7-b5afaec6f9fa'
+        # created vdc object
+        vdc_xml_resp = xml_resp.vdc_xml_response
+        vdc = lxmlElementTree.fromstring(vdc_xml_resp)
+        # assumed return value from VIM connector
+        get_vdc_details.return_value = self.org, vdc
+        get_namebyvappid.return_value = 'Test1_vm-69a18104-8413-4cb8-bad7-b5afaec6f9fa'
+        self.vim.client = self.vim.connect()
+
+        # call to VIM connector method
+        self.assertRaises(vimconnException, self.vim.action_vminstance, vm_id,{'invalid': None})
