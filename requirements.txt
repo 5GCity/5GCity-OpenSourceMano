@@ -1,24 +1,19 @@
-# Copyright 2018 Whitestack, LLC
-#
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
 # a copy of the License at
-#
+
 #         http://www.apache.org/licenses/LICENSE-2.0
-#
+
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-#
-# For those usages not covered by the Apache License, Version 2.0 please
-# contact: bdiaz@whitestack.com or glavado@whitestack.com
-##
 
-include README.rst
-recursive-include osm_nbi *.py *.sh  *.cfg
-recursive-include osm_nbi/html_public *
-recursive-include osm_nbi/http *
-recursive-include devops-stages *
+CherryPy==18.0.0
+jsonschema
+PyYAML==3.*
+python-keystoneclient
+git+https://osm.etsi.org/gerrit/osm/common.git#egg=osm-common
+git+https://osm.etsi.org/gerrit/osm/IM.git#egg=osm-im
 

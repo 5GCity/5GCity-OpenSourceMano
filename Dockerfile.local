@@ -1,24 +1,47 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # This creates osm/NBI docker from local NBI source code
 
 FROM ubuntu:16.04
 
 # Set the working directory to /app
-WORKDIR /app/osm_nbi
-
-# Copy the current directory contents into the container at /app
-ADD . /app
+WORKDIR /app/NBI/osm_nbi
 
 RUN apt-get update && apt-get install -y git python3 python3-jsonschema \
-    python3-cherrypy3 python3-pymongo python3-yaml python3-pip \
+    python3-pymongo python3-yaml python3-pip python3-keystoneclient \
     && pip3 install pip==9.0.3 \
-    && pip3 install aiokafka \
+    && pip3 install aiokafka cherrypy==18.0.0 keystoneauth1 \
     && mkdir -p /app/storage/kafka && mkdir -p /app/log 
-RUN git clone https://osm.etsi.org/gerrit/osm/common.git \
-    && cd common  && python3 setup.py develop && cd ..
+
+# OSM_COMMON
+RUN git -C /app clone https://osm.etsi.org/gerrit/osm/common.git \
+    && pip3 install -e /app/common
+#    && cd common  && python3 setup.py develop && cd ..
 #    && pip3 install -U -r requirements.txt \
 #    && cd ..
 
-
+# OSM_IM
+RUN pip3 install pyang && mkdir -p /app && cd /app \
+    && git -C /app clone https://github.com/robshakir/pyangbind \
+    && pip3 install -e /app/pyangbind \
+    && git -C /app clone  https://osm.etsi.org/gerrit/osm/IM \
+    && cd /app/IM/models/yang \
+    && mkdir /app/IM/osm_im \
+    && pyang --plugindir /app/pyangbind/pyangbind/plugin -f pybind -o /app/IM/osm_im/vnfd.py vnfd.yang \
+    && pyang --plugindir /app/pyangbind/pyangbind/plugin -f pybind -o /app/IM/osm_im/nsd.py nsd.yang \
+    && pyang --plugindir /app/pyangbind/pyangbind/plugin -f pybind -o /app/IM/osm_im/nst.py nst.yang \
+    && pip3 install -e /app/IM
 
 EXPOSE 9999
 
@@ -34,27 +57,39 @@ VOLUME /app/log
 
 # The following ENV can be added with "docker run -e xxx' to configure
 # server
-ENV OSMNBI_SOCKET_HOST     0.0.0.0
-ENV OSMNBI_SOCKET_PORT     9999
+ENV OSMNBI_SOCKET_HOST                          0.0.0.0
+ENV OSMNBI_SOCKET_PORT                          9999
 # storage
-ENV OSMNBI_STORAGE_PATH    /app/storage
+ENV OSMNBI_STORAGE_PATH                         /app/storage
 # database
-ENV OSMNBI_DATABASE_DRIVER mongo
-ENV OSMNBI_DATABASE_HOST   mongo
-ENV OSMNBI_DATABASE_PORT   27017
+ENV OSMNBI_DATABASE_DRIVER                      mongo
+ENV OSMNBI_DATABASE_HOST                        mongo
+ENV OSMNBI_DATABASE_PORT                        27017
+# ENV OSMNBI_DATABASE_USER                      xxx
+# ENV OSMNBI_DATABASE_PASSWORD                  xxx
+# ENV OSMNBI_DATABASE_COMMONKEY                 xxx
 # web
-ENV OSMNBI_STATIC_DIR      /app/osm_nbi/html_public
+ENV OSMNBI_STATIC_DIR                           /app/NBI/osm_nbi/html_public
 # logs
-ENV OSMNBI_LOG_FILE        /app/log
-ENV OSMNBI_LOG_LEVEL       DEBUG
+# ENV OSMNBI_LOG_FILE                             /app/log/nbi.log
+ENV OSMNBI_LOG_LEVEL                            DEBUG
 # message
-ENV OSMNBI_MESSAGE_DRIVER  kafka
-ENV OSMNBI_MESSAGE_HOST    kafka
-ENV OSMNBI_MESSAGE_PORT    9092
-# logs
-ENV OSMNBI_LOG_FILE        /app/log/nbi.log
-ENV OSMNBI_LOG_LEVEL       DEBUG
+ENV OSMNBI_MESSAGE_DRIVER                       kafka
+ENV OSMNBI_MESSAGE_HOST                         kafka
+ENV OSMNBI_MESSAGE_PORT                         9092
+# authentication
+ENV OSMNBI_AUTHENTICATION_BACKEND               internal
+#ENV OSMNBI_AUTHENTICATION_BACKEND               keystone
+#ENV OSMNBI_AUTHENTICATION_AUTH_URL              keystone
+#ENV OSMNBI_AUTHENTICATION_AUTH_PORT             5000
+#ENV OSMNBI_AUTHENTICATION_USER_DOMAIN_NAME      default
+#ENV OSMNBI_AUTHENTICATION_PROJECT_DOMAIN_NAME   default
+#ENV OSMNBI_AUTHENTICATION_SERVICE_USERNAME      nbi
+#ENV OSMNBI_AUTHENTICATION_SERVICE_PASSWORD      nbi
+#ENV OSMNBI_AUTHENTICATION_SERVICE_PROJECT       service
+
+# Copy the current directory contents into the container at /app
+ADD . /app/NBI
 
 # Run app.py when the container launches
 CMD ["python3", "nbi.py"]
-

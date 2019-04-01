@@ -1,5 +1,6 @@
-# Copyright 2018 Whitestack, LLC
-#
+#!/bin/bash
+
+##
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
 # a copy of the License at
@@ -13,12 +14,17 @@
 # under the License.
 #
 # For those usages not covered by the Apache License, Version 2.0 please
-# contact: bdiaz@whitestack.com or glavado@whitestack.com
+# contact with: OSM_TECH@list.etsi.org
 ##
 
-include README.rst
-recursive-include osm_nbi *.py *.sh  *.cfg
-recursive-include osm_nbi/html_public *
-recursive-include osm_nbi/http *
-recursive-include devops-stages *
+echo "POST INSTALL OSM-NBI"
+echo "Installing python dependencies via pip..."
 
+pip3 install pip==9.0.3
+pip3 install cherrypy==18.0.0
+pip3 install keystoneauth1
+
+#Creation of log folder
+mkdir -p /var/log/osm
+
+# systemctl enable osm-nbi.service

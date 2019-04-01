@@ -1,30 +1,37 @@
-# This creates som/NBI docker from from last stable package
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This creates osm/NBI docker from from last stable package
 
 FROM ubuntu:16.04
+
+ARG REPOSITORY_BASE=http://osm-download.etsi.org/repository/osm/debian
+ARG RELEASE=ReleaseFIVE
+ARG REPOSITORY_KEY=OSM%20ETSI%20Release%20Key.gpg
+ARG REPOSITORY=testing
+
+RUN apt-get update && apt-get install -y curl software-properties-common
+RUN curl ${REPOSITORY_BASE}/${RELEASE}/${REPOSITORY_KEY} | apt-key add -
+RUN add-apt-repository -y "deb ${REPOSITORY_BASE}/${RELEASE} ${REPOSITORY} NBI IM common" && apt update
+
+RUN apt-get -y install python3-osm-nbi 
 
 # Set the working directory to /app
 WORKDIR /app/osm_nbi
 
-# avoid extra information from packages
-RUN echo 'path-exclude /usr/share/doc/*\n\
-path-include /usr/share/doc/*/copyright\n\
-path-exclude /usr/share/man/*\n\
-path-exclude /usr/share/groff/*\n\
-path-exclude /usr/share/info/*\n\
-path-exclude /usr/share/lintian/*\n\
-path-exclude /usr/share/linda/*\n'\
-> /etc/dpkg/dpkg.cfg.d/01_nodoc && \
-    echo  'APT::Install-Recommends "false";\n\
-APT::AutoRemove::RecommendsImportant "false";\n\
-APT::AutoRemove::SuggestsImportant "false";\n'\
-> /etc/apt/apt.conf.d/99_norecommends
-
-
-RUN apt-get update && apt-get install -y curl software-properties-common \
-    && add-apt-repository -y "deb http://osm-download.etsi.org/repository/osm/debian/ReleaseFOUR testing common NBI" \
-    && curl "http://osm-download.etsi.org/repository/osm/debian/ReleaseFOUR/OSM%20ETSI%20Release%20Key.gpg" | apt-key add - \
-    && apt-get update && apt-get install -y python3-osm-nbi python3-osm-common \
-    && rm -rf /var/lib/apt/lists/*
+RUN cp -R /usr/lib/python3/dist-packages/osm_nbi/html_public /app/osm_nbi/html_public \
+    && cp /usr/lib/python3/dist-packages/osm_nbi/nbi.cfg /app/osm_nbi/ \
+    && cp -R /usr/lib/python3/dist-packages/osm_nbi/http /app/osm_nbi/
 
 EXPOSE 9999
 
@@ -46,18 +53,30 @@ ENV OSMNBI_SOCKET_PORT     9999
 ENV OSMNBI_STORAGE_PATH    /app/storage
 # database
 ENV OSMNBI_DATABASE_DRIVER mongo
-ENV OSMNBI_DATABASE_HOST   mongo
-ENV OSMNBI_DATABASE_PORT   27017
+ENV OSMNBI_DATABASE_URI    mongodb://mongo:27017
 # web
 ENV OSMNBI_STATIC_DIR      /app/osm_nbi/html_public
 # logs
-ENV OSMNBI_LOG_FILE        /app/log
+# ENV OSMNBI_LOG_FILE        /app/log
 ENV OSMNBI_LOG_LEVEL       DEBUG
 # message
 ENV OSMNBI_MESSAGE_DRIVER  kafka
 ENV OSMNBI_MESSAGE_HOST    kafka
 ENV OSMNBI_MESSAGE_PORT    9092
+# authentication
+ENV OSMNBI_AUTHENTICATION_BACKEND               internal
+#ENV OSMNBI_AUTHENTICATION_BACKEND               keystone
+#ENV OSMNBI_AUTHENTICATION_AUTH_URL              keystone
+#ENV OSMNBI_AUTHENTICATION_AUTH_PORT             5000
+#ENV OSMNBI_AUTHENTICATION_USER_DOMAIN_NAME      default
+#ENV OSMNBI_AUTHENTICATION_PROJECT_DOMAIN_NAME   default
+#ENV OSMNBI_AUTHENTICATION_SERVICE_USERNAME      nbi
+#ENV OSMNBI_AUTHENTICATION_SERVICE_PASSWORD      nbi
+#ENV OSMNBI_AUTHENTICATION_SERVICE_PROJECT       service
 
 # Run app.py when the container launches
-CMD ["python3", "nbi.py"]
+CMD ["python3", "/usr/lib/python3/dist-packages/osm_nbi/nbi.py"]
+
+HEALTHCHECK --interval=5s --timeout=2s --retries=12 \
+  CMD curl -k https://localhost:9999/osm/ | grep Welcome || exit 1
 

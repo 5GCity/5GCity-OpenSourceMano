@@ -1,0 +1,60 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+nsd-catalog:
+    nsd:
+    -   id: cirros_2net_vld_nsd
+        name: cirros_2net_vld_nsd
+        short-name: cirros_2net_vld_ns
+        description: NetServiceDescriptor with 2 vnfs and 2 vld (mgmt and data networks)
+        vendor: OSM
+        version: '1.0'
+        logo: osm_2x.png
+
+        constituent-vnfd:
+        -   member-vnf-index: 1
+            vnfd-id-ref: cirros_2net_vnfd
+        -   member-vnf-index: 2
+            vnfd-id-ref: cirros_2net_vnfd
+
+        connection-point:
+        -   name: nsd_cp_mgmt
+            vld-id-ref: nsd_vnfd_vld_mgmt
+        -   name: nsd_cp_data
+            vld-id-ref: nsd_vnfd_vld_data
+
+        vld:
+        -   id: nsd_vnfd_vld_mgmt
+            name: nsd_vnfd_vld_mgmt
+            short-name: nsd_vnfd_vld_mgmt
+            type: ELAN
+            mgmt-network: 'true'
+            vnfd-connection-point-ref:
+            -   member-vnf-index-ref: 1
+                vnfd-id-ref: cirros_2net_vnfd
+                vnfd-connection-point-ref: eth0
+            -   member-vnf-index-ref: 2
+                vnfd-id-ref: cirros_2net_vnfd
+                vnfd-connection-point-ref: eth0
+        -   id: nsd_vnfd_vld_data
+            name: nsd_vnfd_vld_data
+            short-name: nsd_vnfd_vld_data
+            type: ELAN
+            mgmt-network: 'false'
+            vnfd-connection-point-ref:
+            -   member-vnf-index-ref: 1
+                vnfd-id-ref: cirros_2net_vnfd
+                vnfd-connection-point-ref: eth1
+            -   member-vnf-index-ref: 2
+                vnfd-id-ref: cirros_2net_vnfd
+                vnfd-connection-point-ref: eth1

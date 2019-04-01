@@ -13,10 +13,10 @@
 
 vnfd-catalog:
     vnfd:
-    -   id: cirros_vnfd
-        name: cirros_vnf
-        short-name: cirros_vnf
-        description: Simple VNF example with a cirros 
+    -   id: cirros_2net_vnfd
+        name: cirros_2net_vnfd
+        short-name: cirros_2net_vnfd
+        description: Simple VNF example with a cirros and 2 interfaces (mgmt and data) 
         vendor: OSM
         version: '1.0'
 
@@ -29,9 +29,9 @@ vnfd-catalog:
 
         # Atleast one VDU need to be specified
         vdu:
-        -   id: cirros_vnfd-VM
-            name: cirros_vnfd-VM
-            description: cirros_vnfd-VM
+        -   id: cirros_2net_vnfd-VM
+            name: cirros_2net_vnfd-VM
+            description: cirros_2net_vnfd-VM
             count: 1
 
             # Flavour of the VM to be instantiated for the VDU
@@ -55,7 +55,16 @@ vnfd-catalog:
                     bandwidth: '0'
                     vpci: 0000:00:0a.0
                 external-connection-point-ref: eth0
+            -   name: eth1
+                type: EXTERNAL
+                virtual-interface:
+                    type: VIRTIO
+                    bandwidth: '0'
+                    vpci: 0000:00:0a.0
+                external-connection-point-ref: eth1
 
         connection-point:
-            -   name: eth0
-                type: VPORT
+        -   name: eth0
+            type: VPORT
+        -   name: eth1
+            type: VPORT
