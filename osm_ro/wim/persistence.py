@@ -45,7 +45,7 @@ from hashlib import sha1
 from itertools import groupby
 from operator import itemgetter
 from sys import exc_info
-from time import time
+# from time import time
 from uuid import uuid1 as generate_uuid
 
 from six import reraise
@@ -681,8 +681,7 @@ class WimPersistence(object):
                  'LIMIT {:d},{:d}').format(
                      self.safe_str(wim_account_id),
                      ','.join(type_options),
-                     group_offset, group_limit
-                 )
+                     group_offset, group_limit)
 
         join = 'vim_wim_actions NATURAL JOIN ({}) AS items'.format(items)
         db_results = self.db.get_rows(
@@ -697,7 +696,7 @@ class WimPersistence(object):
                      'task_index': task_index}
         try:
             action = self.query_one('vim_wim_actions', WHERE=condition)
-        except:
+        except Exception:
             actions = self.query('vim_wim_actions', WHERE=condition)
             self.logger.error('More then one action found:\n%s',
                               json.dumps(actions, indent=4))
@@ -710,8 +709,7 @@ class WimPersistence(object):
         updates = preprocess_record(
             merge_dicts(action, properties, extra=extra))
 
-        num_changes = self.db.update_rows('vim_wim_actions',
-                                            UPDATE=updates, WHERE=condition)
+        num_changes = self.db.update_rows('vim_wim_actions', UPDATE=updates, WHERE=condition)
 
         if num_changes is None:
             raise UnexpectedDatabaseError(
@@ -782,8 +780,7 @@ class WimPersistence(object):
         if not changes:
             return 0
 
-        return self.db.update_rows('instance_actions',
-                                    WHERE={'uuid': uuid}, UPDATE=changes)
+        return self.db.update_rows('instance_actions', WHERE={'uuid': uuid}, UPDATE=changes)
 
     def get_only_vm_with_external_net(self, instance_net_id, **kwargs):
         """Return an instance VM if that is the only VM connected to an

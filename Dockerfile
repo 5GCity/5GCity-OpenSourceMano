@@ -21,7 +21,7 @@ FROM ubuntu:16.04
 
 RUN  apt-get update && \
   DEBIAN_FRONTEND=noninteractive apt-get -y install git make python python-pip debhelper python3 python3-all python3-pip python3-setuptools && \
-  DEBIAN_FRONTEND=noninteractive apt-get -y install wget tox apt-utils && \
+  DEBIAN_FRONTEND=noninteractive apt-get -y install wget tox apt-utils flake8 python-nose python-mock && \
   DEBIAN_FRONTEND=noninteractive pip install pip==9.0.3 && \
   DEBIAN_FRONTEND=noninteractive pip3 install pip==9.0.3 && \
   DEBIAN_FRONTEND=noninteractive pip install -U setuptools setuptools-version-command stdeb && \

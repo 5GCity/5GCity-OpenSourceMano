@@ -121,9 +121,8 @@ def datacenter_account(datacenter, tenant):
 
 def datacenter_tenant_association(datacenter, tenant):
     return {'nfvo_tenant_id': uuid('tenant%d' % tenant),
-            'datacenter_id':  uuid('dc%d' % datacenter),
-            'datacenter_tenant_id':
-                uuid('dc-account%d%d' % (tenant, datacenter))}
+            'datacenter_id': uuid('dc%d' % datacenter),
+            'datacenter_tenant_id': uuid('dc-account%d%d' % (tenant, datacenter))}
 
 
 def datacenter_set(identifier=0, tenant=0):

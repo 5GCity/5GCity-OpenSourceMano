@@ -211,8 +211,7 @@ class DynpacConnector(WimConnector):
         selected_ports = []
         for connection_point in connection_points:
             endpoint_id = connection_point.get(self.__SERVICE_ENDPOINT_PARAM)
-            port = filter(lambda x: x.get(self.__WAN_SERVICE_ENDPOINT_PARAM)
-                          == endpoint_id, port_mapping)[0]
+            port = filter(lambda x: x.get(self.__WAN_SERVICE_ENDPOINT_PARAM) == endpoint_id, port_mapping)[0]
             wsmpi_json = port.get(self.__WAN_MAPPING_INFO_PARAM)
             port_info = json.loads(wsmpi_json)
             selected_ports.append(port_info)
@@ -226,7 +225,7 @@ class DynpacConnector(WimConnector):
             }, {
                 "wan_switch_dpid": selected_ports[1].get(self.__SW_ID_PARAM),
                 "wan_switch_port": selected_ports[1].get(self.__SW_PORT_PARAM),
-                "wan_vlan":	connection_points[1].get(self.__ENCAPSULATION_INFO_PARAM).get(self.__VLAN_PARAM)
+                "wan_vlan": connection_points[1].get(self.__ENCAPSULATION_INFO_PARAM).get(self.__VLAN_PARAM)
             }],
             "bandwidth": kwargs.get(self.__BANDWIDTH_PARAM),
             "service_type": service_type,
