@@ -398,23 +398,31 @@ class vimconnector(vimconn.vimconnector):
 
     def _format_exception(self, exception):
         '''Transform a keystone, nova, neutron  exception into a vimconn exception'''
-        if isinstance(exception, (neExceptions.NetworkNotFoundClient, nvExceptions.NotFound, ksExceptions.NotFound, gl1Exceptions.HTTPNotFound)):
-            raise vimconn.vimconnNotFoundException(type(exception).__name__ + ": " + str(exception))
+
+        # Fixing bug 665 https://osm.etsi.org/bugzilla/show_bug.cgi?id=665
+        # There are some openstack versions that message error are unicode with non English
+        message_error = exception.message
+        if isinstance(message_error, unicode):
+            message_error = message_error.encode("utf")
+
+        if isinstance(exception, (neExceptions.NetworkNotFoundClient, nvExceptions.NotFound, ksExceptions.NotFound,
+                                  gl1Exceptions.HTTPNotFound)):
+            raise vimconn.vimconnNotFoundException(type(exception).__name__ + ": " + message_error)
         elif isinstance(exception, (HTTPException, gl1Exceptions.HTTPException, gl1Exceptions.CommunicationError,
                                ConnectionError, ksExceptions.ConnectionError, neExceptions.ConnectionFailed)):
-            raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))
+            raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + message_error)
         elif isinstance(exception,  (KeyError, nvExceptions.BadRequest, ksExceptions.BadRequest)):
-            raise vimconn.vimconnException(type(exception).__name__ + ": " + str(exception))
+            raise vimconn.vimconnException(type(exception).__name__ + ": " + message_error)
         elif isinstance(exception, (nvExceptions.ClientException, ksExceptions.ClientException,
                                     neExceptions.NeutronException)):
-            raise vimconn.vimconnUnexpectedResponse(type(exception).__name__ + ": " + str(exception))
+            raise vimconn.vimconnUnexpectedResponse(type(exception).__name__ + ": " + message_error)
         elif isinstance(exception, nvExceptions.Conflict):
-            raise vimconn.vimconnConflictException(type(exception).__name__ + ": " + str(exception))
+            raise vimconn.vimconnConflictException(type(exception).__name__ + ": " + message_error)
         elif isinstance(exception, vimconn.vimconnException):
             raise exception
         else:  # ()
-            self.logger.error("General Exception " + str(exception), exc_info=True)
-            raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + str(exception))
+            self.logger.error("General Exception " + message_error, exc_info=True)
+            raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + message_error)
 
     def _get_ids_from_name(self):
         """
