@@ -888,7 +888,8 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
     try:
         myvnfd = vnfd_catalog.vnfd()
         try:
-            pybindJSONDecoder.load_ietf_json(vnf_descriptor, None, None, obj=myvnfd, path_helper=True)
+            pybindJSONDecoder.load_ietf_json(vnf_descriptor, None, None, obj=myvnfd, path_helper=True,
+                                             skip_unknown=True)
         except Exception as e:
             raise NfvoException("Error. Invalid VNF descriptor format " + str(e), httperrors.Bad_Request)
         db_vnfs = []
@@ -2264,7 +2265,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
     try:
         mynsd = nsd_catalog.nsd()
         try:
-            pybindJSONDecoder.load_ietf_json(nsd_descriptor, None, None, obj=mynsd)
+            pybindJSONDecoder.load_ietf_json(nsd_descriptor, None, None, obj=mynsd, skip_unknown=True)
         except Exception as e:
             raise NfvoException("Error. Invalid NS descriptor format: " + str(e), httperrors.Bad_Request)
         db_scenarios = []
