@@ -884,6 +884,7 @@ class vimconnector(vimconn.vimconnector):
                                 if 'memory' in numa:
                                     ram = numa['memory']*1024
                                 #See for reference: https://specs.openstack.org/openstack/nova-specs/specs/mitaka/implemented/virt-driver-cpu-thread-pinning.html
+                                extra_specs["hw:cpu_sockets"] = 1
                                 if 'paired-threads' in numa:
                                     vcpus = numa['paired-threads']*2
                                     #cpu_thread_policy "require" implies that the compute node must have an STM architecture
