@@ -591,7 +591,7 @@ class db_base():
         cmd= "INSERT INTO " + table +" SET " + \
             ",".join(map(self.__tuple2db_format_set, INSERT.iteritems() ))
         if created_time:
-            cmd += ",created_at={time},modified_at={time}".format(time=created_time)
+            cmd += ",created_at={time:.9f},modified_at={time:.9f}".format(time=created_time)
         if confidential_data:
             index = cmd.find("SET")
             subcmd = cmd[:index] + 'SET...'
