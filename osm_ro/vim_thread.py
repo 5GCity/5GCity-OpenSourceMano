@@ -63,7 +63,7 @@ The task content is (M: stored at memory, D: stored at database):
             vim_status: VIM status of the element. Stored also at database in the instance_XXX
             vim_info:   Detailed information of a vm/net from the VIM. Stored at database in the instance_XXX but not at
                         vim_wim_actions
-    M   depends:    dict with task_index(from depends_on) to vim_id
+    M   depends:    dict with task_index(from depends_on) to dependency task
     M   params:     same as extra[params]
     MD  error_msg:  descriptive text upon an error.Stored also at database instance_XXX
     MD  created_at: task creation time. The task of creation must be the oldest
@@ -532,9 +532,8 @@ class vim_thread(threading.Thread):
                                 task_dependency["instance_action_id"], task_dependency["task_index"],
                                 task_dependency["action"], task_dependency["item"], task_dependency.get("error_msg")))
 
-                    task["depends"]["TASK-"+str(task_index)] = task_dependency["vim_id"]
-                    task["depends"]["TASK-{}.{}".format(task["instance_action_id"], task_index)] =\
-                        task_dependency["vim_id"]
+                    task["depends"]["TASK-"+str(task_index)] = task_dependency
+                    task["depends"]["TASK-{}.{}".format(task["instance_action_id"], task_index)] = task_dependency
                 if dependency_not_completed:
                     # Move this task to the time dependency is going to be modified plus 10 seconds.
                     self.db.update_rows("vim_wim_actions", modified_time=dependency_modified_at + 10,
@@ -808,7 +807,7 @@ class vim_thread(threading.Thread):
             net_list = params[5]
             for net in net_list:
                 if "net_id" in net and is_task_id(net["net_id"]):  # change task_id into network_id
-                    network_id = task["depends"][net["net_id"]]
+                    network_id = task["depends"][net["net_id"]].get("vim_id")
                     if not network_id:
                         raise VimThreadException(
                             "Cannot create VM because depends on a network not created or found: " +
@@ -1055,7 +1054,8 @@ class vim_thread(threading.Thread):
             dep_id = "TASK-" + str(task["extra"]["depends_on"][0])
             task_id = task["instance_action_id"] + "." + str(task["task_index"])
             error_text = ""
-            interfaces = task.get("depends").get(dep_id).get("extra").get("interfaces")
+            interfaces = task["depends"][dep_id]["extra"].get("interfaces")
+
             ingress_interface_id = task.get("extra").get("params").get("ingress_interface_id")
             egress_interface_id = task.get("extra").get("params").get("egress_interface_id")
             ingress_vim_interface_id = None
