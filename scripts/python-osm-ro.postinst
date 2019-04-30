@@ -30,6 +30,7 @@ pip2 install --upgrade pyvmomi
 pip2 install --upgrade pyang pyangbind
 pip2 install untangle
 pip2 install -e git+https://github.com/python-oca/python-oca#egg=oca
+pip2 install fog05rest
 
 systemctl enable osm-ro.service
 
