@@ -280,6 +280,10 @@ then
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "python-devel" && easy_install \
         python-novaclient python-keystoneclient python-glanceclient python-neutronclient python-cinderclient \
         python-openstackclient python-networking-l2gw #TODO revise if gcc python-pip is needed
+
+    # required for Azure
+    pip2 install azure
+    
 fi  # [[ -z "$NO_PACKAGES" ]]
 
 if [[ -z $NOCLONE ]]; then

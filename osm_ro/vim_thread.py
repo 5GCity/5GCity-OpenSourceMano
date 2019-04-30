@@ -87,6 +87,7 @@ import vimconn_opennebula
 import vimconn_openstack
 import vimconn_vmware
 import vimconn_fos
+import vimconn_azure
 import yaml
 from db_base import db_base_Exception
 from lib_osm_openvim.ovim import ovimException
@@ -102,6 +103,7 @@ vim_module = {
     "openstack": vimconn_openstack,
     "vmware": vimconn_vmware,
     "fos": vimconn_fos
+    "azure": vimconn_azure,
 }
 
 

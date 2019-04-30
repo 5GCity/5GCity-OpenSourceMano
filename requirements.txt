@@ -21,3 +21,4 @@ boto
 genisoimage
 untangle
 oca
+azure
