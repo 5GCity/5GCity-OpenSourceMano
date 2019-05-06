@@ -571,6 +571,8 @@ class vimconnector(vimconn.vimconnector):
                         network_dict["provider:segmentation_id"] = self._generate_vlanID()
 
             network_dict["shared"] = shared
+            if self.config.get("disable_network_port_security"):
+                network_dict["port_security_enabled"] = False
             new_net = self.neutron.create_network({'network':network_dict})
             # print new_net
             # create subnetwork, even if there is no profile
