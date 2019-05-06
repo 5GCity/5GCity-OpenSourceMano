@@ -126,11 +126,12 @@ def get_non_used_vim_name(datacenter_name, datacenter_id, tenant_name, tenant_id
     if name not in vim_threads["names"]:
         vim_threads["names"].append(name)
         return name
-    name = datacenter_name[:16] + "." + tenant_name[:16]
-    if name not in vim_threads["names"]:
-        vim_threads["names"].append(name)
-        return name
-    name = datacenter_id + "-" + tenant_id
+    if tenant_name:
+        name = datacenter_name[:16] + "." + tenant_name[:16]
+        if name not in vim_threads["names"]:
+            vim_threads["names"].append(name)
+            return name
+    name = datacenter_id
     vim_threads["names"].append(name)
     return name
 
@@ -237,7 +238,7 @@ def start_service(mydb, persistence=None, wim=None):
             except Exception as e:
                 raise NfvoException("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, e),
                                     httperrors.Internal_Server_Error)
-            thread_name = get_non_used_vim_name(vim['datacenter_name'], vim['vim_tenant_id'], vim['vim_tenant_name'],
+            thread_name = get_non_used_vim_name(vim['datacenter_name'], vim['datacenter_id'], vim['vim_tenant_name'],
                                                 vim['vim_tenant_id'])
             new_thread = vim_thread.vim_thread(task_lock, thread_name, vim['datacenter_name'],
                                                vim['datacenter_tenant_id'], db=db, db_lock=db_lock, ovim=ovim)
