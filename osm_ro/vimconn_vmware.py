@@ -1665,13 +1665,12 @@ class vimconnector(vimconn.vimconnector):
                 else:
                     result = (response.content).replace("\n"," ")
 
-                src = re.search('<Vm goldMaster="false"\sstatus="\d+"\sname="(.*?)"\s'
-                                               'id="(\w+:\w+:vm:.*?)"\shref="(.*?)"\s'
-                              'type="application/vnd\.vmware\.vcloud\.vm\+xml',result)
-                if src:
-                    vm_name = src.group(1)
-                    vm_id = src.group(2)
-                    vm_href = src.group(3)
+                vapp_template_tree = XmlElementTree.fromstring(response.content)
+                children_element = [child for child in vapp_template_tree if 'Children' in child.tag][0]
+                vm_element = [child for child in children_element if 'Vm' in child.tag][0]
+                vm_name = vm_element.get('name')
+                vm_id = vm_element.get('id')
+                vm_href = vm_element.get('href')
 
                 cpus = re.search('<rasd:Description>Number of Virtual CPUs</.*?>(\d+)</rasd:VirtualQuantity>',result).group(1)
                 memory_mb = re.search('<rasd:Description>Memory Size</.*?>(\d+)</rasd:VirtualQuantity>',result).group(1)
