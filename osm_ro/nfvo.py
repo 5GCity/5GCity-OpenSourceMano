@@ -881,6 +881,21 @@ def _lookfor_or_create_image(db_image, mydb, descriptor):
         db_image["uuid"] = image_uuid
         return None
 
+def get_resource_allocation_params(quota_descriptor):
+    """
+    read the quota_descriptor from vnfd and fetch the resource allocation properties from the descriptor object
+    :param quota_descriptor: cpu/mem/vif/disk-io quota descriptor
+    :return: quota params for limit, reserve, shares from the descriptor object
+    """
+    quota = {}
+    if quota_descriptor.get("limit"):
+        quota["limit"] = int(quota_descriptor["limit"])
+    if quota_descriptor.get("reserve"):
+        quota["reserve"] = int(quota_descriptor["reserve"])
+    if quota_descriptor.get("shares"):
+        quota["shares"] = int(quota_descriptor["shares"])
+    return quota
+
 def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
     """
     Parses an OSM IM vnfd_catalog and insert at DB
@@ -1265,6 +1280,15 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                 numa["cores"] = max(db_flavor["vcpus"], 1)
                             else:
                                 numa["threads"] = max(db_flavor["vcpus"], 1)
+                            epa_vcpu_set = True
+                    if vdu["guest-epa"].get("cpu-quota") and not epa_vcpu_set:
+                        extended["cpu-quota"] = get_resource_allocation_params(vdu["guest-epa"].get("cpu-quota"))
+                    if vdu["guest-epa"].get("mem-quota"):
+                        extended["mem-quota"] = get_resource_allocation_params(vdu["guest-epa"].get("mem-quota"))
+                    if vdu["guest-epa"].get("disk-io-quota"):
+                        extended["disk-io-quota"] = get_resource_allocation_params(vdu["guest-epa"].get("disk-io-quota"))
+                    if vdu["guest-epa"].get("vif-quota"):
+                        extended["vif-quota"] = get_resource_allocation_params(vdu["guest-epa"].get("vif-quota"))
                 if numa:
                     extended["numas"] = [numa]
                 if extended:

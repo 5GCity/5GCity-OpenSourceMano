@@ -796,8 +796,8 @@ class vimconnector(vimconn.vimconnector):
             flavor_candidate_data = (10000, 10000, 10000)
             flavor_target = (flavor_dict["ram"], flavor_dict["vcpus"], flavor_dict["disk"])
             # numa=None
-            numas = flavor_dict.get("extended", {}).get("numas")
-            if numas:
+            extended = flavor_dict.get("extended", {})
+            if extended:
                 #TODO
                 raise vimconn.vimconnNotFoundException("Flavor with EPA still not implemted")
                 # if len(numas) > 1:
@@ -820,6 +820,20 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnNotFoundException("Cannot find any flavor matching '{}'".format(str(flavor_dict)))
         except (nvExceptions.NotFound, nvExceptions.ClientException, ksExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)
+
+    def process_resource_quota(self, quota, prefix, extra_specs):
+        """
+        :param prefix:
+        :param extra_specs: 
+        :return:
+        """
+        if 'limit' in quota:
+            extra_specs["quota:" + prefix + "_limit"] = quota['limit']
+        if 'reserve' in quota:
+            extra_specs["quota:" + prefix + "_reservation"] = quota['reserve']
+        if 'shares' in quota:
+            extra_specs["quota:" + prefix + "_shares_level"] = "custom"
+            extra_specs["quota:" + prefix + "_shares_share"] = quota['shares']
 
     def new_flavor(self, flavor_data, change_name_if_used=True):
         '''Adds a tenant flavor to openstack VIM
@@ -848,7 +862,7 @@ class vimconnector(vimconn.vimconnector):
 
                     ram = flavor_data.get('ram',64)
                     vcpus = flavor_data.get('vcpus',1)
-                    numa_properties=None
+                    extra_specs={}
 
                     extended = flavor_data.get("extended")
                     if extended:
@@ -857,13 +871,13 @@ class vimconnector(vimconn.vimconnector):
                             numa_nodes = len(numas)
                             if numa_nodes > 1:
                                 return -1, "Can not add flavor with more than one numa"
-                            numa_properties = {"hw:numa_nodes":str(numa_nodes)}
-                            numa_properties["hw:mem_page_size"] = "large"
-                            numa_properties["hw:cpu_policy"] = "dedicated"
-                            numa_properties["hw:numa_mempolicy"] = "strict"
+                            extra_specs["hw:numa_nodes"] = str(numa_nodes)
+                            extra_specs["hw:mem_page_size"] = "large"
+                            extra_specs["hw:cpu_policy"] = "dedicated"
+                            extra_specs["hw:numa_mempolicy"] = "strict"
                             if self.vim_type == "VIO":
-                                numa_properties["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
-                                numa_properties["vmware:latency_sensitivity_level"] = "high"
+                                extra_specs["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
+                                extra_specs["vmware:latency_sensitivity_level"] = "high"
                             for numa in numas:
                                 #overwrite ram and vcpus
                                 #check if key 'memory' is present in numa else use ram value at flavor
@@ -873,23 +887,30 @@ class vimconnector(vimconn.vimconnector):
                                 if 'paired-threads' in numa:
                                     vcpus = numa['paired-threads']*2
                                     #cpu_thread_policy "require" implies that the compute node must have an STM architecture
-                                    numa_properties["hw:cpu_thread_policy"] = "require"
-                                    numa_properties["hw:cpu_policy"] = "dedicated"
+                                    extra_specs["hw:cpu_thread_policy"] = "require"
+                                    extra_specs["hw:cpu_policy"] = "dedicated"
                                 elif 'cores' in numa:
                                     vcpus = numa['cores']
                                     # cpu_thread_policy "prefer" implies that the host must not have an SMT architecture, or a non-SMT architecture will be emulated
-                                    numa_properties["hw:cpu_thread_policy"] = "isolate"
-                                    numa_properties["hw:cpu_policy"] = "dedicated"
+                                    extra_specs["hw:cpu_thread_policy"] = "isolate"
+                                    extra_specs["hw:cpu_policy"] = "dedicated"
                                 elif 'threads' in numa:
                                     vcpus = numa['threads']
                                     # cpu_thread_policy "prefer" implies that the host may or may not have an SMT architecture
-                                    numa_properties["hw:cpu_thread_policy"] = "prefer"
-                                    numa_properties["hw:cpu_policy"] = "dedicated"
+                                    extra_specs["hw:cpu_thread_policy"] = "prefer"
+                                    extra_specs["hw:cpu_policy"] = "dedicated"
                                 # for interface in numa.get("interfaces",() ):
                                 #     if interface["dedicated"]=="yes":
                                 #         raise vimconn.vimconnException("Passthrough interfaces are not supported for the openstack connector", http_code=vimconn.HTTP_Service_Unavailable)
                                 #     #TODO, add the key 'pci_passthrough:alias"="<label at config>:<number ifaces>"' when a way to connect it is available
-
+                        elif extended.get("cpu-quota"):
+                            self.process_resource_quota(extended.get("cpu-quota"), "cpu", extra_specs)
+                        if extended.get("mem-quota"):
+                            self.process_resource_quota(extended.get("mem-quota"), "memory", extra_specs)
+                        if extended.get("vif-quota"):
+                            self.process_resource_quota(extended.get("vif-quota"), "vif", extra_specs)
+                        if extended.get("disk-io-quota"):
+                            self.process_resource_quota(extended.get("disk-io-quota"), "disk_io", extra_specs)
                     #create flavor
                     new_flavor=self.nova.flavors.create(name,
                                     ram,
@@ -898,8 +919,8 @@ class vimconnector(vimconn.vimconnector):
                                     is_public=flavor_data.get('is_public', True)
                                 )
                     #add metadata
-                    if numa_properties:
-                        new_flavor.set_keys(numa_properties)
+                    if extra_specs:
+                        new_flavor.set_keys(extra_specs)
                     return new_flavor.id
                 except nvExceptions.Conflict as e:
                     if change_name_if_used and retry < max_retries:
