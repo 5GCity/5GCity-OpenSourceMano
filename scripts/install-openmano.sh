@@ -262,6 +262,9 @@ then
     [ "$_DISTRO" == "Ubuntu" ] && install_packages "genisoimage"
     [ "$_DISTRO" == "CentOS" -o "$_DISTRO" == "Red" ] && install_packages "genisoimage"
 
+    # required for fog connector
+    pip2 install fog05rest || exit 1
+
     # required for OpenNebula connector
     pip2 install untangle || exit 1
     pip2 install -e git+https://github.com/python-oca/python-oca#egg=oca || exit 1
