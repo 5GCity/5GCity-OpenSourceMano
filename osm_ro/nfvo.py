@@ -4616,6 +4616,7 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                     for sce_vnf in instanceDict['vnfs']:
                         for vm in sce_vnf['vms']:
                             if vm["uuid"] == vdu_id:
+                                # TODO revise this should not be vm["uuid"]   instance_vms["vm_id"]
                                 vm_interfaces = vm["interfaces"]
                                 break
 
@@ -4627,7 +4628,7 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                         "status": "SCHEDULED",
                         "item": "instance_vms",
                         "item_id": vdu_id,
-                        "related": vm["related"],
+                        "related": target_vm["related"],
                         "extra": yaml.safe_dump({"params": vm_interfaces},
                                                 default_flow_style=True, width=256)
                     }
@@ -4675,9 +4676,10 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                         pass
                     db_instance_vm = {
                         "uuid": vm_uuid,
+                        'related': vm_uuid,
                         'instance_vnf_id': target_vm['instance_vnf_id'],
                         'vm_id': target_vm['vm_id'],
-                        'vim_name': vm_name
+                        'vim_name': vm_name,
                     }
                     db_instance_vms.append(db_instance_vm)
 
@@ -4718,7 +4720,7 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                         "status": "SCHEDULED",
                         "item": "instance_vms",
                         "item_id": vm_uuid,
-                        "related": target_vm["related"],
+                        "related": vm_uuid,
                         # ALF
                         # ALF
                         # TODO examinar parametros, quitar MAC o incrementar. Incrementar IP y colocar las dependencias con ACTION-asdfasd.
