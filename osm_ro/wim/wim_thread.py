@@ -51,7 +51,7 @@ from time import time, sleep
 from six import reraise
 from six.moves import queue
 
-from . import wan_link_actions, wimconn_odl, wimconn_dynpac  # wimconn_tapi
+from . import wan_link_actions
 from ..utils import ensure, partition, pipe
 from .actions import IGNORE, PENDING, REFRESH
 from .errors import (
@@ -62,16 +62,20 @@ from .errors import (
 )
 from .failing_connector import FailingConnector
 from .wimconn import WimConnectorError
+from .wimconn_dynpac import DynpacConnector
+from .wimconn_fake import FakeConnector
+from .wimconn_ietfl2vpn import WimconnectorIETFL2VPN
 
 ACTIONS = {
     'instance_wim_nets': wan_link_actions.ACTIONS
 }
 
 CONNECTORS = {
-    "odl": wimconn_odl.OdlConnector,
-    # "tapi": wimconn_tapi
+    # "odl": wimconn_odl.OdlConnector,
+    "dynpac": DynpacConnector,
+    "fake": FakeConnector,
+    "ietfl2vpn": WimconnectorIETFL2VPN,
     # Add extra connectors here
-    "dynpac": wimconn_dynpac.DynpacConnector
 }
 
 
