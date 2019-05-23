@@ -74,7 +74,7 @@ CONNECTORS = {
     # "odl": wimconn_odl.OdlConnector,
     "dynpac": DynpacConnector,
     "fake": FakeConnector,
-    "ietfl2vpn": WimconnectorIETFL2VPN,
+    "tapi": WimconnectorIETFL2VPN,
     # Add extra connectors here
 }
 
