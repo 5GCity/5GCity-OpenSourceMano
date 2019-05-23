@@ -36,7 +36,7 @@ QUIET_MODE=""
 BACKUP_DIR=""
 BACKUP_FILE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=38
+LAST_DB_VERSION=39
 
 # Detect paths
 MYSQL=$(which mysql)
@@ -196,6 +196,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 6003 ] && DB_VERSION=36  #0.6.03 =>  36
 #[ $OPENMANO_VER_NUM -ge 6009 ] && DB_VERSION=37  #0.6.09 =>  37
 #[ $OPENMANO_VER_NUM -ge 6011 ] && DB_VERSION=38  #0.6.11 =>  38
+#[ $OPENMANO_VER_NUM -ge 6020 ] && DB_VERSION=39  #0.6.20 =>  39
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -1407,6 +1408,59 @@ function downgrade_from_38(){
     sql "DELETE FROM schema_version WHERE version_int='38';"
 }
 
+function upgrade_to_39(){
+    echo "      Enlarge vim_id to 300 at all places"
+    sql "ALTER TABLE datacenters_flavors CHANGE COLUMN vim_id vim_id VARCHAR(300) NOT NULL AFTER datacenter_vim_id;"
+    sql "ALTER TABLE datacenters_images CHANGE COLUMN vim_id vim_id VARCHAR(300) NOT NULL AFTER datacenter_vim_id;"
+    sql "ALTER TABLE datacenter_nets CHANGE COLUMN vim_net_id vim_net_id VARCHAR(300) NOT NULL AFTER name;"
+    sql "ALTER TABLE instance_classifications CHANGE COLUMN vim_classification_id vim_classification_id VARCHAR(300)" \
+        " NULL DEFAULT NULL AFTER instance_scenario_id;"
+    sql "ALTER TABLE instance_interfaces CHANGE COLUMN vim_interface_id vim_interface_id VARCHAR(300) NULL DEFAULT " \
+        " NULL AFTER interface_id;"
+    sql "ALTER TABLE instance_nets CHANGE COLUMN vim_net_id vim_net_id VARCHAR(300) NULL DEFAULT NULL" \
+        " AFTER osm_id;"
+    sql "ALTER TABLE instance_sfis CHANGE COLUMN vim_sfi_id vim_sfi_id VARCHAR(300) NULL DEFAULT NULL" \
+        " AFTER instance_scenario_id;"
+    sql "ALTER TABLE instance_sfps CHANGE COLUMN vim_sfp_id vim_sfp_id VARCHAR(300) NULL DEFAULT NULL" \
+        " AFTER instance_scenario_id;"
+    sql "ALTER TABLE instance_sfs CHANGE COLUMN vim_sf_id vim_sf_id VARCHAR(300) NULL DEFAULT NULL" \
+        " AFTER instance_scenario_id;"
+    sql "ALTER TABLE instance_vms CHANGE COLUMN vim_vm_id vim_vm_id VARCHAR(300) NULL DEFAULT NULL" \
+        " AFTER instance_vnf_id, DROP INDEX vim_vm_id;"
+    sql "ALTER TABLE instance_wim_nets CHANGE COLUMN wim_internal_id wim_internal_id VARCHAR(300) NULL DEFAULT NULL" \
+        " COMMENT 'Internal ID used by the WIM to refer to the network' AFTER uuid;"
+    sql "ALTER TABLE vim_wim_actions CHANGE COLUMN vim_id vim_id VARCHAR(300) NULL DEFAULT NULL" \
+        " AFTER datacenter_vim_id;"
+
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) " \
+        "VALUES (39, '0.39', '0.6.20', 'Enlarge vim_id to 300 at all places', '2019-05-23');"
+}
+function downgrade_from_39(){
+    echo "      Set vim_id to original lenght at all places"
+    sql "ALTER TABLE datacenters_flavors CHANGE COLUMN vim_id vim_id VARCHAR(36) NOT NULL AFTER datacenter_vim_id;"
+    sql "ALTER TABLE datacenters_images CHANGE COLUMN vim_id vim_id VARCHAR(36) NOT NULL AFTER datacenter_vim_id;"
+    sql "ALTER TABLE datacenter_nets CHANGE COLUMN vim_net_id vim_net_id VARCHAR(36) NOT NULL AFTER name;"
+    sql "ALTER TABLE instance_classifications CHANGE COLUMN vim_classification_id vim_classification_id VARCHAR(36)" \
+        " NULL DEFAULT NULL AFTER instance_scenario_id;"
+    sql "ALTER TABLE instance_interfaces CHANGE COLUMN vim_interface_id vim_interface_id VARCHAR(128) NULL DEFAULT " \
+        " NULL AFTER interface_id;"
+    sql "ALTER TABLE instance_nets CHANGE COLUMN vim_net_id vim_net_id VARCHAR(128) NULL DEFAULT NULL" \
+        " AFTER osm_id;"
+    sql "ALTER TABLE instance_sfis CHANGE COLUMN vim_sfi_id vim_sfi_id VARCHAR(36) NULL DEFAULT NULL" \
+        " AFTER instance_scenario_id;"
+    sql "ALTER TABLE instance_sfps CHANGE COLUMN vim_sfp_id vim_sfp_id VARCHAR(36) NULL DEFAULT NULL" \
+        " AFTER instance_scenario_id;"
+    sql "ALTER TABLE instance_sfs CHANGE COLUMN vim_sf_id vim_sf_id VARCHAR(36) NULL DEFAULT NULL" \
+        " AFTER instance_scenario_id;"
+    sql "ALTER TABLE instance_vms CHANGE COLUMN vim_vm_id vim_vm_id VARCHAR(36) NULL DEFAULT NULL" \
+        " AFTER instance_vnf_id, ADD UNIQUE INDEX vim_vm_id (vim_vm_id);"
+    sql "ALTER TABLE instance_wim_nets CHANGE COLUMN wim_internal_id wim_internal_id VARCHAR(128) NULL DEFAULT NULL" \
+        " COMMENT 'Internal ID used by the WIM to refer to the network' AFTER uuid;"
+    sql "ALTER TABLE vim_wim_actions CHANGE COLUMN vim_id vim_id VARCHAR(64) NULL DEFAULT NULL" \
+        " AFTER datacenter_vim_id;"
+
+    sql "DELETE FROM schema_version WHERE version_int='39';"
+}
 #TODO ... put functions here
 
 
