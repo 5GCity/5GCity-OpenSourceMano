@@ -30,23 +30,23 @@ class vimconnector(vimconn.vimconnector):
 
         # CREDENTIALS 
         self.credentials = ServicePrincipalCredentials(
-            client_id= user,
-            secret= passwd,
-            tenant= tenant_id
+            client_id=user,
+            secret=passwd,
+            tenant=(tenant_id or tenant_name)
         )
-		
-        #SUBSCRIPTION
+
+        # SUBSCRIPTION
         if 'subscription_id' in config:
             self.subscription_id = config.get('subscription_id')
             self.logger.debug('Setting subscription '+str(self.subscription_id))
         else:
             raise vimconn.vimconnException('Subscription not specified')
-        #REGION
+        # REGION
         if 'region_name' in config:
             self.region = config.get('region_name')
         else:
             raise vimconn.vimconnException('Azure region_name is not specified at config')
-        #RESOURCE_GROUP
+        # RESOURCE_GROUP
         if 'resource_group' in config:
             self.resource_group = config.get('resource_group')
         else:
@@ -79,8 +79,9 @@ class vimconnector(vimconn.vimconnector):
         return str(resource_id.split('/')[4])
 
     def _check_subnets_for_vm(self, net_list):
-        #All subnets must belong to the same resource group and vnet
-        if len(set(self._get_resource_group_name_from_resource_id(net['id'])+self._get_resource_name_from_resource_id(net['id']) for net in net_list)) != 1:
+        # All subnets must belong to the same resource group and vnet
+        if len(set(self._get_resource_group_name_from_resource_id(net['id']) +
+                   self._get_resource_name_from_resource_id(net['id']) for net in net_list)) != 1:
             raise self.format_vimconn_exception('Azure VMs can only attach to subnets in same VNET')
 
     def format_vimconn_exception(self, e):
@@ -229,7 +230,8 @@ class vimconnector(vimconn.vimconnector):
 
         return self._new_vminstance(vm_name, image_id, flavor_id, net_list)
         
-    def _new_vminstance(self, vm_name, image_id, flavor_id, net_list, cloud_config=None, disk_list=None, availability_zone_index=None, availability_zone_list=None):               
+    def _new_vminstance(self, vm_name, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
+                        availability_zone_index=None, availability_zone_list=None):
         #Create NICs
         self._check_subnets_for_vm(net_list)
         vm_nics = []
@@ -292,27 +294,27 @@ class vimconnector(vimconn.vimconnector):
             self.format_vimconn_exception(e)
 
     def get_flavor_id_from_data(self, flavor_dict):
-		self.logger.debug("Getting flavor id from data")
-		self._reload_connection()
-		vm_sizes_list = [vm_size.serialize() for vm_size in self.conn_compute.virtual_machine_sizes.list(self.region)]
-		
-		cpus = flavor_dict['vcpus']
-		memMB = flavor_dict['ram']
-		
-		filteredSizes = [size for size in vm_sizes_list if size['numberOfCores'] > cpus and size['memoryInMB'] > memMB]
-		listedFilteredSizes = sorted(filteredSizes, key=lambda k: k['numberOfCores']) 
-		
-		return listedFilteredSizes[0]['name']
+        self.logger.debug("Getting flavor id from data")
+        self._reload_connection()
+        vm_sizes_list = [vm_size.serialize() for vm_size in self.conn_compute.virtual_machine_sizes.list(self.region)]
 
-    def check_vim_connectivity():
+        cpus = flavor_dict['vcpus']
+        memMB = flavor_dict['ram']
+
+        filteredSizes = [size for size in vm_sizes_list if size['numberOfCores'] > cpus and size['memoryInMB'] > memMB]
+        listedFilteredSizes = sorted(filteredSizes, key=lambda k: k['numberOfCores'])
+
+        return listedFilteredSizes[0]['name']
+
+    def check_vim_connectivity(self):
         try:
             self._reload_connection()
-            return true
-        except:
-            raise vimconn.vimconnException("Connectivity issue with Azure API")
+            return True
+        except Exception as e:
+            raise vimconn.vimconnException("Connectivity issue with Azure API: {}".format(e))
 
     def get_network(self, net_id):
-        resGroup= self._get_resource_group_name_from_resource_id(net_id)
+        resGroup = self._get_resource_group_name_from_resource_id(net_id)
         resName = self._get_resource_name_from_resource_id(net_id)
         
         self._reload_connection()
@@ -321,21 +323,21 @@ class vimconnector(vimconn.vimconnector):
         return vnet
 
     def delete_network(self, net_id):
-        resGroup= self._get_resource_group_name_from_resource_id(net_id)
+        resGroup = self._get_resource_group_name_from_resource_id(net_id)
         resName = self._get_resource_name_from_resource_id(net_id)
         
         self._reload_connection()
         self.conn_vnet.virtual_networks.delete(resGroup, resName)
 
     def delete_vminstance(self, vm_id):
-        resGroup= self._get_resource_group_name_from_resource_id(net_id)
+        resGroup = self._get_resource_group_name_from_resource_id(net_id)
         resName = self._get_resource_name_from_resource_id(net_id)
         
         self._reload_connection()
         self.conn_compute.virtual_machines.delete(resGroup, resName)
 
     def get_vminstance(self, vm_id):
-        resGroup= self._get_resource_group_name_from_resource_id(net_id)
+        resGroup = self._get_resource_group_name_from_resource_id(net_id)
         resName = self._get_resource_name_from_resource_id(net_id)
         
         self._reload_connection()
@@ -367,7 +369,7 @@ if __name__ == "__main__":
         "resource_group": "AZURE_RESOURCE_GROUP",  # TODO delete private information # 'testOSMlive2',
                                                          # TODO maybe it should be created a resouce_group per VNFD
         "subscription_id": "AZURE_SUBSCRIPTION_ID",   # TODO delete private information  'ca3d18ab-d373-4afb-a5d6-7c44f098d16a'
-		"vnet_name": "AZURE_VNET_NAME",
+        "vnet_name": "AZURE_VNET_NAME",
     }
     test_params = {}
 
@@ -381,13 +383,13 @@ if __name__ == "__main__":
             'region_name': getenv("AZURE_REGION_NAME", 'westeurope'),
             'resource_group': getenv("AZURE_RESOURCE_GROUP"),
             'subscription_id': getenv("AZURE_SUBSCRIPTION_ID"),
-            'pub_key': getenv("AZURE_PUB_KEY", None),  # TODO delete private information 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDKlMlDqCEYmtD3NzHTzQXcu9Oj3U+CKYCU4D+kwEN5BuKs5J9lPFA9B2MsK9MYsyXoG4Gkt3ENHyzY+dgCN3eLdyiyOAtpHKddqO+5CG3mZoTlONTSofZm2pbnCoWh8UdKlBUvD467gFbw+HcBnXXY89zhdBIkhjQELcuZc0je8XsYrw++9DEJW9GBlREE8E/RustYlF5/MsNHvIxZqKNhBocX4Cj/nUdV+aGxTMa4pEnFi8gDA8xuYK9mDA/GNFd47TMa6kd+YLlojlfzp1GGDiwDK1px1TpjjzXan/dMMFbCsL5dgpuFul34U0yOdg7iEgoAUUwTGvHQsMyIl+BJ sergio@MININT-SCP2P2V',
+            'pub_key': getenv("AZURE_PUB_KEY", None),
             'vnet_name': getenv("AZURE_VNET_NAME", 'myNetwork'),
     }
-	
+
     virtualMachine = {
-        'name':'sergio',
-        'description':'new VM',
+        'name': 'sergio',
+        'description': 'new VM',
         'status': 'running',
         'image': {
             'publisher': 'Canonical',
@@ -409,11 +411,12 @@ if __name__ == "__main__":
     }
     ###########################
 
-    azure=vimconnector(vim_id, vim_name, tenant_id=test_params["tenant"], tenant_name=None, url=None, url_admin=None,
-                       user=test_params["client_id"], passwd=test_params["secret"], log_level=None, config=config)
+    azure = vimconnector(vim_id, vim_name, tenant_id=test_params["tenant"], tenant_name=None, url=None, url_admin=None,
+                         user=test_params["client_id"], passwd=test_params["secret"], log_level=None, config=config)
 
     #azure.get_flavor_id_from_data("here")
     #subnets=azure.get_network_list()
-    #azure.new_vminstance(virtualMachine['name'], virtualMachine['description'], virtualMachine['status'], virtualMachine['image'], virtualMachine['hardware_profile']['vm_size'], subnets)
+    #azure.new_vminstance(virtualMachine['name'], virtualMachine['description'], virtualMachine['status'],
+    #                     virtualMachine['image'], virtualMachine['hardware_profile']['vm_size'], subnets)
     #
     azure.get_flavor("Standard_A11")

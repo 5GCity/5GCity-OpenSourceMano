@@ -102,7 +102,7 @@ vim_module = {
     "opennebula": vimconn_opennebula,
     "openstack": vimconn_openstack,
     "vmware": vimconn_vmware,
-    "fos": vimconn_fos
+    "fos": vimconn_fos,
     "azure": vimconn_azure,
 }
 
