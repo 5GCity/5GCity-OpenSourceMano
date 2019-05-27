@@ -591,7 +591,7 @@ class vimconnector(vimconn.vimconnector):
             n_cpu_arch = n_info.get('cpu')[0].get('arch')
             n_cpu_freq = n_info.get('cpu')[0].get('frequency')
             n_ram = n_info.get('ram').get('size')
-            n_disk_size = sorted(list(filter(lambda x: 'sda' in x['local_address'], n_info.get('disks'))), key= lambda k: k['dimension'])[-1].get('dimension')
+            n_disk_size = sorted(list(filter(lambda x: 'vda' in x['local_address'], n_info.get('disks'))), key= lambda k: k['dimension'])[-1].get('dimension')
 
             hvs = []
             for p in n_plugs:
