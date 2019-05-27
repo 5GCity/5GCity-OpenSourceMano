@@ -14,6 +14,7 @@ from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.compute import ComputeManagementClient
 
+
 class vimconnector(vimconn.vimconnector):
 
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None,
@@ -59,13 +60,17 @@ class vimconnector(vimconn.vimconnector):
         self.pub_key = config.get('pub_key')
             
     def _reload_connection(self):
-        '''Sets connections to work with Azure service APIs
-        '''
+        """
+        Sets connections to work with Azure service APIs
+        :return:
+        """
         self.logger.debug('Reloading API Connection')
         try:
             self.conn = ResourceManagementClient(self.credentials, self.subscription_id)
             self.conn_compute = ComputeManagementClient(self.credentials, self.subscription_id)
             self.conn_vnet = NetworkManagementClient(self.credentials, self.subscription_id)
+            self._check_or_create_resource_group()
+            self._check_or_create_vnet()
         except Exception as e:
             self.format_vimconn_exception(e)            
 
@@ -85,24 +90,41 @@ class vimconnector(vimconn.vimconnector):
             raise self.format_vimconn_exception('Azure VMs can only attach to subnets in same VNET')
 
     def format_vimconn_exception(self, e):
-        '''Params: an Exception object
-        Returns: Raises the exception 'e' passed in mehtod parameters
-        '''
+        """
+        Params: an Exception object
+        :param e:
+        :return: Raises the proper vimconnException
+        """
         self.conn = None
         self.conn_vnet = None
         raise vimconn.vimconnConnectionException(type(e).__name__ + ': ' + str(e))        
 
     def _check_or_create_resource_group(self):
-        '''Creates a resource group in indicated region
-        '''
+        """
+        Creates a resource group in indicated region
+        :return: None
+        """
         self.logger.debug('Creating RG {} in location {}'.format(self.resource_group, self.region))
-        self.conn.resource_groups.create_or_update(self.resource_group, {'location':self.region})
+        self.conn.resource_groups.create_or_update(self.resource_group, {'location': self.region})
+
+    def _check_or_create_vnet(self):
+        try:
+            vnet_params = {
+                'location': self.region,
+                'address_space': {
+                    'address_prefixes': "10.0.0.0/8"
+                },
+            }
+            self.conn_vnet.virtual_networks.create_or_update(self.resource_group, self.vnet_name, vnet_params)
+        except Exception as e:
+            self.format_vimconn_exception(e)
 
     def new_network(self, net_name, net_type, ip_profile=None, shared=False, vlan=None):
-        '''Adds a tenant network to VIM
-        Params:
-            'net_name': name of the network
-            'ip_profile': is a dict containing the IP parameters of the network (Currently only IPv4 is implemented)
+        """
+        Adds a tenant network to VIM
+        :param net_name: name of the network
+        :param net_type:
+        :param ip_profile: is a dict containing the IP parameters of the network (Currently only IPv4 is implemented)
                 'ip-version': can be one of ['IPv4','IPv6']
                 'subnet-address': ip_prefix_schema, that is X.X.X.X/Y
                 'gateway-address': (Optional) ip_schema, that is X.X.X.X
@@ -111,21 +133,26 @@ class vimconnector(vimconn.vimconnector):
                     'enabled': {'type': 'boolean'},
                     'start-address': ip_schema, first IP to grant
                     'count': number of IPs to grant.
-        Returns a tuple with the network identifier and created_items, or raises an exception on error
+        :param shared:
+        :param vlan:
+        :return: a tuple with the network identifier and created_items, or raises an exception on error
             created_items can be None or a dictionary where this method can include key-values that will be passed to
             the method delete_network. Can be used to store created segments, created l2gw connections, etc.
             Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
             as not present.
-        '''
+        """
+
         return self._new_subnet(net_name, ip_profile)
 
     def _new_subnet(self, net_name, ip_profile):
-        '''Adds a tenant network to VIM
-            It creates a new VNET with a single subnet
-        '''
+        """
+        Adds a tenant network to VIM. It creates a new VNET with a single subnet
+        :param net_name:
+        :param ip_profile:
+        :return:
+        """
         self.logger.debug('Adding a subnet to VNET '+self.vnet_name)
         self._reload_connection()
-        self._check_or_create_resource_group()
 
         if ip_profile is None:
             # TODO get a non used vnet ip range /24 and allocate automatically
@@ -188,8 +215,56 @@ class vimconnector(vimconn.vimconnector):
 
         return async_nic_creation.result()
 
+    def get_image_list(self, filter_dict={}):
+        """
+        The urn contains for marketplace  'publisher:offer:sku:version'
+
+        :param filter_dict:
+        :return:
+        """
+        image_list = []
+
+        self._reload_connection()
+        if filter_dict.get("name"):
+            params = filter_dict["name"].split(":")
+            if len(params) >= 3:
+                publisher = params[0]
+                offer = params[1]
+                sku = params[2]
+                version = None
+                if len(params) == 4:
+                    version = params[3]
+                images = self.conn_compute.virtual_machine_images.list(self.region, publisher, offer, sku)
+                for image in images:
+                    if version:
+                        image_version = str(image.id).split("/")[-1]
+                        if image_version != version:
+                            continue
+                    image_list.append({
+                        'id': str(image.id),
+                        'name': self._get_resource_name_from_resource_id(image.id)
+                    })
+                return image_list
+
+        images = self.conn_compute.virtual_machine_images.list()
+
+        for image in images:
+            # TODO implement filter_dict
+            if filter_dict:
+                if filter_dict.get("id") and str(image.id) != filter_dict["id"]:
+                    continue
+                if filter_dict.get("name") and \
+                        self._get_resource_name_from_resource_id(image.id) != filter_dict["name"]:
+                    continue
+                # TODO add checksum
+            image_list.append({
+                'id': str(image.id),
+                'name': self._get_resource_name_from_resource_id(image.id),
+            })
+        return image_list
+
     def get_network_list(self, filter_dict={}):
-        '''Obtain tenant networks of VIM
+        """Obtain tenant networks of VIM
         Filter_dict can be:
             name: network name
             id: network uuid
@@ -198,7 +273,7 @@ class vimconnector(vimconn.vimconnector):
             admin_state_up: boolean
             status: 'ACTIVE'
         Returns the network list of dictionaries
-        '''
+        """
         self.logger.debug('Getting all subnets from VIM')
         try:
             self._reload_connection()
@@ -353,7 +428,6 @@ class vimconnector(vimconn.vimconnector):
 
 
 # TODO refresh_nets_status ver estado activo
-# TODO PRIORITARY get_image_list
 # TODO refresh_vms_status  ver estado activo
 # TODO get_vminstance_console  for getting console
 
@@ -363,12 +437,11 @@ if __name__ == "__main__":
     vim_id='azure'
     vim_name='azure'
     needed_test_params = {
-        "client_id": "AZURE_CLIENT_ID",    # TODO delete private information  
-        "secret": "AZURE_SECRET",        # TODO delete private information  
-        "tenant": "AZURE_TENANT",        # TODO delete private information
-        "resource_group": "AZURE_RESOURCE_GROUP",  # TODO delete private information # 'testOSMlive2',
-                                                         # TODO maybe it should be created a resouce_group per VNFD
-        "subscription_id": "AZURE_SUBSCRIPTION_ID",   # TODO delete private information  'ca3d18ab-d373-4afb-a5d6-7c44f098d16a'
+        "client_id": "AZURE_CLIENT_ID",
+        "secret": "AZURE_SECRET",
+        "tenant": "AZURE_TENANT",
+        "resource_group": "AZURE_RESOURCE_GROUP",
+        "subscription_id": "AZURE_SUBSCRIPTION_ID",
         "vnet_name": "AZURE_VNET_NAME",
     }
     test_params = {}
@@ -414,9 +487,9 @@ if __name__ == "__main__":
     azure = vimconnector(vim_id, vim_name, tenant_id=test_params["tenant"], tenant_name=None, url=None, url_admin=None,
                          user=test_params["client_id"], passwd=test_params["secret"], log_level=None, config=config)
 
-    #azure.get_flavor_id_from_data("here")
-    #subnets=azure.get_network_list()
-    #azure.new_vminstance(virtualMachine['name'], virtualMachine['description'], virtualMachine['status'],
-    #                     virtualMachine['image'], virtualMachine['hardware_profile']['vm_size'], subnets)
-    #
+    # azure.get_flavor_id_from_data("here")
+    # subnets=azure.get_network_list()
+    # azure.new_vminstance(virtualMachine['name'], virtualMachine['description'], virtualMachine['status'],
+    #                      virtualMachine['image'], virtualMachine['hardware_profile']['vm_size'], subnets)
+
     azure.get_flavor("Standard_A11")
