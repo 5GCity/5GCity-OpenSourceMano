@@ -81,25 +81,30 @@ def format_in(http_response, schema):
         return False, ("validate_in error, jsonschema exception ", exc.message, "at", exc.path)
 
 def remove_extra_items(data, schema):
-    deleted=[]
+    deleted = []
     if type(data) is tuple or type(data) is list:
         for d in data:
-            a= remove_extra_items(d, schema['items'])
-            if a is not None: deleted.append(a)
+            a = remove_extra_items(d, schema['items'])
+            if a is not None:
+                deleted.append(a)
     elif type(data) is dict:
-        #TODO deal with patternProperties
+        # TODO deal with patternProperties
         if 'properties' not in schema:
             return None
         for k in data.keys():
-            if k not in schema['properties'].keys():
+            if k in schema['properties'].keys():
+                a = remove_extra_items(data[k], schema['properties'][k])
+                if a is not None:
+                    deleted.append({k: a})
+            elif not schema.get('additionalProperties'):
                 del data[k]
                 deleted.append(k)
-            else:
-                a = remove_extra_items(data[k], schema['properties'][k])
-                if a is not None:  deleted.append({k:a})
-    if len(deleted) == 0: return None
-    elif len(deleted) == 1: return deleted[0]
-    else: return deleted
+    if len(deleted) == 0:
+        return None
+    elif len(deleted) == 1:
+        return deleted[0]
+
+    return deleted
 
 #def format_html2text(http_content):
 #    soup=BeautifulSoup(http_content)

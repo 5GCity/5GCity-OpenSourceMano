@@ -131,11 +131,9 @@ wim_schema = {
             "type": "object",
             "properties": wim_schema_properties,
             "required": ["name", "type", "wim_url"],
-            "additionalProperties": True
         }
     },
     "required": ["wim"],
-    "additionalProperties": False
 }
 
 wim_edit_schema = {
@@ -146,11 +144,9 @@ wim_edit_schema = {
         "wim": {
             "type": "object",
             "properties": wim_schema_properties,
-            "additionalProperties": False
         }
     },
     "required": ["wim"],
-    "additionalProperties": False
 }
 
 wim_account_schema = {
@@ -166,11 +162,9 @@ wim_account_schema = {
                 "password": nameshort_schema,
                 "config": {"type": "object"}
             },
-            "additionalProperties": True
         }
     },
     "required": ["wim_account"],
-    "additionalProperties": False
 }
 
 wim_port_mapping_schema = {

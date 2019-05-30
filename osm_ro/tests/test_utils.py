@@ -3,12 +3,16 @@
 
 import unittest
 
-from ..utils import get_arg, inject_args
+from ..utils import (
+    get_arg,
+    inject_args,
+    remove_extra_items,
+)
 
 
 class TestUtils(unittest.TestCase):
     def test_inject_args_curries_arguments(self):
-        fn = inject_args(lambda a=None, b=None: a+b, a=3, b=5)
+        fn = inject_args(lambda a=None, b=None: a + b, a=3, b=5)
         self.assertEqual(fn(), 8)
 
     def test_inject_args_doesnt_add_arg_if_not_needed(self):
@@ -31,20 +35,43 @@ class TestUtils(unittest.TestCase):
         def _fn(x, y, z):
             return x + y + z
 
-        x = get_arg('x', _fn, (1, 3, 4), {})
+        x = get_arg("x", _fn, (1, 3, 4), {})
         self.assertEqual(x, 1)
-        y = get_arg('y', _fn, (1, 3, 4), {})
+        y = get_arg("y", _fn, (1, 3, 4), {})
         self.assertEqual(y, 3)
-        z = get_arg('z', _fn, (1, 3, 4), {})
+        z = get_arg("z", _fn, (1, 3, 4), {})
         self.assertEqual(z, 4)
 
     def test_get_arg__keyword(self):
         def _fn(x, y, z=5):
             return x + y + z
 
-        z = get_arg('z', _fn, (1, 2), {'z': 3})
+        z = get_arg("z", _fn, (1, 2), {"z": 3})
         self.assertEqual(z, 3)
 
 
-if __name__ == '__main__':
+
+    def test_remove_extra_items__keep_aditional_properties(self):
+        schema = {
+            "type": "object",
+            "properties": {
+                "a": {
+                    "type": "object",
+                    "properties": {
+                        "type": "object",
+                        "properties": {"b": "string"},
+                    },
+                    "additionalProperties": True,
+                }
+            },
+        }
+
+        example = {"a": {"b": 1, "c": 2}, "d": 3}
+        deleted = remove_extra_items(example, schema)
+        self.assertIn("d", deleted)
+        self.assertIs(example.get("d"), None)
+        self.assertEqual(example["a"]["c"], 2)
+
+
+if __name__ == "__main__":
     unittest.main()
