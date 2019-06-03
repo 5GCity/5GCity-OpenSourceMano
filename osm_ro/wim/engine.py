@@ -348,7 +348,7 @@ class WimEngine(object):
             'sce_net_id': sce_net_id,
             'wim_id': wim_id,
             'wim_account_id': account['uuid'],
-            related: related
+            'related': related
         }
 
     def derive_wan_links(self, wim_usage, networks, tenant=None):

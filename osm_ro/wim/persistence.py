@@ -642,8 +642,9 @@ class WimPersistence(object):
 
         if num_changes is None:
             raise UnexpectedDatabaseError(
-                'Impossible to update wim_port_mappings %s:\n%s\n',
-                id, _serialize(properties))
+                'Impossible to update wim_port_mappings {}:\n{}\n'.format(
+                    id, _serialize(properties))
+            )
 
         return num_changes
 
