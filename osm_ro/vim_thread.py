@@ -707,9 +707,12 @@ class vim_thread(threading.Thread):
                     UPDATE={("number_failed" if task["status"] == "FAILED" else "number_done"): {"INCREMENT": 1}},
                     WHERE={"uuid": task["instance_action_id"]})
             if database_update:
+                where_filter = {"related": task["related"]}
+                if task["item"] == "instance_nets" and task["datacenter_vim_id"]:
+                    where_filter["datacenter_tenant_id"] = task["datacenter_vim_id"] 
                 self.db.update_rows(table=task["item"],
                                     UPDATE=database_update,
-                                    WHERE={"related": task["related"]})
+                                    WHERE=where_filter)
         except db_base_Exception as e:
             self.logger.error("task={} Error updating database {}".format(task_id, e), exc_info=True)
 
