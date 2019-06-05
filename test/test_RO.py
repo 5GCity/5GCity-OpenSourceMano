@@ -308,7 +308,7 @@ class test_vimconn_new_network(test_base):
                      self.__class__.test_index, inspect.currentframe().f_code.co_name)
         self.__class__.test_index += 1
 
-        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+        network, _ = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
                                                           net_type=network_type)
         self.__class__.network_id = network
         logger.debug("{}".format(network))
@@ -335,7 +335,7 @@ class test_vimconn_new_network(test_base):
         self.__class__.test_index += 1
         for net_type in network_types:
             self.__class__.network_name = _get_random_string(20)
-            network_id = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+            network_id, _ = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
                                                                                 net_type=net_type)
 
             delete_net_ids.append(network_id)
@@ -392,7 +392,7 @@ class test_vimconn_new_network(test_base):
                                                             self.__class__.test_index,
                                                 inspect.currentframe().f_code.co_name)
         self.__class__.test_index += 1
-        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+        network, _ = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
                                                                            net_type='mgmt',
                                                                      ip_profile=ip_profile)
         self.__class__.network_id = network
@@ -417,7 +417,7 @@ class test_vimconn_new_network(test_base):
                                                             self.__class__.test_index,
                                                 inspect.currentframe().f_code.co_name)
         self.__class__.test_index += 1
-        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+        network, _ = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
                                                                          net_type='bridge',
                                                                              shared=shared)
         self.__class__.network_id = network
@@ -442,7 +442,7 @@ class test_vimconn_new_network(test_base):
                                                             self.__class__.test_index,
                                                 inspect.currentframe().f_code.co_name)
         self.__class__.test_index += 1
-        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+        network, _ = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
                                                                     net_type='unknowntype')
         self.__class__.network_id = network
         logger.debug("{}".format(network))
@@ -466,7 +466,7 @@ class test_vimconn_new_network(test_base):
         # creating new network
         network_name = _get_random_string(20)
         net_type = 'bridge'
-        network_id = test_config["vim_conn"].new_network(net_name=network_name,
+        network_id, _ = test_config["vim_conn"].new_network(net_name=network_name,
                                                           net_type=net_type)
         # refresh net status
         net_dict = test_config["vim_conn"].refresh_nets_status([network_id])
@@ -503,7 +503,7 @@ class test_vimconn_get_network_list(test_base):
         # creating new network
         self.__class__.network_name = _get_random_string(20)
         self.__class__.net_type = 'bridge'
-        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+        network, _ = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
                                                           net_type=self.__class__.net_type)
         self.__class__.network_id = network
         logger.debug("{}".format(network))
@@ -645,7 +645,7 @@ class test_vimconn_get_network(test_base):
         # creating new network
         self.__class__.network_name = _get_random_string(20)
         self.__class__.net_type = 'bridge'
-        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+        network, _ = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
                                                           net_type=self.__class__.net_type)
         self.__class__.network_id = network
         logger.debug("{}".format(network))
@@ -690,7 +690,7 @@ class test_vimconn_delete_network(test_base):
         # Creating network
         self.__class__.network_name = _get_random_string(20)
         self.__class__.net_type = 'bridge'
-        network = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+        network, _ = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
                                                           net_type=self.__class__.net_type)
         self.__class__.network_id = network
         logger.debug("{}".format(network))
@@ -991,7 +991,7 @@ class test_vimconn_new_vminstance(test_base):
         self.__class__.network_name = _get_random_string(20)
         self.__class__.net_type = 'bridge'
 
-        self.__class__.network_id = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
+        self.__class__.network_id, _ = test_config["vim_conn"].new_network(net_name=self.__class__.network_name,
                                                                             net_type=self.__class__.net_type)
         # find image name and image id
         if test_config['image_name']:
@@ -1113,7 +1113,7 @@ class test_vimconn_new_vminstance(test_base):
             network_name = _get_random_string(20)
             net_type = 'data'
 
-            network_id = test_config["vim_conn"].new_network(net_name=network_name,
+            network_id, _ = test_config["vim_conn"].new_network(net_name=network_name,
                                                                             net_type=net_type)
             net_list = [{'use': net_type, 'name': name, 'floating_ip': False, 'port_security': True,
                          'type': _type, 'net_id': network_id}]
@@ -1565,7 +1565,7 @@ class test_vimconn_vminstance_by_ip_address(test_base):
         # create network
         self.network_name = _get_random_string(20)
 
-        self.network_id = test_config["vim_conn"].new_network(net_name=self.network_name,
+        self.network_id, _ = test_config["vim_conn"].new_network(net_name=self.network_name,
                                                                        net_type='bridge')
 
     def tearDown(self):
@@ -1700,7 +1700,7 @@ class test_vimconn_vminstance_by_adding_10_nics(test_base):
         i = 0
         for i in range(10):
             self.network_name = _get_random_string(20)
-            network_id = test_config["vim_conn"].new_network(net_name=self.network_name,
+            network_id, _ = test_config["vim_conn"].new_network(net_name=self.network_name,
                                                                       net_type='bridge')
             self.net_ids.append(network_id)
 
@@ -1752,7 +1752,7 @@ class test_vimconn_vminstance_by_existing_disk(test_base):
     def setUp(self):
         # create network
         self.network_name = _get_random_string(20)
-        self.network_id = test_config["vim_conn"].new_network(net_name=self.network_name,
+        self.network_id, _ = test_config["vim_conn"].new_network(net_name=self.network_name,
                                                                        net_type='bridge')
 
     def tearDown(self):
@@ -1863,7 +1863,7 @@ class test_vimconn_vminstance_by_affinity_anti_affinity(test_base):
     def setUp(self):
         # create network
         self.network_name = _get_random_string(20)
-        self.network_id = test_config["vim_conn"].new_network(net_name=self.network_name,
+        self.network_id, _ = test_config["vim_conn"].new_network(net_name=self.network_name,
                                                                        net_type='bridge')
 
     def tearDown(self):
@@ -1913,7 +1913,7 @@ class test_vimconn_vminstance_by_numa_affinity(test_base):
     def setUp(self):
         # create network
         self.network_name = _get_random_string(20)
-        self.network_id = test_config["vim_conn"].new_network(net_name=self.network_name,
+        self.network_id, _ = test_config["vim_conn"].new_network(net_name=self.network_name,
                                                                        net_type='bridge')
 
     def tearDown(self):

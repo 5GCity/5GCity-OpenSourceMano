@@ -4920,6 +4920,15 @@ class vimconnector(vimconn.vimconnector):
         namespaces["xmlns"] = "http://www.vmware.com/vcloud/v1.5"
         nwcfglist = newelem.findall(".//xmlns:NetworkConfig", namespaces)
 
+        # VCD 9.7 returns an incorrect parentnetwork element. Fix it before PUT operation
+        parentnetworklist = newelem.findall(".//xmlns:ParentNetwork", namespaces)
+        if parentnetworklist:
+            for pn in parentnetworklist:
+                if "href" not in pn.keys():
+                    id_val = pn.get("id")
+                    href_val = "{}/api/network/{}".format(self.url, id_val)
+                    pn.set("href", href_val)
+
         newstr = """<NetworkConfig networkName="{}">
                   <Configuration>
                        <ParentNetwork href="{}/api/network/{}"/>
