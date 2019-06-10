@@ -79,7 +79,7 @@ DEFAULT_IP_PROFILE = {'dhcp_count':50,
 INTERVAL_TIME = 5
 MAX_WAIT_TIME = 1800
 
-API_VERSION = '31.0'
+API_VERSION = '27.0'
 
 __author__ = "Mustafa Bayramov, Arpita Kate, Sachin Bhangare, Prakash Kasar"
 __date__ = "$09-Mar-2018 11:09:29$"
