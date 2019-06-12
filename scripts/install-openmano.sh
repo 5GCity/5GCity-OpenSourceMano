@@ -267,6 +267,7 @@ then
 
     # required for OpenNebula connector
     pip2 install untangle || exit 1
+    pip2 install pyone || exit 1
     pip2 install -e git+https://github.com/python-oca/python-oca#egg=oca || exit 1
 
     # required for AWS connector

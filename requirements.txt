@@ -20,5 +20,6 @@ prettytable
 boto
 genisoimage
 untangle
+pyone
 oca
 azure

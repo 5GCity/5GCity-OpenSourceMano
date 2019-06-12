@@ -38,6 +38,7 @@ RUN  apt-get update && \
   DEBIAN_FRONTEND=noninteractive apt-get -y install python-argcomplete python-bottle python-cffi python-packaging python-paramiko python-pkgconfig libmysqlclient-dev libssl-dev libffi-dev python-mysqldb && \
   DEBIAN_FRONTEND=noninteractive apt-get -y install python-logutils python-openstackclient python-openstacksdk && \
   DEBIAN_FRONTEND=noninteractive pip install untangle && \
+  DEBIAN_FRONTEND=noninteractive pip install pyone && \
   DEBIAN_FRONTEND=noninteractive pip install -e git+https://github.com/python-oca/python-oca#egg=oca
 
 
