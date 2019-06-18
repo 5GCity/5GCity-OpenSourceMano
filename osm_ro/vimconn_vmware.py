@@ -2200,7 +2200,7 @@ class vimconnector(vimconn.vimconnector):
             media_upload_href = match.group(1)
         else:
             raise Exception('Could not parse the upload URL for the media file from the last response')
-
+        upload_iso_task = self.get_task_from_response(response.content)
         headers['Content-Type'] = 'application/octet-stream'
         response = self.perform_request(req_type='PUT',
                                         url=media_upload_href,
@@ -2209,6 +2209,9 @@ class vimconnector(vimconn.vimconnector):
 
         if response.status_code != 200:
             raise Exception('PUT request to "{}" failed'.format(media_upload_href))
+        result = self.client.get_task_monitor().wait_for_success(task=upload_iso_task)
+        if result.get('status') != 'success':
+            raise Exception('The upload iso task failed with status {}'.format(result.get('status')))
 
     def get_vcd_availibility_zones(self,respool_href, headers):
         """ Method to find presence of av zone is VIM resource pool
