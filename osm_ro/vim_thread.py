@@ -258,6 +258,7 @@ class vim_thread(threading.Thread):
                     # task of creation must be the first in the list of related_task
                     assert(related_tasks[0]["action"] in ("CREATE", "FIND"))
 
+                    task["params"] = None
                     if task["extra"]:
                         extra = yaml.load(task["extra"])
                     else:

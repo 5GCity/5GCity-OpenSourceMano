@@ -150,11 +150,11 @@ def format_in(default_schema, version_fields=None, version_dict_schema=None, con
         return client_data, used_schema
     except (TypeError, ValueError, yaml.YAMLError) as exc:
         error_text += str(exc)
-        logger.error(error_text, exc_info=True)
+        logger.error(error_text)
         bottle.abort(httperrors.Bad_Request, error_text)
     except js_e.ValidationError as exc:
         logger.error(
-            "validate_in error, jsonschema exception", exc_info=True)
+            "validate_in error, jsonschema exception")
         error_pos = ""
         if len(exc.path)>0: error_pos=" at " + ":".join(map(json.dumps, exc.path))
         bottle.abort(httperrors.Bad_Request, error_text + exc.message + error_pos)
