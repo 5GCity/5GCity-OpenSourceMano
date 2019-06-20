@@ -212,14 +212,14 @@ class WimconnectorIETFL2VPN(WimConnector):
                 site_network_access_list.append(site_network_access)
                 site_network_accesses["site-network-access"] = site_network_access_list
                 conn_info_d = {}
-                conn_info_d["site"] = connection_point_wan_info["site-id"]
+                conn_info_d["site"] = connection_point_wan_info["wan_service_mapping_info"]["site-id"]
                 conn_info_d["site-network-access-id"] = site_network_access["network-access-id"]
                 conn_info_d["mapping"] = None
                 conn_info.append(conn_info_d)
                 try:
                     endpoint_site_network_access_creation = \
                         "{}/restconf/data/ietf-l2vpn-svc:l2vpn-svc/sites/site={}/site-network-accesses/".format(
-                            self.wim["wim_url"], connection_point_wan_info["site-id"])
+                            self.wim["wim_url"], connection_point_wan_info["wan_service_mapping_info"]["site-id"])
                     response_endpoint_site_network_access_creation = requests.post(
                         endpoint_site_network_access_creation,
                         headers=self.headers,
@@ -234,8 +234,9 @@ class WimconnectorIETFL2VPN(WimConnector):
                     
                     elif response_endpoint_site_network_access_creation.status_code == 400:
                         self.delete_connectivity_service(vpn_service["vpn-id"])
-                        raise WimConnectorError("Site {} does not exist".format(connection_point_wan_info["site-id"]),
-                                                http_code=response_endpoint_site_network_access_creation.status_code)
+                        raise WimConnectorError("Site {} does not exist".format(
+                            connection_point_wan_info["wan_service_mapping_info"]["site-id"]),
+                            http_code=response_endpoint_site_network_access_creation.status_code)
                     
                     elif response_endpoint_site_network_access_creation.status_code != requests.codes.created and \
                             response_endpoint_site_network_access_creation.status_code != requests.codes.no_content:
@@ -281,7 +282,7 @@ class WimconnectorIETFL2VPN(WimConnector):
             site_network_access = {}
             connection_point_wan_info = self.search_mapp(connection_point)
             params_site = {}
-            params_site["site-id"] = connection_point_wan_info["site-id"]
+            params_site["site-id"] = connection_point_wan_info["wan_service_mapping_info"]["site-id"]
             params_site["site-vpn-flavor"] = "site-vpn-flavor-single"
             device_site = {}
             device_site["device-id"] = connection_point_wan_info["device-id"]
@@ -316,7 +317,7 @@ class WimconnectorIETFL2VPN(WimConnector):
             try:
                 endpoint_site_network_access_edit = \
                     "{}/restconf/data/ietf-l2vpn-svc:l2vpn-svc/sites/site={}/site-network-accesses/".format(
-                        self.wim["wim_url"], connection_point_wan_info["site-id"])  # MODIF
+                        self.wim["wim_url"], connection_point_wan_info["wan_service_mapping_info"]["site-id"])
                 response_endpoint_site_network_access_creation = requests.put(endpoint_site_network_access_edit,
                                                                               headers=self.headers,
                                                                               json=site_network_accesses,
