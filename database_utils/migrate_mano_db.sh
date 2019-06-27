@@ -796,14 +796,14 @@ function downgrade_from_22(){
 function upgrade_to_23(){
     # echo "    upgrade database from version 0.22 to version 0.23"
     echo "      add column 'availability_zone' at table 'vms'"
-    sql "ALTER TABLE mano_db.vms ADD COLUMN availability_zone VARCHAR(255) NULL AFTER modified_at;"
+    sql "ALTER TABLE vms ADD COLUMN availability_zone VARCHAR(255) NULL AFTER modified_at;"
     sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (23, '0.23', '0.5.20',"\
         "'Changed type of ram in flavors from SMALLINT to MEDIUMINT', '2017-08-29');"
 }
 function downgrade_from_23(){
     # echo "    downgrade database from version 0.23 to version 0.22"
     echo "      remove column 'availability_zone' from table 'vms'"
-    sql "ALTER TABLE mano_db.vms DROP COLUMN availability_zone;"
+    sql "ALTER TABLE vms DROP COLUMN availability_zone;"
     sql "DELETE FROM schema_version WHERE version_int='23';"
 }
 
