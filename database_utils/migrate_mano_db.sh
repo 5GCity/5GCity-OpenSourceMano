@@ -1398,7 +1398,7 @@ function downgrade_from_38(){
 	    "CHANGE COLUMN status status ENUM('SCHEDULED','BUILD','DONE','FAILED','SUPERSEDED') " \
 	    "NOT NULL DEFAULT 'SCHEDULED' AFTER item_id;"
     echo "      Remove related from instance_xxxx"
-    for table in instance_classifications instance_nets instance_wim_netsinstance_sfis instance_sfps instance_sfs \
+    for table in instance_classifications instance_nets instance_wim_nets instance_sfis instance_sfps instance_sfs \
         instance_vms
     do
         sql "ALTER TABLE $table DROP COLUMN related;"
