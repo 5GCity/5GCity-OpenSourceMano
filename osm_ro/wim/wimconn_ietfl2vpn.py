@@ -207,6 +207,7 @@ class WimconnectorIETFL2VPN(WimConnector):
                 self.logger.info("Sending vpn-attachement :{}".format(vpn_attach))
                 uuid_sna = str(uuid.uuid4())
                 site_network_access["network-access-id"] = uuid_sna
+                site_network_access["bearer"] = connection_point_wan_info["wan_service_mapping_info"]["bearer"]
                 site_network_accesses = {}
                 site_network_access_list = []
                 site_network_access_list.append(site_network_access)
@@ -310,6 +311,7 @@ class WimconnectorIETFL2VPN(WimConnector):
             site_network_access["vpn-attachment"] = vpn_attach
             uuid_sna = conn_info[counter]["site-network-access-id"]
             site_network_access["network-access-id"] = uuid_sna
+            site_network_access["bearer"] = connection_point_wan_info["wan_service_mapping_info"]["bearer"]
             site_network_accesses = {}
             site_network_access_list = []
             site_network_access_list.append(site_network_access)
