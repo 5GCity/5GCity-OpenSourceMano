@@ -17,22 +17,22 @@ function is_db_created() {
     db_version=$6  # minimun database version
 
     if mysqlshow -h"$db_host" -P"$db_port" -u"$db_user" -p"$db_pswd" | grep -v Wildcard | grep -q -e "$db_name" ; then
-        if echo "SELECT * FROM schema_version WHERE version='0'" |
+        if echo "SELECT comments FROM schema_version WHERE version_int=0;" |
                 mysql -h"$db_host" -P"$db_port" -u"$db_user" -p"$db_pswd" "$db_name" |
                 grep -q -e "init" ; then
-            echo " DB $db_name exists BUT failed in previous init"
+            echo " DB $db_name exists BUT failed in previous init" >&2
             return 1
-        elif echo "SELECT * FROM schema_version WHERE version='$db_version'" |
+        elif echo "SELECT * FROM schema_version WHERE version_int=$db_version;" |
                 mysql -h"$db_host" -P"$db_port" -u"$db_user" -p"$db_pswd" "$db_name" |
                 grep -q -e "$db_version" ; then
-            echo " DB $db_name exists and inited"
+            echo " DB $db_name exists and inited" >&2
             return 0
         else
-            echo " DB $db_name exists BUT not inited"
+            echo " DB $db_name exists BUT not inited" >&2
             return 1
         fi
     fi
-    echo " DB $db_name does not exist"
+    echo " DB $db_name does not exist" >&2
     return 1
 }
 
@@ -70,7 +70,7 @@ function wait_db(){
         #wait 120 sec
         if [ $attempt -ge $max_attempts ]; then
             echo
-            echo "Cannot connect to database ${db_host}:${db_port} during $max_attempts sec"
+            echo "Cannot connect to database ${db_host}:${db_port} during $max_attempts sec" >&2
             return 1
         fi
         attempt=$[$attempt+1]
@@ -94,7 +94,7 @@ wait_db "$RO_DB_HOST" "$RO_DB_PORT" || exit 1
 echo "3/4 Init database"
 RO_PATH=`python -c 'import osm_ro; print(osm_ro.__path__[0])'`
 echo "RO_PATH: $RO_PATH"
-if ! is_db_created "$RO_DB_HOST" "$RO_DB_PORT" "$RO_DB_USER" "$RO_DB_PASSWORD" "$RO_DB_NAME" "0.27"
+if ! is_db_created "$RO_DB_HOST" "$RO_DB_PORT" "$RO_DB_USER" "$RO_DB_PASSWORD" "$RO_DB_NAME" "27"
 then
     if [ -n "$RO_DB_ROOT_PASSWORD" ] ; then
         mysqladmin -h"$RO_DB_HOST" -uroot -p"$RO_DB_ROOT_PASSWORD" create "$RO_DB_NAME"
@@ -114,7 +114,7 @@ fi
 OVIM_PATH=`python -c 'import lib_osm_openvim; print(lib_osm_openvim.__path__[0])'`
 echo "OVIM_PATH: $OVIM_PATH"
 if ! is_db_created "$RO_DB_OVIM_HOST" "$RO_DB_OVIM_PORT" "$RO_DB_OVIM_USER" "$RO_DB_OVIM_PASSWORD" "$RO_DB_OVIM_NAME" \
-    "0.22"
+    "22"
 then
     if [ -n "$RO_DB_OVIM_ROOT_PASSWORD" ] ; then
         mysqladmin -h"$RO_DB_OVIM_HOST" -uroot -p"$RO_DB_OVIM_ROOT_PASSWORD" create "$RO_DB_OVIM_NAME"

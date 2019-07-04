@@ -1545,8 +1545,8 @@ DATABASE_PROCESS=`echo "select comments from schema_version where version_int=0;
 if [[ -z "$DATABASE_PROCESS" ]] ; then  # migration a non empty database
     check_migration_needed || exit 0
     # Create a backup database content
-    [[ -n "$BACKUP_DIR" ]] && BACKUP_FILE="$(mktemp -q  "${BACKUP_DIR}/backupdb.XXXXXX.sql")"
-    [[ -z "$BACKUP_DIR" ]] && BACKUP_FILE="$(mktemp -q --tmpdir "backupdb.XXXXXX.sql")"
+    [[ -n "$BACKUP_DIR" ]] && BACKUP_FILE=$(mktemp -q  "${BACKUP_DIR}/backupdb.XXXXXX.sql")
+    [[ -z "$BACKUP_DIR" ]] && BACKUP_FILE=$(mktemp -q --tmpdir "backupdb.XXXXXX.sql")
     mysqldump $DEF_EXTRA_FILE_PARAM --add-drop-table --add-drop-database --routines --databases $DBNAME > $BACKUP_FILE ||
         ! echo "Cannot create Backup file '$BACKUP_FILE'" >&2 || exit 1
     echo "    Backup file '$BACKUP_FILE' created"
