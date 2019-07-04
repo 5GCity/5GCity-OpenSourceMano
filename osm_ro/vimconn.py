@@ -25,8 +25,6 @@
 vimconn implement an Abstract class for the vim connector plugins
  with the definition of the method to be implemented.
 """
-__author__="Alfonso Tierno, Igor D.C."
-__date__ ="$14-aug-2017 23:59:59$"
 
 import logging
 import paramiko
@@ -36,6 +34,10 @@ import yaml
 import sys
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from utils import deprecated
+
+__author__ = "Alfonso Tierno, Igor D.C."
+__date__  = "$14-aug-2017 23:59:59$"
 
 #Error variables 
 HTTP_Bad_Request = 400
@@ -48,41 +50,49 @@ HTTP_Not_Implemented = 501
 HTTP_Service_Unavailable = 503 
 HTTP_Internal_Server_Error = 500 
 
+
 class vimconnException(Exception):
     """Common and base class Exception for all vimconnector exceptions"""
     def __init__(self, message, http_code=HTTP_Bad_Request):
         Exception.__init__(self, message)
         self.http_code = http_code
 
+
 class vimconnConnectionException(vimconnException):
     """Connectivity error with the VIM"""
     def __init__(self, message, http_code=HTTP_Service_Unavailable):
         vimconnException.__init__(self, message, http_code)
-    
+
+
 class vimconnUnexpectedResponse(vimconnException):
     """Get an wrong response from VIM"""
     def __init__(self, message, http_code=HTTP_Service_Unavailable):
         vimconnException.__init__(self, message, http_code)
+
 
 class vimconnAuthException(vimconnException):
     """Invalid credentials or authorization to perform this action over the VIM"""
     def __init__(self, message, http_code=HTTP_Unauthorized):
         vimconnException.__init__(self, message, http_code)
 
+
 class vimconnNotFoundException(vimconnException):
     """The item is not found at VIM"""
     def __init__(self, message, http_code=HTTP_Not_Found):
         vimconnException.__init__(self, message, http_code)
+
 
 class vimconnConflictException(vimconnException):
     """There is a conflict, e.g. more item found than one"""
     def __init__(self, message, http_code=HTTP_Conflict):
         vimconnException.__init__(self, message, http_code)
 
+
 class vimconnNotSupportedException(vimconnException):
     """The request is not supported by connector"""
     def __init__(self, message, http_code=HTTP_Service_Unavailable):
         vimconnException.__init__(self, message, http_code)
+
 
 class vimconnNotImplemented(vimconnException):
     """The method is not implemented by the connected"""
@@ -97,80 +107,82 @@ class vimconnector():
     """ 
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None,
                  config={}, persitent_info={}):
-        """Constructor of VIM
-        Params:
-            'uuid': id asigned to this VIM
-            'name': name assigned to this VIM, can be used for logging
-            'tenant_id', 'tenant_name': (only one of them is mandatory) VIM tenant to be used
-            'url_admin': (optional), url used for administrative tasks
-            'user', 'passwd': credentials of the VIM user
-            'log_level': provider if it should use a different log_level than the general one
-            'config': dictionary with extra VIM information. This contains a consolidate version of general VIM config
-                    at creation and particular VIM config at teh attachment
-            'persistent_info': dict where the class can store information that will be available among class
+        """
+        Constructor of VIM. Raise an exception is some needed parameter is missing, but it must not do any connectivity
+            checking against the VIM
+        :param uuid: internal id of this VIM
+        :param name: name assigned to this VIM, can be used for logging
+        :param tenant_id: 'tenant_id': (only one of them is mandatory) VIM tenant to be used
+        :param tenant_name: 'tenant_name': (only one of them is mandatory) VIM tenant to be used
+        :param url: url used for normal operations
+        :param url_admin: (optional), url used for administrative tasks
+        :param user: user to access
+        :param passwd: password
+        :param log_level: provided if it should use a different log_level than the general one
+        :param config: dictionary with extra VIM information. This contains a consolidate version of VIM config
+                    at VIM_ACCOUNT (attach)
+        :param persitent_info: dict where the class can store information that will be available among class
                     destroy/creation cycles. This info is unique per VIM/credential. At first call it will contain an
                     empty dict. Useful to store login/tokens information for speed up communication
 
-        Returns: Raise an exception is some needed parameter is missing, but it must not do any connectivity
-            check against the VIM
         """
-        self.id        = uuid
-        self.name      = name
-        self.url       = url
+        self.id = uuid
+        self.name = name
+        self.url = url
         self.url_admin = url_admin
         self.tenant_id = tenant_id
         self.tenant_name = tenant_name
-        self.user      = user
-        self.passwd    = passwd
-        self.config    = config
+        self.user = user
+        self.passwd = passwd
+        self.config = config or {}
         self.availability_zone = None
         self.logger = logging.getLogger('openmano.vim')
         if log_level:
-            self.logger.setLevel( getattr(logging, log_level) )
-        if not self.url_admin:  #try to use normal url 
+            self.logger.setLevel(getattr(logging, log_level))
+        if not self.url_admin:   # try to use normal url
             self.url_admin = self.url
     
-    def __getitem__(self,index):
-        if index=='tenant_id':
+    def __getitem__(self, index):
+        if index == 'tenant_id':
             return self.tenant_id
-        if index=='tenant_name':
+        if index == 'tenant_name':
             return self.tenant_name
-        elif index=='id':
+        elif index == 'id':
             return self.id
-        elif index=='name':
+        elif index == 'name':
             return self.name
-        elif index=='user':
+        elif index == 'user':
             return self.user
-        elif index=='passwd':
+        elif index == 'passwd':
             return self.passwd
-        elif index=='url':
+        elif index == 'url':
             return self.url
-        elif index=='url_admin':
+        elif index == 'url_admin':
             return self.url_admin
-        elif index=="config":
+        elif index == "config":
             return self.config
         else:
-            raise KeyError("Invalid key '%s'" %str(index))
+            raise KeyError("Invalid key '{}'".format(index))
         
-    def __setitem__(self,index, value):
-        if index=='tenant_id':
+    def __setitem__(self, index, value):
+        if index == 'tenant_id':
             self.tenant_id = value
-        if index=='tenant_name':
+        if index == 'tenant_name':
             self.tenant_name = value
-        elif index=='id':
+        elif index == 'id':
             self.id = value
-        elif index=='name':
+        elif index == 'name':
             self.name = value
-        elif index=='user':
+        elif index == 'user':
             self.user = value
-        elif index=='passwd':
+        elif index == 'passwd':
             self.passwd = value
-        elif index=='url':
+        elif index == 'url':
             self.url = value
-        elif index=='url_admin':
+        elif index == 'url_admin':
             self.url_admin = value
         else:
-            raise KeyError("Invalid key '%s'" %str(index))
+            raise KeyError("Invalid key '{}'".format(index))
 
     @staticmethod
     def _create_mimemultipart(content_list):
@@ -186,24 +198,24 @@ class vimconnector():
         combined_message = MIMEMultipart()
         for content in content_list:
             if content.startswith('#include'):
-                format = 'text/x-include-url'
+                mime_format = 'text/x-include-url'
             elif content.startswith('#include-once'):
-                format = 'text/x-include-once-url'
+                mime_format = 'text/x-include-once-url'
             elif content.startswith('#!'):
-                format = 'text/x-shellscript'
+                mime_format = 'text/x-shellscript'
             elif content.startswith('#cloud-config'):
-                format = 'text/cloud-config'
+                mime_format = 'text/cloud-config'
             elif content.startswith('#cloud-config-archive'):
-                format = 'text/cloud-config-archive'
+                mime_format = 'text/cloud-config-archive'
             elif content.startswith('#upstart-job'):
-                format = 'text/upstart-job'
+                mime_format = 'text/upstart-job'
             elif content.startswith('#part-handler'):
-                format = 'text/part-handler'
+                mime_format = 'text/part-handler'
             elif content.startswith('#cloud-boothook'):
-                format = 'text/cloud-boothook'
+                mime_format = 'text/cloud-boothook'
             else:  # by default
-                format = 'text/x-shellscript'
-            sub_message = MIMEText(content, format, sys.getdefaultencoding())
+                mime_format = 'text/x-shellscript'
+            sub_message = MIMEText(content, mime_format, sys.getdefaultencoding())
             combined_message.attach(sub_message)
         return combined_message.as_string()
 
@@ -237,7 +249,7 @@ class vimconnector():
                 else:
                     for u in cloud_config["user-data"]:
                         userdata_list.append(u)
-            if cloud_config.get("boot-data-drive") != None:
+            if cloud_config.get("boot-data-drive") is not None:
                 config_drive = cloud_config["boot-data-drive"]
             if cloud_config.get("config-files") or cloud_config.get("users") or cloud_config.get("key-pairs"):
                 userdata_dict = {}
@@ -283,24 +295,25 @@ class vimconnector():
 
     def check_vim_connectivity(self):
         """Checks VIM can be reached and user credentials are ok.
-        Returns None if success or raised vimconnConnectionException, vimconnAuthException, ...
+        Returns None if success or raises vimconnConnectionException, vimconnAuthException, ...
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        # by default no checking until each connector implements it
+        return None
 
-    def new_tenant(self,tenant_name,tenant_description):
+    def new_tenant(self, tenant_name, tenant_description):
         """Adds a new tenant to VIM with this name and description, this is done using admin_url if provided
         "tenant_name": string max lenght 64
         "tenant_description": string max length 256
         returns the tenant identifier or raise exception
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise vimconnNotImplemented("Should have implemented this")
 
-    def delete_tenant(self,tenant_id,):
+    def delete_tenant(self, tenant_id):
         """Delete a tenant from VIM
         tenant_id: returned VIM tenant_id on "new_tenant"
         Returns None on success. Raises and exception of failure. If tenant is not found raises vimconnNotFoundException
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise vimconnNotImplemented("Should have implemented this")
 
     def get_tenant_list(self, filter_dict={}):
         """Obtain tenants of VIM
@@ -311,7 +324,7 @@ class vimconnector():
         Returns the tenant list of dictionaries, and empty list if no tenant match all the filers:
             [{'name':'<name>, 'id':'<id>, ...}, ...]
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise vimconnNotImplemented("Should have implemented this")
 
     def new_network(self, net_name, net_type, ip_profile=None, shared=False, vlan=None):
         """Adds a tenant network to VIM
@@ -337,7 +350,7 @@ class vimconnector():
             Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
             as not present.
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise vimconnNotImplemented("Should have implemented this")
 
     def get_network_list(self, filter_dict={}):
         """Obtain tenant networks of VIM
@@ -360,7 +373,7 @@ class vimconnector():
         List can be empty if no network map the filter_dict. Raise an exception only upon VIM connectivity,
             authorization, or some other unspecific error
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise vimconnNotImplemented("Should have implemented this")
 
     def get_network(self, net_id):
         """Obtain network details from the 'net_id' VIM network
@@ -372,7 +385,7 @@ class vimconnector():
             other VIM specific fields: (optional) whenever possible using the same naming of filter_dict param
         Raises an exception upon error or when network is not found
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise vimconnNotImplemented("Should have implemented this")
 
     def delete_network(self, net_id, created_items=None):
         """
@@ -381,7 +394,7 @@ class vimconnector():
         :param created_items: dictionary with extra items to be deleted. provided by method new_network
         Returns the network identifier or raises an exception upon error or when network is not found
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise vimconnNotImplemented("Should have implemented this")
 
     def refresh_nets_status(self, net_list):
         """Get the status of the networks
@@ -400,14 +413,14 @@ class vimconnector():
                 vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
             'net_id2': ...
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise vimconnNotImplemented("Should have implemented this")
 
     def get_flavor(self, flavor_id):
         """Obtain flavor details from the VIM
         Returns the flavor dict details {'id':<>, 'name':<>, other vim specific }
         Raises an exception upon error or if not found
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise vimconnNotImplemented("Should have implemented this")
 
     def get_flavor_id_from_data(self, flavor_dict):
         """Obtain flavor id that match the flavor description
@@ -419,7 +432,7 @@ class vimconnector():
                 #TODO: complete parameters for EPA
         Returns the flavor_id or raises a vimconnNotFoundException
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise vimconnNotImplemented("Should have implemented this")
 
     def new_flavor(self, flavor_data):
         """Adds a tenant flavor to VIM
@@ -440,29 +453,29 @@ class vimconnector():
                 is_public:
                  #TODO to concrete
         Returns the flavor identifier"""
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise vimconnNotImplemented("Should have implemented this")
 
     def delete_flavor(self, flavor_id):
         """Deletes a tenant flavor from VIM identify by its id
         Returns the used id or raise an exception"""
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise vimconnNotImplemented("Should have implemented this")
 
     def new_image(self, image_dict):
         """ Adds a tenant image to VIM
         Returns the image id or raises an exception if failed
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise vimconnNotImplemented("Should have implemented this")
 
     def delete_image(self, image_id):
         """Deletes a tenant image from VIM
         Returns the image_id if image is deleted or raises an exception on error"""
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise vimconnNotImplemented("Should have implemented this")
 
     def get_image_id_from_path(self, path):
         """Get the image id from image path in the VIM database.
            Returns the image_id or raises a vimconnNotFoundException
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise vimconnNotImplemented("Should have implemented this")
         
     def get_image_list(self, filter_dict={}):
         """Obtain tenant images from VIM
@@ -603,6 +616,74 @@ class vimconnector():
                 server:   usually ip address 
                 port:     the http, ssh, ... port 
                 suffix:   extra text, e.g. the http path and query string   
+        """
+        raise vimconnNotImplemented( "Should have implemented this" )
+
+    def inject_user_key(self, ip_addr=None, user=None, key=None, ro_key=None, password=None):
+        """
+        Inject a ssh public key in a VM
+        Params:
+            ip_addr: ip address of the VM
+            user: username (default-user) to enter in the VM
+            key: public key to be injected in the VM
+            ro_key: private key of the RO, used to enter in the VM if the password is not provided
+            password: password of the user to enter in the VM
+        The function doesn't return a value:
+        """
+        if not ip_addr or not user:
+            raise vimconnNotSupportedException("All parameters should be different from 'None'")
+        elif not ro_key and not password:
+            raise vimconnNotSupportedException("All parameters should be different from 'None'")
+        else:
+            commands = {'mkdir -p ~/.ssh/', 'echo "%s" >> ~/.ssh/authorized_keys' % key,
+                        'chmod 644 ~/.ssh/authorized_keys', 'chmod 700 ~/.ssh/'}
+            client = paramiko.SSHClient()
+            try:
+                if ro_key:
+                    pkey = paramiko.RSAKey.from_private_key(StringIO.StringIO(ro_key))
+                else:
+                    pkey = None
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                client.connect(ip_addr, username=user, password=password, pkey=pkey, timeout=10)
+                for command in commands:
+                    (i, o, e) = client.exec_command(command, timeout=10)
+                    returncode = o.channel.recv_exit_status()
+                    output = o.read()
+                    outerror = e.read()
+                    if returncode != 0:
+                        text = "run_command='{}' Error='{}'".format(command, outerror)
+                        raise vimconnUnexpectedResponse("Cannot inject ssh key in VM: '{}'".format(text))
+                        return
+            except (socket.error, paramiko.AuthenticationException, paramiko.SSHException) as message:
+                raise vimconnUnexpectedResponse(
+                    "Cannot inject ssh key in VM: '{}' - {}".format(ip_addr, str(message)))
+                return
+
+# Optional methods
+
+    def new_tenant(self,tenant_name,tenant_description):
+        """Adds a new tenant to VIM with this name and description, this is done using admin_url if provided
+        "tenant_name": string max lenght 64
+        "tenant_description": string max length 256
+        returns the tenant identifier or raise exception
+        """
+        raise vimconnNotImplemented( "Should have implemented this" )
+
+    def delete_tenant(self,tenant_id,):
+        """Delete a tenant from VIM
+        tenant_id: returned VIM tenant_id on "new_tenant"
+        Returns None on success. Raises and exception of failure. If tenant is not found raises vimconnNotFoundException
+        """
+        raise vimconnNotImplemented( "Should have implemented this" )
+
+    def get_tenant_list(self, filter_dict=None):
+        """Obtain tenants of VIM
+        filter_dict dictionary that can contain the following keys:
+            name: filter by tenant name
+            id: filter by tenant uuid/id
+            <other VIM specific>
+        Returns the tenant list of dictionaries, and empty list if no tenant match all the filers:
+            [{'name':'<name>, 'id':'<id>, ...}, ...]
         """
         raise vimconnNotImplemented( "Should have implemented this" )
 
@@ -752,7 +833,6 @@ class vimconnector():
         """
         raise vimconnNotImplemented( "SFC support not implemented" )
 
-
     def new_sfp(self, name, classifications, sfs, sfc_encap=True, spi=None):
         """Creates a service function path
         Params:
@@ -803,89 +883,58 @@ class vimconnector():
         """
         raise vimconnNotImplemented( "SFC support not implemented" )
 
-    def inject_user_key(self, ip_addr=None, user=None, key=None, ro_key=None, password=None):
-        """
-        Inject a ssh public key in a VM
-        Params:
-            ip_addr: ip address of the VM
-            user: username (default-user) to enter in the VM
-            key: public key to be injected in the VM
-            ro_key: private key of the RO, used to enter in the VM if the password is not provided
-            password: password of the user to enter in the VM
-        The function doesn't return a value:
-        """
-        if not ip_addr or not user:
-            raise vimconnNotSupportedException("All parameters should be different from 'None'")
-        elif not ro_key and not password:
-            raise vimconnNotSupportedException("All parameters should be different from 'None'")
-        else:
-            commands = {'mkdir -p ~/.ssh/', 'echo "%s" >> ~/.ssh/authorized_keys' % key,
-                        'chmod 644 ~/.ssh/authorized_keys', 'chmod 700 ~/.ssh/'}
-            client = paramiko.SSHClient()
-            try:
-                if ro_key:
-                    pkey = paramiko.RSAKey.from_private_key(StringIO.StringIO(ro_key))
-                else:
-                    pkey = None
-                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                client.connect(ip_addr, username=user, password=password, pkey=pkey, timeout=10)
-                for command in commands:
-                    (i, o, e) = client.exec_command(command, timeout=10)
-                    returncode = o.channel.recv_exit_status()
-                    output = o.read()
-                    outerror = e.read()
-                    if returncode != 0:
-                        text = "run_command='{}' Error='{}'".format(command, outerror)
-                        raise vimconnUnexpectedResponse("Cannot inject ssh key in VM: '{}'".format(text))
-                        return
-            except (socket.error, paramiko.AuthenticationException, paramiko.SSHException) as message:
-                raise vimconnUnexpectedResponse(
-                    "Cannot inject ssh key in VM: '{}' - {}".format(ip_addr, str(message)))
-                return
+# NOT USED METHODS in current version. Deprecated
 
-
-#NOT USED METHODS in current version
-
+    @deprecated
     def host_vim2gui(self, host, server_dict):
         """Transform host dictionary from VIM format to GUI format,
         and append to the server_dict
         """
         raise vimconnNotImplemented( "Should have implemented this" )
 
+    @deprecated
     def get_hosts_info(self):
         """Get the information of deployed hosts
         Returns the hosts content"""
         raise vimconnNotImplemented( "Should have implemented this" )
 
+    @deprecated
     def get_hosts(self, vim_tenant):
         """Get the hosts and deployed instances
         Returns the hosts content"""
         raise vimconnNotImplemented( "Should have implemented this" )
 
+    @deprecated
     def get_processor_rankings(self):
         """Get the processor rankings in the VIM database"""
         raise vimconnNotImplemented( "Should have implemented this" )
     
+    @deprecated
     def new_host(self, host_data):
         """Adds a new host to VIM"""
         """Returns status code of the VIM response"""
         raise vimconnNotImplemented( "Should have implemented this" )
     
+    @deprecated
     def new_external_port(self, port_data):
         """Adds a external port to VIM"""
         """Returns the port identifier"""
         raise vimconnNotImplemented( "Should have implemented this" )
         
+    @deprecated
     def new_external_network(self,net_name,net_type):
         """Adds a external network to VIM (shared)"""
         """Returns the network identifier"""
         raise vimconnNotImplemented( "Should have implemented this" )
+    @deprecated
 
+    @deprecated
     def connect_port_network(self, port_id, network_id, admin=False):
         """Connects a external port to a network"""
         """Returns status code of the VIM response"""
         raise vimconnNotImplemented( "Should have implemented this" )
 
+    @deprecated
     def new_vminstancefromJSON(self, vm_data):
         """Adds a VM instance to VIM"""
         """Returns the instance identifier"""
