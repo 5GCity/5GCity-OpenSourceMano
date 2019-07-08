@@ -56,7 +56,7 @@ class WimAPIActions(Enum):
 
 
 class DynpacConnector(WimConnector):
-    __supported_service_types = ["ELINE (L2)"]
+    __supported_service_types = ["ELINE (L2)", "ELINE"]
     __supported_encapsulation_types = ["dot1q"]
     __WIM_LOGGER = 'openmano.wimconn.dynpac'
     __ENCAPSULATION_TYPE_PARAM = "service_endpoint_encapsulation_type"
@@ -198,24 +198,25 @@ class DynpacConnector(WimConnector):
             if enc_type not in self.__supported_encapsulation_types:
                 self.__exception(WimError.ENCAPSULATION_TYPE, http_code=400)
 
-        bandwidth = kwargs.get(self.__BANDWIDTH_PARAM)
-        if not isinstance(bandwidth, int):
-            self.__exception(WimError.BANDWIDTH, http_code=400)
+        # Commented out for as long as parameter isn't implemented
+        # bandwidth = kwargs.get(self.__BANDWIDTH_PARAM)
+        # if not isinstance(bandwidth, int):
+            # self.__exception(WimError.BANDWIDTH, http_code=400)
 
-        backup = kwargs.get(self.__BACKUP_PARAM)
-        if not isinstance(backup, bool):
-            self.__exception(WimError.BACKUP, http_code=400)
+        # Commented out for as long as parameter isn't implemented
+        # backup = kwargs.get(self.__BACKUP_PARAM)
+        # if not isinstance(backup, bool):
+            # self.__exception(WimError.BACKUP, http_code=400)
 
     def __get_body(self, service_type, connection_points, kwargs):
-        port_mapping = self.__config.get("port_mapping")
+        port_mapping = self.__config.get("service_endpoint_mapping")
         selected_ports = []
         for connection_point in connection_points:
             endpoint_id = connection_point.get(self.__SERVICE_ENDPOINT_PARAM)
             port = filter(lambda x: x.get(self.__WAN_SERVICE_ENDPOINT_PARAM) == endpoint_id, port_mapping)[0]
-            wsmpi_json = port.get(self.__WAN_MAPPING_INFO_PARAM)
-            port_info = json.loads(wsmpi_json)
+            port_info = port.get(self.__WAN_MAPPING_INFO_PARAM)
             selected_ports.append(port_info)
-        if service_type == "ELINE (L2)":
+        if service_type == "ELINE (L2)" or service_type == "ELINE":
             service_type = "L2"
         body = {
             "connection_points": [{
@@ -227,8 +228,8 @@ class DynpacConnector(WimConnector):
                 "wan_switch_port": selected_ports[1].get(self.__SW_PORT_PARAM),
                 "wan_vlan": connection_points[1].get(self.__ENCAPSULATION_INFO_PARAM).get(self.__VLAN_PARAM)
             }],
-            "bandwidth": kwargs.get(self.__BANDWIDTH_PARAM),
+            "bandwidth": 100,  # Hardcoded for as long as parameter isn't implemented
             "service_type": service_type,
-            "backup": kwargs.get(self.__BACKUP_PARAM)
+            "backup": False    # Hardcoded for as long as parameter isn't implemented
         }
         return "body={}".format(json.dumps(body))
