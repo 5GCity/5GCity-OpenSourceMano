@@ -181,8 +181,8 @@ class vimconnector(vimconn.vimconnector):
 
         # oca library method cannot be used in this case (problem with cluster parameters)
         try:
+            created_items = {}
             one = self._new_one_connection()
-            ip_prefix_type = "IP"
             size = "254"
             if ip_profile is None:
                 subnet_rand = random.randint(0, 255)
@@ -204,25 +204,26 @@ class vimconnector(vimconn.vimconnector):
                 vlan_id = vlan
             else:
                 vlan_id = str(random.randint(100, 4095))
-
+            #if "internal" in net_name:
+            # OpenNebula not support two networks with same name
+            random_net_name = str(random.randint(1, 1000000))
+            net_name = net_name + random_net_name
             net_id = one.vn.allocate({
                         'NAME': net_name,
                         'VN_MAD': '802.1Q',
                         'PHYDEV': self.config["network"]["phydev"],
                         'VLAN_ID': vlan_id
                     }, self.config["cluster"]["id"])
-
-            one.vn.add_ar(net_id, {
-                'AR_POOL': {
-                    'AR': {
-                        'TYPE': 'IP4',
-                        ip_prefix_type: ip_start,
-                        'SIZE': size
+            arpool = {'AR_POOL': {
+                        'AR': {
+                            'TYPE': 'IP4',
+                            'IP': ip_start,
+                            'SIZE': size
+                        }
                     }
-                }
-            })
-
-            return net_id
+            }
+            one.vn.add_ar(net_id, arpool)
+            return net_id, created_items
         except Exception as e:
             self.logger.error("Create new network error: " + str(e))
             raise vimconn.vimconnException(e)
@@ -680,5 +681,4 @@ class vimconnector(vimconn.vimconnector):
                 interfaces.append(interface)
             return interfaces
         except Exception as e:
-            self.logger.error("Error getting vm interface_information of vm_id: "+str(vm_element.ID))
-
+            self.logger.error("Error getting vm interface_information of vm_id: " + str(vm_element.ID))
