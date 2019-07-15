@@ -6485,6 +6485,7 @@ class vimconnector(vimconn.vimconnector):
                                                                                       self.org_name))
             host = self.url
             client = Client(host, verify_ssl_certs=False)
+            client.set_highest_supported_version()
             client.set_credentials(BasicLoginCredentials(self.user, self.org_name, self.passwd))
             # connection object
             self.client = client
