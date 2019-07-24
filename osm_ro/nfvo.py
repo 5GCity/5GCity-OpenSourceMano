@@ -808,7 +808,7 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
         try:
             flavor_vim_id = None
             flavor_vim_id=vim.get_flavor_id_from_data(flavor_dict)
-            flavor_create="false"
+            flavor_created="false"
         except vimconn.vimconnException as e:
             pass
         try:

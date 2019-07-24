@@ -799,7 +799,7 @@ class vimconnector(vimconn.vimconnector):
             extended = flavor_dict.get("extended", {})
             if extended:
                 #TODO
-                raise vimconn.vimconnNotFoundException("Flavor with EPA still not implemted")
+                raise vimconn.vimconnNotFoundException("Flavor with EPA still not implemented")
                 # if len(numas) > 1:
                 #     raise vimconn.vimconnNotFoundException("Cannot find any flavor with more than one numa")
                 # numa=numas[0]
