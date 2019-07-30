@@ -3208,10 +3208,13 @@ def create_instance(mydb, tenant_id, instance_dict):
         # logger.debug(">>>>>>>> Merged dictionary")
         # logger.debug("Creating instance scenario-dict MERGED:\n%s",
         #              yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False))
-
+        logger.debug("ScenarioDict: {}".format(scenarioDict))
         # 1. Creating new nets (sce_nets) in the VIM"
         number_mgmt_networks = 0
         db_instance_nets = []
+
+
+
         for sce_net in scenarioDict['nets']:
             sce_net_uuid = sce_net.get('uuid', sce_net["name"])
             # get involved datacenters where this network need to be created
@@ -3229,10 +3232,22 @@ def create_instance(mydb, tenant_id, instance_dict):
                 involved_datacenters.append(default_datacenter_id)
             target_wim_account = sce_net.get("wim_account", default_wim_account)
 
+            # Exclude Datacenters that share URL and TENANT_ID.
+            # If same VIM and same tenant, there will be connectivity; no WIM needed.
+            filtered_involved_datacenters = []
+            [filtered_involved_datacenters.append(vim)
+             for dc in involved_datacenters
+             for vim in [myvims[dc]]
+             if (vim.url, vim.tenant_id) not in
+             [(node.url, node.tenant_id) for node in filtered_involved_datacenters]]
+            logger.debug("involved_clusters.(urls, AZ, tenant): {}".format([(myvims[node].url, myvims[node].availability_zone, myvims[node].tenant_id) for node in involved_datacenters]))
+            logger.debug("filtered_involved_clusters.(urls, AZ, tenant): {}".format([(node.url, node.availability_zone, node.tenant_id) for node in filtered_involved_datacenters]))
+
             # --> WIM
             # TODO: use this information during network creation
             wim_account_id = wim_account_name = None
-            if len(involved_datacenters) > 1 and 'uuid' in sce_net:
+            # Use of filtered_involved_datacenters to check if WIM needed
+            if len(filtered_involved_datacenters) > 1 and 'uuid' in sce_net:
                 if target_wim_account is None or target_wim_account is True:  # automatic selection of WIM
                     # OBS: sce_net without uuid are used internally to VNFs
                     # and the assumption is that VNFs will not be split among
